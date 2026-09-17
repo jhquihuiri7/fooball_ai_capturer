@@ -116,6 +116,17 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
     return 'bloqueada · 1/$denominator · ISO ${applied.iso}';
   }
 
+  /// El código de tiempo pintado en cada frame: sin él el servidor no empareja.
+  String get timecodeLabel {
+    final CaptureStatus? applied = status;
+    if (applied == null) {
+      return 'sin cámara';
+    }
+    return applied.timecodeFailures == 0
+        ? 'pintado en cada frame'
+        : 'FALLA en ${applied.timecodeFailures} frames';
+  }
+
   String get whiteBalanceLabel {
     final CaptureStatus? applied = status;
     if (applied == null || !applied.whiteBalanceLocked) {

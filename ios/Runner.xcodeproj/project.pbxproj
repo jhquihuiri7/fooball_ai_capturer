@@ -19,6 +19,7 @@
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
 		A068CD3AAF7E49FE87160E29 /* UltraWideCamera.swift in Sources */ = {isa = PBXBuildFile; fileRef = 097B554979A583E770A366B6 /* UltraWideCamera.swift */; };
 		A4A6013E8278B8712287176B /* CaptureHostApiImpl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C0BE040E3FBCE1ACB195CD6 /* CaptureHostApiImpl.swift */; };
+		C12248A7A6C7D36389B4417F /* RigTimecode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6156F708114F91B966049E46 /* RigTimecode.swift */; };
 		C191B261C5CEF0625CF121FA /* CaptureEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6386D157B1CCE800D9D25B8 /* CaptureEngine.swift */; };
 		C9E99AD11E6380D4551F24F8 /* CaptureApi.g.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F7AA4C807562B3E041044F9 /* CaptureApi.g.swift */; };
 /* End PBXBuildFile section */
@@ -55,6 +56,7 @@
 		331C8081294A63A400263BE5 /* RunnerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RunnerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = AppFrameworkInfo.plist; path = Flutter/AppFrameworkInfo.plist; sourceTree = "<group>"; };
 		5C0BE040E3FBCE1ACB195CD6 /* CaptureHostApiImpl.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CaptureHostApiImpl.swift; sourceTree = "<group>"; };
+		6156F708114F91B966049E46 /* RigTimecode.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RigTimecode.swift; sourceTree = "<group>"; };
 		74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Runner-Bridging-Header.h"; sourceTree = "<group>"; };
 		74858FAE1ED2DC5600515810 /* AppDelegate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
@@ -139,6 +141,7 @@
 				5C0BE040E3FBCE1ACB195CD6 /* CaptureHostApiImpl.swift */,
 				097B554979A583E770A366B6 /* UltraWideCamera.swift */,
 				323F9049728479B1DD01C32B /* CapturePreview.swift */,
+				6156F708114F91B966049E46 /* RigTimecode.swift */,
 			);
 			path = Runner;
 			sourceTree = "<group>";
@@ -304,6 +307,7 @@
 				A4A6013E8278B8712287176B /* CaptureHostApiImpl.swift in Sources */,
 				A068CD3AAF7E49FE87160E29 /* UltraWideCamera.swift in Sources */,
 				932A4BF39D12B65F6E366D50 /* CapturePreview.swift in Sources */,
+				C12248A7A6C7D36389B4417F /* RigTimecode.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

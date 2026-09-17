@@ -40,6 +40,10 @@ final class CaptureEngine: NSObject {
 
     private(set) var droppedFrames: Int64 = 0
 
+    /// Frames en los que no se pudo pintar el código de tiempo. Tiene que ser cero: uno
+    /// solo ya es un frame que el servidor no puede emparejar.
+    private(set) var timecodeFailures: Int64 = 0
+
     // MARK: - Ciclo de vida
 
     func hasUltraWideCamera() -> Bool {
@@ -78,6 +82,13 @@ final class CaptureEngine: NSObject {
         session.addInput(input)
 
         if !session.outputs.contains(output) {
+            // 4:2:0 biplanar con la luma en el plano 0: es donde `RigTimecode` pinta.
+            // Fijarlo, y no dejar el formato por defecto, para que sea el mismo en los
+            // dos móviles y en todos los modelos.
+            output.videoSettings = [
+                kCVPixelBufferPixelFormatTypeKey as String:
+                    kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+            ]
             output.alwaysDiscardsLateVideoFrames = false
             output.setSampleBufferDelegate(self, queue: queue)
             if session.canAddOutput(output) {
@@ -257,7 +268,8 @@ final class CaptureEngine: NSObject {
             thermalState: Self.thermalState(),
             batteryLevel: Double(UIDevice.current.batteryLevel),
             freeDiskBytes: Self.freeDiskBytes(),
-            droppedFrames: droppedFrames
+            droppedFrames: droppedFrames,
+            timecodeFailures: timecodeFailures
         )
     }
 
@@ -293,6 +305,17 @@ extension CaptureEngine: AVCaptureVideoDataOutputSampleBufferDelegate {
         recentPts.append(rigNs)
         if recentPts.count > recentPtsCapacity {
             recentPts.removeFirst(recentPts.count - recentPtsCapacity)
+        }
+
+        // El tiempo del soporte, pintado en la esquina del frame (enmienda B1a): es lo
+        // que el servidor lee para emparejar, y sobrevive a cualquier relé. Va en todos
+        // los frames, se grabe o no, para que archivo y stream lo lleven igual.
+        let rigMs = UInt64(max(0, rigNs / 1_000_000))
+        if let pixels = CMSampleBufferGetImageBuffer(sampleBuffer),
+           RigTimecode.write(valueMs: rigMs, into: pixels) {
+            // pintado
+        } else {
+            timecodeFailures += 1
         }
 
         guard let writer, let input = writerInput else { return }

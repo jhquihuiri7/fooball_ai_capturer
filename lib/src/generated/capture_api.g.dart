@@ -246,6 +246,7 @@ class CaptureStatus {
     required this.batteryLevel,
     required this.freeDiskBytes,
     required this.droppedFrames,
+    required this.timecodeFailures,
   });
 
   bool running;
@@ -287,6 +288,10 @@ class CaptureStatus {
 
   int droppedFrames;
 
+  /// Frames en los que no se pudo pintar el código de tiempo (enmienda B1a). Tiene que
+  /// ser cero: cada uno es un frame que el servidor no puede emparejar.
+  int timecodeFailures;
+
   List<Object?> _toList() {
     return <Object?>[
       running,
@@ -305,6 +310,7 @@ class CaptureStatus {
       batteryLevel,
       freeDiskBytes,
       droppedFrames,
+      timecodeFailures,
     ];
   }
 
@@ -330,6 +336,7 @@ class CaptureStatus {
       batteryLevel: result[13]! as double,
       freeDiskBytes: result[14]! as int,
       droppedFrames: result[15]! as int,
+      timecodeFailures: result[16]! as int,
     );
   }
 
@@ -342,7 +349,7 @@ class CaptureStatus {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(running, other.running) && _deepEquals(width, other.width) && _deepEquals(height, other.height) && _deepEquals(actualFps, other.actualFps) && _deepEquals(stabilizationDisabled, other.stabilizationDisabled) && _deepEquals(exposureLocked, other.exposureLocked) && _deepEquals(exposureSeconds, other.exposureSeconds) && _deepEquals(iso, other.iso) && _deepEquals(whiteBalanceLocked, other.whiteBalanceLocked) && _deepEquals(whiteBalanceKelvin, other.whiteBalanceKelvin) && _deepEquals(focusLocked, other.focusLocked) && _deepEquals(intrinsicsAvailable, other.intrinsicsAvailable) && _deepEquals(thermalState, other.thermalState) && _deepEquals(batteryLevel, other.batteryLevel) && _deepEquals(freeDiskBytes, other.freeDiskBytes) && _deepEquals(droppedFrames, other.droppedFrames);
+    return _deepEquals(running, other.running) && _deepEquals(width, other.width) && _deepEquals(height, other.height) && _deepEquals(actualFps, other.actualFps) && _deepEquals(stabilizationDisabled, other.stabilizationDisabled) && _deepEquals(exposureLocked, other.exposureLocked) && _deepEquals(exposureSeconds, other.exposureSeconds) && _deepEquals(iso, other.iso) && _deepEquals(whiteBalanceLocked, other.whiteBalanceLocked) && _deepEquals(whiteBalanceKelvin, other.whiteBalanceKelvin) && _deepEquals(focusLocked, other.focusLocked) && _deepEquals(intrinsicsAvailable, other.intrinsicsAvailable) && _deepEquals(thermalState, other.thermalState) && _deepEquals(batteryLevel, other.batteryLevel) && _deepEquals(freeDiskBytes, other.freeDiskBytes) && _deepEquals(droppedFrames, other.droppedFrames) && _deepEquals(timecodeFailures, other.timecodeFailures);
   }
 
   @override
@@ -351,7 +358,7 @@ class CaptureStatus {
 
   @override
   String toString() {
-    return 'CaptureStatus(running: $running, width: $width, height: $height, actualFps: $actualFps, stabilizationDisabled: $stabilizationDisabled, exposureLocked: $exposureLocked, exposureSeconds: $exposureSeconds, iso: $iso, whiteBalanceLocked: $whiteBalanceLocked, whiteBalanceKelvin: $whiteBalanceKelvin, focusLocked: $focusLocked, intrinsicsAvailable: $intrinsicsAvailable, thermalState: $thermalState, batteryLevel: $batteryLevel, freeDiskBytes: $freeDiskBytes, droppedFrames: $droppedFrames)';
+    return 'CaptureStatus(running: $running, width: $width, height: $height, actualFps: $actualFps, stabilizationDisabled: $stabilizationDisabled, exposureLocked: $exposureLocked, exposureSeconds: $exposureSeconds, iso: $iso, whiteBalanceLocked: $whiteBalanceLocked, whiteBalanceKelvin: $whiteBalanceKelvin, focusLocked: $focusLocked, intrinsicsAvailable: $intrinsicsAvailable, thermalState: $thermalState, batteryLevel: $batteryLevel, freeDiskBytes: $freeDiskBytes, droppedFrames: $droppedFrames, timecodeFailures: $timecodeFailures)';
   }
 }
 

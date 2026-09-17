@@ -27,6 +27,7 @@ CaptureStatus fakeStatus({
     batteryLevel: 0.9,
     freeDiskBytes: 64000000000,
     droppedFrames: 0,
+    timecodeFailures: 0,
   );
 }
 

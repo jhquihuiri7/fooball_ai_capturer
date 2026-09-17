@@ -217,6 +217,11 @@ class _CapturePageState extends State<CapturePage> {
             _Row('Batería', '${(status.batteryLevel * 100).round()} %'),
             _Row('Disco libre', '${(status.freeDiskBytes / 1e9).toStringAsFixed(1)} GB'),
             _Row('Frames perdidos', '${status.droppedFrames}'),
+            _Row(
+              'Código de tiempo',
+              _session.timecodeLabel,
+              alarm: status.timecodeFailures > 0,
+            ),
           ],
           _Row('Reloj del soporte', _session.clockLabel),
           _Row('Fase de exposición', _session.phaseLabel),

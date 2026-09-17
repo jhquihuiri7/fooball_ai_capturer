@@ -79,6 +79,17 @@ void main() {
       expect(session.exposureLabel, 'bloqueada · 1/100 · ISO 320');
       expect(session.whiteBalanceLabel, 'bloqueado · 5400 K');
     });
+
+    test('el código de tiempo avisa en cuanto falla un frame', () async {
+      final CaptureSession session = CaptureSession(role: CameraRole.left, api: FakeCaptureApi());
+      expect(session.timecodeLabel, 'sin cámara');
+
+      await session.prepare();
+      expect(session.timecodeLabel, 'pintado en cada frame');
+
+      session.status!.timecodeFailures = 3;
+      expect(session.timecodeLabel, 'FALLA en 3 frames');
+    });
   });
 
   group('un solo móvil', () {

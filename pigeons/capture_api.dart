@@ -105,6 +105,7 @@ class CaptureStatus {
     required this.batteryLevel,
     required this.freeDiskBytes,
     required this.droppedFrames,
+    required this.timecodeFailures,
   });
 
   final bool running;
@@ -138,6 +139,10 @@ class CaptureStatus {
   final double batteryLevel;
   final int freeDiskBytes;
   final int droppedFrames;
+
+  /// Frames en los que no se pudo pintar el código de tiempo (enmienda B1a). Tiene que
+  /// ser cero: cada uno es un frame que el servidor no puede emparejar.
+  final int timecodeFailures;
 }
 
 /// Una medida de desfase entre este móvil y el maestro del reloj.
