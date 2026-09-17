@@ -23,7 +23,7 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
     init(binaryMessenger: FlutterBinaryMessenger) {
         flutter = CaptureFlutterApi(binaryMessenger: binaryMessenger)
         super.init()
-        CaptureHostApi.setUp(binaryMessenger: binaryMessenger, api: self)
+        CaptureHostApiSetup.setUp(binaryMessenger: binaryMessenger, api: self)
         observeInterruptions()
     }
 

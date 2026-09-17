@@ -3,7 +3,7 @@ import UIKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
-  /// Se guarda como propiedad porque `CaptureHostApi.setUp` no retiene el objeto: si se
+  /// Se guarda como propiedad porque `CaptureHostApiSetup.setUp` no retiene el objeto: si se
   /// deja caer, el canal queda registrado contra nada y la primera llamada desde Dart
   /// se pierde sin error.
   private var captureApi: CaptureHostApiImpl?
@@ -25,6 +25,6 @@ import UIKit
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
-    captureApi = CaptureHostApiImpl(binaryMessenger: engineBridge.applicationBinaryMessenger)
+    captureApi = CaptureHostApiImpl(binaryMessenger: engineBridge.applicationRegistrar.messenger())
   }
 }
