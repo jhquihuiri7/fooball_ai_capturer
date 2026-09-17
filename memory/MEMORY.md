@@ -1,0 +1,27 @@
+# football-ai-capture — Memoria del proyecto
+
+> **Cómo usarme con esto.** Alexander dice "revisa la memoria" (o "lee memory/"). Entonces
+> leo este índice y los `.md` que referencie, y los trato como reglas del proyecto. Si no
+> lo dice, esta carpeta se ignora. Se escribe aquí cuando termina un milestone, cuando
+> se descubre algo que no se deduce del código, o cuando Alexander corrige la forma de
+> trabajar. Lo más reciente va arriba.
+
+## 🔴 ACTIVO HOY (17 Sep 2026, tarde) — Paso 3 (emisión SRT) VERIFICADO y commiteado
+- [session_state_paso3_17sep.md](session_state_paso3_17sep.md) — **Empezar aquí si retomamos.** Pasos 1, 2 y 3 hechos y probados en el iPhone contra el MediaMTX del Mac (29,3 fps, 300/300 códigos de tiempo legibles por RTSP). Siguiente: paso 4, Multipeer y reloj común, que necesita los dos iPhone.
+- [lesson_banco_mediamtx_17sep.md](lesson_banco_mediamtx_17sep.md) — Tres trampas del banco en el Mac: `srtAddress` tiene que ser `0.0.0.0:8890`; `flutter install` borra los datos de la app (usar `devicectl install`); la API de HaishinKit en `main` no es la de 2.2.5 (leer el checkout local).
+
+## 🎯 REGLA (17 Sep 2026, tarde) — No más "pruebitas" con Alexander
+- [feedback_workflow_alexander.md](feedback_workflow_alexander.md) — Se enfadó, con razón: le pedí varias pruebas cortas seguidas y teclear IPs. **Diagnosticar solo desde el Mac todo lo que se pueda, y darle una prueba única cuando esté completa.** Actualizado con lo que quiere ver en pantalla.
+
+## 🔴 (17 Sep 2026, mañana) — Milestone 1 probado en el iPhone, commit `23738d5`
+- [session_state_milestone1_17sep.md](session_state_milestone1_17sep.md) — **Empezar aquí si retomamos.** Qué está hecho y probado en el móvil, qué commits hay, qué queda del plan y cuál es el siguiente paso (paso 2: código de tiempo pintado en la imagen).
+- [lesson_camera_on_device_17sep.md](lesson_camera_on_device_17sep.md) — Lo que enseñó el iPhone y no se veía en el código: foco al infinito, medir luz y balance antes de congelar, BT.709 sin HDR, y el `markAsFinished` que tira la app. **No revertir ninguno de los cuatro.**
+
+## 🗺️ PLAN — pasos de la app de captura y contrato con el servidor
+- [project_plan_app_captura.md](project_plan_app_captura.md) — Los 7 pasos acordados con su criterio de "vale cuando", qué necesita un iPhone y qué necesita dos, y lo que el servidor `football-ai` exige de la app: código de tiempo pintado (formato exacto), MediaMTX solo recibe RTMP hoy, PyAV sin SRT. Un Android no sirve como segunda cámara.
+
+## 🛠️ ENTORNO — este Mac
+- [project_environment_mac_17sep.md](project_environment_mac_17sep.md) — Flutter 3.44.8 en `~/flutter_3.44.8` (no está en el PATH; `~/flutter` es de cardiocare y no se toca), comandos para compilar e instalar en el iPhone por WiFi, UDID, cómo añadir un Swift al target con la gema `xcodeproj`, y por qué cmdline-tools es la 22.0.
+
+## 🎯 REGLAS — cómo trabaja Alexander en este repo
+- [feedback_workflow_alexander.md](feedback_workflow_alexander.md) — Un milestone cada vez, él prueba en el iPhone, y **solo se hace commit cuando él confirma**. Respuestas cortas. Los logs `FigCaptureSourceRemote err=-17281` son ruido. Las grabaciones van a Archivos → En mi iPhone, no a Fotos.
