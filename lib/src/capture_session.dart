@@ -129,11 +129,21 @@ class CaptureSession extends ChangeNotifier {
     return null;
   }
 
-  /// Mide la fase de exposición y reinicia si salió mala (TASK A4).
-  Future<void> sortExposurePhase() async {
+  /// Mide la fase de exposición contra el otro móvil y reinicia si salió mala (A4).
+  ///
+  /// `masterPtsNs` los trae el enlace entre móviles (TASK A3), no la cámara: la fase es
+  /// un desfase entre los dos y ninguno de los dos lo conoce solo.
+  Future<void> sortExposurePhase({
+    required Future<List<int>> Function() masterPtsNs,
+    required int frameIntervalNs,
+  }) async {
     _set(SessionPhase.ajustandoFase);
     for (phaseAttempt = 1; phaseAttempt <= phasePolicy.maxAttempts; phaseAttempt++) {
-      exposurePhaseNs = await _api.exposurePhaseNs();
+      exposurePhaseNs = measurePhaseNs(
+        localPtsNs: await _api.recentFramePtsNs(),
+        masterPtsNs: await masterPtsNs(),
+        frameIntervalNs: frameIntervalNs,
+      );
       final PhaseDecision decision =
           phasePolicy.decide(phaseNs: exposurePhaseNs!, attempt: phaseAttempt);
       notifyListeners();

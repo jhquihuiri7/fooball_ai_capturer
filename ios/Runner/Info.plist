@@ -66,5 +66,22 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<!-- Permisos del soporte de dos camaras (ADR 0012). -->
+	<key>NSCameraUsageDescription</key>
+	<string>Graba el partido con la camara ultra gran angular.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Graba el sonido del partido y sirve para sincronizar los dos moviles.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Sincroniza el reloj con el otro movil del soporte por la red local.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_footballai-rig._tcp</string>
+	</array>
+	<!-- El fichero se saca por Finder cuando la emision se degrada y el archivo local
+	     pasa a ser el partido bueno (ADR 0012, decision 5). -->
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
 </dict>
 </plist>

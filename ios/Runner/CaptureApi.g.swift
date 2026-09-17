@@ -528,12 +528,13 @@ protocol CaptureHostApi {
   func start(srtUrl: String, recordingDirectory: String) throws
   func stop() throws
   func status() throws -> CaptureStatus
-  /// Desfase de exposición medido contra el maestro, en nanosegundos (TASK A4).
+  /// PTS de los últimos frames capturados, ya en tiempo del soporte (TASK A4).
   ///
-  /// Sin genlock los dos sensores exponen en instantes distintos, y el desfase se
-  /// sortea en cada arranque. Se mide y, si sale grande, se reinicia la captura: son
-  /// segundos antes del saque inicial y ahorra desdoblamiento en la costura.
-  func exposurePhaseNs() throws -> Int64
+  /// El nativo no puede calcular la fase de exposición él solo: la fase es un desfase
+  /// **entre los dos móviles**, y cada uno solo conoce sus propios sellos. Así que
+  /// entrega los suyos y la resta se hace en Dart, que es quien tiene el enlace con el
+  /// otro móvil (`measurePhaseNs`).
+  func recentFramePtsNs() throws -> [Int64]
   /// Reabre la sesión para volver a sortear la fase.
   func restartForPhase() throws
   /// Fija el desfase de reloj que se aplicará a los PTS emitidos. Es lo que pone los
@@ -624,23 +625,24 @@ class CaptureHostApiSetup {
     } else {
       statusChannel.setMessageHandler(nil)
     }
-    /// Desfase de exposición medido contra el maestro, en nanosegundos (TASK A4).
+    /// PTS de los últimos frames capturados, ya en tiempo del soporte (TASK A4).
     ///
-    /// Sin genlock los dos sensores exponen en instantes distintos, y el desfase se
-    /// sortea en cada arranque. Se mide y, si sale grande, se reinicia la captura: son
-    /// segundos antes del saque inicial y ahorra desdoblamiento en la costura.
-    let exposurePhaseNsChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.exposurePhaseNs\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    /// El nativo no puede calcular la fase de exposición él solo: la fase es un desfase
+    /// **entre los dos móviles**, y cada uno solo conoce sus propios sellos. Así que
+    /// entrega los suyos y la resta se hace en Dart, que es quien tiene el enlace con el
+    /// otro móvil (`measurePhaseNs`).
+    let recentFramePtsNsChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.recentFramePtsNs\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
-      exposurePhaseNsChannel.setMessageHandler { _, reply in
+      recentFramePtsNsChannel.setMessageHandler { _, reply in
         do {
-          let result = try api.exposurePhaseNs()
+          let result = try api.recentFramePtsNs()
           reply(wrapResult(result))
         } catch {
           reply(wrapError(error))
         }
       }
     } else {
-      exposurePhaseNsChannel.setMessageHandler(nil)
+      recentFramePtsNsChannel.setMessageHandler(nil)
     }
     /// Reabre la sesión para volver a sortear la fase.
     let restartForPhaseChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.restartForPhase\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)

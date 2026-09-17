@@ -561,13 +561,14 @@ class CaptureHostApi {
     return pigeonVar_replyValue! as CaptureStatus;
   }
 
-  /// Desfase de exposición medido contra el maestro, en nanosegundos (TASK A4).
+  /// PTS de los últimos frames capturados, ya en tiempo del soporte (TASK A4).
   ///
-  /// Sin genlock los dos sensores exponen en instantes distintos, y el desfase se
-  /// sortea en cada arranque. Se mide y, si sale grande, se reinicia la captura: son
-  /// segundos antes del saque inicial y ahorra desdoblamiento en la costura.
-  Future<int> exposurePhaseNs() async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.CaptureHostApi.exposurePhaseNs$pigeonVar_messageChannelSuffix';
+  /// El nativo no puede calcular la fase de exposición él solo: la fase es un desfase
+  /// **entre los dos móviles**, y cada uno solo conoce sus propios sellos. Así que
+  /// entrega los suyos y la resta se hace en Dart, que es quien tiene el enlace con el
+  /// otro móvil (`measurePhaseNs`).
+  Future<List<int>> recentFramePtsNs() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.CaptureHostApi.recentFramePtsNs$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -582,7 +583,7 @@ class CaptureHostApi {
         isNullValid: false,
     )
     ;
-    return pigeonVar_replyValue! as int;
+    return (pigeonVar_replyValue! as List<Object?>).cast<int>();
   }
 
   /// Reabre la sesión para volver a sortear la fase.

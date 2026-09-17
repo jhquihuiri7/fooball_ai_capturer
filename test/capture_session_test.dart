@@ -5,6 +5,10 @@ import 'package:football_ai_capture/src/capture_session.dart';
 import 'package:football_ai_capture/src/constants.dart';
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
 
+const int frame30 = 33333333; // ns, un frame a 30 fps
+
+Future<List<int>> _masterPts() async => <int>[0, frame30, 2 * frame30];
+
 CaptureStatus _status({
   bool stabilizationDisabled = true,
   bool exposureLocked = true,
@@ -59,11 +63,13 @@ class _FakeApi extends CaptureHostApi {
   @override
   Future<CaptureStatus> status() async => applied;
 
+  /// Cada intento entrega un PTS local desplazado la fase que toque; el maestro
+  /// siempre está en 0, así que la resta da exactamente esa fase.
   @override
-  Future<int> exposurePhaseNs() async {
+  Future<List<int>> recentFramePtsNs() async {
     final int value = phases[_phaseIndex.clamp(0, phases.length - 1)];
     _phaseIndex++;
-    return value;
+    return <int>[value, frame30 + value, 2 * frame30 + value];
   }
 
   @override
@@ -131,7 +137,7 @@ void main() {
       final _FakeApi api = _FakeApi(phases: <int>[2 * nsPerMillisecond]);
       final CaptureSession session = CaptureSession(role: CameraRole.left, api: api);
 
-      await session.sortExposurePhase();
+      await session.sortExposurePhase(masterPtsNs: _masterPts, frameIntervalNs: frame30);
 
       expect(api.restarts, 0);
       expect(session.phase, SessionPhase.lista);
@@ -143,7 +149,7 @@ void main() {
       );
       final CaptureSession session = CaptureSession(role: CameraRole.left, api: api);
 
-      await session.sortExposurePhase();
+      await session.sortExposurePhase(masterPtsNs: _masterPts, frameIntervalNs: frame30);
 
       expect(api.restarts, 2);
       expect(session.exposurePhaseNs, nsPerMillisecond);
@@ -154,7 +160,7 @@ void main() {
       final _FakeApi api = _FakeApi(phases: <int>[16 * nsPerMillisecond]);
       final CaptureSession session = CaptureSession(role: CameraRole.left, api: api);
 
-      await session.sortExposurePhase();
+      await session.sortExposurePhase(masterPtsNs: _masterPts, frameIntervalNs: frame30);
 
       expect(api.restarts, exposurePhaseMaxAttempts - 1);
       expect(session.phase, SessionPhase.lista);
@@ -166,7 +172,7 @@ void main() {
         api: _FakeApi(phases: <int>[5 * nsPerMillisecond]),
       );
 
-      await session.sortExposurePhase();
+      await session.sortExposurePhase(masterPtsNs: _masterPts, frameIntervalNs: frame30);
 
       expect(session.phaseLabel, contains('15 cm'));
     });
