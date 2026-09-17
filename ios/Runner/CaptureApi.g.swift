@@ -226,9 +226,11 @@ struct CaptureSettings: Hashable, CustomStringConvertible {
   /// Denominador de la obturación: 100 con red de 50 Hz, 120 con 60 Hz. Múltiplo de la
   /// frecuencia de red para que los focos del campo no produzcan bandas.
   var shutterDenominator: Int64
-  /// ISO fijo. Igual en los dos móviles para que la costura no cambie de brillo; si los
-  /// modelos son distintos, el mismo ISO no da el mismo brillo y lo remata la
-  /// corrección de ganancia del servidor.
+  /// ISO de reserva. La exposición se mide en automático al abrir la cámara y se
+  /// congela trasladada a la obturación sin parpadeo; este valor solo se usa si la
+  /// cámara no llega a medir nada. Igual en los dos móviles para que la costura no
+  /// cambie de brillo; si los modelos son distintos, lo remata la corrección de
+  /// ganancia del servidor.
   var iso: Int64
   /// Recorta verticalmente a la banda jugable antes de codificar (TASK A6). Ahorra un
   /// tercio del bitrate tirando cielo y grada, que no se usan para nada.
@@ -309,7 +311,13 @@ struct CaptureStatus: Hashable, CustomStringConvertible {
   /// recorta y desplaza la imagen, y la rotación calibrada deja de valer.
   var stabilizationDisabled: Bool
   var exposureLocked: Bool
+  /// Lo que quedó congelado: obturación en segundos e ISO. Se enseñan para que quien
+  /// monta el soporte vea que los dos móviles miden lo mismo.
+  var exposureSeconds: Double
+  var iso: Int64
   var whiteBalanceLocked: Bool
+  /// Temperatura de color congelada, en kelvin.
+  var whiteBalanceKelvin: Int64
   var focusLocked: Bool
   /// La matriz intrínseca por frame. Sin ella hay que caer a `from_hfov`, que sirve
   /// para dimensionar y no para cerrar una costura.
@@ -328,13 +336,16 @@ struct CaptureStatus: Hashable, CustomStringConvertible {
     let actualFps = pigeonVar_list[3] as! Double
     let stabilizationDisabled = pigeonVar_list[4] as! Bool
     let exposureLocked = pigeonVar_list[5] as! Bool
-    let whiteBalanceLocked = pigeonVar_list[6] as! Bool
-    let focusLocked = pigeonVar_list[7] as! Bool
-    let intrinsicsAvailable = pigeonVar_list[8] as! Bool
-    let thermalState = pigeonVar_list[9] as! ThermalState
-    let batteryLevel = pigeonVar_list[10] as! Double
-    let freeDiskBytes = pigeonVar_list[11] as! Int64
-    let droppedFrames = pigeonVar_list[12] as! Int64
+    let exposureSeconds = pigeonVar_list[6] as! Double
+    let iso = pigeonVar_list[7] as! Int64
+    let whiteBalanceLocked = pigeonVar_list[8] as! Bool
+    let whiteBalanceKelvin = pigeonVar_list[9] as! Int64
+    let focusLocked = pigeonVar_list[10] as! Bool
+    let intrinsicsAvailable = pigeonVar_list[11] as! Bool
+    let thermalState = pigeonVar_list[12] as! ThermalState
+    let batteryLevel = pigeonVar_list[13] as! Double
+    let freeDiskBytes = pigeonVar_list[14] as! Int64
+    let droppedFrames = pigeonVar_list[15] as! Int64
 
     return CaptureStatus(
       running: running,
@@ -343,7 +354,10 @@ struct CaptureStatus: Hashable, CustomStringConvertible {
       actualFps: actualFps,
       stabilizationDisabled: stabilizationDisabled,
       exposureLocked: exposureLocked,
+      exposureSeconds: exposureSeconds,
+      iso: iso,
       whiteBalanceLocked: whiteBalanceLocked,
+      whiteBalanceKelvin: whiteBalanceKelvin,
       focusLocked: focusLocked,
       intrinsicsAvailable: intrinsicsAvailable,
       thermalState: thermalState,
@@ -360,7 +374,10 @@ struct CaptureStatus: Hashable, CustomStringConvertible {
       actualFps,
       stabilizationDisabled,
       exposureLocked,
+      exposureSeconds,
+      iso,
       whiteBalanceLocked,
+      whiteBalanceKelvin,
       focusLocked,
       intrinsicsAvailable,
       thermalState,
@@ -373,7 +390,7 @@ struct CaptureStatus: Hashable, CustomStringConvertible {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return CaptureApiPigeonInternal.deepEquals(lhs.running, rhs.running) && CaptureApiPigeonInternal.deepEquals(lhs.width, rhs.width) && CaptureApiPigeonInternal.deepEquals(lhs.height, rhs.height) && CaptureApiPigeonInternal.deepEquals(lhs.actualFps, rhs.actualFps) && CaptureApiPigeonInternal.deepEquals(lhs.stabilizationDisabled, rhs.stabilizationDisabled) && CaptureApiPigeonInternal.deepEquals(lhs.exposureLocked, rhs.exposureLocked) && CaptureApiPigeonInternal.deepEquals(lhs.whiteBalanceLocked, rhs.whiteBalanceLocked) && CaptureApiPigeonInternal.deepEquals(lhs.focusLocked, rhs.focusLocked) && CaptureApiPigeonInternal.deepEquals(lhs.intrinsicsAvailable, rhs.intrinsicsAvailable) && CaptureApiPigeonInternal.deepEquals(lhs.thermalState, rhs.thermalState) && CaptureApiPigeonInternal.deepEquals(lhs.batteryLevel, rhs.batteryLevel) && CaptureApiPigeonInternal.deepEquals(lhs.freeDiskBytes, rhs.freeDiskBytes) && CaptureApiPigeonInternal.deepEquals(lhs.droppedFrames, rhs.droppedFrames)
+    return CaptureApiPigeonInternal.deepEquals(lhs.running, rhs.running) && CaptureApiPigeonInternal.deepEquals(lhs.width, rhs.width) && CaptureApiPigeonInternal.deepEquals(lhs.height, rhs.height) && CaptureApiPigeonInternal.deepEquals(lhs.actualFps, rhs.actualFps) && CaptureApiPigeonInternal.deepEquals(lhs.stabilizationDisabled, rhs.stabilizationDisabled) && CaptureApiPigeonInternal.deepEquals(lhs.exposureLocked, rhs.exposureLocked) && CaptureApiPigeonInternal.deepEquals(lhs.exposureSeconds, rhs.exposureSeconds) && CaptureApiPigeonInternal.deepEquals(lhs.iso, rhs.iso) && CaptureApiPigeonInternal.deepEquals(lhs.whiteBalanceLocked, rhs.whiteBalanceLocked) && CaptureApiPigeonInternal.deepEquals(lhs.whiteBalanceKelvin, rhs.whiteBalanceKelvin) && CaptureApiPigeonInternal.deepEquals(lhs.focusLocked, rhs.focusLocked) && CaptureApiPigeonInternal.deepEquals(lhs.intrinsicsAvailable, rhs.intrinsicsAvailable) && CaptureApiPigeonInternal.deepEquals(lhs.thermalState, rhs.thermalState) && CaptureApiPigeonInternal.deepEquals(lhs.batteryLevel, rhs.batteryLevel) && CaptureApiPigeonInternal.deepEquals(lhs.freeDiskBytes, rhs.freeDiskBytes) && CaptureApiPigeonInternal.deepEquals(lhs.droppedFrames, rhs.droppedFrames)
   }
 
   func hash(into hasher: inout Hasher) {
@@ -384,7 +401,10 @@ struct CaptureStatus: Hashable, CustomStringConvertible {
     CaptureApiPigeonInternal.deepHash(value: actualFps, hasher: &hasher)
     CaptureApiPigeonInternal.deepHash(value: stabilizationDisabled, hasher: &hasher)
     CaptureApiPigeonInternal.deepHash(value: exposureLocked, hasher: &hasher)
+    CaptureApiPigeonInternal.deepHash(value: exposureSeconds, hasher: &hasher)
+    CaptureApiPigeonInternal.deepHash(value: iso, hasher: &hasher)
     CaptureApiPigeonInternal.deepHash(value: whiteBalanceLocked, hasher: &hasher)
+    CaptureApiPigeonInternal.deepHash(value: whiteBalanceKelvin, hasher: &hasher)
     CaptureApiPigeonInternal.deepHash(value: focusLocked, hasher: &hasher)
     CaptureApiPigeonInternal.deepHash(value: intrinsicsAvailable, hasher: &hasher)
     CaptureApiPigeonInternal.deepHash(value: thermalState, hasher: &hasher)
@@ -394,7 +414,7 @@ struct CaptureStatus: Hashable, CustomStringConvertible {
   }
 
   public var description: String {
-    return "CaptureStatus(running: \(String(describing: running)), width: \(String(describing: width)), height: \(String(describing: height)), actualFps: \(String(describing: actualFps)), stabilizationDisabled: \(String(describing: stabilizationDisabled)), exposureLocked: \(String(describing: exposureLocked)), whiteBalanceLocked: \(String(describing: whiteBalanceLocked)), focusLocked: \(String(describing: focusLocked)), intrinsicsAvailable: \(String(describing: intrinsicsAvailable)), thermalState: \(String(describing: thermalState)), batteryLevel: \(String(describing: batteryLevel)), freeDiskBytes: \(String(describing: freeDiskBytes)), droppedFrames: \(String(describing: droppedFrames)))"
+    return "CaptureStatus(running: \(String(describing: running)), width: \(String(describing: width)), height: \(String(describing: height)), actualFps: \(String(describing: actualFps)), stabilizationDisabled: \(String(describing: stabilizationDisabled)), exposureLocked: \(String(describing: exposureLocked)), exposureSeconds: \(String(describing: exposureSeconds)), iso: \(String(describing: iso)), whiteBalanceLocked: \(String(describing: whiteBalanceLocked)), whiteBalanceKelvin: \(String(describing: whiteBalanceKelvin)), focusLocked: \(String(describing: focusLocked)), intrinsicsAvailable: \(String(describing: intrinsicsAvailable)), thermalState: \(String(describing: thermalState)), batteryLevel: \(String(describing: batteryLevel)), freeDiskBytes: \(String(describing: freeDiskBytes)), droppedFrames: \(String(describing: droppedFrames)))"
   }
 }
 
@@ -512,20 +532,33 @@ class CaptureApiPigeonCodec: FlutterStandardMessageCodec, @unchecked Sendable {
   static let shared = CaptureApiPigeonCodec(readerWriter: CaptureApiPigeonCodecReaderWriter())
 }
 
+
 /// La cámara nativa. Todo lo que Flutter no puede hacer por sí mismo.
 ///
 /// Generated protocol from Pigeon that represents a handler of messages from Flutter.
 protocol CaptureHostApi {
+  /// Pide al sistema el permiso de cámara y espera la respuesta.
+  ///
+  /// Va antes que cualquier otra llamada: sin permiso, AVFoundation acepta abrir la
+  /// sesión y no entrega ni un frame, sin error. Es asíncrono porque el diálogo de iOS
+  /// lo es: la respuesta llega cuando el operador pulsa.
+  func requestCameraAccess() async throws -> Bool
   /// `true` si este iPhone tiene ultra gran angular.
   ///
   /// Se resuelve con `AVCaptureDevice.DiscoverySession`, **nunca con una lista de
   /// modelos**: Veo Go rechazó el iPhone 17 Pro por tener una lista desactualizada.
   func hasUltraWideCamera() throws -> Bool
   /// Abre la cámara con los ajustes dados y devuelve lo que se aplicó de verdad.
-  func configure(settings: CaptureSettings) throws -> CaptureStatus
+  ///
+  /// Tarda unos segundos: la cámara mide exposición y balance en automático antes de
+  /// congelarlos, y no se responde hasta que estén congelados.
+  func configure(settings: CaptureSettings) async throws -> CaptureStatus
   /// Empieza a grabar en local y a emitir por SRT. La grabación local no es opcional:
   /// es lo que convierte un fallo de red en un partido en diferido (ADR 0012, dec. 5).
-  func start(srtUrl: String, recordingDirectory: String) throws
+  ///
+  /// Devuelve la ruta del archivo que se está escribiendo: la pantalla lo enseña, y
+  /// quien lo busque después en Finder sabe cuál es.
+  func start(srtUrl: String, recordingDirectory: String) throws -> String
   func stop() throws
   func status() throws -> CaptureStatus
   /// PTS de los últimos frames capturados, ya en tiempo del soporte (TASK A4).
@@ -548,6 +581,26 @@ class CaptureHostApiSetup {
   /// Sets up an instance of `CaptureHostApi` to handle messages through the `binaryMessenger`.
   static func setUp(binaryMessenger: FlutterBinaryMessenger, api: CaptureHostApi?, messageChannelSuffix: String = "") {
     let channelSuffix = messageChannelSuffix.count > 0 ? ".\(messageChannelSuffix)" : ""
+    /// Pide al sistema el permiso de cámara y espera la respuesta.
+    ///
+    /// Va antes que cualquier otra llamada: sin permiso, AVFoundation acepta abrir la
+    /// sesión y no entrega ni un frame, sin error. Es asíncrono porque el diálogo de iOS
+    /// lo es: la respuesta llega cuando el operador pulsa.
+    let requestCameraAccessChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.requestCameraAccess\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      requestCameraAccessChannel.setMessageHandler { _, reply in
+        Task { @MainActor in
+          do {
+            let result = try await api.requestCameraAccess()
+            reply(wrapResult(result))
+          } catch {
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      requestCameraAccessChannel.setMessageHandler(nil)
+    }
     /// `true` si este iPhone tiene ultra gran angular.
     ///
     /// Se resuelve con `AVCaptureDevice.DiscoverySession`, **nunca con una lista de
@@ -566,16 +619,21 @@ class CaptureHostApiSetup {
       hasUltraWideCameraChannel.setMessageHandler(nil)
     }
     /// Abre la cámara con los ajustes dados y devuelve lo que se aplicó de verdad.
+    ///
+    /// Tarda unos segundos: la cámara mide exposición y balance en automático antes de
+    /// congelarlos, y no se responde hasta que estén congelados.
     let configureChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.configure\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       configureChannel.setMessageHandler { message, reply in
         let args = message as! [Any?]
         let settingsArg = args[0] as! CaptureSettings
-        do {
-          let result = try api.configure(settings: settingsArg)
-          reply(wrapResult(result))
-        } catch {
-          reply(wrapError(error))
+        Task { @MainActor in
+          do {
+            let result = try await api.configure(settings: settingsArg)
+            reply(wrapResult(result))
+          } catch {
+            reply(wrapError(error))
+          }
         }
       }
     } else {
@@ -583,6 +641,9 @@ class CaptureHostApiSetup {
     }
     /// Empieza a grabar en local y a emitir por SRT. La grabación local no es opcional:
     /// es lo que convierte un fallo de red en un partido en diferido (ADR 0012, dec. 5).
+    ///
+    /// Devuelve la ruta del archivo que se está escribiendo: la pantalla lo enseña, y
+    /// quien lo busque después en Finder sabe cuál es.
     let startChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.start\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       startChannel.setMessageHandler { message, reply in
@@ -590,8 +651,8 @@ class CaptureHostApiSetup {
         let srtUrlArg = args[0] as! String
         let recordingDirectoryArg = args[1] as! String
         do {
-          try api.start(srtUrl: srtUrlArg, recordingDirectory: recordingDirectoryArg)
-          reply(wrapResult(nil))
+          let result = try api.start(srtUrl: srtUrlArg, recordingDirectory: recordingDirectoryArg)
+          reply(wrapResult(result))
         } catch {
           reply(wrapError(error))
         }

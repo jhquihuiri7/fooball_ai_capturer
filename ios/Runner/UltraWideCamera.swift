@@ -34,12 +34,19 @@ struct AppliedCameraSettings {
     var width: Int
     var height: Int
     var actualFps: Double
-    var exposureLocked: Bool
-    var whiteBalanceLocked: Bool
+    var exposureLocked = false
+    var exposureSeconds = 0.0
+    var iso: Float = 0
+    var whiteBalanceLocked = false
+    var whiteBalanceKelvin: Float = 0
     var focusLocked: Bool
 }
 
 enum UltraWideCamera {
+    /// Posición de la lente para el infinito. AVFoundation la normaliza de 0 (lo más
+    /// cerca) a 1 (lo más lejos), sin unidades ni distancia real.
+    static let infinityLensPosition: Float = 1.0
+
     /// La cámara ultra gran angular trasera, si la hay.
     ///
     /// Con `DiscoverySession` y nunca con una lista de modelos: Veo Go rechazó el
@@ -98,28 +105,40 @@ enum UltraWideCamera {
         device.activeVideoMinFrameDuration = duration
         device.activeVideoMaxFrameDuration = duration
 
-        // Obturación múltiplo de la frecuencia de la red, e ISO acotado a lo que el
-        // formato admite: pedir un ISO fuera de rango es una excepción, no un recorte.
-        let shutter = CMTime(value: 1, timescale: CMTimeScale(settings.shutterDenominator))
-        let iso = min(max(Float(settings.iso), format.minISO), format.maxISO)
-        var exposureLocked = false
-        if device.isExposureModeSupported(.custom) {
-            device.setExposureModeCustom(duration: shutter, iso: iso, completionHandler: nil)
-            exposureLocked = true
+        // Exposición y balance en automático por ahora: la cámara tiene que medir la
+        // luz del campo antes de que `lockExposureAndWhiteBalance` congele lo medido.
+        // Quien monta el soporte debe apuntar ya al campo al configurar.
+        if device.isExposureModeSupported(.continuousAutoExposure) {
+            device.exposureMode = .continuousAutoExposure
+        }
+        if device.isWhiteBalanceModeSupported(.continuousAutoWhiteBalance) {
+            device.whiteBalanceMode = .continuousAutoWhiteBalance
         }
 
-        // El balance se congela con las ganancias que la cámara tenga ahora mismo, así
-        // que quien monta el soporte debe apuntar ya al campo antes de configurar.
-        var whiteBalanceLocked = false
-        if device.isWhiteBalanceModeSupported(.locked) {
-            device.setWhiteBalanceModeLocked(with: device.deviceWhiteBalanceGains, completionHandler: nil)
-            whiteBalanceLocked = true
+        // BT.709 en las dos cámaras. Es lo que espera el servidor (OpenCV y FFmpeg no
+        // miran las primarias) y lo único que garantiza que el color sea el mismo en
+        // los dos móviles aunque un formato admita P3 y otro no.
+        if format.supportedColorSpaces.contains(.sRGB) {
+            device.activeColorSpace = .sRGB
         }
 
-        // La ultra gran angular de los iPhone 11 y 12 es de foco fijo: ahí no hay nada
-        // que bloquear, y no es un fallo.
+        // Sin HDR de sensor: mezcla exposiciones frame a frame con una curva que cambia
+        // sola, y dos móviles no la cambian igual. La costura se vería.
+        if format.isVideoHDRSupported {
+            device.automaticallyAdjustsVideoHDREnabled = false
+            device.isVideoHDREnabled = false
+        }
+
+        // Foco al infinito, y no «donde esté la lente ahora»: en los Pro la ultra gran
+        // angular enfoca hasta macro, y si la app arranca con el móvil sobre una mesa la
+        // lente se queda a dos centímetros y el campo sale borroso. A 13 mm todo lo que
+        // esté a más de un metro es nítido con la lente en el infinito, así que es el
+        // único valor que vale igual para las dos cámaras. La ultra gran angular de los
+        // iPhone 11 y 12 es de foco fijo: ahí no hay nada que mover, y no es un fallo.
         var focusLocked = true
-        if device.isFocusModeSupported(.locked) {
+        if device.isLockingFocusWithCustomLensPositionSupported {
+            device.setFocusModeLocked(lensPosition: infinityLensPosition, completionHandler: nil)
+        } else if device.isFocusModeSupported(.locked) {
             device.focusMode = .locked
         } else {
             focusLocked = !device.isFocusModeSupported(.continuousAutoFocus)
@@ -138,10 +157,72 @@ enum UltraWideCamera {
             width: Int(dimensions.width),
             height: Int(dimensions.height),
             actualFps: 1.0 / CMTimeGetSeconds(device.activeVideoMinFrameDuration),
-            exposureLocked: exposureLocked,
-            whiteBalanceLocked: whiteBalanceLocked,
             focusLocked: focusLocked
         )
+    }
+
+    /// Congela exposición y balance con lo que la cámara acaba de medir.
+    ///
+    /// La luz total (ISO por tiempo) se conserva, pero el tiempo se lleva a la obturación
+    /// sin parpadeo: un semiperiodo de la red (1/100 a 50 Hz). Si al ISO mínimo sobra
+    /// luz, es de día y no hay red que parpadee, así que se acorta la obturación. Si al
+    /// ISO máximo falta luz, se abre a dos semiperiodos, que siguen sin dar bandas; y si
+    /// ni así llega, queda oscuro y la pantalla lo enseña.
+    static func lockExposureAndWhiteBalance(
+        on device: AVCaptureDevice,
+        settings: CaptureSettings,
+        applied: inout AppliedCameraSettings
+    ) throws {
+        let format = device.activeFormat
+        let halfPeriod = 1.0 / Double(settings.shutterDenominator)
+        let measuredSeconds = CMTimeGetSeconds(device.exposureDuration)
+        let measuredIso = Double(device.iso)
+        let measuredLight = measuredIso * measuredSeconds
+
+        var seconds = halfPeriod
+        var iso = measuredLight / seconds
+        if !iso.isFinite || iso <= 0 {
+            // La cámara no llegó a medir: el ISO de reserva del contrato.
+            iso = Double(settings.iso)
+        } else if iso < Double(format.minISO) {
+            iso = Double(format.minISO)
+            seconds = measuredLight / iso
+        } else if iso > Double(format.maxISO) {
+            seconds = 2 * halfPeriod
+            iso = measuredLight / seconds
+        }
+        iso = min(max(iso, Double(format.minISO)), Double(format.maxISO))
+        seconds = min(
+            max(seconds, CMTimeGetSeconds(format.minExposureDuration)),
+            CMTimeGetSeconds(format.maxExposureDuration)
+        )
+
+        try device.lockForConfiguration()
+        defer { device.unlockForConfiguration() }
+
+        if device.isExposureModeSupported(.custom) {
+            device.setExposureModeCustom(
+                duration: CMTime(seconds: seconds, preferredTimescale: 1_000_000_000),
+                iso: Float(iso),
+                completionHandler: nil
+            )
+            applied.exposureLocked = true
+        }
+        applied.exposureSeconds = seconds
+        applied.iso = Float(iso)
+
+        // Las ganancias se acotan porque fuera de rango no es un recorte: es una
+        // excepción que tira la app.
+        if device.isWhiteBalanceModeSupported(.locked) {
+            var gains = device.deviceWhiteBalanceGains
+            let top = device.maxWhiteBalanceGain
+            gains.redGain = min(max(gains.redGain, 1), top)
+            gains.greenGain = min(max(gains.greenGain, 1), top)
+            gains.blueGain = min(max(gains.blueGain, 1), top)
+            device.setWhiteBalanceModeLocked(with: gains, completionHandler: nil)
+            applied.whiteBalanceLocked = true
+            applied.whiteBalanceKelvin = device.temperatureAndTintValues(for: gains).temperature
+        }
     }
 
     /// Deja la conexión como la necesita el soporte y dice si lo consiguió.

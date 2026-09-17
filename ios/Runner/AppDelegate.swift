@@ -25,6 +25,12 @@ import UIKit
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
-    captureApi = CaptureHostApiImpl(binaryMessenger: engineBridge.applicationRegistrar.messenger())
+    let api = CaptureHostApiImpl(binaryMessenger: engineBridge.applicationRegistrar.messenger())
+    captureApi = api
+    // La imagen de la cámara en pantalla: una vista de plataforma sobre la misma sesión
+    // que graba, así que enseña el encuadre real (`CapturePreview.swift`).
+    engineBridge.pluginRegistry
+      .registrar(forPlugin: "capture-preview")?
+      .register(CapturePreviewFactory(makeLayer: api.makePreviewLayer), withId: "capture-preview")
   }
 }

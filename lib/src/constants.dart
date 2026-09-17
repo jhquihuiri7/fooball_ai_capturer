@@ -56,3 +56,13 @@ const int exposurePhaseToleranceNs = 5 * nsPerMillisecond;
 /// 33 ms la probabilidad de fallar un intento es ~0.7 y la de fallar seis seguidos,
 /// ~0.12. Más intentos rinden poco y retrasan el saque inicial.
 const int exposurePhaseMaxAttempts = 6;
+
+// --------------------------------------------------------------------------- //
+// Pantalla de captura
+// --------------------------------------------------------------------------- //
+
+/// Cada cuánto la pantalla vuelve a pedir el estado al nativo.
+///
+/// Batería, temperatura y frames perdidos cambian sin que nadie avise. Un segundo
+/// basta para ver venir un apagón y no molesta: es una llamada síncrona y barata.
+const Duration statusRefreshInterval = Duration(seconds: 1);

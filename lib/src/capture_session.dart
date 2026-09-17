@@ -7,6 +7,10 @@
 /// El transporte con el otro móvil entra por `clockSamples` en vez de construirse aquí.
 /// Hoy ese stream lo llena la TASK A3 (Multipeer); mañana podría ser otra cosa, y así
 /// esta clase se prueba sin levantar ninguna red.
+///
+/// Los avisos que el nativo empuja sin que nadie pregunte (`CaptureFlutterApi`) entran
+/// también por aquí: la sesión es quien sabe qué hacer con una interrupción, y así se
+/// prueban llamando al método, sin canal de por medio.
 library;
 
 import 'dart:async';
@@ -37,13 +41,14 @@ enum SessionPhase {
   fallo,
 }
 
-class CaptureSession extends ChangeNotifier {
+class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
   CaptureSession({
     required this.role,
     CaptureHostApi? api,
     Stream<ClockSample>? clockSamples,
     RigClock? clock,
     this.phasePolicy = const PhaseSortPolicy(),
+    this.standalone = false,
   })  : _api = api ?? CaptureHostApi(),
         _clock = clock ?? RigClock() {
     if (clockSamples != null) {
@@ -54,6 +59,14 @@ class CaptureSession extends ChangeNotifier {
   final CameraRole role;
   final PhaseSortPolicy phasePolicy;
 
+  /// Un solo móvil, sin reloj ni fase: para probar la cámara en el banco.
+  ///
+  /// Salta las dos comprobaciones que hacen que dos vídeos pareen, así que lo que se
+  /// grabe así no sirve para el soporte y la pantalla lo dice en grande. Lo que sí
+  /// sigue valiendo es la comprobación de la cámara —ajustes aplicados de verdad—,
+  /// que es justo lo que se viene a probar.
+  final bool standalone;
+
   final CaptureHostApi _api;
   final RigClock _clock;
   StreamSubscription<ClockSample>? _clockSubscription;
@@ -61,14 +74,55 @@ class CaptureSession extends ChangeNotifier {
   SessionPhase phase = SessionPhase.preparando;
   CaptureStatus? status;
   String? problem;
+
+  /// La interrupción que avisó el nativo (llamada, otra app, calor), mientras dure.
+  String? interruption;
+
   int? exposurePhaseNs;
   int phaseAttempt = 0;
+
+  /// Archivo de la grabación en curso, o de la última, tal como lo nombró el nativo.
+  String? recordingFile;
+  final Stopwatch _recordingClock = Stopwatch();
 
   bool get recording => phase == SessionPhase.grabando;
 
   /// Solo se graba con la cámara lista. Dejar grabar antes es la forma más fácil de
   /// volver a casa con dos vídeos que no parean.
   bool get canRecord => phase == SessionPhase.lista || phase == SessionPhase.grabando;
+
+  String get modeLabel =>
+      standalone ? 'un solo móvil · SIN RELOJ' : 'soporte de dos móviles';
+
+  /// Cuánto lleva grabando y en qué archivo: es lo que se lee de un vistazo en la
+  /// cancha para saber que de verdad se está grabando.
+  String get recordingLabel {
+    final Duration elapsed = _recordingClock.elapsed;
+    final String minutes = elapsed.inMinutes.toString().padLeft(2, '0');
+    final String seconds = (elapsed.inSeconds % 60).toString().padLeft(2, '0');
+    final String? file = recordingFileName;
+    return file == null ? '$minutes:$seconds' : '$minutes:$seconds · $file';
+  }
+
+  String? get recordingFileName => recordingFile?.split('/').last;
+
+  /// Lo que quedó congelado, en la unidad en que se lee: 1/100 e ISO, no segundos.
+  String get exposureLabel {
+    final CaptureStatus? applied = status;
+    if (applied == null || !applied.exposureLocked) {
+      return 'AUTOMÁTICA';
+    }
+    final int denominator = applied.exposureSeconds > 0 ? (1 / applied.exposureSeconds).round() : 0;
+    return 'bloqueada · 1/$denominator · ISO ${applied.iso}';
+  }
+
+  String get whiteBalanceLabel {
+    final CaptureStatus? applied = status;
+    if (applied == null || !applied.whiteBalanceLocked) {
+      return 'AUTOMÁTICO';
+    }
+    return 'bloqueado · ${applied.whiteBalanceKelvin} K';
+  }
 
   String get clockLabel {
     final ClockSyncEstimate? estimate = _clock.estimate;
@@ -95,6 +149,14 @@ class CaptureSession extends ChangeNotifier {
   Future<void> prepare({CaptureSettings? settings}) async {
     _set(SessionPhase.preparando, problem: null);
     try {
+      // El permiso va primero: sin él la sesión abre igual y no llega ni un frame.
+      if (!await _api.requestCameraAccess()) {
+        _set(
+          SessionPhase.fallo,
+          problem: 'sin permiso de cámara: concédelo en Ajustes y vuelve a entrar',
+        );
+        return;
+      }
       if (!await _api.hasUltraWideCamera()) {
         _set(
           SessionPhase.fallo,
@@ -108,10 +170,29 @@ class CaptureSession extends ChangeNotifier {
         _set(SessionPhase.fallo, problem: wrong);
         return;
       }
-      _set(SessionPhase.esperandoReloj);
+      _set(standalone ? SessionPhase.lista : SessionPhase.esperandoReloj);
     } on Exception catch (error) {
       _set(SessionPhase.fallo, problem: 'no se pudo abrir la cámara: $error');
     }
+  }
+
+  /// Vuelve a leer el estado del nativo.
+  ///
+  /// La pantalla lo llama cada segundo: batería, temperatura y frames perdidos cambian
+  /// sin que nadie avise, y `running` solo es verdad un rato después de configurar.
+  /// Antes de tener cámara no hay nada que leer.
+  Future<void> refreshStatus() async {
+    if (status == null) {
+      return;
+    }
+    try {
+      status = await _api.status();
+    } on Exception {
+      // Un fallo puntual del canal no es un problema de captura: se reintenta al
+      // segundo siguiente sin asustar a nadie.
+      return;
+    }
+    notifyListeners();
   }
 
   /// Lo que invalida el soporte aunque la cámara haya abierto.
@@ -156,14 +237,60 @@ class CaptureSession extends ChangeNotifier {
     _set(SessionPhase.lista);
   }
 
+  bool _toggling = false;
+
   Future<void> toggleRecording({String srtUrl = '', String recordingDirectory = ''}) async {
-    if (recording) {
-      await _api.stop();
-      _set(SessionPhase.lista);
+    // Dos toques seguidos son uno: el segundo llegaría con el nativo a medio abrir.
+    if (_toggling) {
       return;
     }
-    await _api.start(srtUrl, recordingDirectory);
-    _set(SessionPhase.grabando);
+    _toggling = true;
+    try {
+      if (recording) {
+        await _api.stop();
+        _recordingClock.stop();
+        _set(SessionPhase.lista);
+        return;
+      }
+      recordingFile = await _api.start(srtUrl, recordingDirectory);
+      _recordingClock
+        ..reset()
+        ..start();
+      _set(SessionPhase.grabando);
+    } on Exception catch (error) {
+      // Grabar puede fallar (disco lleno, archivo no creado) sin que la cámara deje de
+      // valer: se queda lista y se dice por qué.
+      _set(SessionPhase.lista, problem: 'no se pudo grabar: $error');
+    } finally {
+      _toggling = false;
+    }
+  }
+
+  // Avisos del nativo (CaptureFlutterApi). Llegan por el canal cuando la pantalla
+  // registra esta sesión con `CaptureFlutterApi.setUp`.
+
+  @override
+  void onInterrupted(String reason) {
+    interruption = reason;
+    notifyListeners();
+  }
+
+  @override
+  void onResumed() {
+    interruption = null;
+    notifyListeners();
+  }
+
+  @override
+  void onThermalStateChanged(ThermalState state) {
+    status?.thermalState = state;
+    notifyListeners();
+  }
+
+  @override
+  void onStatus(CaptureStatus latest) {
+    status = latest;
+    notifyListeners();
   }
 
   void _onClockSample(ClockSample sample) {

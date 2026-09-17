@@ -46,7 +46,13 @@ final class CaptureEngine: NSObject {
         UltraWideCamera.discover() != nil
     }
 
-    func configure(_ settings: CaptureSettings) throws -> AppliedCameraSettings {
+    /// Una capa de vista previa sobre esta misma sesión. La compone el GPU: no cuesta
+    /// CPU ni toca la salida de vídeo que va al archivo y al stream.
+    func makePreviewLayer() -> AVCaptureVideoPreviewLayer {
+        AVCaptureVideoPreviewLayer(session: session)
+    }
+
+    func configure(_ settings: CaptureSettings) async throws -> AppliedCameraSettings {
         guard let device = UltraWideCamera.discover() else {
             throw CameraSetupError.noUltraWideCamera
         }
@@ -56,6 +62,10 @@ final class CaptureEngine: NSObject {
         // preset, la sesión reescribe el formato al aplicar la configuración y todo el
         // trabajo de `lockSettings` se pierde en silencio.
         session.sessionPreset = .inputPriority
+        // El espacio de color lo fija `lockSettings` (BT.709). Si la sesión lo eligiera
+        // sola pondría P3 en unos formatos y no en otros, y las dos cámaras no
+        // coincidirían ni entre ellas ni con lo que espera el servidor.
+        session.automaticallyConfiguresCaptureDeviceForWideColor = false
 
         for input in session.inputs {
             session.removeInput(input)
@@ -76,7 +86,7 @@ final class CaptureEngine: NSObject {
         }
         session.commitConfiguration()
 
-        let applied = try UltraWideCamera.lockSettings(on: device, settings: settings)
+        var applied = try UltraWideCamera.lockSettings(on: device, settings: settings)
         if let connection = output.connection(with: .video) {
             let result = UltraWideCamera.configure(connection: connection)
             stabilizationOff = result.stabilizationOff
@@ -86,7 +96,37 @@ final class CaptureEngine: NSObject {
         self.device = device
         self.settings = settings
         self.applied = applied
+
+        // Exposición y balance: la cámara mide en automático un momento y después se
+        // congela lo medido, trasladado a una obturación sin parpadeo. Fijar un ISO a
+        // ciegas, que es lo que hacía esto antes, salía negro en interior y quemado a
+        // pleno sol; y congelar el balance antes del primer frame congelaba un color
+        // cualquiera.
+        startRunning()
+        await Self.waitForMetering(on: device)
+        try UltraWideCamera.lockExposureAndWhiteBalance(on: device, settings: settings, applied: &applied)
+        self.applied = applied
         return applied
+    }
+
+    /// Cada cuánto se mira si la cámara terminó de medir, en nanosegundos.
+    private static let meteringPollNs: UInt64 = 100_000_000
+
+    /// Sondeos mínimos antes de dar la medida por buena: la sesión tarda en arrancar y
+    /// la exposición automática necesita unos frames aunque diga que no está ajustando.
+    private static let meteringMinPolls = 7
+
+    /// Sondeos máximos: si en tres segundos no se asienta, se congela lo que haya y la
+    /// pantalla enseña los valores para que se vea.
+    private static let meteringMaxPolls = 30
+
+    private static func waitForMetering(on device: AVCaptureDevice) async {
+        for poll in 1...meteringMaxPolls {
+            try? await Task.sleep(nanoseconds: meteringPollNs)
+            if poll >= meteringMinPolls, !device.isAdjustingExposure, !device.isAdjustingWhiteBalance {
+                return
+            }
+        }
     }
 
     func startRunning() {
@@ -121,7 +161,7 @@ final class CaptureEngine: NSObject {
 
     // MARK: - Grabación
 
-    func startRecording(directory: String) throws {
+    func startRecording(directory: String) throws -> String {
         guard let settings, let applied else {
             throw CameraSetupError.noUltraWideCamera
         }
@@ -154,21 +194,40 @@ final class CaptureEngine: NSObject {
         }
 
         queue.async { [weak self] in
-            self?.writer = writer
-            self?.writerInput = input
-            self?.writerStarted = false
+            guard let self else { return }
+            // Si había una grabación abierta (dos toques seguidos), se cierra antes.
+            self.closeWriter()
+            self.writer = writer
+            self.writerInput = input
+            self.writerStarted = false
         }
+        return url.path
     }
 
     func stopRecording() {
         queue.async { [weak self] in
-            guard let self, let writer = self.writer else { return }
-            self.writerInput?.markAsFinished()
-            writer.finishWriting {}
-            self.writer = nil
-            self.writerInput = nil
-            self.writerStarted = false
+            self?.closeWriter()
         }
+    }
+
+    /// Cierra el escritor, en la cola de captura.
+    ///
+    /// Solo se termina un archivo que empezó. `markAsFinished` sobre un escritor que
+    /// nunca recibió un frame no devuelve error: tira la app entera, y es exactamente
+    /// lo que pasa si PARAR llega antes que el primer frame.
+    private func closeWriter() {
+        guard let writer else { return }
+        if writer.status == .writing {
+            if writerStarted {
+                writerInput?.markAsFinished()
+                writer.finishWriting {}
+            } else {
+                writer.cancelWriting()
+            }
+        }
+        self.writer = nil
+        writerInput = nil
+        writerStarted = false
     }
 
     func stop() {
@@ -189,7 +248,10 @@ final class CaptureEngine: NSObject {
             actualFps: applied?.actualFps ?? 0,
             stabilizationDisabled: stabilizationOff,
             exposureLocked: applied?.exposureLocked ?? false,
+            exposureSeconds: applied?.exposureSeconds ?? 0,
+            iso: Int64((applied?.iso ?? 0).rounded()),
             whiteBalanceLocked: applied?.whiteBalanceLocked ?? false,
+            whiteBalanceKelvin: Int64((applied?.whiteBalanceKelvin ?? 0).rounded()),
             focusLocked: applied?.focusLocked ?? false,
             intrinsicsAvailable: intrinsicsAvailable,
             thermalState: Self.thermalState(),
@@ -236,9 +298,20 @@ extension CaptureEngine: AVCaptureVideoDataOutputSampleBufferDelegate {
         guard let writer, let input = writerInput else { return }
 
         if !writerStarted {
-            writer.startWriting()
+            guard writer.startWriting() else {
+                // No se pudo abrir el archivo (disco, permisos): se suelta el escritor
+                // para no seguir intentándolo frame a frame, y queda en el log.
+                NSLog("[capture] no se pudo empezar a grabar: %@", writer.error?.localizedDescription ?? "?")
+                self.writer = nil
+                writerInput = nil
+                return
+            }
             writer.startSession(atSourceTime: rigTime)
             writerStarted = true
+        }
+        guard writer.status == .writing else {
+            droppedFrames += 1
+            return
         }
         guard input.isReadyForMoreMediaData else {
             // Nunca se encola: si el escritor va por detrás, el frame se pierde y se

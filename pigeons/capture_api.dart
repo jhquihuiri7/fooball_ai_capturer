@@ -70,9 +70,11 @@ class CaptureSettings {
   /// frecuencia de red para que los focos del campo no produzcan bandas.
   final int shutterDenominator;
 
-  /// ISO fijo. Igual en los dos móviles para que la costura no cambie de brillo; si los
-  /// modelos son distintos, el mismo ISO no da el mismo brillo y lo remata la
-  /// corrección de ganancia del servidor.
+  /// ISO de reserva. La exposición se mide en automático al abrir la cámara y se
+  /// congela trasladada a la obturación sin parpadeo; este valor solo se usa si la
+  /// cámara no llega a medir nada. Igual en los dos móviles para que la costura no
+  /// cambie de brillo; si los modelos son distintos, lo remata la corrección de
+  /// ganancia del servidor.
   final int iso;
 
   /// Recorta verticalmente a la banda jugable antes de codificar (TASK A6). Ahorra un
@@ -93,7 +95,10 @@ class CaptureStatus {
     required this.actualFps,
     required this.stabilizationDisabled,
     required this.exposureLocked,
+    required this.exposureSeconds,
+    required this.iso,
     required this.whiteBalanceLocked,
+    required this.whiteBalanceKelvin,
     required this.focusLocked,
     required this.intrinsicsAvailable,
     required this.thermalState,
@@ -112,7 +117,17 @@ class CaptureStatus {
   final bool stabilizationDisabled;
 
   final bool exposureLocked;
+
+  /// Lo que quedó congelado: obturación en segundos e ISO. Se enseñan para que quien
+  /// monta el soporte vea que los dos móviles miden lo mismo.
+  final double exposureSeconds;
+  final int iso;
+
   final bool whiteBalanceLocked;
+
+  /// Temperatura de color congelada, en kelvin.
+  final int whiteBalanceKelvin;
+
   final bool focusLocked;
 
   /// La matriz intrínseca por frame. Sin ella hay que caer a `from_hfov`, que sirve
@@ -146,6 +161,14 @@ class ClockSample {
 /// La cámara nativa. Todo lo que Flutter no puede hacer por sí mismo.
 @HostApi()
 abstract class CaptureHostApi {
+  /// Pide al sistema el permiso de cámara y espera la respuesta.
+  ///
+  /// Va antes que cualquier otra llamada: sin permiso, AVFoundation acepta abrir la
+  /// sesión y no entrega ni un frame, sin error. Es asíncrono porque el diálogo de iOS
+  /// lo es: la respuesta llega cuando el operador pulsa.
+  @async
+  bool requestCameraAccess();
+
   /// `true` si este iPhone tiene ultra gran angular.
   ///
   /// Se resuelve con `AVCaptureDevice.DiscoverySession`, **nunca con una lista de
@@ -153,11 +176,18 @@ abstract class CaptureHostApi {
   bool hasUltraWideCamera();
 
   /// Abre la cámara con los ajustes dados y devuelve lo que se aplicó de verdad.
+  ///
+  /// Tarda unos segundos: la cámara mide exposición y balance en automático antes de
+  /// congelarlos, y no se responde hasta que estén congelados.
+  @async
   CaptureStatus configure(CaptureSettings settings);
 
   /// Empieza a grabar en local y a emitir por SRT. La grabación local no es opcional:
   /// es lo que convierte un fallo de red en un partido en diferido (ADR 0012, dec. 5).
-  void start(String srtUrl, String recordingDirectory);
+  ///
+  /// Devuelve la ruta del archivo que se está escribiendo: la pantalla lo enseña, y
+  /// quien lo busque después en Finder sabe cuál es.
+  String start(String srtUrl, String recordingDirectory);
 
   void stop();
 

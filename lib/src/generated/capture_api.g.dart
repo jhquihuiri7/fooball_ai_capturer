@@ -160,9 +160,11 @@ class CaptureSettings {
   /// frecuencia de red para que los focos del campo no produzcan bandas.
   int shutterDenominator;
 
-  /// ISO fijo. Igual en los dos móviles para que la costura no cambie de brillo; si los
-  /// modelos son distintos, el mismo ISO no da el mismo brillo y lo remata la
-  /// corrección de ganancia del servidor.
+  /// ISO de reserva. La exposición se mide en automático al abrir la cámara y se
+  /// congela trasladada a la obturación sin parpadeo; este valor solo se usa si la
+  /// cámara no llega a medir nada. Igual en los dos móviles para que la costura no
+  /// cambie de brillo; si los modelos son distintos, lo remata la corrección de
+  /// ganancia del servidor.
   int iso;
 
   /// Recorta verticalmente a la banda jugable antes de codificar (TASK A6). Ahorra un
@@ -234,7 +236,10 @@ class CaptureStatus {
     required this.actualFps,
     required this.stabilizationDisabled,
     required this.exposureLocked,
+    required this.exposureSeconds,
+    required this.iso,
     required this.whiteBalanceLocked,
+    required this.whiteBalanceKelvin,
     required this.focusLocked,
     required this.intrinsicsAvailable,
     required this.thermalState,
@@ -257,7 +262,16 @@ class CaptureStatus {
 
   bool exposureLocked;
 
+  /// Lo que quedó congelado: obturación en segundos e ISO. Se enseñan para que quien
+  /// monta el soporte vea que los dos móviles miden lo mismo.
+  double exposureSeconds;
+
+  int iso;
+
   bool whiteBalanceLocked;
+
+  /// Temperatura de color congelada, en kelvin.
+  int whiteBalanceKelvin;
 
   bool focusLocked;
 
@@ -281,7 +295,10 @@ class CaptureStatus {
       actualFps,
       stabilizationDisabled,
       exposureLocked,
+      exposureSeconds,
+      iso,
       whiteBalanceLocked,
+      whiteBalanceKelvin,
       focusLocked,
       intrinsicsAvailable,
       thermalState,
@@ -303,13 +320,16 @@ class CaptureStatus {
       actualFps: result[3]! as double,
       stabilizationDisabled: result[4]! as bool,
       exposureLocked: result[5]! as bool,
-      whiteBalanceLocked: result[6]! as bool,
-      focusLocked: result[7]! as bool,
-      intrinsicsAvailable: result[8]! as bool,
-      thermalState: result[9]! as ThermalState,
-      batteryLevel: result[10]! as double,
-      freeDiskBytes: result[11]! as int,
-      droppedFrames: result[12]! as int,
+      exposureSeconds: result[6]! as double,
+      iso: result[7]! as int,
+      whiteBalanceLocked: result[8]! as bool,
+      whiteBalanceKelvin: result[9]! as int,
+      focusLocked: result[10]! as bool,
+      intrinsicsAvailable: result[11]! as bool,
+      thermalState: result[12]! as ThermalState,
+      batteryLevel: result[13]! as double,
+      freeDiskBytes: result[14]! as int,
+      droppedFrames: result[15]! as int,
     );
   }
 
@@ -322,7 +342,7 @@ class CaptureStatus {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(running, other.running) && _deepEquals(width, other.width) && _deepEquals(height, other.height) && _deepEquals(actualFps, other.actualFps) && _deepEquals(stabilizationDisabled, other.stabilizationDisabled) && _deepEquals(exposureLocked, other.exposureLocked) && _deepEquals(whiteBalanceLocked, other.whiteBalanceLocked) && _deepEquals(focusLocked, other.focusLocked) && _deepEquals(intrinsicsAvailable, other.intrinsicsAvailable) && _deepEquals(thermalState, other.thermalState) && _deepEquals(batteryLevel, other.batteryLevel) && _deepEquals(freeDiskBytes, other.freeDiskBytes) && _deepEquals(droppedFrames, other.droppedFrames);
+    return _deepEquals(running, other.running) && _deepEquals(width, other.width) && _deepEquals(height, other.height) && _deepEquals(actualFps, other.actualFps) && _deepEquals(stabilizationDisabled, other.stabilizationDisabled) && _deepEquals(exposureLocked, other.exposureLocked) && _deepEquals(exposureSeconds, other.exposureSeconds) && _deepEquals(iso, other.iso) && _deepEquals(whiteBalanceLocked, other.whiteBalanceLocked) && _deepEquals(whiteBalanceKelvin, other.whiteBalanceKelvin) && _deepEquals(focusLocked, other.focusLocked) && _deepEquals(intrinsicsAvailable, other.intrinsicsAvailable) && _deepEquals(thermalState, other.thermalState) && _deepEquals(batteryLevel, other.batteryLevel) && _deepEquals(freeDiskBytes, other.freeDiskBytes) && _deepEquals(droppedFrames, other.droppedFrames);
   }
 
   @override
@@ -331,7 +351,7 @@ class CaptureStatus {
 
   @override
   String toString() {
-    return 'CaptureStatus(running: $running, width: $width, height: $height, actualFps: $actualFps, stabilizationDisabled: $stabilizationDisabled, exposureLocked: $exposureLocked, whiteBalanceLocked: $whiteBalanceLocked, focusLocked: $focusLocked, intrinsicsAvailable: $intrinsicsAvailable, thermalState: $thermalState, batteryLevel: $batteryLevel, freeDiskBytes: $freeDiskBytes, droppedFrames: $droppedFrames)';
+    return 'CaptureStatus(running: $running, width: $width, height: $height, actualFps: $actualFps, stabilizationDisabled: $stabilizationDisabled, exposureLocked: $exposureLocked, exposureSeconds: $exposureSeconds, iso: $iso, whiteBalanceLocked: $whiteBalanceLocked, whiteBalanceKelvin: $whiteBalanceKelvin, focusLocked: $focusLocked, intrinsicsAvailable: $intrinsicsAvailable, thermalState: $thermalState, batteryLevel: $batteryLevel, freeDiskBytes: $freeDiskBytes, droppedFrames: $droppedFrames)';
   }
 }
 
@@ -461,6 +481,30 @@ class CaptureHostApi {
   final String pigeonVar_messageChannelSuffix;
 
 
+  /// Pide al sistema el permiso de cámara y espera la respuesta.
+  ///
+  /// Va antes que cualquier otra llamada: sin permiso, AVFoundation acepta abrir la
+  /// sesión y no entrega ni un frame, sin error. Es asíncrono porque el diálogo de iOS
+  /// lo es: la respuesta llega cuando el operador pulsa.
+  Future<bool> requestCameraAccess() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.CaptureHostApi.requestCameraAccess$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as bool;
+  }
+
   /// `true` si este iPhone tiene ultra gran angular.
   ///
   /// Se resuelve con `AVCaptureDevice.DiscoverySession`, **nunca con una lista de
@@ -485,6 +529,9 @@ class CaptureHostApi {
   }
 
   /// Abre la cámara con los ajustes dados y devuelve lo que se aplicó de verdad.
+  ///
+  /// Tarda unos segundos: la cámara mide exposición y balance en automático antes de
+  /// congelarlos, y no se responde hasta que estén congelados.
   Future<CaptureStatus> configure(CaptureSettings settings) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.CaptureHostApi.configure$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
@@ -506,7 +553,10 @@ class CaptureHostApi {
 
   /// Empieza a grabar en local y a emitir por SRT. La grabación local no es opcional:
   /// es lo que convierte un fallo de red en un partido en diferido (ADR 0012, dec. 5).
-  Future<void> start(String srtUrl, String recordingDirectory) async {
+  ///
+  /// Devuelve la ruta del archivo que se está escribiendo: la pantalla lo enseña, y
+  /// quien lo busque después en Finder sabe cuál es.
+  Future<String> start(String srtUrl, String recordingDirectory) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.CaptureHostApi.start$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
@@ -516,12 +566,13 @@ class CaptureHostApi {
     final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[srtUrl, recordingDirectory]);
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
-    _extractReplyValueOrThrow(
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
         pigeonVar_replyList,
         pigeonVar_channelName,
-        isNullValid: true,
+        isNullValid: false,
     )
     ;
+    return pigeonVar_replyValue! as String;
   }
 
   Future<void> stop() async {

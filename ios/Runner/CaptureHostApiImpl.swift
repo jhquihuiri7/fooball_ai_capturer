@@ -29,14 +29,21 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
 
     // MARK: - CaptureHostApi
 
+    func requestCameraAccess() async throws -> Bool {
+        // Con el permiso ya decidido responde al instante; si no, iOS enseña el diálogo
+        // y la respuesta llega cuando el operador pulsa. Se pide aquí, en vez de dejar
+        // que lo dispare la sesión al abrirse, porque en ese caso la cámara arranca sin
+        // entregar frames y nadie se entera.
+        await AVCaptureDevice.requestAccess(for: .video)
+    }
+
     func hasUltraWideCamera() throws -> Bool {
         engine.hasUltraWideCamera()
     }
 
-    func configure(settings: CaptureSettings) throws -> CaptureStatus {
+    func configure(settings: CaptureSettings) async throws -> CaptureStatus {
         do {
-            _ = try engine.configure(settings)
-            engine.startRunning()
+            _ = try await engine.configure(settings)
             return engine.status()
         } catch {
             throw PigeonError(
@@ -47,12 +54,13 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
         }
     }
 
-    func start(srtUrl: String, recordingDirectory: String) throws {
+    func start(srtUrl: String, recordingDirectory: String) throws -> String {
         let directory = recordingDirectory.isEmpty ? defaultDirectory : recordingDirectory
+        let path: String
         do {
             // El orden importa: primero el fichero, después la emisión. Si algo falla,
             // que falle lo prescindible (ADR 0012, decisión 5).
-            try engine.startRecording(directory: directory)
+            path = try engine.startRecording(directory: directory)
         } catch {
             throw PigeonError(code: "record", message: error.localizedDescription, details: nil)
         }
@@ -62,6 +70,12 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
             // emite, que es un modo degradado honesto y no un fallo silencioso.
             NSLog("[capture] SRT todavia no implementado (TASK A5): %@", srtUrl)
         }
+        return path
+    }
+
+    /// La capa de vista previa para la vista de plataforma `capture-preview`.
+    func makePreviewLayer() -> AVCaptureVideoPreviewLayer {
+        engine.makePreviewLayer()
     }
 
     func stop() throws {
