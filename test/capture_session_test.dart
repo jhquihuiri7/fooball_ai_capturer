@@ -22,6 +22,18 @@ void main() {
       expect(api.configureCalls, 0);
     });
 
+    test('la red local se pide al preparar y, si la niegan, se dice sin parar nada', () async {
+      final CaptureSession session =
+          CaptureSession(role: CameraRole.left, api: FakeCaptureApi(localNetwork: false));
+      expect(session.localNetworkLabel, 'sin pedir');
+
+      await session.prepare();
+
+      expect(session.localNetworkAllowed, isFalse);
+      expect(session.localNetworkLabel, contains('Red local'));
+      expect(session.phase, SessionPhase.esperandoReloj);
+    });
+
     test('sin ultra gran angular no hay cámara que valga', () async {
       final CaptureSession session =
           CaptureSession(role: CameraRole.left, api: FakeCaptureApi(ultraWide: false));
@@ -89,6 +101,21 @@ void main() {
 
       session.status!.timecodeFailures = 3;
       expect(session.timecodeLabel, 'FALLA en 3 frames');
+    });
+  });
+
+  group('cierre', () {
+    test('si la pantalla se cierra mientras la cámara mide, prepare termina en silencio',
+        () async {
+      final FakeCaptureApi api = FakeCaptureApi()..configureGate = Completer<void>();
+      final CaptureSession session = CaptureSession(role: CameraRole.left, api: api);
+
+      final Future<void> preparing = session.prepare();
+      session.dispose();
+      api.configureGate!.complete();
+
+      await preparing;
+      expect(session.phase, SessionPhase.esperandoReloj);
     });
   });
 
@@ -281,6 +308,62 @@ void main() {
 
       expect(session.recordingFileName, 'left-1.mov');
       expect(session.recordingLabel, matches(r'^\d\d:\d\d · left-1\.mov$'));
+    });
+  });
+
+  group('emisión', () {
+    test('cada lado publica en su path, con el búfer de Starlink', () {
+      final CaptureSession left = CaptureSession(
+        role: CameraRole.left,
+        api: FakeCaptureApi(),
+        serverHost: '10.10.18.100',
+      );
+      final CaptureSession right = CaptureSession(
+        role: CameraRole.right,
+        api: FakeCaptureApi(),
+        serverHost: 'pod.football.ai',
+      );
+
+      expect(left.streamUrl, 'srt://10.10.18.100:8890?streamid=publish:izquierda&latency=1000');
+      expect(right.streamUrl, 'srt://pod.football.ai:8890?streamid=publish:derecha&latency=1000');
+    });
+
+    test('sin servidor no se emite: solo se graba', () async {
+      final FakeCaptureApi api = FakeCaptureApi();
+      final CaptureSession session = CaptureSession(role: CameraRole.left, api: api);
+
+      expect(session.streamUrl, '');
+      await session.toggleRecording();
+
+      expect(api.lastSrtUrl, '');
+      expect(session.streamLabel, contains('sin servidor'));
+    });
+
+    test('al grabar se pasa la URL de emisión al nativo', () async {
+      final FakeCaptureApi api = FakeCaptureApi();
+      final CaptureSession session =
+          CaptureSession(role: CameraRole.left, api: api, serverHost: '10.0.0.5');
+
+      await session.toggleRecording();
+
+      expect(api.lastSrtUrl, startsWith('srt://10.0.0.5:8890'));
+    });
+
+    test('la etiqueta dice en qué está la emisión y avisa cuando va mal', () async {
+      final CaptureSession session = CaptureSession(
+        role: CameraRole.left,
+        api: FakeCaptureApi(status: fakeStatus(streamState: StreamState.streaming)),
+        serverHost: '10.0.0.5',
+      );
+      await session.prepare();
+      expect(session.streamLabel, 'EMITIENDO a 10.0.0.5 · 15 Mbit/s');
+      expect(session.streamInTrouble, isFalse);
+
+      session.status!
+        ..streamState = StreamState.reconnecting
+        ..streamDetail = 'se perdió el enlace';
+      expect(session.streamLabel, 'RECONECTANDO · se perdió el enlace');
+      expect(session.streamInTrouble, isTrue);
     });
   });
 

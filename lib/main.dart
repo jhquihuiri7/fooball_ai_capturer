@@ -17,14 +17,17 @@ void main() {
 }
 
 class CaptureApp extends StatelessWidget {
-  const CaptureApp({super.key});
+  const CaptureApp({this.api, super.key});
+
+  /// Inyectable para los tests.
+  final CaptureHostApi? api;
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'football-ai · captura',
       theme: ThemeData(colorSchemeSeed: Colors.green, brightness: Brightness.dark),
-      home: const RolePage(),
+      home: RolePage(api: api),
     );
   }
 }
@@ -32,15 +35,76 @@ class CaptureApp extends StatelessWidget {
 /// Elegir lado. Es lo primero y lo único que no puede equivocarse: si los dos móviles
 /// dicen ser el izquierdo, el servidor recibe dos veces la misma mitad del campo.
 class RolePage extends StatefulWidget {
-  const RolePage({super.key});
+  const RolePage({this.api, super.key});
+
+  final CaptureHostApi? api;
 
   @override
   State<RolePage> createState() => _RolePageState();
 }
 
 class _RolePageState extends State<RolePage> {
+  late final CaptureHostApi _api = widget.api ?? CaptureHostApi();
+  final TextEditingController _server = TextEditingController();
+
   /// Apagado por defecto: encenderlo en un partido es grabar dos vídeos que no parean.
   bool _standalone = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadServer());
+  }
+
+  /// Lo guardado manda; si no hay nada, se busca el banco de pruebas por Bonjour y se
+  /// guarda lo encontrado, para no teclear una IP nunca.
+  bool _searching = false;
+
+  Future<void> _loadServer() async {
+    try {
+      _server.text = await _api.loadServerHost();
+    } on Exception {
+      // Sin nativo (tests) no hay nada guardado. Se queda vacío: solo grabación.
+    }
+    if (_server.text.isEmpty) {
+      await _discoverServer();
+    }
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  Future<void> _discoverServer() async {
+    if (mounted) {
+      setState(() => _searching = true);
+    }
+    try {
+      final String found = await _api.discoverServer();
+      if (found.isNotEmpty) {
+        _server.text = found;
+        await _saveServer(found);
+      }
+    } on Exception {
+      // Sin nativo no hay red que buscar.
+    }
+    if (mounted) {
+      setState(() => _searching = false);
+    }
+  }
+
+  Future<void> _saveServer(String host) async {
+    try {
+      await _api.saveServerHost(host.trim());
+    } on Exception {
+      // Igual que arriba: sin nativo no se guarda, y no pasa nada.
+    }
+  }
+
+  @override
+  void dispose() {
+    _server.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -57,14 +121,39 @@ class _RolePageState extends State<RolePage> {
                     role: CameraRole.left,
                     label: 'IZQUIERDA',
                     standalone: _standalone,
+                    serverHost: _server.text.trim(),
                   ),
                   _RoleButton(
                     role: CameraRole.right,
                     label: 'DERECHA',
                     standalone: _standalone,
+                    serverHost: _server.text.trim(),
                   ),
                 ],
               ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: TextField(
+              controller: _server,
+              keyboardType: TextInputType.url,
+              autocorrect: false,
+              decoration: InputDecoration(
+                labelText: 'Servidor (host o IP del MediaMTX)',
+                helperText: _searching
+                    ? 'Buscando el servidor en la red…'
+                    : 'Vacío: solo se graba en el móvil, no se emite.',
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.search),
+                  tooltip: 'Buscar en la red',
+                  onPressed: _searching ? null : () => unawaited(_discoverServer()),
+                ),
+              ),
+              onChanged: (String value) {
+                unawaited(_saveServer(value));
+                setState(() {});
+              },
             ),
           ),
           SwitchListTile(
@@ -83,18 +172,24 @@ class _RolePageState extends State<RolePage> {
 }
 
 class _RoleButton extends StatelessWidget {
-  const _RoleButton({required this.role, required this.label, required this.standalone});
+  const _RoleButton({
+    required this.role,
+    required this.label,
+    required this.standalone,
+    required this.serverHost,
+  });
 
   final CameraRole role;
   final String label;
   final bool standalone;
+  final String serverHost;
 
   @override
   Widget build(BuildContext context) {
     return FilledButton(
       onPressed: () => Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (_) => CapturePage(role: role, standalone: standalone),
+          builder: (_) => CapturePage(role: role, standalone: standalone, serverHost: serverHost),
         ),
       ),
       style: FilledButton.styleFrom(
@@ -107,7 +202,13 @@ class _RoleButton extends StatelessWidget {
 
 /// Estado de la captura y los dos botones.
 class CapturePage extends StatefulWidget {
-  const CapturePage({required this.role, this.session, this.standalone = false, super.key});
+  const CapturePage({
+    required this.role,
+    this.session,
+    this.standalone = false,
+    this.serverHost = '',
+    super.key,
+  });
 
   final CameraRole role;
 
@@ -117,13 +218,16 @@ class CapturePage extends StatefulWidget {
   /// Probar con un solo móvil, sin esperar reloj (ver `CaptureSession.standalone`).
   final bool standalone;
 
+  /// Host o IP del servidor. Vacío: solo grabación.
+  final String serverHost;
+
   @override
   State<CapturePage> createState() => _CapturePageState();
 }
 
 class _CapturePageState extends State<CapturePage> {
-  late final CaptureSession _session =
-      widget.session ?? CaptureSession(role: widget.role, standalone: widget.standalone);
+  late final CaptureSession _session = widget.session ??
+      CaptureSession(role: widget.role, standalone: widget.standalone, serverHost: widget.serverHost);
   Timer? _refresh;
 
   @override
@@ -183,8 +287,10 @@ class _CapturePageState extends State<CapturePage> {
             ),
           ),
           const SizedBox(height: 12),
-          // TASK A5: aquí irá el estado de la emisión al servidor (URL, bitrate, enlace).
-          const _Row('Emisión', 'todavía no se envía nada: solo graba en el móvil'),
+          _Row('Red local', _session.localNetworkLabel, alarm: _session.localNetworkAllowed == false),
+          _Row('Emisión', _session.streamLabel, alarm: _session.streamInTrouble),
+          if (status != null && status.streamState != StreamState.off)
+            _Row('Frames perdidos (emisión)', '${status.streamDroppedFrames}'),
           if (!_session.recording && _session.recordingFileName != null)
             _Row('Último archivo', _session.recordingFileName!),
           _Row('Modo', _session.modeLabel, alarm: _session.standalone),

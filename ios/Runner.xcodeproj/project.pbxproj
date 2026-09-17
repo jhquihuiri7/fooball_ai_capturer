@@ -8,8 +8,11 @@
 
 /* Begin PBXBuildFile section */
 		1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */ = {isa = PBXBuildFile; fileRef = 1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */; };
+		30A153D65E62D04448669E06 /* ServerDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5150A74A7D1D6F3192EFB92A /* ServerDiscovery.swift */; };
 		331C808B294A63AB00263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C807B294A618700263BE5 /* RunnerTests.swift */; };
 		3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */ = {isa = PBXBuildFile; fileRef = 3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */; };
+		58ECE88B6A9325C2B7045FEE /* SRTHaishinKit in Frameworks */ = {isa = PBXBuildFile; productRef = 4297400DDA0324015053E4F8 /* SRTHaishinKit */; };
+		627CB884C887B67E5DF909EB /* LocalNetworkAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7BDBD1AB0D8AFDBE92BC8F2 /* LocalNetworkAccess.swift */; };
 		74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };
 		7884E8682EC3CC0700C636F2 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */; };
 		78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */ = {isa = PBXBuildFile; productRef = 78A3181F2AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage */; };
@@ -19,8 +22,10 @@
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
 		A068CD3AAF7E49FE87160E29 /* UltraWideCamera.swift in Sources */ = {isa = PBXBuildFile; fileRef = 097B554979A583E770A366B6 /* UltraWideCamera.swift */; };
 		A4A6013E8278B8712287176B /* CaptureHostApiImpl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C0BE040E3FBCE1ACB195CD6 /* CaptureHostApiImpl.swift */; };
+		BE93EA77B1159338482C9E3C /* StreamPublisher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FC3008AB8EFE5C3CF589A7A /* StreamPublisher.swift */; };
 		C12248A7A6C7D36389B4417F /* RigTimecode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6156F708114F91B966049E46 /* RigTimecode.swift */; };
 		C191B261C5CEF0625CF121FA /* CaptureEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6386D157B1CCE800D9D25B8 /* CaptureEngine.swift */; };
+		C2787637CA67F80499196302 /* HaishinKit in Frameworks */ = {isa = PBXBuildFile; productRef = DB432E64DE2C65DC05887E2C /* HaishinKit */; };
 		C9E99AD11E6380D4551F24F8 /* CaptureApi.g.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F7AA4C807562B3E041044F9 /* CaptureApi.g.swift */; };
 /* End PBXBuildFile section */
 
@@ -51,10 +56,12 @@
 		097B554979A583E770A366B6 /* UltraWideCamera.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = UltraWideCamera.swift; sourceTree = "<group>"; };
 		1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GeneratedPluginRegistrant.h; sourceTree = "<group>"; };
 		1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GeneratedPluginRegistrant.m; sourceTree = "<group>"; };
+		1FC3008AB8EFE5C3CF589A7A /* StreamPublisher.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = StreamPublisher.swift; sourceTree = "<group>"; };
 		323F9049728479B1DD01C32B /* CapturePreview.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CapturePreview.swift; sourceTree = "<group>"; };
 		331C807B294A618700263BE5 /* RunnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunnerTests.swift; sourceTree = "<group>"; };
 		331C8081294A63A400263BE5 /* RunnerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RunnerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = AppFrameworkInfo.plist; path = Flutter/AppFrameworkInfo.plist; sourceTree = "<group>"; };
+		5150A74A7D1D6F3192EFB92A /* ServerDiscovery.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ServerDiscovery.swift; sourceTree = "<group>"; };
 		5C0BE040E3FBCE1ACB195CD6 /* CaptureHostApiImpl.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CaptureHostApiImpl.swift; sourceTree = "<group>"; };
 		6156F708114F91B966049E46 /* RigTimecode.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RigTimecode.swift; sourceTree = "<group>"; };
 		74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Runner-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -70,6 +77,7 @@
 		97C146FD1CF9000F007C117D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		97C147001CF9000F007C117D /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		C7BDBD1AB0D8AFDBE92BC8F2 /* LocalNetworkAccess.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LocalNetworkAccess.swift; sourceTree = "<group>"; };
 		F6386D157B1CCE800D9D25B8 /* CaptureEngine.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CaptureEngine.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -79,6 +87,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */,
+				C2787637CA67F80499196302 /* HaishinKit in Frameworks */,
+				58ECE88B6A9325C2B7045FEE /* SRTHaishinKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -142,6 +152,9 @@
 				097B554979A583E770A366B6 /* UltraWideCamera.swift */,
 				323F9049728479B1DD01C32B /* CapturePreview.swift */,
 				6156F708114F91B966049E46 /* RigTimecode.swift */,
+				1FC3008AB8EFE5C3CF589A7A /* StreamPublisher.swift */,
+				C7BDBD1AB0D8AFDBE92BC8F2 /* LocalNetworkAccess.swift */,
+				5150A74A7D1D6F3192EFB92A /* ServerDiscovery.swift */,
 			);
 			path = Runner;
 			sourceTree = "<group>";
@@ -184,6 +197,8 @@
 			name = Runner;
 			packageProductDependencies = (
 				78A3181F2AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage */,
+				DB432E64DE2C65DC05887E2C /* HaishinKit */,
+				4297400DDA0324015053E4F8 /* SRTHaishinKit */,
 			);
 			productName = Runner;
 			productReference = 97C146EE1CF9000F007C117D /* Runner.app */;
@@ -220,6 +235,7 @@
 			mainGroup = 97C146E51CF9000F007C117D;
 			packageReferences = (
 				781AD8BC2B33823900A9FFBB /* XCLocalSwiftPackageReference "FlutterGeneratedPluginSwiftPackage" */,
+				6BBD633D42FAA13D81180F02 /* XCRemoteSwiftPackageReference "HaishinKit.swift" */,
 			);
 			productRefGroup = 97C146EF1CF9000F007C117D /* Products */;
 			projectDirPath = "";
@@ -308,6 +324,9 @@
 				A068CD3AAF7E49FE87160E29 /* UltraWideCamera.swift in Sources */,
 				932A4BF39D12B65F6E366D50 /* CapturePreview.swift in Sources */,
 				C12248A7A6C7D36389B4417F /* RigTimecode.swift in Sources */,
+				BE93EA77B1159338482C9E3C /* StreamPublisher.swift in Sources */,
+				627CB884C887B67E5DF909EB /* LocalNetworkAccess.swift in Sources */,
+				30A153D65E62D04448669E06 /* ServerDiscovery.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -384,7 +403,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = iphoneos;
@@ -511,7 +530,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
@@ -562,7 +581,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = iphoneos;
@@ -660,10 +679,31 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		6BBD633D42FAA13D81180F02 /* XCRemoteSwiftPackageReference "HaishinKit.swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/HaishinKit/HaishinKit.swift";
+			requirement = {
+				kind = exactVersion;
+				version = 2.2.5;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
+		4297400DDA0324015053E4F8 /* SRTHaishinKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6BBD633D42FAA13D81180F02 /* XCRemoteSwiftPackageReference "HaishinKit.swift" */;
+			productName = SRTHaishinKit;
+		};
 		78A3181F2AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = FlutterGeneratedPluginSwiftPackage;
+		};
+		DB432E64DE2C65DC05887E2C /* HaishinKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6BBD633D42FAA13D81180F02 /* XCRemoteSwiftPackageReference "HaishinKit.swift" */;
+			productName = HaishinKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

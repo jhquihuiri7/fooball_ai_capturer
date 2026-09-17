@@ -127,6 +127,17 @@ enum ThermalState {
   critical;
 }
 
+/// Estado de la emisión al servidor (TASK A5).
+enum StreamState {
+  /// No se emite: sin servidor configurado, o antes de GRABAR.
+  off,
+  connecting,
+  streaming,
+  /// Se perdió el enlace y se reintenta sola. `streamDetail` dice por qué.
+  reconnecting,
+  failed;
+}
+
 /// Ajustes con los que se abre la cámara. Todos son decisiones del ADR 0012, no
 /// preferencias: cambiarlos invalida la calibración del soporte.
 class CaptureSettings {
@@ -247,6 +258,9 @@ class CaptureStatus {
     required this.freeDiskBytes,
     required this.droppedFrames,
     required this.timecodeFailures,
+    required this.streamState,
+    required this.streamDetail,
+    required this.streamDroppedFrames,
   });
 
   bool running;
@@ -292,6 +306,14 @@ class CaptureStatus {
   /// ser cero: cada uno es un frame que el servidor no puede emparejar.
   int timecodeFailures;
 
+  StreamState streamState;
+
+  /// Por qué se está reconectando o falló, en palabras. Vacío si va bien.
+  String streamDetail;
+
+  /// Frames que la emisión descartó porque el codificador iba por detrás.
+  int streamDroppedFrames;
+
   List<Object?> _toList() {
     return <Object?>[
       running,
@@ -311,6 +333,9 @@ class CaptureStatus {
       freeDiskBytes,
       droppedFrames,
       timecodeFailures,
+      streamState,
+      streamDetail,
+      streamDroppedFrames,
     ];
   }
 
@@ -337,6 +362,9 @@ class CaptureStatus {
       freeDiskBytes: result[14]! as int,
       droppedFrames: result[15]! as int,
       timecodeFailures: result[16]! as int,
+      streamState: result[17]! as StreamState,
+      streamDetail: result[18]! as String,
+      streamDroppedFrames: result[19]! as int,
     );
   }
 
@@ -349,7 +377,7 @@ class CaptureStatus {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(running, other.running) && _deepEquals(width, other.width) && _deepEquals(height, other.height) && _deepEquals(actualFps, other.actualFps) && _deepEquals(stabilizationDisabled, other.stabilizationDisabled) && _deepEquals(exposureLocked, other.exposureLocked) && _deepEquals(exposureSeconds, other.exposureSeconds) && _deepEquals(iso, other.iso) && _deepEquals(whiteBalanceLocked, other.whiteBalanceLocked) && _deepEquals(whiteBalanceKelvin, other.whiteBalanceKelvin) && _deepEquals(focusLocked, other.focusLocked) && _deepEquals(intrinsicsAvailable, other.intrinsicsAvailable) && _deepEquals(thermalState, other.thermalState) && _deepEquals(batteryLevel, other.batteryLevel) && _deepEquals(freeDiskBytes, other.freeDiskBytes) && _deepEquals(droppedFrames, other.droppedFrames) && _deepEquals(timecodeFailures, other.timecodeFailures);
+    return _deepEquals(running, other.running) && _deepEquals(width, other.width) && _deepEquals(height, other.height) && _deepEquals(actualFps, other.actualFps) && _deepEquals(stabilizationDisabled, other.stabilizationDisabled) && _deepEquals(exposureLocked, other.exposureLocked) && _deepEquals(exposureSeconds, other.exposureSeconds) && _deepEquals(iso, other.iso) && _deepEquals(whiteBalanceLocked, other.whiteBalanceLocked) && _deepEquals(whiteBalanceKelvin, other.whiteBalanceKelvin) && _deepEquals(focusLocked, other.focusLocked) && _deepEquals(intrinsicsAvailable, other.intrinsicsAvailable) && _deepEquals(thermalState, other.thermalState) && _deepEquals(batteryLevel, other.batteryLevel) && _deepEquals(freeDiskBytes, other.freeDiskBytes) && _deepEquals(droppedFrames, other.droppedFrames) && _deepEquals(timecodeFailures, other.timecodeFailures) && _deepEquals(streamState, other.streamState) && _deepEquals(streamDetail, other.streamDetail) && _deepEquals(streamDroppedFrames, other.streamDroppedFrames);
   }
 
   @override
@@ -358,7 +386,7 @@ class CaptureStatus {
 
   @override
   String toString() {
-    return 'CaptureStatus(running: $running, width: $width, height: $height, actualFps: $actualFps, stabilizationDisabled: $stabilizationDisabled, exposureLocked: $exposureLocked, exposureSeconds: $exposureSeconds, iso: $iso, whiteBalanceLocked: $whiteBalanceLocked, whiteBalanceKelvin: $whiteBalanceKelvin, focusLocked: $focusLocked, intrinsicsAvailable: $intrinsicsAvailable, thermalState: $thermalState, batteryLevel: $batteryLevel, freeDiskBytes: $freeDiskBytes, droppedFrames: $droppedFrames, timecodeFailures: $timecodeFailures)';
+    return 'CaptureStatus(running: $running, width: $width, height: $height, actualFps: $actualFps, stabilizationDisabled: $stabilizationDisabled, exposureLocked: $exposureLocked, exposureSeconds: $exposureSeconds, iso: $iso, whiteBalanceLocked: $whiteBalanceLocked, whiteBalanceKelvin: $whiteBalanceKelvin, focusLocked: $focusLocked, intrinsicsAvailable: $intrinsicsAvailable, thermalState: $thermalState, batteryLevel: $batteryLevel, freeDiskBytes: $freeDiskBytes, droppedFrames: $droppedFrames, timecodeFailures: $timecodeFailures, streamState: $streamState, streamDetail: $streamDetail, streamDroppedFrames: $streamDroppedFrames)';
   }
 }
 
@@ -435,14 +463,17 @@ class _PigeonCodec extends StandardMessageCodec {
     }    else if (value is ThermalState) {
       buffer.putUint8(130);
       writeValue(buffer, value.index);
-    }    else if (value is CaptureSettings) {
+    }    else if (value is StreamState) {
       buffer.putUint8(131);
-      writeValue(buffer, value.encode());
-    }    else if (value is CaptureStatus) {
+      writeValue(buffer, value.index);
+    }    else if (value is CaptureSettings) {
       buffer.putUint8(132);
       writeValue(buffer, value.encode());
-    }    else if (value is ClockSample) {
+    }    else if (value is CaptureStatus) {
       buffer.putUint8(133);
+      writeValue(buffer, value.encode());
+    }    else if (value is ClockSample) {
+      buffer.putUint8(134);
       writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
@@ -459,10 +490,13 @@ class _PigeonCodec extends StandardMessageCodec {
         final value = readValue(buffer) as int?;
         return value == null ? null : ThermalState.values[value];
       case 131:
-        return CaptureSettings.decode(readValue(buffer)!);
+        final value = readValue(buffer) as int?;
+        return value == null ? null : StreamState.values[value];
       case 132:
-        return CaptureStatus.decode(readValue(buffer)!);
+        return CaptureSettings.decode(readValue(buffer)!);
       case 133:
+        return CaptureStatus.decode(readValue(buffer)!);
+      case 134:
         return ClockSample.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
@@ -495,6 +529,28 @@ class CaptureHostApi {
   /// lo es: la respuesta llega cuando el operador pulsa.
   Future<bool> requestCameraAccess() async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.CaptureHostApi.requestCameraAccess$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as bool;
+  }
+
+  /// Provoca el aviso de "red local" de iOS y dice si se concedió. Va al preparar la
+  /// cámara: si saltara en mitad de la emisión, los paquetes se tirarían en silencio.
+  /// `false` también si el operador no contesta en 20 s.
+  Future<bool> requestLocalNetworkAccess() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.CaptureHostApi.requestLocalNetworkAccess$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -681,6 +737,67 @@ class CaptureHostApi {
         isNullValid: true,
     )
     ;
+  }
+
+  /// El servidor al que se emite (host o IP), guardado en el móvil para no teclearlo
+  /// en cada partido. Vacío si no se ha configurado: entonces solo se graba.
+  Future<String> loadServerHost() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.CaptureHostApi.loadServerHost$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as String;
+  }
+
+  Future<void> saveServerHost(String host) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.CaptureHostApi.saveServerHost$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[host]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
+  /// Busca el servidor anunciado por Bonjour en la red local (`_footballai-srt._tcp`,
+  /// el banco de pruebas). Devuelve su nombre `.local`, o vacío si no hay ninguno en
+  /// unos segundos. El pod, al otro lado de Starlink, no se anuncia: ahí se teclea.
+  Future<String> discoverServer() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.CaptureHostApi.discoverServer$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as String;
   }
 }
 

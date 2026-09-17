@@ -39,12 +39,39 @@ Future<void> _openCapturePage(
 
 void main() {
   testWidgets('lo primero que se pide es el lado del soporte', (WidgetTester tester) async {
-    await tester.pumpWidget(const CaptureApp());
+    final FakeCaptureApi api = FakeCaptureApi()..serverHost = '10.10.18.100';
+    await tester.pumpWidget(CaptureApp(api: api));
+    await tester.pump();
 
     expect(find.text('IZQUIERDA'), findsOneWidget);
     expect(find.text('DERECHA'), findsOneWidget);
     // El modo de un solo móvil existe y está apagado: encenderlo es una decisión.
     expect(tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value, isFalse);
+    // El servidor guardado en el móvil aparece, y lo que se teclea se guarda.
+    expect(tester.widget<TextField>(find.byType(TextField)).controller!.text, '10.10.18.100');
+    await tester.enterText(find.byType(TextField), 'pod.football.ai');
+    await tester.pump();
+    expect(api.serverHost, 'pod.football.ai');
+  });
+
+  testWidgets('sin servidor guardado se busca en la red y se guarda lo encontrado',
+      (WidgetTester tester) async {
+    final FakeCaptureApi api = FakeCaptureApi()..discoverable = 'macbook.local';
+    await tester.pumpWidget(CaptureApp(api: api));
+    await tester.pump();
+
+    expect(tester.widget<TextField>(find.byType(TextField)).controller!.text, 'macbook.local');
+    expect(api.serverHost, 'macbook.local');
+  });
+
+  testWidgets('con servidor guardado no se busca: lo guardado manda', (WidgetTester tester) async {
+    final FakeCaptureApi api = FakeCaptureApi()
+      ..serverHost = 'pod.football.ai'
+      ..discoverable = 'macbook.local';
+    await tester.pumpWidget(CaptureApp(api: api));
+    await tester.pump();
+
+    expect(tester.widget<TextField>(find.byType(TextField)).controller!.text, 'pod.football.ai');
   });
 
   testWidgets('la pantalla de captura dice de qué lado es', (WidgetTester tester) async {

@@ -26,6 +26,8 @@ final class CaptureEngine: NSObject {
     private var stabilizationOff = false
     private var intrinsicsAvailable = false
 
+    private let publisher = StreamPublisher()
+
     private var writer: AVAssetWriter?
     private var writerInput: AVAssetWriterInput?
     private var writerStarted = false
@@ -241,7 +243,21 @@ final class CaptureEngine: NSObject {
         writerStarted = false
     }
 
+    /// Empieza a emitir al servidor. Independiente de la grabación: si esto falla, el
+    /// archivo sigue (ADR 0012, decisión 5).
+    func startStreaming(to url: URL) throws {
+        guard let settings, let applied else {
+            throw CameraSetupError.noUltraWideCamera
+        }
+        publisher.start(url: url, settings: settings, applied: applied)
+    }
+
+    func stopStreaming() {
+        publisher.stop()
+    }
+
     func stop() {
+        publisher.stop()
         stopRecording()
         queue.async { [weak self] in
             self?.session.stopRunning()
@@ -269,8 +285,28 @@ final class CaptureEngine: NSObject {
             batteryLevel: Double(UIDevice.current.batteryLevel),
             freeDiskBytes: Self.freeDiskBytes(),
             droppedFrames: droppedFrames,
-            timecodeFailures: timecodeFailures
+            timecodeFailures: timecodeFailures,
+            streamState: Self.streamState(publisher.state),
+            streamDetail: Self.streamDetail(publisher.state),
+            streamDroppedFrames: publisher.droppedFrames
         )
+    }
+
+    private static func streamState(_ state: StreamPublisher.State) -> StreamState {
+        switch state {
+        case .off: return .off
+        case .connecting: return .connecting
+        case .streaming: return .streaming
+        case .reconnecting: return .reconnecting
+        case .failed: return .failed
+        }
+    }
+
+    private static func streamDetail(_ state: StreamPublisher.State) -> String {
+        switch state {
+        case let .reconnecting(detail), let .failed(detail): return detail
+        default: return ""
+        }
     }
 
     private static func thermalState() -> ThermalState {
@@ -317,6 +353,10 @@ extension CaptureEngine: AVCaptureVideoDataOutputSampleBufferDelegate {
         } else {
             timecodeFailures += 1
         }
+
+        // Al stream va el mismo buffer ya pintado. No bloquea: si el codificador va por
+        // detrás, el frame se descarta y se cuenta.
+        publisher.append(sampleBuffer)
 
         guard let writer, let input = writerInput else { return }
 

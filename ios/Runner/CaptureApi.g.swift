@@ -208,6 +208,17 @@ enum ThermalState: Int, CaseIterable {
   case critical = 3
 }
 
+/// Estado de la emisión al servidor (TASK A5).
+enum StreamState: Int, CaseIterable {
+  /// No se emite: sin servidor configurado, o antes de GRABAR.
+  case off = 0
+  case connecting = 1
+  case streaming = 2
+  /// Se perdió el enlace y se reintenta sola. `streamDetail` dice por qué.
+  case reconnecting = 3
+  case failed = 4
+}
+
 /// Ajustes con los que se abre la cámara. Todos son decisiones del ADR 0012, no
 /// preferencias: cambiarlos invalida la calibración del soporte.
 ///
@@ -329,6 +340,11 @@ struct CaptureStatus: Hashable, CustomStringConvertible {
   /// Frames en los que no se pudo pintar el código de tiempo (enmienda B1a). Tiene que
   /// ser cero: cada uno es un frame que el servidor no puede emparejar.
   var timecodeFailures: Int64
+  var streamState: StreamState
+  /// Por qué se está reconectando o falló, en palabras. Vacío si va bien.
+  var streamDetail: String
+  /// Frames que la emisión descartó porque el codificador iba por detrás.
+  var streamDroppedFrames: Int64
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
@@ -350,6 +366,9 @@ struct CaptureStatus: Hashable, CustomStringConvertible {
     let freeDiskBytes = pigeonVar_list[14] as! Int64
     let droppedFrames = pigeonVar_list[15] as! Int64
     let timecodeFailures = pigeonVar_list[16] as! Int64
+    let streamState = pigeonVar_list[17] as! StreamState
+    let streamDetail = pigeonVar_list[18] as! String
+    let streamDroppedFrames = pigeonVar_list[19] as! Int64
 
     return CaptureStatus(
       running: running,
@@ -368,7 +387,10 @@ struct CaptureStatus: Hashable, CustomStringConvertible {
       batteryLevel: batteryLevel,
       freeDiskBytes: freeDiskBytes,
       droppedFrames: droppedFrames,
-      timecodeFailures: timecodeFailures
+      timecodeFailures: timecodeFailures,
+      streamState: streamState,
+      streamDetail: streamDetail,
+      streamDroppedFrames: streamDroppedFrames
     )
   }
   func toList() -> [Any?] {
@@ -390,13 +412,16 @@ struct CaptureStatus: Hashable, CustomStringConvertible {
       freeDiskBytes,
       droppedFrames,
       timecodeFailures,
+      streamState,
+      streamDetail,
+      streamDroppedFrames,
     ]
   }
   static func == (lhs: CaptureStatus, rhs: CaptureStatus) -> Bool {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return CaptureApiPigeonInternal.deepEquals(lhs.running, rhs.running) && CaptureApiPigeonInternal.deepEquals(lhs.width, rhs.width) && CaptureApiPigeonInternal.deepEquals(lhs.height, rhs.height) && CaptureApiPigeonInternal.deepEquals(lhs.actualFps, rhs.actualFps) && CaptureApiPigeonInternal.deepEquals(lhs.stabilizationDisabled, rhs.stabilizationDisabled) && CaptureApiPigeonInternal.deepEquals(lhs.exposureLocked, rhs.exposureLocked) && CaptureApiPigeonInternal.deepEquals(lhs.exposureSeconds, rhs.exposureSeconds) && CaptureApiPigeonInternal.deepEquals(lhs.iso, rhs.iso) && CaptureApiPigeonInternal.deepEquals(lhs.whiteBalanceLocked, rhs.whiteBalanceLocked) && CaptureApiPigeonInternal.deepEquals(lhs.whiteBalanceKelvin, rhs.whiteBalanceKelvin) && CaptureApiPigeonInternal.deepEquals(lhs.focusLocked, rhs.focusLocked) && CaptureApiPigeonInternal.deepEquals(lhs.intrinsicsAvailable, rhs.intrinsicsAvailable) && CaptureApiPigeonInternal.deepEquals(lhs.thermalState, rhs.thermalState) && CaptureApiPigeonInternal.deepEquals(lhs.batteryLevel, rhs.batteryLevel) && CaptureApiPigeonInternal.deepEquals(lhs.freeDiskBytes, rhs.freeDiskBytes) && CaptureApiPigeonInternal.deepEquals(lhs.droppedFrames, rhs.droppedFrames) && CaptureApiPigeonInternal.deepEquals(lhs.timecodeFailures, rhs.timecodeFailures)
+    return CaptureApiPigeonInternal.deepEquals(lhs.running, rhs.running) && CaptureApiPigeonInternal.deepEquals(lhs.width, rhs.width) && CaptureApiPigeonInternal.deepEquals(lhs.height, rhs.height) && CaptureApiPigeonInternal.deepEquals(lhs.actualFps, rhs.actualFps) && CaptureApiPigeonInternal.deepEquals(lhs.stabilizationDisabled, rhs.stabilizationDisabled) && CaptureApiPigeonInternal.deepEquals(lhs.exposureLocked, rhs.exposureLocked) && CaptureApiPigeonInternal.deepEquals(lhs.exposureSeconds, rhs.exposureSeconds) && CaptureApiPigeonInternal.deepEquals(lhs.iso, rhs.iso) && CaptureApiPigeonInternal.deepEquals(lhs.whiteBalanceLocked, rhs.whiteBalanceLocked) && CaptureApiPigeonInternal.deepEquals(lhs.whiteBalanceKelvin, rhs.whiteBalanceKelvin) && CaptureApiPigeonInternal.deepEquals(lhs.focusLocked, rhs.focusLocked) && CaptureApiPigeonInternal.deepEquals(lhs.intrinsicsAvailable, rhs.intrinsicsAvailable) && CaptureApiPigeonInternal.deepEquals(lhs.thermalState, rhs.thermalState) && CaptureApiPigeonInternal.deepEquals(lhs.batteryLevel, rhs.batteryLevel) && CaptureApiPigeonInternal.deepEquals(lhs.freeDiskBytes, rhs.freeDiskBytes) && CaptureApiPigeonInternal.deepEquals(lhs.droppedFrames, rhs.droppedFrames) && CaptureApiPigeonInternal.deepEquals(lhs.timecodeFailures, rhs.timecodeFailures) && CaptureApiPigeonInternal.deepEquals(lhs.streamState, rhs.streamState) && CaptureApiPigeonInternal.deepEquals(lhs.streamDetail, rhs.streamDetail) && CaptureApiPigeonInternal.deepEquals(lhs.streamDroppedFrames, rhs.streamDroppedFrames)
   }
 
   func hash(into hasher: inout Hasher) {
@@ -418,10 +443,13 @@ struct CaptureStatus: Hashable, CustomStringConvertible {
     CaptureApiPigeonInternal.deepHash(value: freeDiskBytes, hasher: &hasher)
     CaptureApiPigeonInternal.deepHash(value: droppedFrames, hasher: &hasher)
     CaptureApiPigeonInternal.deepHash(value: timecodeFailures, hasher: &hasher)
+    CaptureApiPigeonInternal.deepHash(value: streamState, hasher: &hasher)
+    CaptureApiPigeonInternal.deepHash(value: streamDetail, hasher: &hasher)
+    CaptureApiPigeonInternal.deepHash(value: streamDroppedFrames, hasher: &hasher)
   }
 
   public var description: String {
-    return "CaptureStatus(running: \(String(describing: running)), width: \(String(describing: width)), height: \(String(describing: height)), actualFps: \(String(describing: actualFps)), stabilizationDisabled: \(String(describing: stabilizationDisabled)), exposureLocked: \(String(describing: exposureLocked)), exposureSeconds: \(String(describing: exposureSeconds)), iso: \(String(describing: iso)), whiteBalanceLocked: \(String(describing: whiteBalanceLocked)), whiteBalanceKelvin: \(String(describing: whiteBalanceKelvin)), focusLocked: \(String(describing: focusLocked)), intrinsicsAvailable: \(String(describing: intrinsicsAvailable)), thermalState: \(String(describing: thermalState)), batteryLevel: \(String(describing: batteryLevel)), freeDiskBytes: \(String(describing: freeDiskBytes)), droppedFrames: \(String(describing: droppedFrames)), timecodeFailures: \(String(describing: timecodeFailures)))"
+    return "CaptureStatus(running: \(String(describing: running)), width: \(String(describing: width)), height: \(String(describing: height)), actualFps: \(String(describing: actualFps)), stabilizationDisabled: \(String(describing: stabilizationDisabled)), exposureLocked: \(String(describing: exposureLocked)), exposureSeconds: \(String(describing: exposureSeconds)), iso: \(String(describing: iso)), whiteBalanceLocked: \(String(describing: whiteBalanceLocked)), whiteBalanceKelvin: \(String(describing: whiteBalanceKelvin)), focusLocked: \(String(describing: focusLocked)), intrinsicsAvailable: \(String(describing: intrinsicsAvailable)), thermalState: \(String(describing: thermalState)), batteryLevel: \(String(describing: batteryLevel)), freeDiskBytes: \(String(describing: freeDiskBytes)), droppedFrames: \(String(describing: droppedFrames)), timecodeFailures: \(String(describing: timecodeFailures)), streamState: \(String(describing: streamState)), streamDetail: \(String(describing: streamDetail)), streamDroppedFrames: \(String(describing: streamDroppedFrames)))"
   }
 }
 
@@ -491,10 +519,16 @@ private class CaptureApiPigeonCodecReader: FlutterStandardReader {
       }
       return nil
     case 131:
-      return CaptureSettings.fromList(self.readValue() as! [Any?])
+      let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
+      if let enumResultAsInt = enumResultAsInt {
+        return StreamState(rawValue: enumResultAsInt)
+      }
+      return nil
     case 132:
-      return CaptureStatus.fromList(self.readValue() as! [Any?])
+      return CaptureSettings.fromList(self.readValue() as! [Any?])
     case 133:
+      return CaptureStatus.fromList(self.readValue() as! [Any?])
+    case 134:
       return ClockSample.fromList(self.readValue() as! [Any?])
     default:
       return super.readValue(ofType: type)
@@ -510,14 +544,17 @@ private class CaptureApiPigeonCodecWriter: FlutterStandardWriter {
     } else if let value = value as? ThermalState {
       super.writeByte(130)
       super.writeValue(value.rawValue)
-    } else if let value = value as? CaptureSettings {
+    } else if let value = value as? StreamState {
       super.writeByte(131)
-      super.writeValue(value.toList())
-    } else if let value = value as? CaptureStatus {
+      super.writeValue(value.rawValue)
+    } else if let value = value as? CaptureSettings {
       super.writeByte(132)
       super.writeValue(value.toList())
-    } else if let value = value as? ClockSample {
+    } else if let value = value as? CaptureStatus {
       super.writeByte(133)
+      super.writeValue(value.toList())
+    } else if let value = value as? ClockSample {
+      super.writeByte(134)
       super.writeValue(value.toList())
     } else {
       super.writeValue(value)
@@ -550,6 +587,10 @@ protocol CaptureHostApi {
   /// sesión y no entrega ni un frame, sin error. Es asíncrono porque el diálogo de iOS
   /// lo es: la respuesta llega cuando el operador pulsa.
   func requestCameraAccess() async throws -> Bool
+  /// Provoca el aviso de "red local" de iOS y dice si se concedió. Va al preparar la
+  /// cámara: si saltara en mitad de la emisión, los paquetes se tirarían en silencio.
+  /// `false` también si el operador no contesta en 20 s.
+  func requestLocalNetworkAccess() async throws -> Bool
   /// `true` si este iPhone tiene ultra gran angular.
   ///
   /// Se resuelve con `AVCaptureDevice.DiscoverySession`, **nunca con una lista de
@@ -580,6 +621,14 @@ protocol CaptureHostApi {
   /// Fija el desfase de reloj que se aplicará a los PTS emitidos. Es lo que pone los
   /// dos streams en el dominio de tiempo del soporte (ADR 0012, decisión 2).
   func setClockOffsetNs(offsetNs: Int64) throws
+  /// El servidor al que se emite (host o IP), guardado en el móvil para no teclearlo
+  /// en cada partido. Vacío si no se ha configurado: entonces solo se graba.
+  func loadServerHost() throws -> String
+  func saveServerHost(host: String) throws
+  /// Busca el servidor anunciado por Bonjour en la red local (`_footballai-srt._tcp`,
+  /// el banco de pruebas). Devuelve su nombre `.local`, o vacío si no hay ninguno en
+  /// unos segundos. El pod, al otro lado de Starlink, no se anuncia: ahí se teclea.
+  func discoverServer() async throws -> String
 }
 
 /// Generated setup class from Pigeon to handle messages through the `binaryMessenger`.
@@ -607,6 +656,24 @@ class CaptureHostApiSetup {
       }
     } else {
       requestCameraAccessChannel.setMessageHandler(nil)
+    }
+    /// Provoca el aviso de "red local" de iOS y dice si se concedió. Va al preparar la
+    /// cámara: si saltara en mitad de la emisión, los paquetes se tirarían en silencio.
+    /// `false` también si el operador no contesta en 20 s.
+    let requestLocalNetworkAccessChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.requestLocalNetworkAccess\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      requestLocalNetworkAccessChannel.setMessageHandler { _, reply in
+        Task { @MainActor in
+          do {
+            let result = try await api.requestLocalNetworkAccess()
+            reply(wrapResult(result))
+          } catch {
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      requestLocalNetworkAccessChannel.setMessageHandler(nil)
     }
     /// `true` si este iPhone tiene ultra gran angular.
     ///
@@ -742,6 +809,54 @@ class CaptureHostApiSetup {
       }
     } else {
       setClockOffsetNsChannel.setMessageHandler(nil)
+    }
+    /// El servidor al que se emite (host o IP), guardado en el móvil para no teclearlo
+    /// en cada partido. Vacío si no se ha configurado: entonces solo se graba.
+    let loadServerHostChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.loadServerHost\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      loadServerHostChannel.setMessageHandler { _, reply in
+        do {
+          let result = try api.loadServerHost()
+          reply(wrapResult(result))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      loadServerHostChannel.setMessageHandler(nil)
+    }
+    let saveServerHostChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.saveServerHost\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      saveServerHostChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let hostArg = args[0] as! String
+        do {
+          try api.saveServerHost(host: hostArg)
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      saveServerHostChannel.setMessageHandler(nil)
+    }
+    /// Busca el servidor anunciado por Bonjour en la red local (`_footballai-srt._tcp`,
+    /// el banco de pruebas). Devuelve su nombre `.local`, o vacío si no hay ninguno en
+    /// unos segundos. El pod, al otro lado de Starlink, no se anuncia: ahí se teclea.
+    let discoverServerChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.discoverServer\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      discoverServerChannel.setMessageHandler { _, reply in
+        Task { @MainActor in
+          do {
+            let result = try await api.discoverServer()
+            reply(wrapResult(result))
+          } catch {
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      discoverServerChannel.setMessageHandler(nil)
     }
   }
 }

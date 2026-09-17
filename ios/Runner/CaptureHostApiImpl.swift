@@ -37,6 +37,10 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
         await AVCaptureDevice.requestAccess(for: .video)
     }
 
+    func requestLocalNetworkAccess() async throws -> Bool {
+        await LocalNetworkAccess.request()
+    }
+
     func hasUltraWideCamera() throws -> Bool {
         engine.hasUltraWideCamera()
     }
@@ -66,11 +70,30 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
         }
 
         if !srtUrl.isEmpty {
-            // TASK A5: la emisión SRT con HaishinKit. Hasta entonces se graba y no se
-            // emite, que es un modo degradado honesto y no un fallo silencioso.
-            NSLog("[capture] SRT todavia no implementado (TASK A5): %@", srtUrl)
+            guard let url = URL(string: srtUrl) else {
+                throw PigeonError(code: "stream", message: "URL de emisión no válida: \(srtUrl)", details: nil)
+            }
+            do {
+                try engine.startStreaming(to: url)
+            } catch {
+                throw PigeonError(code: "stream", message: error.localizedDescription, details: nil)
+            }
         }
         return path
+    }
+
+    private static let serverHostKey = "serverHost"
+
+    func loadServerHost() throws -> String {
+        UserDefaults.standard.string(forKey: Self.serverHostKey) ?? ""
+    }
+
+    func saveServerHost(host: String) throws {
+        UserDefaults.standard.set(host, forKey: Self.serverHostKey)
+    }
+
+    func discoverServer() async throws -> String {
+        await ServerDiscovery.find()
     }
 
     /// La capa de vista previa para la vista de plataforma `capture-preview`.

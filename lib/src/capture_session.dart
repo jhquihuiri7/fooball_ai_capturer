@@ -16,6 +16,7 @@ library;
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:football_ai_capture/src/constants.dart';
 import 'package:football_ai_capture/src/exposure_phase.dart';
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
 import 'package:football_ai_capture/src/rig_clock.dart';
@@ -49,6 +50,7 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
     RigClock? clock,
     this.phasePolicy = const PhaseSortPolicy(),
     this.standalone = false,
+    this.serverHost = '',
   })  : _api = api ?? CaptureHostApi(),
         _clock = clock ?? RigClock() {
     if (clockSamples != null) {
@@ -67,6 +69,9 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
   /// que es justo lo que se viene a probar.
   final bool standalone;
 
+  /// Host o IP del MediaMTX que recibe la emisión. Vacío: solo se graba.
+  final String serverHost;
+
   final CaptureHostApi _api;
   final RigClock _clock;
   StreamSubscription<ClockSample>? _clockSubscription;
@@ -77,6 +82,10 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
 
   /// La interrupción que avisó el nativo (llamada, otra app, calor), mientras dure.
   String? interruption;
+
+  /// Permiso de red local de iOS. `null` hasta que se pide. Sin él no sale ni un
+  /// paquete hacia el servidor ni hacia el otro móvil, y iOS no avisa.
+  bool? localNetworkAllowed;
 
   int? exposurePhaseNs;
   int phaseAttempt = 0;
@@ -94,6 +103,17 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
   String get modeLabel =>
       standalone ? 'un solo móvil · SIN RELOJ' : 'soporte de dos móviles';
 
+  String get localNetworkLabel {
+    switch (localNetworkAllowed) {
+      case null:
+        return 'sin pedir';
+      case true:
+        return 'permitida';
+      case false:
+        return 'NO PERMITIDA · Ajustes → Privacidad y seguridad → Red local';
+    }
+  }
+
   /// Cuánto lleva grabando y en qué archivo: es lo que se lee de un vistazo en la
   /// cancha para saber que de verdad se está grabando.
   String get recordingLabel {
@@ -105,6 +125,37 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
   }
 
   String? get recordingFileName => recordingFile?.split('/').last;
+
+  /// A dónde publica este móvil: un path por cámara en el MediaMTX del servidor
+  /// (`izquierda` / `derecha`), con el búfer SRT que aguanta los traspasos de Starlink.
+  String get streamUrl {
+    if (serverHost.isEmpty) {
+      return '';
+    }
+    final String path = role == CameraRole.left ? 'izquierda' : 'derecha';
+    return 'srt://$serverHost:$streamPort?streamid=publish:$path&latency=$streamLatencyMs';
+  }
+
+  String get streamLabel {
+    final CaptureStatus? applied = status;
+    switch (applied?.streamState ?? StreamState.off) {
+      case StreamState.off:
+        return serverHost.isEmpty ? 'apagada: sin servidor configurado' : 'apagada';
+      case StreamState.connecting:
+        return 'conectando con $serverHost…';
+      case StreamState.streaming:
+        return 'EMITIENDO a $serverHost · ${defaultSettings(role).bitrateBps ~/ 1000000} Mbit/s';
+      case StreamState.reconnecting:
+        return 'RECONECTANDO · ${applied!.streamDetail}';
+      case StreamState.failed:
+        return 'FALLO · ${applied!.streamDetail}';
+    }
+  }
+
+  bool get streamInTrouble {
+    final StreamState state = status?.streamState ?? StreamState.off;
+    return state == StreamState.reconnecting || state == StreamState.failed;
+  }
 
   /// Lo que quedó congelado, en la unidad en que se lee: 1/100 e ISO, no segundos.
   String get exposureLabel {
@@ -168,6 +219,9 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
         );
         return;
       }
+      // No es fatal: sin red local se graba igual. Pero se pide ahora, con el
+      // operador mirando, y no en mitad del partido.
+      localNetworkAllowed = await _api.requestLocalNetworkAccess();
       if (!await _api.hasUltraWideCamera()) {
         _set(
           SessionPhase.fallo,
@@ -250,7 +304,7 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
 
   bool _toggling = false;
 
-  Future<void> toggleRecording({String srtUrl = '', String recordingDirectory = ''}) async {
+  Future<void> toggleRecording({String? srtUrl, String recordingDirectory = ''}) async {
     // Dos toques seguidos son uno: el segundo llegaría con el nativo a medio abrir.
     if (_toggling) {
       return;
@@ -263,7 +317,7 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
         _set(SessionPhase.lista);
         return;
       }
-      recordingFile = await _api.start(srtUrl, recordingDirectory);
+      recordingFile = await _api.start(srtUrl ?? streamUrl, recordingDirectory);
       _recordingClock
         ..reset()
         ..start();
@@ -321,8 +375,22 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
     notifyListeners();
   }
 
+  bool _disposed = false;
+
+  /// `prepare` puede terminar después de que la pantalla se haya cerrado (el operador
+  /// vuelve atrás mientras la cámara mide la luz). Avisar a una sesión liberada tira la
+  /// app en debug y no sirve de nada en release: se calla.
+  @override
+  void notifyListeners() {
+    if (_disposed) {
+      return;
+    }
+    super.notifyListeners();
+  }
+
   @override
   void dispose() {
+    _disposed = true;
     unawaited(_clockSubscription?.cancel());
     super.dispose();
   }

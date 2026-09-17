@@ -1,0 +1,48 @@
+# MediaMTX en el Mac para probar la app sin el pod (paso 3 de la app de captura).
+#
+# Recibe el SRT (o RTMP) de los móviles y lo reexpone por RTSP, que es exactamente lo
+# que hará el MediaMTX del pod (`football-ai/tools/mediamtx-ingest.yml`, tarea B1c).
+# Los paths son los del soporte: uno por cámara.
+#
+#   brew install mediamtx
+#   mediamtx tools/mediamtx-banco.yml
+#   # el móvil publica en   srt://<IP-DEL-MAC>:8890?streamid=publish:izquierda
+#   # comprobar desde el repo del servidor:
+#   uv run python tools/ingest_probe.py probe rtsp://127.0.0.1:8554/izquierda --seconds 20
+#
+# Sin autenticación más allá de la red local: es un banco de pruebas de sesión corta.
+
+logLevel: info
+logDestinations: [stdout]
+
+rtsp: yes
+rtspAddress: :8554
+rtspTransports: [tcp]       # TCP: la pérdida en UDP se ve como macrobloques y no da error
+
+srt: yes
+srtAddress: 0.0.0.0:8890   # IPv4 explícito: en macOS el socket dual-stack de SRT no recibe IPv4
+
+rtmp: yes
+rtmpAddress: :1935          # por si hace falta comparar con RTMP
+
+hls: no
+webrtc: no
+moq: no                     # genera certificados y abre tres puertos más: fuera
+api: no
+metrics: no
+pprof: no
+playback: no
+
+authMethod: internal
+authInternalUsers:
+  - user: any
+    ips: ['127.0.0.0/8', '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16']
+    permissions:
+      - action: publish
+      - action: read
+
+paths:
+  izquierda:
+    source: publisher
+  derecha:
+    source: publisher

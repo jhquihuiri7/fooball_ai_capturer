@@ -66,3 +66,14 @@ const int exposurePhaseMaxAttempts = 6;
 /// Batería, temperatura y frames perdidos cambian sin que nadie avise. Un segundo
 /// basta para ver venir un apagón y no molesta: es una llamada síncrona y barata.
 const Duration statusRefreshInterval = Duration(seconds: 1);
+
+// --------------------------------------------------------------------------- //
+// Emisión al servidor (ADR 0012; TASK A5)
+// --------------------------------------------------------------------------- //
+
+/// Puerto SRT del MediaMTX que recibe a los móviles (`srtAddress: :8890`).
+const int streamPort = 8890;
+
+/// Milisegundos de búfer de SRT. Starlink pierde paquetes en cada traspaso de satélite,
+/// cada 15 s; con un segundo de margen el ARQ los recupera sin que se note.
+const int streamLatencyMs = 1000;

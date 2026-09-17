@@ -1,6 +1,8 @@
 /// Cámara falsa para los tests: el nativo no existe en Dart, y tampoco hace falta.
 library;
 
+import 'dart:async';
+
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
 
 /// Un frame a 30 fps, en nanosegundos.
@@ -9,6 +11,8 @@ const int frame30 = 33333333;
 CaptureStatus fakeStatus({
   bool stabilizationDisabled = true,
   bool exposureLocked = true,
+  StreamState streamState = StreamState.off,
+  String streamDetail = '',
 }) {
   return CaptureStatus(
     running: true,
@@ -28,12 +32,16 @@ CaptureStatus fakeStatus({
     freeDiskBytes: 64000000000,
     droppedFrames: 0,
     timecodeFailures: 0,
+    streamState: streamState,
+    streamDetail: streamDetail,
+    streamDroppedFrames: 0,
   );
 }
 
 class FakeCaptureApi extends CaptureHostApi {
   FakeCaptureApi({
     this.cameraAccess = true,
+    this.localNetwork = true,
     this.ultraWide = true,
     CaptureStatus? status,
     this.phases = const <int>[0],
@@ -44,11 +52,24 @@ class FakeCaptureApi extends CaptureHostApi {
   final bool failStart;
 
   final bool cameraAccess;
+  final bool localNetwork;
   final bool ultraWide;
 
   /// No se puede llamar `status`: chocaría con el método `status()` del contrato.
   final CaptureStatus applied;
   final List<int> phases;
+
+  /// Lo que el nativo tiene guardado como servidor.
+  String serverHost = '';
+
+  /// Lo que Bonjour encontraría en la red.
+  String discoverable = '';
+
+  /// Si se pone, `configure` espera a que se complete: simula la medición de la luz.
+  Completer<void>? configureGate;
+
+  /// La URL de emisión que llegó en el último `start`.
+  String? lastSrtUrl;
 
   int accessRequests = 0;
   int configureCalls = 0;
@@ -66,11 +87,15 @@ class FakeCaptureApi extends CaptureHostApi {
   }
 
   @override
+  Future<bool> requestLocalNetworkAccess() async => localNetwork;
+
+  @override
   Future<bool> hasUltraWideCamera() async => ultraWide;
 
   @override
   Future<CaptureStatus> configure(CaptureSettings settings) async {
     configureCalls++;
+    await configureGate?.future;
     return applied;
   }
 
@@ -95,6 +120,7 @@ class FakeCaptureApi extends CaptureHostApi {
   @override
   Future<String> start(String srtUrl, String recordingDirectory) async {
     startCalls++;
+    lastSrtUrl = srtUrl;
     if (failStart) {
       throw Exception('disco lleno');
     }
@@ -106,4 +132,13 @@ class FakeCaptureApi extends CaptureHostApi {
 
   @override
   Future<void> setClockOffsetNs(int offsetNs) async => offsets.add(offsetNs);
+
+  @override
+  Future<String> loadServerHost() async => serverHost;
+
+  @override
+  Future<void> saveServerHost(String host) async => serverHost = host;
+
+  @override
+  Future<String> discoverServer() async => discoverable;
 }

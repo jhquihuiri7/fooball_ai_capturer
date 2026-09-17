@@ -38,6 +38,18 @@ enum CameraRole {
 /// que iOS decida bajarlo por su cuenta matando la sesión de captura.
 enum ThermalState { nominal, fair, serious, critical }
 
+/// Estado de la emisión al servidor (TASK A5).
+enum StreamState {
+  /// No se emite: sin servidor configurado, o antes de GRABAR.
+  off,
+  connecting,
+  streaming,
+
+  /// Se perdió el enlace y se reintenta sola. `streamDetail` dice por qué.
+  reconnecting,
+  failed,
+}
+
 /// Ajustes con los que se abre la cámara. Todos son decisiones del ADR 0012, no
 /// preferencias: cambiarlos invalida la calibración del soporte.
 class CaptureSettings {
@@ -106,6 +118,9 @@ class CaptureStatus {
     required this.freeDiskBytes,
     required this.droppedFrames,
     required this.timecodeFailures,
+    required this.streamState,
+    required this.streamDetail,
+    required this.streamDroppedFrames,
   });
 
   final bool running;
@@ -143,6 +158,14 @@ class CaptureStatus {
   /// Frames en los que no se pudo pintar el código de tiempo (enmienda B1a). Tiene que
   /// ser cero: cada uno es un frame que el servidor no puede emparejar.
   final int timecodeFailures;
+
+  final StreamState streamState;
+
+  /// Por qué se está reconectando o falló, en palabras. Vacío si va bien.
+  final String streamDetail;
+
+  /// Frames que la emisión descartó porque el codificador iba por detrás.
+  final int streamDroppedFrames;
 }
 
 /// Una medida de desfase entre este móvil y el maestro del reloj.
@@ -173,6 +196,12 @@ abstract class CaptureHostApi {
   /// lo es: la respuesta llega cuando el operador pulsa.
   @async
   bool requestCameraAccess();
+
+  /// Provoca el aviso de "red local" de iOS y dice si se concedió. Va al preparar la
+  /// cámara: si saltara en mitad de la emisión, los paquetes se tirarían en silencio.
+  /// `false` también si el operador no contesta en 20 s.
+  @async
+  bool requestLocalNetworkAccess();
 
   /// `true` si este iPhone tiene ultra gran angular.
   ///
@@ -212,6 +241,18 @@ abstract class CaptureHostApi {
   /// Fija el desfase de reloj que se aplicará a los PTS emitidos. Es lo que pone los
   /// dos streams en el dominio de tiempo del soporte (ADR 0012, decisión 2).
   void setClockOffsetNs(int offsetNs);
+
+  /// El servidor al que se emite (host o IP), guardado en el móvil para no teclearlo
+  /// en cada partido. Vacío si no se ha configurado: entonces solo se graba.
+  String loadServerHost();
+
+  void saveServerHost(String host);
+
+  /// Busca el servidor anunciado por Bonjour en la red local (`_footballai-srt._tcp`,
+  /// el banco de pruebas). Devuelve su nombre `.local`, o vacío si no hay ninguno en
+  /// unos segundos. El pod, al otro lado de Starlink, no se anuncia: ahí se teclea.
+  @async
+  String discoverServer();
 }
 
 /// Avisos que el nativo empuja hacia Flutter sin que nadie pregunte.
