@@ -77,3 +77,11 @@ const int streamPort = 8890;
 /// Milisegundos de búfer de SRT. Starlink pierde paquetes en cada traspaso de satélite,
 /// cada 15 s; con un segundo de margen el ARQ los recupera sin que se note.
 const int streamLatencyMs = 1000;
+
+/// Primer nivel del canal en MediaMTX: `rig/izquierda` y `rig/derecha`.
+const String streamPathPrefix = 'rig';
+
+/// Puertos por defecto de RTMP y RTMPS. En un pod de RunPod el puerto externo lo asigna
+/// la plataforma y cambia en cada reinicio: ahí se escribe a mano (`rtmp://IP:PUERTO`).
+const int rtmpPort = 1935;
+const int rtmpsPort = 443;

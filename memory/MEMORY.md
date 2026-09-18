@@ -6,6 +6,9 @@
 > se descubre algo que no se deduce del código, o cuando Alexander corrige la forma de
 > trabajar. Lo más reciente va arriba.
 
+## ⚡ ÓRDENES CORTAS
+- [feedback_prendelo_apagalo.md](feedback_prendelo_apagalo.md) — **"préndelo"** = `tools/local.sh start` · **"apágalo"** = `tools/local.sh stop`. Sin preguntar, respuesta de una línea.
+
 ## 🔴 ACTIVO HOY (18 Sep 2026) — El servidor corre en el Mac; el pod no arrancó
 - [project_servidor_local_18sep.md](project_servidor_local_18sep.md) — **`tools/local.sh start | start clip | stop`** enciende y apaga MediaMTX + panel en el Mac. Qué aguanta el Air M4, qué falta (el `.onnx` lo tiene el socio), por qué RunPod obliga a RTMP y por qué el pod no arrancó, y qué hace falta para TestFlight. RTMP en la app sin commit hasta que Alexander lo pruebe.
 

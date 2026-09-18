@@ -100,6 +100,17 @@ class _RolePageState extends State<RolePage> {
     }
   }
 
+  /// El protocolo se deduce de lo escrito: sin esquema o `srt://` es SRT.
+  String get _protocol => _server.text.trim().startsWith('rtmp') ? 'rtmp' : 'srt';
+
+  /// Cambiar de protocolo reescribe el campo, para no teclear el esquema en el móvil.
+  void _setProtocol(String protocol) {
+    final String bare = _server.text.trim().replaceFirst(RegExp(r'^[a-z]+://'), '');
+    final String next = (protocol == 'rtmp' && bare.isNotEmpty) ? 'rtmp://$bare' : bare;
+    setState(() => _server.text = next);
+    unawaited(_saveServer(next));
+  }
+
   @override
   void dispose() {
     _server.dispose();
@@ -154,6 +165,17 @@ class _RolePageState extends State<RolePage> {
                 unawaited(_saveServer(value));
                 setState(() {});
               },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: SegmentedButton<String>(
+              segments: const <ButtonSegment<String>>[
+                ButtonSegment<String>(value: 'srt', label: Text('SRT (banco, relé)')),
+                ButtonSegment<String>(value: 'rtmp', label: Text('RTMP (pod RunPod)')),
+              ],
+              selected: <String>{_protocol},
+              onSelectionChanged: (Set<String> choice) => _setProtocol(choice.first),
             ),
           ),
           SwitchListTile(

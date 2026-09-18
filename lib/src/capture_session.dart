@@ -16,10 +16,10 @@ library;
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:football_ai_capture/src/constants.dart';
 import 'package:football_ai_capture/src/exposure_phase.dart';
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
 import 'package:football_ai_capture/src/rig_clock.dart';
+import 'package:football_ai_capture/src/stream_url.dart';
 
 /// En qué punto de la preparación está esta cámara.
 enum SessionPhase {
@@ -139,23 +139,21 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
 
   /// A dónde publica este móvil: un path por cámara en el MediaMTX del servidor
   /// (`izquierda` / `derecha`), con el búfer SRT que aguanta los traspasos de Starlink.
-  String get streamUrl {
-    if (serverHost.isEmpty) {
-      return '';
-    }
-    final String path = role == CameraRole.left ? 'izquierda' : 'derecha';
-    return 'srt://$serverHost:$streamPort?streamid=publish:$path&latency=$streamLatencyMs';
-  }
+  String get streamUrl => buildStreamUrl(serverHost, role);
 
   String get streamLabel {
     final CaptureStatus? applied = status;
     switch (applied?.streamState ?? StreamState.off) {
       case StreamState.off:
-        return serverHost.isEmpty ? 'apagada: sin servidor configurado' : 'apagada';
+        if (serverHost.trim().isEmpty) {
+          return 'apagada: sin servidor configurado';
+        }
+        return streamUrl.isEmpty ? 'apagada: no se entiende el servidor' : 'apagada';
       case StreamState.connecting:
-        return 'conectando con $serverHost…';
+        return 'conectando por ${describeStreamTarget(serverHost)}…';
       case StreamState.streaming:
-        return 'EMITIENDO a $serverHost · ${defaultSettings(role).bitrateBps ~/ 1000000} Mbit/s';
+        return 'EMITIENDO por ${describeStreamTarget(serverHost)} · '
+            '${defaultSettings(role).bitrateBps ~/ 1000000} Mbit/s';
       case StreamState.reconnecting:
         return 'RECONECTANDO · ${applied!.streamDetail}';
       case StreamState.failed:

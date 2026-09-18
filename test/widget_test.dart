@@ -64,6 +64,20 @@ void main() {
     expect(api.serverHost, 'macbook.local');
   });
 
+  testWidgets('elegir RTMP reescribe el servidor sin teclear el esquema', (WidgetTester tester) async {
+    final FakeCaptureApi api = FakeCaptureApi()..serverHost = '10.10.18.100';
+    await tester.pumpWidget(CaptureApp(api: api));
+    await tester.pump();
+
+    await tester.tap(find.text('RTMP (pod RunPod)'));
+    await tester.pump();
+    expect(api.serverHost, 'rtmp://10.10.18.100');
+
+    await tester.tap(find.text('SRT (banco, relé)'));
+    await tester.pump();
+    expect(api.serverHost, '10.10.18.100');
+  });
+
   testWidgets('con servidor guardado no se busca: lo guardado manda', (WidgetTester tester) async {
     final FakeCaptureApi api = FakeCaptureApi()
       ..serverHost = 'pod.football.ai'

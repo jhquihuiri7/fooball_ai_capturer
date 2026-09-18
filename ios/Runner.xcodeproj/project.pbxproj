@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */ = {isa = PBXBuildFile; fileRef = 1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */; };
+		29130493FFB6D7166959BD48 /* RTMPHaishinKit in Frameworks */ = {isa = PBXBuildFile; productRef = FA72810F08DA0153C6116349 /* RTMPHaishinKit */; };
 		30A153D65E62D04448669E06 /* ServerDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5150A74A7D1D6F3192EFB92A /* ServerDiscovery.swift */; };
 		331C808B294A63AB00263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C807B294A618700263BE5 /* RunnerTests.swift */; };
 		3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */ = {isa = PBXBuildFile; fileRef = 3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */; };
@@ -89,6 +90,7 @@
 				78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */,
 				C2787637CA67F80499196302 /* HaishinKit in Frameworks */,
 				58ECE88B6A9325C2B7045FEE /* SRTHaishinKit in Frameworks */,
+				29130493FFB6D7166959BD48 /* RTMPHaishinKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -199,6 +201,7 @@
 				78A3181F2AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage */,
 				DB432E64DE2C65DC05887E2C /* HaishinKit */,
 				4297400DDA0324015053E4F8 /* SRTHaishinKit */,
+				FA72810F08DA0153C6116349 /* RTMPHaishinKit */,
 			);
 			productName = Runner;
 			productReference = 97C146EE1CF9000F007C117D /* Runner.app */;
@@ -704,6 +707,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 6BBD633D42FAA13D81180F02 /* XCRemoteSwiftPackageReference "HaishinKit.swift" */;
 			productName = HaishinKit;
+		};
+		FA72810F08DA0153C6116349 /* RTMPHaishinKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6BBD633D42FAA13D81180F02 /* XCRemoteSwiftPackageReference "HaishinKit.swift" */;
+			productName = RTMPHaishinKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

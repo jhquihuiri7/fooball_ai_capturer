@@ -1,7 +1,9 @@
-// Emisión al servidor por SRT (ADR 0012, TASK A5).
+// Emisión al servidor por SRT o RTMP (ADR 0012, TASK A5).
 //
-// HaishinKit (BSD-3) codifica en HEVC con VideoToolbox y muxea en MPEG-TS sobre SRT. Lo
-// que este fichero decide, y que una app de directo normal no haría:
+// HaishinKit (BSD-3) codifica en HEVC con VideoToolbox y lo saca por SRT (MPEG-TS sobre
+// UDP, el preferido) o por RTMP (TCP, el que entra a un pod de RunPod). El protocolo lo
+// decide el esquema de la URL. Lo que este fichero decide, y que una app de directo
+// normal no haría:
 //
 //   1. **Bitrate fijo.** Los dos móviles comparten Starlink y dos controles adaptativos
 //      se pelean hasta oscilar (ADR 0012, decisión 7). Media fija con tope por segundo.
@@ -16,6 +18,7 @@ import AVFoundation
 import Foundation
 import HaishinKit
 import Logboard
+import RTMPHaishinKit
 import SRTHaishinKit
 import VideoToolbox
 
@@ -58,6 +61,9 @@ final class StreamPublisher {
         LBLogger(kSRTHaishinKitIdentifier).level = .info
         await SRTLogger.shared.setLevel(.notice)
         await SessionBuilderFactory.shared.register(SRTSessionFactory())
+        // RTMP es el único transporte que entra directo a un pod de RunPod (sin UDP).
+        // HaishinKit anuncia HEVC por E-RTMP por defecto y MediaMTX lo acepta.
+        await SessionBuilderFactory.shared.register(RTMPSessionFactory())
     }
 
     private let lock = NSLock()

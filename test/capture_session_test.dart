@@ -340,8 +340,8 @@ void main() {
         serverHost: 'pod.football.ai',
       );
 
-      expect(left.streamUrl, 'srt://10.10.18.100:8890?streamid=publish:izquierda&latency=1000');
-      expect(right.streamUrl, 'srt://pod.football.ai:8890?streamid=publish:derecha&latency=1000');
+      expect(left.streamUrl, 'srt://10.10.18.100:8890?streamid=publish:rig/izquierda&latency=1000');
+      expect(right.streamUrl, 'srt://pod.football.ai:8890?streamid=publish:rig/derecha&latency=1000');
     });
 
     test('sin servidor no se emite: solo se graba', () async {
@@ -372,7 +372,7 @@ void main() {
         serverHost: '10.0.0.5',
       );
       await session.prepare();
-      expect(session.streamLabel, 'EMITIENDO a 10.0.0.5 · 15 Mbit/s');
+      expect(session.streamLabel, 'EMITIENDO por SRT a 10.0.0.5 · 15 Mbit/s');
       expect(session.streamInTrouble, isFalse);
 
       session.status!
