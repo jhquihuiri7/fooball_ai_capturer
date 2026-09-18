@@ -6,9 +6,9 @@
 #
 #   brew install mediamtx
 #   mediamtx tools/mediamtx-banco.yml
-#   # el móvil publica en   srt://<IP-DEL-MAC>:8890?streamid=publish:izquierda
+#   # el móvil publica en   srt://<IP-DEL-MAC>:8890?streamid=publish:rig/izquierda   (o rtmp://<IP-DEL-MAC>:1935/rig/izquierda)
 #   # comprobar desde el repo del servidor:
-#   uv run python tools/ingest_probe.py probe rtsp://127.0.0.1:8554/izquierda --seconds 20
+#   uv run python tools/ingest_probe.py probe rtsp://127.0.0.1:8554/rig/izquierda --seconds 20
 #
 # Sin autenticación más allá de la red local: es un banco de pruebas de sesión corta.
 
@@ -26,7 +26,15 @@ rtmp: yes
 rtmpAddress: :1935          # por si hace falta comparar con RTMP
 
 hls: no
-webrtc: no
+
+# WebRTC: la vista previa del panel del servidor en el navegador, con menos de un segundo
+# de retraso (ADR 0007 de `football-ai`). Solo en esta máquina y con el medio por TCP.
+webrtc: yes
+webrtcAddress: 127.0.0.1:8889
+webrtcLocalUDPAddress: ""
+webrtcLocalTCPAddress: 127.0.0.1:8189
+webrtcIPsFromInterfaces: no
+webrtcAdditionalHosts: [127.0.0.1]
 moq: no                     # genera certificados y abre tres puertos más: fuera
 api: no
 metrics: no
@@ -41,8 +49,16 @@ authInternalUsers:
       - action: publish
       - action: read
 
+# Un canal por cámara, con dos niveles: el cliente RTMP de la app parte la URL en
+# aplicación y nombre de stream, y con un solo nivel se rompe. SRT usa el mismo nombre
+# (`streamid=publish:rig/izquierda`) para que el servidor abra siempre el mismo RTSP.
 paths:
-  izquierda:
+  rig/izquierda:
     source: publisher
-  derecha:
+  rig/derecha:
+    source: publisher
+
+  # Lo que publica el panel del servidor cuando corre en esta máquina: la vista previa
+  # (`program`), la salida al relé (`salida`) y la señal de prueba en bucle (`live`).
+  all_others:
     source: publisher

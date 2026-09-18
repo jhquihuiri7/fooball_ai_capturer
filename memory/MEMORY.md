@@ -6,6 +6,9 @@
 > se descubre algo que no se deduce del código, o cuando Alexander corrige la forma de
 > trabajar. Lo más reciente va arriba.
 
+## 🔴 ACTIVO HOY (18 Sep 2026) — El servidor corre en el Mac; el pod no arrancó
+- [project_servidor_local_18sep.md](project_servidor_local_18sep.md) — **`tools/local.sh start | start clip | stop`** enciende y apaga MediaMTX + panel en el Mac. Qué aguanta el Air M4, qué falta (el `.onnx` lo tiene el socio), por qué RunPod obliga a RTMP y por qué el pod no arrancó, y qué hace falta para TestFlight. RTMP en la app sin commit hasta que Alexander lo pruebe.
+
 ## 🔴 ACTIVO HOY (17 Sep 2026, noche) — Pasos 1, 2, 3 y 6 (segmentos y calor) hechos con un iPhone
 - [session_state_paso3_17sep.md](session_state_paso3_17sep.md) — **Empezar aquí si retomamos.** Con un solo iPhone ya está todo: cámara, código de tiempo, emisión SRT (29,3 fps, 300/300 legibles por RTSP) y robustez (segmentos tras corte, bitrate por calor). Queda con un iPhone: recorte vertical (A6), README, PROGRESS del servidor y B1c (SRT en el MediaMTX del pod). Con dos iPhone: paso 4 (reloj Multipeer) y 5 (fase).
 - Visor en vivo en el Mac para que Alexander vea lo que llega: `uv run python tools/ingest_probe.py view rtsp://127.0.0.1:8554/izquierda --port 8090` en el repo del servidor, con MediaMTX (`tools/banco.sh`) corriendo. Arrancarlo **después** de que el móvil emita, o se queda colgado sin imagen.

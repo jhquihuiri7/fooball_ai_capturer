@@ -5,7 +5,7 @@
 #   tools/banco.sh            # arranca MediaMTX y el anuncio; Ctrl-C para parar los dos
 #
 # Comprobar lo que llega, desde el repo del servidor:
-#   uv run python tools/ingest_probe.py probe rtsp://127.0.0.1:8554/izquierda --seconds 20
+#   uv run python tools/ingest_probe.py probe rtsp://127.0.0.1:8554/rig/izquierda --seconds 20
 set -eu
 cd "$(dirname "$0")/.."
 
