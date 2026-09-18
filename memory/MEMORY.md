@@ -6,8 +6,9 @@
 > se descubre algo que no se deduce del código, o cuando Alexander corrige la forma de
 > trabajar. Lo más reciente va arriba.
 
-## 🔴 ACTIVO HOY (17 Sep 2026, tarde) — Paso 3 (emisión SRT) VERIFICADO y commiteado
-- [session_state_paso3_17sep.md](session_state_paso3_17sep.md) — **Empezar aquí si retomamos.** Pasos 1, 2 y 3 hechos y probados en el iPhone contra el MediaMTX del Mac (29,3 fps, 300/300 códigos de tiempo legibles por RTSP). Siguiente: paso 4, Multipeer y reloj común, que necesita los dos iPhone.
+## 🔴 ACTIVO HOY (17 Sep 2026, noche) — Pasos 1, 2, 3 y 6 (segmentos y calor) hechos con un iPhone
+- [session_state_paso3_17sep.md](session_state_paso3_17sep.md) — **Empezar aquí si retomamos.** Con un solo iPhone ya está todo: cámara, código de tiempo, emisión SRT (29,3 fps, 300/300 legibles por RTSP) y robustez (segmentos tras corte, bitrate por calor). Queda con un iPhone: recorte vertical (A6), README, PROGRESS del servidor y B1c (SRT en el MediaMTX del pod). Con dos iPhone: paso 4 (reloj Multipeer) y 5 (fase).
+- Visor en vivo en el Mac para que Alexander vea lo que llega: `uv run python tools/ingest_probe.py view rtsp://127.0.0.1:8554/izquierda --port 8090` en el repo del servidor, con MediaMTX (`tools/banco.sh`) corriendo. Arrancarlo **después** de que el móvil emita, o se queda colgado sin imagen.
 - [lesson_banco_mediamtx_17sep.md](lesson_banco_mediamtx_17sep.md) — Tres trampas del banco en el Mac: `srtAddress` tiene que ser `0.0.0.0:8890`; `flutter install` borra los datos de la app (usar `devicectl install`); la API de HaishinKit en `main` no es la de 2.2.5 (leer el checkout local).
 
 ## 🎯 REGLA (17 Sep 2026, tarde) — No más "pruebitas" con Alexander

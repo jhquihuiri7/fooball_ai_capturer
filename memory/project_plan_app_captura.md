@@ -19,7 +19,7 @@ Pasos 1 a 3 con un iPhone y el Mac; desde el 4 hacen falta los dos iPhone.
 | 3 | Emisión a MediaMTX (HaishinKit, bitrate fijo) | Por RTSP llegan 30 fps en 4K con el código de tiempo legible; el archivo local sigue entero | ✅ 17 Sep (29,3 fps, 300/300 legibles) |
 | 4 | Multipeer y reloj común (A3) | Incertidumbre < 5 ms; dos móviles filmando un cronómetro difieren < 16 ms | ⬜ **siguiente**, dos iPhone |
 | 5 | Fase de exposición (A4) | Fase ≤ 5 ms con reintentos visibles | ⬜ |
-| 6 | Robustez: segmento tras interrupción, bitrate térmico, recorte vertical | FaceTime en medio → segundo archivo y stream de vuelta | ⬜ |
+| 6 | Robustez: segmento tras interrupción, bitrate térmico, recorte vertical | Salir de la app en medio → archivo nuevo y stream de vuelta | ✅ segmentos y calor (17 Sep, 3 archivos en la prueba) · ⬜ recorte vertical (A6) |
 | 7 | Campo y docs: firma para dos iPhone, Acceso Guiado, README, `DEPENDENCIES.md`, PROGRESS del servidor | — | ⬜ |
 
 ## Lo que el servidor exige (repo `fooball_ai_streaming`, léase `docs/PROGRESS.md` línea 48)

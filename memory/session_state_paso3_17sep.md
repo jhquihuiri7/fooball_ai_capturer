@@ -60,3 +60,13 @@ HEVC 3840×2160, 300 frames en 10,2 s (29,3 fps), **300/300 con código de tiemp
 2. Si llega: commit `feat(ios): emisión SRT al servidor con HaishinKit (TASK A5)` y
    actualizar el plan. Después, pasos 4+ (dos iPhone).
 3. Registrar HaishinKit (BSD-3) en un `DEPENDENCIES.md` de la app.
+
+## Paso 6 (17 Sep, 18:00): segmentos tras corte y bitrate por calor — hecho y probado
+
+Commit `feat(ios): grabar en un segmento nuevo tras un corte y bajar el bitrate por calor`.
+Prueba de Alexander: salir de la app dos veces grabando y emitiendo → tres archivos
+(`left-…mov`, `-2.mov`, `-3.mov`) y la emisión siguió por el mismo enlace SRT (la
+conexión no cayó; solo pararon los frames). La primera reanudación tarda 2–3 s: iOS
+devuelve la cámara y hay que esperar al siguiente frame clave. El bitrate por calor
+solo tiene test unitario (no se puede provocar en el banco).
+
