@@ -121,10 +121,21 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
     final String minutes = elapsed.inMinutes.toString().padLeft(2, '0');
     final String seconds = (elapsed.inSeconds % 60).toString().padLeft(2, '0');
     final String? file = recordingFileName;
-    return file == null ? '$minutes:$seconds' : '$minutes:$seconds · $file';
+    if (file == null) {
+      return '$minutes:$seconds';
+    }
+    final int segment = status?.recordingSegment ?? 1;
+    final String suffix = segment > 1 ? ' · segmento $segment' : '';
+    return '$minutes:$seconds · $file$suffix';
   }
 
-  String? get recordingFileName => recordingFile?.split('/').last;
+  /// El archivo en curso. Manda el que dice el nativo: tras un corte, la grabación
+  /// sigue en un segmento nuevo que la pantalla tiene que enseñar sin que nadie pulse.
+  String? get recordingFileName {
+    final String? fromNative = status?.recordingFile;
+    final String? path = (fromNative != null && fromNative.isNotEmpty) ? fromNative : recordingFile;
+    return path?.split('/').last;
+  }
 
   /// A dónde publica este móvil: un path por cámara en el MediaMTX del servidor
   /// (`izquierda` / `derecha`), con el búfer SRT que aguanta los traspasos de Starlink.

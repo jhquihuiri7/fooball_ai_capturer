@@ -118,6 +118,8 @@ class CaptureStatus {
     required this.freeDiskBytes,
     required this.droppedFrames,
     required this.timecodeFailures,
+    required this.recordingFile,
+    required this.recordingSegment,
     required this.streamState,
     required this.streamDetail,
     required this.streamDroppedFrames,
@@ -158,6 +160,13 @@ class CaptureStatus {
   /// Frames en los que no se pudo pintar el código de tiempo (enmienda B1a). Tiene que
   /// ser cero: cada uno es un frame que el servidor no puede emparejar.
   final int timecodeFailures;
+
+  /// Archivo que se está escribiendo ahora, o el último. Cambia solo tras una
+  /// interrupción: la grabación sigue en un segmento nuevo (TASK A9).
+  final String recordingFile;
+
+  /// Número de segmento de la grabación en curso: 1 salvo que haya habido cortes.
+  final int recordingSegment;
 
   final StreamState streamState;
 

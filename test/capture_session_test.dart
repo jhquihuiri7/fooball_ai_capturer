@@ -300,6 +300,22 @@ void main() {
       expect(session.problem, contains('disco lleno'));
     });
 
+    test('tras un corte, la pantalla enseña el segmento nuevo que abrió el nativo', () async {
+      final FakeCaptureApi api = FakeCaptureApi();
+      final CaptureSession session = CaptureSession(role: CameraRole.left, api: api);
+      await session.prepare();
+      await session.toggleRecording();
+      expect(session.recordingFileName, 'left-1.mov');
+
+      // El nativo reabrió en otro archivo y lo cuenta en el estado.
+      session.status!
+        ..recordingFile = 'Documents/left-77-2.mov'
+        ..recordingSegment = 2;
+
+      expect(session.recordingFileName, 'left-77-2.mov');
+      expect(session.recordingLabel, endsWith('· left-77-2.mov · segmento 2'));
+    });
+
     test('se sabe en qué archivo se graba y cuánto lleva', () async {
       final CaptureSession session = CaptureSession(role: CameraRole.left, api: FakeCaptureApi());
       expect(session.recordingFileName, isNull);

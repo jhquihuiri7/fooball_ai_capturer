@@ -133,9 +133,11 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
             object: nil,
             queue: .main
         ) { [weak self] notification in
-            let reason = notification.userInfo?[AVCaptureSessionInterruptionReasonKey] as? Int
+            guard let self else { return }
+            self.engine.interruptionBegan()
+            let reason = Self.interruptionReason(notification)
             Task { @MainActor in
-                try? await self?.flutter.onInterrupted(reason: "motivo \(reason ?? -1)")
+                try? await self.flutter.onInterrupted(reason: reason)
             }
         }
         center.addObserver(
@@ -143,8 +145,25 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
             object: nil,
             queue: .main
         ) { [weak self] _ in
+            guard let self else { return }
+            self.engine.interruptionEnded()
             Task { @MainActor in
-                try? await self?.flutter.onResumed()
+                try? await self.flutter.onResumed()
+            }
+        }
+        center.addObserver(
+            forName: .AVCaptureSessionRuntimeError,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self else { return }
+            let error = notification.userInfo?[AVCaptureSessionErrorKey] as? NSError
+            NSLog("[capture] error de sesión: %@", error?.localizedDescription ?? "?")
+            self.engine.runtimeErrorOccurred()
+            Task { @MainActor in
+                try? await self.flutter.onInterrupted(
+                    reason: "error de la cámara: \(error?.localizedDescription ?? "desconocido")"
+                )
             }
         }
         center.addObserver(
@@ -153,10 +172,30 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
             queue: .main
         ) { [weak self] _ in
             guard let self else { return }
+            self.engine.thermalStateChanged()
             let state = self.engine.status().thermalState
             Task { @MainActor in
                 try? await self.flutter.onThermalStateChanged(state: state)
             }
+        }
+    }
+
+    /// El motivo del corte en palabras, para la pantalla. Los códigos son de
+    /// `AVCaptureSession.InterruptionReason`.
+    private static func interruptionReason(_ notification: Notification) -> String {
+        guard let raw = notification.userInfo?[AVCaptureSessionInterruptionReasonKey] as? Int,
+              let reason = AVCaptureSession.InterruptionReason(rawValue: raw)
+        else {
+            return "motivo desconocido"
+        }
+        switch reason {
+        case .videoDeviceNotAvailableInBackground: return "la app pasó a segundo plano"
+        case .audioDeviceInUseByAnotherClient: return "otra app usa el micrófono"
+        case .videoDeviceInUseByAnotherClient: return "otra app usa la cámara"
+        case .videoDeviceNotAvailableWithMultipleForegroundApps: return "pantalla compartida"
+        case .videoDeviceNotAvailableDueToSystemPressure: return "el sistema recortó la cámara por calor"
+        case .sensitiveContentMitigationActivated: return "protección de contenido del sistema"
+        @unknown default: return "motivo \(raw)"
         }
     }
 }

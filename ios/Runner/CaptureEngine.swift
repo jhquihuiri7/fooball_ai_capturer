@@ -32,6 +32,13 @@ final class CaptureEngine: NSObject {
     private var writerInput: AVAssetWriterInput?
     private var writerStarted = false
 
+    /// Lo que hace falta para reabrir la grabación en un segmento nuevo tras un corte:
+    /// que el operador quería grabar, dónde, y cuántos segmentos van.
+    private var recordingWanted = false
+    private var recordingDirectory = ""
+    private(set) var recordingSegment = 0
+    private(set) var recordingFile = ""
+
     /// Desfase al tiempo del soporte, en nanosegundos. Lo fija Dart.
     private var clockOffsetNs: Int64 = 0
 
@@ -175,15 +182,26 @@ final class CaptureEngine: NSObject {
     // MARK: - Grabación
 
     func startRecording(directory: String) throws -> String {
+        recordingWanted = true
+        recordingDirectory = directory
+        recordingSegment = 1
+        return try openSegment()
+    }
+
+    /// Abre el archivo del segmento actual. Un fichero por arranque, con el lado en el
+    /// nombre: en el servidor hay que poder saber cuál es cuál sin abrirlos. Tras un
+    /// corte, el siguiente segmento lleva su número al final.
+    private func openSegment() throws -> String {
         guard let settings, let applied else {
             throw CameraSetupError.noUltraWideCamera
         }
-
-        // Un fichero por arranque, con el lado en el nombre: en el servidor hay que
-        // poder saber cuál es cuál sin abrirlos.
-        let side = settings.role == .left ? "left" : "right"
-        let name = "\(side)-\(Int(Date().timeIntervalSince1970)).mov"
-        let url = URL(fileURLWithPath: directory).appendingPathComponent(name)
+        let name = Self.segmentName(
+            role: settings.role,
+            epochSeconds: Int(Date().timeIntervalSince1970),
+            segment: recordingSegment
+        )
+        let url = URL(fileURLWithPath: recordingDirectory).appendingPathComponent(name)
+        recordingFile = url.path
 
         let writer = try AVAssetWriter(outputURL: url, fileType: .mov)
         let input = AVAssetWriterInput(
@@ -218,9 +236,68 @@ final class CaptureEngine: NSObject {
     }
 
     func stopRecording() {
+        recordingWanted = false
         queue.async { [weak self] in
             self?.closeWriter()
         }
+    }
+
+    static func segmentName(role: CameraRole, epochSeconds: Int, segment: Int) -> String {
+        let side = role == .left ? "left" : "right"
+        return segment <= 1 ? "\(side)-\(epochSeconds).mov" : "\(side)-\(epochSeconds)-\(segment).mov"
+    }
+
+    // MARK: - Cortes
+
+    /// La cámara se interrumpió (la app pasó atrás, otra app la tomó, el sistema la
+    /// recortó por calor). Se cierra el segmento ahora, con el archivo entero y
+    /// reproducible, en vez de dejarlo abierto: si iOS mata la app mientras dure el
+    /// corte, un archivo abierto no se puede leer.
+    func interruptionBegan() {
+        queue.async { [weak self] in
+            self?.closeWriter()
+        }
+    }
+
+    /// Volvió la cámara. Si se estaba grabando, se sigue en un segmento nuevo sin que
+    /// nadie pulse nada: en la cancha nadie está mirando el móvil.
+    func interruptionEnded() {
+        guard recordingWanted else { return }
+        recordingSegment += 1
+        do {
+            _ = try openSegment()
+        } catch {
+            NSLog("[capture] no se pudo abrir el segmento %d: %@", recordingSegment, error.localizedDescription)
+        }
+    }
+
+    /// Error de ejecución de la sesión (por ejemplo, los servicios de vídeo del sistema
+    /// se reiniciaron). Lo único que lo arregla es volver a arrancar.
+    func runtimeErrorOccurred() {
+        queue.async { [weak self] in
+            guard let self, !self.session.isRunning else { return }
+            self.session.startRunning()
+        }
+    }
+
+    // MARK: - Calor
+
+    /// Fracción del bitrate de emisión por estado térmico. Escalones fijos, no un
+    /// control continuo: dos móviles con controles continuos se pelean por Starlink
+    /// (ADR 0012, decisión 7). La grabación local no se toca: el archivo es la verdad.
+    static func bitrateFraction(for state: ProcessInfo.ThermalState) -> Double {
+        switch state {
+        case .nominal, .fair: return 1.0
+        case .serious: return 2.0 / 3.0
+        case .critical: return 0.4
+        @unknown default: return 0.4
+        }
+    }
+
+    func thermalStateChanged() {
+        guard let settings else { return }
+        let fraction = Self.bitrateFraction(for: ProcessInfo.processInfo.thermalState)
+        publisher.setBitRate(Int(Double(settings.bitrateBps) * fraction))
     }
 
     /// Cierra el escritor, en la cola de captura.
@@ -286,6 +363,8 @@ final class CaptureEngine: NSObject {
             freeDiskBytes: Self.freeDiskBytes(),
             droppedFrames: droppedFrames,
             timecodeFailures: timecodeFailures,
+            recordingFile: recordingFile,
+            recordingSegment: Int64(recordingSegment),
             streamState: Self.streamState(publisher.state),
             streamDetail: Self.streamDetail(publisher.state),
             streamDroppedFrames: publisher.droppedFrames

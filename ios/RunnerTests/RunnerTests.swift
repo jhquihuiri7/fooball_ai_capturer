@@ -74,3 +74,19 @@ final class RigTimecodeTests: XCTestCase {
         return RigTimecode.word(valueMs: value) == word ? value : nil
     }
 }
+
+/// Robustez de campo (TASK A7 y A9): lo que no puede cambiar sin que se note en la cancha.
+final class FieldRobustnessTests: XCTestCase {
+    func testSegmentNamesKeepTheSideAndNumberTheCuts() {
+        XCTAssertEqual(CaptureEngine.segmentName(role: .left, epochSeconds: 1_700_000_000, segment: 1), "left-1700000000.mov")
+        XCTAssertEqual(CaptureEngine.segmentName(role: .right, epochSeconds: 1_700_000_000, segment: 3), "right-1700000000-3.mov")
+    }
+
+    func testBitrateStepsDownWithHeatAndNeverToZero() {
+        XCTAssertEqual(CaptureEngine.bitrateFraction(for: .nominal), 1.0)
+        XCTAssertEqual(CaptureEngine.bitrateFraction(for: .fair), 1.0)
+        XCTAssertLessThan(CaptureEngine.bitrateFraction(for: .serious), 1.0)
+        XCTAssertLessThan(CaptureEngine.bitrateFraction(for: .critical), CaptureEngine.bitrateFraction(for: .serious))
+        XCTAssertGreaterThan(CaptureEngine.bitrateFraction(for: .critical), 0.0)
+    }
+}

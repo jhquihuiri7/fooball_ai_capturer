@@ -13,6 +13,8 @@ CaptureStatus fakeStatus({
   bool exposureLocked = true,
   StreamState streamState = StreamState.off,
   String streamDetail = '',
+  String recordingFile = '',
+  int recordingSegment = 0,
 }) {
   return CaptureStatus(
     running: true,
@@ -32,6 +34,8 @@ CaptureStatus fakeStatus({
     freeDiskBytes: 64000000000,
     droppedFrames: 0,
     timecodeFailures: 0,
+    recordingFile: recordingFile,
+    recordingSegment: recordingSegment,
     streamState: streamState,
     streamDetail: streamDetail,
     streamDroppedFrames: 0,

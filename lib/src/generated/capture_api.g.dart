@@ -258,6 +258,8 @@ class CaptureStatus {
     required this.freeDiskBytes,
     required this.droppedFrames,
     required this.timecodeFailures,
+    required this.recordingFile,
+    required this.recordingSegment,
     required this.streamState,
     required this.streamDetail,
     required this.streamDroppedFrames,
@@ -306,6 +308,13 @@ class CaptureStatus {
   /// ser cero: cada uno es un frame que el servidor no puede emparejar.
   int timecodeFailures;
 
+  /// Archivo que se está escribiendo ahora, o el último. Cambia solo tras una
+  /// interrupción: la grabación sigue en un segmento nuevo (TASK A9).
+  String recordingFile;
+
+  /// Número de segmento de la grabación en curso: 1 salvo que haya habido cortes.
+  int recordingSegment;
+
   StreamState streamState;
 
   /// Por qué se está reconectando o falló, en palabras. Vacío si va bien.
@@ -333,6 +342,8 @@ class CaptureStatus {
       freeDiskBytes,
       droppedFrames,
       timecodeFailures,
+      recordingFile,
+      recordingSegment,
       streamState,
       streamDetail,
       streamDroppedFrames,
@@ -362,9 +373,11 @@ class CaptureStatus {
       freeDiskBytes: result[14]! as int,
       droppedFrames: result[15]! as int,
       timecodeFailures: result[16]! as int,
-      streamState: result[17]! as StreamState,
-      streamDetail: result[18]! as String,
-      streamDroppedFrames: result[19]! as int,
+      recordingFile: result[17]! as String,
+      recordingSegment: result[18]! as int,
+      streamState: result[19]! as StreamState,
+      streamDetail: result[20]! as String,
+      streamDroppedFrames: result[21]! as int,
     );
   }
 
@@ -377,7 +390,7 @@ class CaptureStatus {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(running, other.running) && _deepEquals(width, other.width) && _deepEquals(height, other.height) && _deepEquals(actualFps, other.actualFps) && _deepEquals(stabilizationDisabled, other.stabilizationDisabled) && _deepEquals(exposureLocked, other.exposureLocked) && _deepEquals(exposureSeconds, other.exposureSeconds) && _deepEquals(iso, other.iso) && _deepEquals(whiteBalanceLocked, other.whiteBalanceLocked) && _deepEquals(whiteBalanceKelvin, other.whiteBalanceKelvin) && _deepEquals(focusLocked, other.focusLocked) && _deepEquals(intrinsicsAvailable, other.intrinsicsAvailable) && _deepEquals(thermalState, other.thermalState) && _deepEquals(batteryLevel, other.batteryLevel) && _deepEquals(freeDiskBytes, other.freeDiskBytes) && _deepEquals(droppedFrames, other.droppedFrames) && _deepEquals(timecodeFailures, other.timecodeFailures) && _deepEquals(streamState, other.streamState) && _deepEquals(streamDetail, other.streamDetail) && _deepEquals(streamDroppedFrames, other.streamDroppedFrames);
+    return _deepEquals(running, other.running) && _deepEquals(width, other.width) && _deepEquals(height, other.height) && _deepEquals(actualFps, other.actualFps) && _deepEquals(stabilizationDisabled, other.stabilizationDisabled) && _deepEquals(exposureLocked, other.exposureLocked) && _deepEquals(exposureSeconds, other.exposureSeconds) && _deepEquals(iso, other.iso) && _deepEquals(whiteBalanceLocked, other.whiteBalanceLocked) && _deepEquals(whiteBalanceKelvin, other.whiteBalanceKelvin) && _deepEquals(focusLocked, other.focusLocked) && _deepEquals(intrinsicsAvailable, other.intrinsicsAvailable) && _deepEquals(thermalState, other.thermalState) && _deepEquals(batteryLevel, other.batteryLevel) && _deepEquals(freeDiskBytes, other.freeDiskBytes) && _deepEquals(droppedFrames, other.droppedFrames) && _deepEquals(timecodeFailures, other.timecodeFailures) && _deepEquals(recordingFile, other.recordingFile) && _deepEquals(recordingSegment, other.recordingSegment) && _deepEquals(streamState, other.streamState) && _deepEquals(streamDetail, other.streamDetail) && _deepEquals(streamDroppedFrames, other.streamDroppedFrames);
   }
 
   @override
@@ -386,7 +399,7 @@ class CaptureStatus {
 
   @override
   String toString() {
-    return 'CaptureStatus(running: $running, width: $width, height: $height, actualFps: $actualFps, stabilizationDisabled: $stabilizationDisabled, exposureLocked: $exposureLocked, exposureSeconds: $exposureSeconds, iso: $iso, whiteBalanceLocked: $whiteBalanceLocked, whiteBalanceKelvin: $whiteBalanceKelvin, focusLocked: $focusLocked, intrinsicsAvailable: $intrinsicsAvailable, thermalState: $thermalState, batteryLevel: $batteryLevel, freeDiskBytes: $freeDiskBytes, droppedFrames: $droppedFrames, timecodeFailures: $timecodeFailures, streamState: $streamState, streamDetail: $streamDetail, streamDroppedFrames: $streamDroppedFrames)';
+    return 'CaptureStatus(running: $running, width: $width, height: $height, actualFps: $actualFps, stabilizationDisabled: $stabilizationDisabled, exposureLocked: $exposureLocked, exposureSeconds: $exposureSeconds, iso: $iso, whiteBalanceLocked: $whiteBalanceLocked, whiteBalanceKelvin: $whiteBalanceKelvin, focusLocked: $focusLocked, intrinsicsAvailable: $intrinsicsAvailable, thermalState: $thermalState, batteryLevel: $batteryLevel, freeDiskBytes: $freeDiskBytes, droppedFrames: $droppedFrames, timecodeFailures: $timecodeFailures, recordingFile: $recordingFile, recordingSegment: $recordingSegment, streamState: $streamState, streamDetail: $streamDetail, streamDroppedFrames: $streamDroppedFrames)';
   }
 }
 

@@ -68,6 +68,8 @@ final class StreamPublisher {
     private var currentStream_: (any StreamConvertible)?
     private var lostContinuation_: AsyncStream<Void>.Continuation?
 
+    private var video_: VideoCodecSettings?
+
     private var connectTask: Task<Void, Never>?
     private var pumpTask: Task<Void, Never>?
     private var session: (any Session)?
@@ -100,6 +102,7 @@ final class StreamPublisher {
             droppedFrames_ = 0
         }
         let video = Self.videoSettings(settings: settings, applied: applied)
+        withLock { video_ = video }
 
         // La bomba: saca frames de la cola, en orden, y se los da al stream si lo hay.
         // Es una sola tarea a propósito: una tarea por frame no garantiza el orden.
@@ -135,6 +138,24 @@ final class StreamPublisher {
         }
     }
 
+    /// Cambia el bitrate en caliente (por calor, TASK A7). Se aplica al stream activo y
+    /// queda fijado para las reconexiones.
+    func setBitRate(_ bitRate: Int) {
+        var updated: VideoCodecSettings?
+        var stream: (any StreamConvertible)?
+        withLock {
+            guard var video = video_, video.bitRate != bitRate else { return }
+            video.bitRate = bitRate
+            video.dataRateLimits = [Double(bitRate) / 8.0, 1.0]
+            video_ = video
+            updated = video
+            stream = currentStream_
+        }
+        guard let updated, let stream else { return }
+        NSLog("[stream] bitrate a %d bit/s", bitRate)
+        Task { try? await stream.setVideoSettings(updated) }
+    }
+
     /// Un frame de la cámara, ya con el código de tiempo pintado. Se llama desde la cola
     /// de captura y no bloquea: si la cola está llena, se descarta el más viejo.
     func append(_ sampleBuffer: CMSampleBuffer) {
@@ -148,11 +169,13 @@ final class StreamPublisher {
 
     // MARK: - Conexión
 
-    private func run(url: URL, video: VideoCodecSettings) async {
+    private func run(url: URL, video initialVideo: VideoCodecSettings) async {
         await Self.registration.value
         NSLog("[stream] emitiendo a %@", url.absoluteString)
         while wanted, !Task.isCancelled {
             do {
+                // El bitrate vigente, que puede haber bajado por calor desde el arranque.
+                let video = currentVideo ?? initialVideo
                 guard let session = try await SessionBuilderFactory.shared
                     .make(url)
                     .setMode(.publish)
@@ -231,6 +254,12 @@ final class StreamPublisher {
         lock.lock()
         defer { lock.unlock() }
         return wanted_
+    }
+
+    private var currentVideo: VideoCodecSettings? {
+        lock.lock()
+        defer { lock.unlock() }
+        return video_
     }
 
     private var currentStream: (any StreamConvertible)? {
