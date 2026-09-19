@@ -39,7 +39,28 @@ struct AppliedCameraSettings {
     var iso: Float = 0
     var whiteBalanceLocked = false
     var whiteBalanceKelvin: Float = 0
+    var whiteBalanceTint: Float = 0
     var focusLocked: Bool
+}
+
+/// Cómo «ve» una cámara: lo que el maestro le pasa al otro móvil para que las dos mitades
+/// de la panorámica salgan del mismo color y con la misma luz.
+///
+/// Viaja en unidades que no dependen del móvil: el balance en temperatura y tinte (las
+/// ganancias son de cada sensor) y la apertura junto al ISO, para que un móvil con otra
+/// lente compense la luz que le entra de más o de menos.
+struct CameraLook: Equatable {
+    var exposureNs: Int64
+    var iso: Float
+    var aperture: Float
+    var kelvin: Float
+    var tint: Float
+
+    /// El ISO que da la misma luz con otra apertura: la luz va con el cuadrado del número f.
+    func iso(forAperture other: Float) -> Float {
+        guard aperture > 0, other > 0 else { return iso }
+        return iso * (other * other) / (aperture * aperture)
+    }
 }
 
 enum UltraWideCamera {
@@ -221,7 +242,55 @@ enum UltraWideCamera {
             gains.blueGain = min(max(gains.blueGain, 1), top)
             device.setWhiteBalanceModeLocked(with: gains, completionHandler: nil)
             applied.whiteBalanceLocked = true
-            applied.whiteBalanceKelvin = device.temperatureAndTintValues(for: gains).temperature
+            let values = device.temperatureAndTintValues(for: gains)
+            applied.whiteBalanceKelvin = values.temperature
+            applied.whiteBalanceTint = values.tint
+        }
+    }
+
+    /// Pone la exposición y el balance del maestro en vez de los medidos por este móvil.
+    ///
+    /// La obturación se copia tal cual (ya viene sin parpadeo) y el ISO se corrige por la
+    /// apertura. Todo se acota al formato: fuera de rango AVFoundation no recorta, lanza.
+    static func apply(
+        look: CameraLook,
+        on device: AVCaptureDevice,
+        applied: inout AppliedCameraSettings
+    ) throws {
+        let format = device.activeFormat
+        let seconds = min(
+            max(Double(look.exposureNs) / 1_000_000_000, CMTimeGetSeconds(format.minExposureDuration)),
+            CMTimeGetSeconds(format.maxExposureDuration)
+        )
+        let iso = min(max(look.iso(forAperture: device.lensAperture), format.minISO), format.maxISO)
+
+        try device.lockForConfiguration()
+        defer { device.unlockForConfiguration() }
+
+        if device.isExposureModeSupported(.custom) {
+            device.setExposureModeCustom(
+                duration: CMTime(seconds: seconds, preferredTimescale: 1_000_000_000),
+                iso: iso,
+                completionHandler: nil
+            )
+            applied.exposureLocked = true
+            applied.exposureSeconds = seconds
+            applied.iso = iso
+        }
+        if device.isWhiteBalanceModeSupported(.locked), look.kelvin > 0 {
+            let values = AVCaptureDevice.WhiteBalanceTemperatureAndTintValues(
+                temperature: look.kelvin,
+                tint: look.tint
+            )
+            var gains = device.deviceWhiteBalanceGains(for: values)
+            let top = device.maxWhiteBalanceGain
+            gains.redGain = min(max(gains.redGain, 1), top)
+            gains.greenGain = min(max(gains.greenGain, 1), top)
+            gains.blueGain = min(max(gains.blueGain, 1), top)
+            device.setWhiteBalanceModeLocked(with: gains, completionHandler: nil)
+            applied.whiteBalanceLocked = true
+            applied.whiteBalanceKelvin = look.kelvin
+            applied.whiteBalanceTint = look.tint
         }
     }
 

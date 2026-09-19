@@ -39,6 +39,14 @@ final class CaptureEngine: NSObject {
     private(set) var recordingSegment = 0
     private(set) var recordingFile = ""
 
+    /// Exposición y balance del maestro, si han llegado por el enlace. Se guardan porque
+    /// pueden llegar antes de que esta cámara esté configurada.
+    private var masterLook: CameraLook?
+
+    /// Avisa de que esta cámara acaba de congelar exposición y balance: el maestro lo
+    /// usa para pasárselos al otro móvil.
+    var onLookLocked: ((CameraLook) -> Void)?
+
     /// Desfase al tiempo del soporte, en nanosegundos. Lo fija Dart.
     private var clockOffsetNs: Int64 = 0
 
@@ -125,8 +133,50 @@ final class CaptureEngine: NSObject {
         startRunning()
         await Self.waitForMetering(on: device)
         try UltraWideCamera.lockExposureAndWhiteBalance(on: device, settings: settings, applied: &applied)
+        // Si el maestro ya dijo cómo ve, manda él: lo medido aquí solo valía de reserva.
+        if let masterLook {
+            try UltraWideCamera.apply(look: masterLook, on: device, applied: &applied)
+        }
         self.applied = applied
+        if let look = look() { onLookLocked?(look) }
         return applied
+    }
+
+    // MARK: - Mismo color en los dos móviles
+
+    /// Cómo ve esta cámara ahora, o `nil` si todavía no ha congelado exposición y balance.
+    func look() -> CameraLook? {
+        guard let device, let applied, applied.exposureLocked, applied.whiteBalanceLocked else { return nil }
+        return CameraLook(
+            exposureNs: Int64((applied.exposureSeconds * 1_000_000_000).rounded()),
+            iso: applied.iso,
+            aperture: device.lensAperture,
+            kelvin: applied.whiteBalanceKelvin,
+            tint: applied.whiteBalanceTint
+        )
+    }
+
+    /// Adopta la exposición y el balance del maestro. Si la cámara aún no está lista se
+    /// guarda y `configure` lo aplica al terminar de medir.
+    func adopt(masterLook look: CameraLook) {
+        guard look != masterLook else { return }
+        masterLook = look
+        guard let device, var applied, applied.exposureLocked else { return }
+        do {
+            try UltraWideCamera.apply(look: look, on: device, applied: &applied)
+            self.applied = applied
+            NSLog(
+                "[color] ajustes del maestro: 1/%.0f s, ISO %.0f, %.0f K",
+                1 / applied.exposureSeconds, Double(applied.iso), Double(applied.whiteBalanceKelvin)
+            )
+        } catch {
+            NSLog("[color] no se pudieron poner los ajustes del maestro: %@", error.localizedDescription)
+        }
+    }
+
+    /// Sin enlace no hay maestro: la próxima configuración vuelve a lo que mida este móvil.
+    func forgetMasterLook() {
+        masterLook = nil
     }
 
     /// Cada cuánto se mira si la cámara terminó de medir, en nanosegundos.

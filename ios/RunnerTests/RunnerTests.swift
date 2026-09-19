@@ -101,6 +101,8 @@ final class RigMessageTests: XCTestCase {
             .ptsRequest(seq: UInt32.max),
             .ptsReply(seq: 9, pts: []),
             .ptsReply(seq: 10, pts: [0, 33_333_333, 66_666_666]),
+            .lookRequest(seq: 11),
+            .look(seq: 12, look: CameraLook(exposureNs: 10_000_000, iso: 412.5, aperture: 2.2, kelvin: 5234, tint: -3.5)),
         ]
         for message in messages {
             XCTAssertEqual(RigMessage.decode(message.encode()), message)
@@ -118,6 +120,22 @@ final class RigMessageTests: XCTestCase {
         XCTAssertNil(RigMessage.decode(Data([99, 0, 0, 0, 1])))
         let pong = RigMessage.pong(seq: 1, t1: 2, t2: 3, t3: 4).encode()
         XCTAssertNil(RigMessage.decode(pong.dropLast(3)))
+    }
+
+    func testACorruptLookNeverReachesTheCamera() {
+        // Un ISO que no es un número lanzaría una excepción dentro de AVFoundation.
+        let bad = CameraLook(exposureNs: 10_000_000, iso: .nan, aperture: 2.2, kelvin: 5000, tint: 0)
+        XCTAssertNil(RigMessage.decode(RigMessage.look(seq: 1, look: bad).encode()))
+        let frozen = CameraLook(exposureNs: 0, iso: 100, aperture: 2.2, kelvin: 5000, tint: 0)
+        XCTAssertNil(RigMessage.decode(RigMessage.look(seq: 1, look: frozen).encode()))
+    }
+
+    func testIsoFollowsTheApertureSoBothPhonesGetTheSameLight() {
+        let look = CameraLook(exposureNs: 10_000_000, iso: 100, aperture: 2.2, kelvin: 5000, tint: 0)
+        XCTAssertEqual(look.iso(forAperture: 2.2), 100, accuracy: 0.01)
+        // f/1.8 deja pasar más luz que f/2.2: hace falta menos ISO.
+        XCTAssertEqual(look.iso(forAperture: 1.8), 100 * (1.8 * 1.8) / (2.2 * 2.2), accuracy: 0.01)
+        XCTAssertEqual(CameraLook(exposureNs: 1, iso: 100, aperture: 0, kelvin: 0, tint: 0).iso(forAperture: 1.8), 100)
     }
 
     func testServiceTypeFitsMultipeerLimit() {

@@ -31,9 +31,13 @@ enum RigMessage: Equatable {
     /// El derecho pide los PTS recientes del maestro para medir la fase (TASK A4).
     case ptsRequest(seq: UInt32)
     case ptsReply(seq: UInt32, pts: [Int64])
+    /// El derecho pregunta cómo ve el maestro (exposición y balance de blancos)...
+    case lookRequest(seq: UInt32)
+    /// ...y el maestro contesta; también lo manda por su cuenta cuando los cambia.
+    case look(seq: UInt32, look: CameraLook)
 
     private enum Kind: UInt8 {
-        case ping = 1, pong, ptsRequest, ptsReply
+        case ping = 1, pong, ptsRequest, ptsReply, lookRequest, look
     }
 
     func encode() -> Data {
@@ -57,6 +61,15 @@ enum RigMessage: Equatable {
             data.appendBigEndian(seq)
             data.appendBigEndian(UInt16(clamping: pts.count))
             pts.prefix(Int(UInt16.max)).forEach { data.appendBigEndian($0) }
+        case let .lookRequest(seq):
+            data.append(Kind.lookRequest.rawValue)
+            data.appendBigEndian(seq)
+        case let .look(seq, look):
+            data.append(Kind.look.rawValue)
+            data.appendBigEndian(seq)
+            data.appendBigEndian(look.exposureNs)
+            // Los decimales viajan con sus bits tal cual: sin redondeos ni escalas que acordar.
+            [look.iso, look.aperture, look.kelvin, look.tint].forEach { data.appendBigEndian($0.bitPattern) }
         }
         return data
     }
@@ -90,6 +103,29 @@ enum RigMessage: Equatable {
                 pts.append(value)
             }
             return .ptsReply(seq: seq, pts: pts)
+        case .lookRequest:
+            return .lookRequest(seq: seq)
+        case .look:
+            guard let exposureNs = reader.read(Int64.self), let iso = reader.read(UInt32.self),
+                  let aperture = reader.read(UInt32.self), let kelvin = reader.read(UInt32.self),
+                  let tint = reader.read(UInt32.self)
+            else {
+                return nil
+            }
+            let look = CameraLook(
+                exposureNs: exposureNs,
+                iso: Float(bitPattern: iso),
+                aperture: Float(bitPattern: aperture),
+                kelvin: Float(bitPattern: kelvin),
+                tint: Float(bitPattern: tint)
+            )
+            // Un paquete corrupto no debe llegar a la cámara como un ISO infinito.
+            guard exposureNs > 0, [look.iso, look.aperture, look.kelvin, look.tint].allSatisfy(\.isFinite),
+                  look.iso > 0
+            else {
+                return nil
+            }
+            return .look(seq: seq, look: look)
         }
     }
 
@@ -139,6 +175,10 @@ final class RigLink: NSObject {
     /// De dónde saca el maestro sus PTS recientes cuando el derecho se los pide.
     var recentPts: (() -> [Int64])?
 
+    /// De dónde saca el maestro cómo ve su cámara, y qué hace el derecho cuando le llega.
+    var currentLook: (() -> CameraLook?)?
+    var onLook: ((CameraLook) -> Void)?
+
     private let role: CameraRole
     private let peerID: MCPeerID
     private let session: MCSession
@@ -150,6 +190,10 @@ final class RigLink: NSObject {
     private var pingGeneration = 0
     private var sentPings = 0
     private var pendingPts: [UInt32: CheckedContinuation<[Int64], Never>] = [:]
+
+    /// Si en esta conexión ya llegó cómo ve el maestro. Mientras no, se vuelve a pedir
+    /// con cada respuesta de hora: el maestro puede estar todavía midiendo la luz.
+    private var lookReceived = false
 
     init(role: CameraRole) {
         self.role = role
@@ -254,6 +298,26 @@ final class RigLink: NSObject {
         NSLog("[enlace] hora %d: ida y vuelta %.2f ms, desfase %.2f ms", loggedPongs, roundTripMs, offsetMs)
     }
 
+    // MARK: - Mismo color en los dos móviles
+
+    /// El maestro avisa de que ha vuelto a congelar exposición y balance.
+    func publish(look: CameraLook) {
+        guard role == .left, !session.connectedPeers.isEmpty else { return }
+        queue.async {
+            self.seq &+= 1
+            let message = RigMessage.look(seq: self.seq, look: look)
+            try? self.session.send(message.encode(), toPeers: self.session.connectedPeers, with: .reliable)
+        }
+    }
+
+    private func requestLookIfNeeded(from peer: MCPeerID) {
+        queue.async {
+            guard !self.lookReceived else { return }
+            self.seq &+= 1
+            try? self.session.send(RigMessage.lookRequest(seq: self.seq).encode(), toPeers: [peer], with: .reliable)
+        }
+    }
+
     // MARK: - PTS del maestro (TASK A4)
 
     /// Los PTS recientes del maestro, o vacío si no hay enlace o no contesta a tiempo.
@@ -284,7 +348,10 @@ extension RigLink: MCSessionDelegate {
             if role == .right { startPinging() }
         case .notConnected:
             NSLog("[enlace] se perdió %@", peerID.displayName)
-            queue.async { self.pingGeneration += 1 }
+            queue.async {
+                self.pingGeneration += 1
+                self.lookReceived = false
+            }
             onState?(.searching, "")
             // El buscador no vuelve a avisar de un par que ya vio: se reinicia.
             if role == .right { DispatchQueue.main.async { self.startBrowsing() } }
@@ -306,11 +373,22 @@ extension RigLink: MCSessionDelegate {
         case let .pong(_, t1, t2, t3):
             logClock(t1: t1, t2: t2, t3: t3, t4: arrival)
             onStamps?(t1, t2, t3, arrival)
+            // Una respuesta de hora es la prueba de que el enlace va: buen momento para pedir.
+            requestLookIfNeeded(from: peerID)
         case let .ptsRequest(seq):
             let reply = RigMessage.ptsReply(seq: seq, pts: recentPts?() ?? [])
             try? session.send(reply.encode(), toPeers: [peerID], with: .reliable)
         case let .ptsReply(seq, pts):
             queue.async { self.pendingPts.removeValue(forKey: seq)?.resume(returning: pts) }
+        case let .lookRequest(seq):
+            // Sin ajustes todavía no se contesta: el derecho vuelve a preguntar.
+            guard role == .left, let look = currentLook?() else { return }
+            try? session.send(RigMessage.look(seq: seq, look: look).encode(), toPeers: [peerID], with: .reliable)
+        case let .look(_, look):
+            guard role == .right else { return }
+            queue.async { self.lookReceived = true }
+            NSLog("[enlace] ajustes del maestro: ISO %.0f, %.0f K", Double(look.iso), Double(look.kelvin))
+            onLook?(look)
         }
     }
 

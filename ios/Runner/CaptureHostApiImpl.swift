@@ -116,6 +116,14 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
                 try? await self?.flutter.onClockStamps(t1Ns: t1, t2Ns: t2, t3Ns: t3, t4Ns: t4)
             }
         }
+        // Mismo color en las dos mitades: el izquierdo dice cómo ve y el derecho lo copia.
+        if role == .left {
+            link.currentLook = { [weak self] in self?.engine.look() }
+            engine.onLookLocked = { [weak link] look in link?.publish(look: look) }
+        } else {
+            link.onLook = { [weak self] look in self?.engine.adopt(masterLook: look) }
+            engine.onLookLocked = nil
+        }
         self.link = link
         link.start()
     }
@@ -123,6 +131,8 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
     func stopLink() throws {
         link?.stop()
         link = nil
+        engine.onLookLocked = nil
+        engine.forgetMasterLook()
     }
 
     func masterRecentPtsNs() async throws -> [Int64] {
