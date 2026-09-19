@@ -5,6 +5,7 @@
 #
 #   tools/local.sh start          # enciende y abre el panel en el navegador
 #   tools/local.sh start clip     # lo mismo, con un vídeo grabado haciendo de iPhone
+#   tools/local.sh start dos      # los dos iPhone: el panel junta izquierda y derecha
 #   tools/local.sh stop           # apaga todo
 #   tools/local.sh status         # qué está encendido y cuánta CPU gasta
 #
@@ -67,7 +68,29 @@ case "${1:-status}" in
 
     # El panel se cierra si al arrancar nadie emite todavía (MediaMTX responde 404), así
     # que se relanza solo hasta que llegue la señal. El navegador se abre en ese momento.
-    launch panel bash -c "cd '$SERVER_REPO' && while true; do uv run python tools/live_panel.py 'rtsp://127.0.0.1:8554/$CHANNEL' --port 8090 --no-browser --open-timeout 30 --read-timeout 30; sleep 3; done"
+    # Con `dos`, el panel lee también la cámara derecha y guarda la calibración del soporte.
+    RIG_ARGS=""
+    if [ "${2:-}" = "dos" ]; then
+      mkdir -p "$HOME/Movies/football-ai"
+      # El soporte monta el móvil izquierdo girado 180° para juntar las lentes: su imagen
+      # llega cabeza abajo y el panel la endereza. `FLIP=right` o `FLIP=` si cambia el montaje.
+      FLIP="${FLIP-left}"
+      RIG_ARGS="--right-url 'rtsp://127.0.0.1:8554/rig/derecha' --rig '$HOME/Movies/football-ai/soporte.json'"
+      [ -n "$FLIP" ] && RIG_ARGS="$RIG_ARGS --flip $FLIP"
+      # Banda vertical de la panorámica. Por defecto la de una cancha desde un mástil, que
+      # recorta el cielo; en interior: PITCH_LIMITS="-45 35" tools/local.sh start dos
+      [ -n "${PITCH_LIMITS:-}" ] && RIG_ARGS="$RIG_ARGS --rig-pitch-limits $PITCH_LIMITS"
+    fi
+    # La IA (cajas de jugadores) se enciende sola si está el modelo del socio. No viene
+    # en git: hay que pedírselo y dejarlo en models/onnx/ del repo del servidor.
+    MODEL="${MODEL-$SERVER_REPO/models/onnx/rfdetr-small.onnx}"
+    if [ -n "$MODEL" ] && [ -f "$MODEL" ]; then
+      RIG_ARGS="$RIG_ARGS --model '$MODEL'"
+      echo "IA: con modelo ($(basename "$MODEL"))"
+    else
+      echo "IA: APAGADA, falta $MODEL"
+    fi
+    launch panel bash -c "cd '$SERVER_REPO' && while true; do uv run python tools/live_panel.py 'rtsp://127.0.0.1:8554/$CHANNEL' $RIG_ARGS --port 8090 --no-browser --open-timeout 30 --read-timeout 30; sleep 3; done"
     launch abrir bash -c "until curl -s -m 1 -o /dev/null '$PANEL_URL'; do sleep 2; done; open '$PANEL_URL'"
     echo "Panel: $PANEL_URL (se abre solo en el navegador cuando haya señal)"
     echo "IP de este Mac para la app: $(ipconfig getifaddr en0 2>/dev/null || echo '?') (la app la encuentra sola)"

@@ -82,6 +82,10 @@
 	</array>
 	<!-- El fichero se saca por Finder cuando la emision se degrada y el archivo local
 	     pasa a ser el partido bueno (ADR 0012, decision 5). -->
+	<!-- Sin cifrado propio: SRT va sin clave y RTMP sin TLS. Con esto App Store Connect
+	     no pregunta por la normativa de exportación en cada subida a TestFlight. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>UIFileSharingEnabled</key>
 	<true/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>

@@ -48,8 +48,18 @@ otros proyectos a la vez y el Air se calienta: apagar el servidor cuando no se u
 
 ## TestFlight
 
-En el Mac hay certificado **Apple Distribution: Freddy Alexander Chavez (GC4H399Z46)**,
-cuenta de pago. El proyecto firma con `5AKXUHD733`, su equipo personal gratuito, que no
-sirve para TestFlight: hay que cambiarlo, añadir `ITSAppUsesNonExemptEncryption = NO` y
-`flutter build ipa`. La subida la hace él (Transporter o Xcode). TestFlight reparte la
-app, pero no hace que otro iPhone llegue al servidor: para eso, el pod o Tailscale.
+**Corrección (18 Sep, tarde):** el proyecto firma con `5AKXUHD733`, que es **LOGICIELAPPLAB
+S.A.S.**, la empresa de Alexander: equipo de pago que ya publica las apps de miwego. No es
+un equipo gratuito, como anoté antes por error. No hay que cambiar de equipo.
+
+- `flutter build ipa --release` funciona: deja `build/ios/ipa/football_ai_capture.ipa`
+  firmado para App Store Connect (firma gestionada en la nube, sin certificado de
+  distribución local de ese equipo). Se sube con **Transporter** o Xcode; lo hace él.
+- Añadidos para que Apple lo acepte: `ITSAppUsesNonExemptEncryption = false` en Info.plist
+  y `ios/Runner/PrivacyInfo.xcprivacy` (UserDefaults y espacio en disco).
+- Avisos que no bloquean: icono y pantalla de arranque son los de la plantilla de Flutter.
+- Cada subida necesita un número de build nuevo: `--build-number 2`, etc.
+- **Probadores internos** (usuarios del equipo en App Store Connect): disponibles a los
+  minutos. **Externos**: revisión de Apple de ~1 día, no llega para el día siguiente.
+- TestFlight reparte la app, pero no hace que otro iPhone llegue al servidor: para eso,
+  misma WiFi que el Mac, el pod, o Tailscale.

@@ -9,7 +9,10 @@
 ## ⚡ ÓRDENES CORTAS
 - [feedback_prendelo_apagalo.md](feedback_prendelo_apagalo.md) — **"préndelo"** = `tools/local.sh start` · **"apágalo"** = `tools/local.sh stop`. Sin preguntar, respuesta de una línea.
 
-## 🔴 ACTIVO HOY (18 Sep 2026, tarde) — Paso 4 escrito: enlace entre móviles y reloj común
+## 🔴 ACTIVO HOY (19 Sep 2026) — Dos iPhone reales funcionando contra el Mac
+- [session_state_dos_iphone_19sep.md](session_state_dos_iphone_19sep.md) — **Empezar aquí.** Reloj común (5-6 ms), emparejado 94-96 %, móvil izquierdo invertido por diseño (`--flip left`), panorámica completa (`PITCH_LIMITS="-45 35" tools/local.sh start dos`) y color igualado en el servidor. Servidor subido al `main` del socio. Sin probar en los móviles: el derecho copia exposición y balance del izquierdo. Falta el `.onnx` del socio para la IA.
+
+## 🔴 (18 Sep 2026, tarde) — Paso 4 escrito: enlace entre móviles y reloj común
 - [session_state_paso4_18sep.md](session_state_paso4_18sep.md) — **Empezar aquí el 19 Sep.** Multipeer + reloj verificado entre dos simuladores (ida y vuelta 1 ms, desfase 0,2 ms). Sin commit. Falta la prueba con dos iPhone reales: uno IZQUIERDA, otro DERECHA, y mirar en el derecho Enlace, Reloj y Fase.
 
 ## 🔴 ACTIVO HOY (18 Sep 2026) — El servidor corre en el Mac; el pod no arrancó
