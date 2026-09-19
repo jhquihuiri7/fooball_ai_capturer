@@ -10,6 +10,7 @@
 - [feedback_prendelo_apagalo.md](feedback_prendelo_apagalo.md) — **"préndelo"** = `tools/local.sh start` · **"apágalo"** = `tools/local.sh stop`. Sin preguntar, respuesta de una línea.
 
 ## 🔴 ACTIVO HOY (19 Sep 2026) — Dos iPhone reales funcionando contra el Mac
+- [project_pod_runpod_19sep.md](project_pod_runpod_19sep.md) — **`tools/pod.sh up | down`** despliega el servidor en un pod RunPod con GPU desde cero (sin volumen no se conserva nada). IA 10 ms en la 4090; RTMP desde los iPhone funciona pero dos a 15 Mbit/s no caben por la WiFi: falta bajar el bitrate de emisión.
 - [session_state_dos_iphone_19sep.md](session_state_dos_iphone_19sep.md) — **Empezar aquí.** Reloj común (5-6 ms), emparejado 94-96 %, móvil izquierdo invertido por diseño (`--flip left`), panorámica completa (`PITCH_LIMITS="-45 35" tools/local.sh start dos`) y color igualado en el servidor. Servidor subido al `main` del socio. Sin probar en los móviles: el derecho copia exposición y balance del izquierdo. Falta el `.onnx` del socio para la IA.
 
 ## 🔴 (18 Sep 2026, tarde) — Paso 4 escrito: enlace entre móviles y reloj común

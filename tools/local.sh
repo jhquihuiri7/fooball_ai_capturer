@@ -7,6 +7,11 @@
 #   tools/local.sh start clip     # lo mismo, con un vídeo grabado haciendo de iPhone
 #   tools/local.sh start dos      # los dos iPhone: el panel junta izquierda y derecha
 #   tools/local.sh stop           # apaga todo
+#
+# Para salir a YouTube (o Facebook), la clave va SOLO por variable de entorno, nunca en un
+# fichero: FBAI_YOUTUBE_KEY=xxxx tools/local.sh start dos
+# El panel publica entonces el programa y el relé del servidor le añade audio y lo sube.
+# El botón «al aire» del panel corta y reanuda la salida.
 #   tools/local.sh status         # qué está encendido y cuánta CPU gasta
 #
 # Con `start` a secas el panel espera a que el iPhone emita: abrir la app, IZQUIERDA,
@@ -90,7 +95,18 @@ case "${1:-status}" in
     else
       echo "IA: APAGADA, falta $MODEL"
     fi
+    # Con clave de alguna plataforma, el panel publica el programa para el relé.
+    RELAY=""
+    if [ -n "${FBAI_YOUTUBE_KEY:-}${FBAI_FACEBOOK_KEY:-}${FBAI_TIKTOK_KEY:-}" ]; then
+      command -v ffmpeg >/dev/null || { echo "falta ffmpeg: brew install ffmpeg"; exit 1; }
+      RELAY=1
+      RIG_ARGS="$RIG_ARGS --publish rtmp://127.0.0.1:1935/salida --bitrate ${BITRATE:-6}"
+    fi
     launch panel bash -c "cd '$SERVER_REPO' && while true; do uv run python tools/live_panel.py 'rtsp://127.0.0.1:8554/$CHANNEL' $RIG_ARGS --port 8090 --no-browser --open-timeout 30 --read-timeout 30; sleep 3; done"
+    if [ -n "$RELAY" ]; then
+      # Las claves las hereda del entorno; en el log salen tapadas.
+      launch rele bash -c "cd '$SERVER_REPO' && exec uv run python tools/stream_relay.py"
+    fi
     launch abrir bash -c "until curl -s -m 1 -o /dev/null '$PANEL_URL'; do sleep 2; done; open '$PANEL_URL'"
     echo "Panel: $PANEL_URL (se abre solo en el navegador cuando haya señal)"
     echo "IP de este Mac para la app: $(ipconfig getifaddr en0 2>/dev/null || echo '?') (la app la encuentra sola)"
@@ -98,13 +114,14 @@ case "${1:-status}" in
     ;;
   stop)
     echo "Apagando el servidor local:"
-    for name in abrir panel clip anuncio mediamtx; do halt "$name"; done
+    for name in rele abrir panel clip anuncio mediamtx; do halt "$name"; done
+    pkill -f '[s]tream_relay.py' 2>/dev/null
     # El panel corre como hijo del bucle que lo relanza: se le busca por su línea de comando.
     pkill -f '[l]ive_panel.py' 2>/dev/null
     echo "Listo."
     ;;
   status)
-    for name in mediamtx anuncio clip panel; do
+    for name in mediamtx anuncio clip panel rele; do
       if running "$name"; then echo "  $name: ENCENDIDO"; else echo "  $name: apagado"; fi
     done
     if running panel && ! curl -s -m 1 -o /dev/null "$PANEL_URL"; then
