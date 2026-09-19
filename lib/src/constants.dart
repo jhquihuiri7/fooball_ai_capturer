@@ -15,8 +15,9 @@ const int nsPerMillisecond = 1000000;
 // Reloj del soporte (ADR 0012, decisión 2)
 // --------------------------------------------------------------------------- //
 
-/// Muestras de reloj que se conservan. Una cada 30 s durante un partido de 90 min son
-/// 180; 240 deja margen para el calentamiento y la prórroga sin crecer sin límite.
+/// Muestras de reloj que se conservan. El enlace pregunta la hora en ráfaga al conectar
+/// y después una vez cada 5 s (`RigLink.swift`): 240 muestras son una ventana de veinte
+/// minutos, suficiente para ajustar la deriva y corta para seguirla si cambia con el calor.
 const int clockMaxSamples = 240;
 
 /// Múltiplo del mejor RTT por encima del cual una muestra se descarta.
@@ -49,6 +50,13 @@ const int clockMinDriftSpanSeconds = 60;
 /// 30 m/s se desdobla 15 cm en la costura, que a 1080p no se ve; a 16 ms —el peor caso
 /// a 30 fps— serían 50 cm, que sí.
 const int exposurePhaseToleranceNs = 5 * nsPerMillisecond;
+
+/// Espera tras arrancar o reiniciar la captura antes de medir la fase.
+///
+/// Los PTS recientes de los dos móviles tienen que ser posteriores al reinicio, o se
+/// mediría la fase vieja. El nativo guarda treinta frames, un segundo a 30 fps; se deja
+/// algo de margen.
+const Duration phaseSettleDelay = Duration(milliseconds: 1200);
 
 /// Reintentos de arranque para sortear una fase mejor.
 ///

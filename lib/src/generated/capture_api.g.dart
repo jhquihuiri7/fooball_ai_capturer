@@ -127,6 +127,16 @@ enum ThermalState {
   critical;
 }
 
+/// Estado del enlace entre los dos móviles del soporte (TASK A3).
+enum LinkState {
+  /// Sin enlace: modo de un solo móvil, o antes de preparar la cámara.
+  off,
+  /// Anunciándose (izquierdo) o buscando al izquierdo (derecho).
+  searching,
+  /// Los dos móviles se ven. Por aquí viajan el reloj y los PTS del maestro.
+  connected;
+}
+
 /// Estado de la emisión al servidor (TASK A5).
 enum StreamState {
   /// No se emite: sin servidor configurado, o antes de GRABAR.
@@ -476,17 +486,20 @@ class _PigeonCodec extends StandardMessageCodec {
     }    else if (value is ThermalState) {
       buffer.putUint8(130);
       writeValue(buffer, value.index);
-    }    else if (value is StreamState) {
+    }    else if (value is LinkState) {
       buffer.putUint8(131);
       writeValue(buffer, value.index);
-    }    else if (value is CaptureSettings) {
+    }    else if (value is StreamState) {
       buffer.putUint8(132);
-      writeValue(buffer, value.encode());
-    }    else if (value is CaptureStatus) {
+      writeValue(buffer, value.index);
+    }    else if (value is CaptureSettings) {
       buffer.putUint8(133);
       writeValue(buffer, value.encode());
-    }    else if (value is ClockSample) {
+    }    else if (value is CaptureStatus) {
       buffer.putUint8(134);
+      writeValue(buffer, value.encode());
+    }    else if (value is ClockSample) {
+      buffer.putUint8(135);
       writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
@@ -504,12 +517,15 @@ class _PigeonCodec extends StandardMessageCodec {
         return value == null ? null : ThermalState.values[value];
       case 131:
         final value = readValue(buffer) as int?;
-        return value == null ? null : StreamState.values[value];
+        return value == null ? null : LinkState.values[value];
       case 132:
-        return CaptureSettings.decode(readValue(buffer)!);
+        final value = readValue(buffer) as int?;
+        return value == null ? null : StreamState.values[value];
       case 133:
-        return CaptureStatus.decode(readValue(buffer)!);
+        return CaptureSettings.decode(readValue(buffer)!);
       case 134:
+        return CaptureStatus.decode(readValue(buffer)!);
+      case 135:
         return ClockSample.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
@@ -812,6 +828,68 @@ class CaptureHostApi {
     ;
     return pigeonVar_replyValue! as String;
   }
+
+  /// Abre el enlace con el otro móvil del soporte (Multipeer Connectivity, TASK A3).
+  ///
+  /// El izquierdo se anuncia y es el maestro del reloj; el derecho lo busca, se conecta
+  /// y le pregunta la hora. Los cuatro sellos de cada pregunta se toman en nativo, con
+  /// el mismo reloj que los frames, y llegan a Dart por `onClockStamps`.
+  Future<void> startLink(CameraRole role) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.CaptureHostApi.startLink$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[role]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
+  Future<void> stopLink() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.CaptureHostApi.stopLink$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
+  /// PTS recientes del maestro, en tiempo del soporte, pedidos por el enlace (TASK A4).
+  /// Solo tiene sentido en el derecho. Vacío si el maestro no contesta a tiempo.
+  Future<List<int>> masterRecentPtsNs() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.CaptureHostApi.masterRecentPtsNs$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return (pigeonVar_replyValue! as List<Object?>).cast<int>();
+  }
 }
 
 /// Avisos que el nativo empuja hacia Flutter sin que nadie pregunte.
@@ -828,6 +906,14 @@ abstract class CaptureFlutterApi {
   void onThermalStateChanged(ThermalState state);
 
   void onStatus(CaptureStatus status);
+
+  /// El enlace con el otro móvil cambió de estado. `peerName` es su nombre, o vacío.
+  void onLinkStateChanged(LinkState state, String peerName);
+
+  /// Los cuatro sellos de una pregunta de hora al maestro, en nanosegundos: `t1` salida
+  /// de la pregunta y `t4` llegada de la respuesta (reloj de este móvil); `t2` llegada y
+  /// `t3` salida en el maestro (su reloj). Dart despeja el desfase (`solveClockSample`).
+  void onClockStamps(int t1Ns, int t2Ns, int t3Ns, int t4Ns);
 
   static void setUp(CaptureFlutterApi? api, {
     BinaryMessenger? binaryMessenger, 
@@ -908,6 +994,52 @@ abstract class CaptureFlutterApi {
           final CaptureStatus arg_status = args[0]! as CaptureStatus;
           try {
             api.onStatus(arg_status);
+            return wrapResponse(empty: true);
+          } on PlatformException catch (e) {
+            return wrapResponse(error: e);
+          }          catch (e) {
+            return wrapResponse(error: PlatformException(code: 'error', message: e.toString()));
+          }
+        });
+      }
+    }
+    {
+      final pigeonVar_channel = BasicMessageChannel<Object?>(
+          'dev.flutter.pigeon.football_ai_capture.CaptureFlutterApi.onLinkStateChanged$messageChannelSuffix', pigeonChannelCodec,
+          binaryMessenger: binaryMessenger);
+      if (api == null) {
+        pigeonVar_channel.setMessageHandler(null);
+      } else {
+        pigeonVar_channel.setMessageHandler((Object? message) async {
+          final List<Object?> args = message! as List<Object?>;
+          final LinkState arg_state = args[0]! as LinkState;
+          final String arg_peerName = args[1]! as String;
+          try {
+            api.onLinkStateChanged(arg_state, arg_peerName);
+            return wrapResponse(empty: true);
+          } on PlatformException catch (e) {
+            return wrapResponse(error: e);
+          }          catch (e) {
+            return wrapResponse(error: PlatformException(code: 'error', message: e.toString()));
+          }
+        });
+      }
+    }
+    {
+      final pigeonVar_channel = BasicMessageChannel<Object?>(
+          'dev.flutter.pigeon.football_ai_capture.CaptureFlutterApi.onClockStamps$messageChannelSuffix', pigeonChannelCodec,
+          binaryMessenger: binaryMessenger);
+      if (api == null) {
+        pigeonVar_channel.setMessageHandler(null);
+      } else {
+        pigeonVar_channel.setMessageHandler((Object? message) async {
+          final List<Object?> args = message! as List<Object?>;
+          final int arg_t1Ns = args[0]! as int;
+          final int arg_t2Ns = args[1]! as int;
+          final int arg_t3Ns = args[2]! as int;
+          final int arg_t4Ns = args[3]! as int;
+          try {
+            api.onClockStamps(arg_t1Ns, arg_t2Ns, arg_t3Ns, arg_t4Ns);
             return wrapResponse(empty: true);
           } on PlatformException catch (e) {
             return wrapResponse(error: e);

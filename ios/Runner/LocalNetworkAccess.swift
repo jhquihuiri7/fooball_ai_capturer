@@ -11,9 +11,10 @@ import Foundation
 import Network
 
 enum LocalNetworkAccess {
-    /// Tipo Bonjour propio. Está en `NSBonjourServices` del Info.plist, y es el mismo
-    /// que usará el enlace entre móviles (TASK A3).
-    static let serviceType = "_footballai-rig._tcp"
+    /// Tipo Bonjour propio, solo para esta comprobación. Está en `NSBonjourServices`.
+    /// No es el del enlace entre móviles a propósito: si lo fuera, el derecho vería este
+    /// anuncio de un instante como si fuera el izquierdo y lo invitaría.
+    static let serviceType = "_footballai-lan._tcp"
 
     /// Código DNS-SD `kDNSServiceErr_PolicyDenied`: el usuario dijo que no.
     private static let policyDenied: DNSServiceErrorType = -65570

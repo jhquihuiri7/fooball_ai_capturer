@@ -38,6 +38,18 @@ enum CameraRole {
 /// que iOS decida bajarlo por su cuenta matando la sesión de captura.
 enum ThermalState { nominal, fair, serious, critical }
 
+/// Estado del enlace entre los dos móviles del soporte (TASK A3).
+enum LinkState {
+  /// Sin enlace: modo de un solo móvil, o antes de preparar la cámara.
+  off,
+
+  /// Anunciándose (izquierdo) o buscando al izquierdo (derecho).
+  searching,
+
+  /// Los dos móviles se ven. Por aquí viajan el reloj y los PTS del maestro.
+  connected,
+}
+
 /// Estado de la emisión al servidor (TASK A5).
 enum StreamState {
   /// No se emite: sin servidor configurado, o antes de GRABAR.
@@ -262,6 +274,20 @@ abstract class CaptureHostApi {
   /// unos segundos. El pod, al otro lado de Starlink, no se anuncia: ahí se teclea.
   @async
   String discoverServer();
+
+  /// Abre el enlace con el otro móvil del soporte (Multipeer Connectivity, TASK A3).
+  ///
+  /// El izquierdo se anuncia y es el maestro del reloj; el derecho lo busca, se conecta
+  /// y le pregunta la hora. Los cuatro sellos de cada pregunta se toman en nativo, con
+  /// el mismo reloj que los frames, y llegan a Dart por `onClockStamps`.
+  void startLink(CameraRole role);
+
+  void stopLink();
+
+  /// PTS recientes del maestro, en tiempo del soporte, pedidos por el enlace (TASK A4).
+  /// Solo tiene sentido en el derecho. Vacío si el maestro no contesta a tiempo.
+  @async
+  List<int> masterRecentPtsNs();
 }
 
 /// Avisos que el nativo empuja hacia Flutter sin que nadie pregunte.
@@ -277,4 +303,12 @@ abstract class CaptureFlutterApi {
   void onThermalStateChanged(ThermalState state);
 
   void onStatus(CaptureStatus status);
+
+  /// El enlace con el otro móvil cambió de estado. `peerName` es su nombre, o vacío.
+  void onLinkStateChanged(LinkState state, String peerName);
+
+  /// Los cuatro sellos de una pregunta de hora al maestro, en nanosegundos: `t1` salida
+  /// de la pregunta y `t4` llegada de la respuesta (reloj de este móvil); `t2` llegada y
+  /// `t3` salida en el maestro (su reloj). Dart despeja el desfase (`solveClockSample`).
+  void onClockStamps(int t1Ns, int t2Ns, int t3Ns, int t4Ns);
 }

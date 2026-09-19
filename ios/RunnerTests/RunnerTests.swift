@@ -90,3 +90,39 @@ final class FieldRobustnessTests: XCTestCase {
         XCTAssertGreaterThan(CaptureEngine.bitrateFraction(for: .critical), 0.0)
     }
 }
+
+/// Los mensajes del enlace entre móviles (TASK A3): lo que sale tiene que volver igual,
+/// y lo que no es nuestro o llega cortado se ignora sin reventar.
+final class RigMessageTests: XCTestCase {
+    func testEveryMessageRoundTrips() {
+        let messages: [RigMessage] = [
+            .ping(seq: 1, t1: 550_889_603_000_000),
+            .pong(seq: 7, t1: -5, t2: Int64.max, t3: Int64.min),
+            .ptsRequest(seq: UInt32.max),
+            .ptsReply(seq: 9, pts: []),
+            .ptsReply(seq: 10, pts: [0, 33_333_333, 66_666_666]),
+        ]
+        for message in messages {
+            XCTAssertEqual(RigMessage.decode(message.encode()), message)
+        }
+    }
+
+    func testPingIsSmallAndFixedSize() {
+        // Tipo, secuencia y un sello: cabe de sobra en un datagrama.
+        XCTAssertEqual(RigMessage.ping(seq: 1, t1: 2).encode().count, 13)
+        XCTAssertEqual(RigMessage.pong(seq: 1, t1: 2, t2: 3, t3: 4).encode().count, 29)
+    }
+
+    func testTruncatedOrForeignPacketsAreIgnored() {
+        XCTAssertNil(RigMessage.decode(Data()))
+        XCTAssertNil(RigMessage.decode(Data([99, 0, 0, 0, 1])))
+        let pong = RigMessage.pong(seq: 1, t1: 2, t2: 3, t3: 4).encode()
+        XCTAssertNil(RigMessage.decode(pong.dropLast(3)))
+    }
+
+    func testServiceTypeFitsMultipeerLimit() {
+        // Multipeer exige de 1 a 15 caracteres en minúsculas, números y guiones.
+        XCTAssertLessThanOrEqual(RigLink.serviceType.count, 15)
+        XCTAssertNil(RigLink.serviceType.range(of: "[^a-z0-9-]", options: .regularExpression))
+    }
+}

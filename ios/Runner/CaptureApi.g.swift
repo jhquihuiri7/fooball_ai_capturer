@@ -208,6 +208,16 @@ enum ThermalState: Int, CaseIterable {
   case critical = 3
 }
 
+/// Estado del enlace entre los dos móviles del soporte (TASK A3).
+enum LinkState: Int, CaseIterable {
+  /// Sin enlace: modo de un solo móvil, o antes de preparar la cámara.
+  case off = 0
+  /// Anunciándose (izquierdo) o buscando al izquierdo (derecho).
+  case searching = 1
+  /// Los dos móviles se ven. Por aquí viajan el reloj y los PTS del maestro.
+  case connected = 2
+}
+
 /// Estado de la emisión al servidor (TASK A5).
 enum StreamState: Int, CaseIterable {
   /// No se emite: sin servidor configurado, o antes de GRABAR.
@@ -534,14 +544,20 @@ private class CaptureApiPigeonCodecReader: FlutterStandardReader {
     case 131:
       let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
       if let enumResultAsInt = enumResultAsInt {
-        return StreamState(rawValue: enumResultAsInt)
+        return LinkState(rawValue: enumResultAsInt)
       }
       return nil
     case 132:
-      return CaptureSettings.fromList(self.readValue() as! [Any?])
+      let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
+      if let enumResultAsInt = enumResultAsInt {
+        return StreamState(rawValue: enumResultAsInt)
+      }
+      return nil
     case 133:
-      return CaptureStatus.fromList(self.readValue() as! [Any?])
+      return CaptureSettings.fromList(self.readValue() as! [Any?])
     case 134:
+      return CaptureStatus.fromList(self.readValue() as! [Any?])
+    case 135:
       return ClockSample.fromList(self.readValue() as! [Any?])
     default:
       return super.readValue(ofType: type)
@@ -557,17 +573,20 @@ private class CaptureApiPigeonCodecWriter: FlutterStandardWriter {
     } else if let value = value as? ThermalState {
       super.writeByte(130)
       super.writeValue(value.rawValue)
-    } else if let value = value as? StreamState {
+    } else if let value = value as? LinkState {
       super.writeByte(131)
       super.writeValue(value.rawValue)
-    } else if let value = value as? CaptureSettings {
+    } else if let value = value as? StreamState {
       super.writeByte(132)
-      super.writeValue(value.toList())
-    } else if let value = value as? CaptureStatus {
+      super.writeValue(value.rawValue)
+    } else if let value = value as? CaptureSettings {
       super.writeByte(133)
       super.writeValue(value.toList())
-    } else if let value = value as? ClockSample {
+    } else if let value = value as? CaptureStatus {
       super.writeByte(134)
+      super.writeValue(value.toList())
+    } else if let value = value as? ClockSample {
+      super.writeByte(135)
       super.writeValue(value.toList())
     } else {
       super.writeValue(value)
@@ -642,6 +661,16 @@ protocol CaptureHostApi {
   /// el banco de pruebas). Devuelve su nombre `.local`, o vacío si no hay ninguno en
   /// unos segundos. El pod, al otro lado de Starlink, no se anuncia: ahí se teclea.
   func discoverServer() async throws -> String
+  /// Abre el enlace con el otro móvil del soporte (Multipeer Connectivity, TASK A3).
+  ///
+  /// El izquierdo se anuncia y es el maestro del reloj; el derecho lo busca, se conecta
+  /// y le pregunta la hora. Los cuatro sellos de cada pregunta se toman en nativo, con
+  /// el mismo reloj que los frames, y llegan a Dart por `onClockStamps`.
+  func startLink(role: CameraRole) throws
+  func stopLink() throws
+  /// PTS recientes del maestro, en tiempo del soporte, pedidos por el enlace (TASK A4).
+  /// Solo tiene sentido en el derecho. Vacío si el maestro no contesta a tiempo.
+  func masterRecentPtsNs() async throws -> [Int64]
 }
 
 /// Generated setup class from Pigeon to handle messages through the `binaryMessenger`.
@@ -871,6 +900,56 @@ class CaptureHostApiSetup {
     } else {
       discoverServerChannel.setMessageHandler(nil)
     }
+    /// Abre el enlace con el otro móvil del soporte (Multipeer Connectivity, TASK A3).
+    ///
+    /// El izquierdo se anuncia y es el maestro del reloj; el derecho lo busca, se conecta
+    /// y le pregunta la hora. Los cuatro sellos de cada pregunta se toman en nativo, con
+    /// el mismo reloj que los frames, y llegan a Dart por `onClockStamps`.
+    let startLinkChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.startLink\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      startLinkChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let roleArg = args[0] as! CameraRole
+        do {
+          try api.startLink(role: roleArg)
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      startLinkChannel.setMessageHandler(nil)
+    }
+    let stopLinkChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.stopLink\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      stopLinkChannel.setMessageHandler { _, reply in
+        do {
+          try api.stopLink()
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      stopLinkChannel.setMessageHandler(nil)
+    }
+    /// PTS recientes del maestro, en tiempo del soporte, pedidos por el enlace (TASK A4).
+    /// Solo tiene sentido en el derecho. Vacío si el maestro no contesta a tiempo.
+    let masterRecentPtsNsChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.masterRecentPtsNs\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      masterRecentPtsNsChannel.setMessageHandler { _, reply in
+        Task { @MainActor in
+          do {
+            let result = try await api.masterRecentPtsNs()
+            reply(wrapResult(result))
+          } catch {
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      masterRecentPtsNsChannel.setMessageHandler(nil)
+    }
   }
 }
 
@@ -885,6 +964,12 @@ protocol CaptureFlutterApiProtocol {
   /// Cambio de estado térmico. Por encima de `serious` hay que bajar el bitrate.
   @MainActor func onThermalStateChanged(state stateArg: ThermalState) async throws
   @MainActor func onStatus(status statusArg: CaptureStatus) async throws
+  /// El enlace con el otro móvil cambió de estado. `peerName` es su nombre, o vacío.
+  @MainActor func onLinkStateChanged(state stateArg: LinkState, peerName peerNameArg: String) async throws
+  /// Los cuatro sellos de una pregunta de hora al maestro, en nanosegundos: `t1` salida
+  /// de la pregunta y `t4` llegada de la respuesta (reloj de este móvil); `t2` llegada y
+  /// `t3` salida en el maestro (su reloj). Dart despeja el desfase (`solveClockSample`).
+  @MainActor func onClockStamps(t1Ns t1NsArg: Int64, t2Ns t2NsArg: Int64, t3Ns t3NsArg: Int64, t4Ns t4NsArg: Int64) async throws
 }
 class CaptureFlutterApi: CaptureFlutterApiProtocol {
   private let binaryMessenger: FlutterBinaryMessenger
@@ -964,6 +1049,50 @@ class CaptureFlutterApi: CaptureFlutterApiProtocol {
       let channelName: String = "dev.flutter.pigeon.football_ai_capture.CaptureFlutterApi.onStatus\(messageChannelSuffix)"
       let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
       channel.sendMessage([statusArg] as [Any?]) { response in
+        guard let listResponse = response as? [Any?] else {
+          continuation.resume(throwing: createConnectionError(withChannelName: channelName))
+          return
+        }
+        if listResponse.count > 1 {
+          let code: String = listResponse[0] as! String
+          let message: String? = nilOrValue(listResponse[1])
+          let details: String? = nilOrValue(listResponse[2])
+          continuation.resume(throwing: PigeonError(code: code, message: message, details: details))
+        } else {
+          continuation.resume()
+        }
+      }
+    }
+  }
+  /// El enlace con el otro móvil cambió de estado. `peerName` es su nombre, o vacío.
+  @MainActor func onLinkStateChanged(state stateArg: LinkState, peerName peerNameArg: String) async throws {
+    return try await withCheckedThrowingContinuation { continuation in
+      let channelName: String = "dev.flutter.pigeon.football_ai_capture.CaptureFlutterApi.onLinkStateChanged\(messageChannelSuffix)"
+      let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
+      channel.sendMessage([stateArg, peerNameArg] as [Any?]) { response in
+        guard let listResponse = response as? [Any?] else {
+          continuation.resume(throwing: createConnectionError(withChannelName: channelName))
+          return
+        }
+        if listResponse.count > 1 {
+          let code: String = listResponse[0] as! String
+          let message: String? = nilOrValue(listResponse[1])
+          let details: String? = nilOrValue(listResponse[2])
+          continuation.resume(throwing: PigeonError(code: code, message: message, details: details))
+        } else {
+          continuation.resume()
+        }
+      }
+    }
+  }
+  /// Los cuatro sellos de una pregunta de hora al maestro, en nanosegundos: `t1` salida
+  /// de la pregunta y `t4` llegada de la respuesta (reloj de este móvil); `t2` llegada y
+  /// `t3` salida en el maestro (su reloj). Dart despeja el desfase (`solveClockSample`).
+  @MainActor func onClockStamps(t1Ns t1NsArg: Int64, t2Ns t2NsArg: Int64, t3Ns t3NsArg: Int64, t4Ns t4NsArg: Int64) async throws {
+    return try await withCheckedThrowingContinuation { continuation in
+      let channelName: String = "dev.flutter.pigeon.football_ai_capture.CaptureFlutterApi.onClockStamps\(messageChannelSuffix)"
+      let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
+      channel.sendMessage([t1NsArg, t2NsArg, t3NsArg, t4NsArg] as [Any?]) { response in
         guard let listResponse = response as? [Any?] else {
           continuation.resume(throwing: createConnectionError(withChannelName: channelName))
           return

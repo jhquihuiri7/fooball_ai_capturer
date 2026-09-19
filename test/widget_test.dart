@@ -17,7 +17,9 @@ Future<FilledButton> _recordButton(WidgetTester tester) async {
 Future<void> _openCapturePage(
   WidgetTester tester, {
   required FakeCaptureApi api,
-  CameraRole role = CameraRole.left,
+  // El derecho, por defecto: es el que espera reloj. El izquierdo es el maestro y queda
+  // listo nada más abrir la cámara.
+  CameraRole role = CameraRole.right,
   bool standalone = false,
 }) async {
   // Un viewport alto: la vista previa y las filas de estado no caben en los 800×600

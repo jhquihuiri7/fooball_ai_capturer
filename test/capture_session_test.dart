@@ -24,7 +24,7 @@ void main() {
 
     test('la red local se pide al preparar y, si la niegan, se dice sin parar nada', () async {
       final CaptureSession session =
-          CaptureSession(role: CameraRole.left, api: FakeCaptureApi(localNetwork: false));
+          CaptureSession(role: CameraRole.right, api: FakeCaptureApi(localNetwork: false));
       expect(session.localNetworkLabel, 'sin pedir');
 
       await session.prepare();
@@ -68,16 +68,31 @@ void main() {
       expect(session.problem, contains('exposición'));
     });
 
-    test('con todo en orden se queda esperando reloj, no lista', () async {
+    test('el derecho, con todo en orden, abre el enlace y espera reloj: no está listo', () async {
       // Grabar sin reloj común es volver a casa con dos vídeos que no parean.
+      final FakeCaptureApi api = FakeCaptureApi();
+      final CaptureSession session = CaptureSession(role: CameraRole.right, api: api);
+
+      await session.prepare();
+
+      expect(api.accessRequests, 1);
+      expect(api.startLinkCalls, 1);
+      expect(api.linkRole, CameraRole.right);
+      expect(session.phase, SessionPhase.esperandoReloj);
+      expect(session.canRecord, isFalse);
+    });
+
+    test('el izquierdo es el maestro del reloj: queda listo sin esperar a nadie', () async {
+      // Su hora es la del soporte por definición. Si el derecho no llega nunca, media
+      // cancha es mejor que ninguna.
       final FakeCaptureApi api = FakeCaptureApi();
       final CaptureSession session = CaptureSession(role: CameraRole.left, api: api);
 
       await session.prepare();
 
-      expect(api.accessRequests, 1);
-      expect(session.phase, SessionPhase.esperandoReloj);
-      expect(session.canRecord, isFalse);
+      expect(api.linkRole, CameraRole.left);
+      expect(session.phase, SessionPhase.lista);
+      expect(session.clockLabel, contains('maestro'));
     });
   });
 
@@ -108,7 +123,7 @@ void main() {
     test('si la pantalla se cierra mientras la cámara mide, prepare termina en silencio',
         () async {
       final FakeCaptureApi api = FakeCaptureApi()..configureGate = Completer<void>();
-      final CaptureSession session = CaptureSession(role: CameraRole.left, api: api);
+      final CaptureSession session = CaptureSession(role: CameraRole.right, api: api);
 
       final Future<void> preparing = session.prepare();
       session.dispose();
@@ -182,7 +197,7 @@ void main() {
   group('fase de exposición', () {
     test('una fase buena se acepta sin reiniciar', () async {
       final FakeCaptureApi api = FakeCaptureApi(phases: <int>[2 * nsPerMillisecond]);
-      final CaptureSession session = CaptureSession(role: CameraRole.left, api: api);
+      final CaptureSession session = CaptureSession(role: CameraRole.left, api: api, phaseSettle: Duration.zero);
 
       await session.sortExposurePhase(masterPtsNs: _masterPts, frameIntervalNs: frame30);
 
@@ -194,7 +209,7 @@ void main() {
       final FakeCaptureApi api = FakeCaptureApi(
         phases: <int>[15 * nsPerMillisecond, 12 * nsPerMillisecond, 1 * nsPerMillisecond],
       );
-      final CaptureSession session = CaptureSession(role: CameraRole.left, api: api);
+      final CaptureSession session = CaptureSession(role: CameraRole.left, api: api, phaseSettle: Duration.zero);
 
       await session.sortExposurePhase(masterPtsNs: _masterPts, frameIntervalNs: frame30);
 
@@ -205,7 +220,7 @@ void main() {
 
     test('agotados los intentos se graba igual', () async {
       final FakeCaptureApi api = FakeCaptureApi(phases: <int>[16 * nsPerMillisecond]);
-      final CaptureSession session = CaptureSession(role: CameraRole.left, api: api);
+      final CaptureSession session = CaptureSession(role: CameraRole.left, api: api, phaseSettle: Duration.zero);
 
       await session.sortExposurePhase(masterPtsNs: _masterPts, frameIntervalNs: frame30);
 
@@ -217,6 +232,7 @@ void main() {
       final CaptureSession session = CaptureSession(
         role: CameraRole.left,
         api: FakeCaptureApi(phases: <int>[5 * nsPerMillisecond]),
+        phaseSettle: Duration.zero,
       );
 
       await session.sortExposurePhase(masterPtsNs: _masterPts, frameIntervalNs: frame30);
@@ -233,6 +249,7 @@ void main() {
         role: CameraRole.right,
         api: api,
         clockSamples: samples.stream,
+        autoSortPhase: false,
       );
       await session.prepare();
 
@@ -254,9 +271,59 @@ void main() {
       session.dispose();
     });
 
+    test('los sellos del enlace dan reloj, y con reloj el derecho mide la fase solo', () async {
+      final FakeCaptureApi api = FakeCaptureApi(phases: <int>[2 * nsPerMillisecond]);
+      final CaptureSession session =
+          CaptureSession(role: CameraRole.right, api: api, phaseSettle: Duration.zero);
+      await session.prepare();
+      session.onLinkStateChanged(LinkState.connected, 'iPhone (izquierda)');
+      expect(session.linkLabel, 'conectado con iPhone (izquierda)');
+
+      // El maestro va 7 ms por delante y la ida y vuelta son 2 ms.
+      for (int i = 0; i < 4; i++) {
+        final int t1 = i * nsPerSecond;
+        final int t2 = t1 + 8 * nsPerMillisecond;
+        session.onClockStamps(t1, t2, t2, t1 + 2 * nsPerMillisecond);
+      }
+      await pumpEventQueue();
+
+      expect(api.offsets.last, 7 * nsPerMillisecond);
+      expect(session.clockLabel, contains('7.0 ms ±1.0'));
+      expect(session.exposurePhaseNs, 2 * nsPerMillisecond);
+      expect(session.phase, SessionPhase.lista);
+    });
+
+    test('si el maestro no contesta con sus PTS, se graba igual con la fase sin medir', () async {
+      final FakeCaptureApi api = FakeCaptureApi()..masterPts = <int>[];
+      final CaptureSession session =
+          CaptureSession(role: CameraRole.right, api: api, phaseSettle: Duration.zero);
+      await session.prepare();
+
+      for (int i = 0; i < 4; i++) {
+        final int t1 = i * nsPerSecond;
+        session.onClockStamps(t1, t1 + nsPerMillisecond, t1 + nsPerMillisecond, t1 + 2 * nsPerMillisecond);
+      }
+      await pumpEventQueue();
+
+      expect(api.restarts, 0);
+      expect(session.phaseLabel, 'sin medir');
+      expect(session.phase, SessionPhase.lista);
+    });
+
+    test('al cerrar la pantalla se cierra el enlace', () async {
+      final FakeCaptureApi api = FakeCaptureApi();
+      final CaptureSession session = CaptureSession(role: CameraRole.left, api: api);
+      await session.prepare();
+      session.onLinkStateChanged(LinkState.searching, '');
+
+      session.dispose();
+
+      expect(api.stopLinkCalls, 1);
+    });
+
     test('sin muestras la etiqueta lo dice en vez de mentir un cero', () {
       expect(
-        CaptureSession(role: CameraRole.left, api: FakeCaptureApi()).clockLabel,
+        CaptureSession(role: CameraRole.right, api: FakeCaptureApi()).clockLabel,
         'sin reloj',
       );
     });

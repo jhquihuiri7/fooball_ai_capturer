@@ -16,6 +16,7 @@ library;
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:football_ai_capture/src/constants.dart';
 import 'package:football_ai_capture/src/exposure_phase.dart';
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
 import 'package:football_ai_capture/src/rig_clock.dart';
@@ -51,6 +52,9 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
     this.phasePolicy = const PhaseSortPolicy(),
     this.standalone = false,
     this.serverHost = '',
+    this.autoSortPhase = true,
+    this.phaseSettle = phaseSettleDelay,
+    this.linkOnly = false,
   })  : _api = api ?? CaptureHostApi(),
         _clock = clock ?? RigClock() {
     if (clockSamples != null) {
@@ -72,6 +76,17 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
   /// Host o IP del MediaMTX que recibe la emisión. Vacío: solo se graba.
   final String serverHost;
 
+  /// En cuanto hay reloj, medir la fase contra el maestro sin que nadie pulse nada.
+  /// Solo los tests lo apagan, para mirar el estado intermedio.
+  final bool autoSortPhase;
+
+  /// Espera antes de cada medida de fase (ver `phaseSettleDelay`). Cero en los tests.
+  final Duration phaseSettle;
+
+  /// Banco de pruebas del enlace: abre solo el enlace entre móviles, sin cámara. Sirve
+  /// para probar reloj y emparejado en simuladores, que no tienen ultra gran angular.
+  final bool linkOnly;
+
   final CaptureHostApi _api;
   final RigClock _clock;
   StreamSubscription<ClockSample>? _clockSubscription;
@@ -86,6 +101,15 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
   /// Permiso de red local de iOS. `null` hasta que se pide. Sin él no sale ni un
   /// paquete hacia el servidor ni hacia el otro móvil, y iOS no avisa.
   bool? localNetworkAllowed;
+
+  /// El enlace con el otro móvil del soporte (TASK A3).
+  LinkState linkState = LinkState.off;
+  String linkPeer = '';
+  bool _sortingPhase = false;
+
+  /// El izquierdo es el maestro: su hora es la del soporte por definición (ADR 0012,
+  /// decisión 2), así que no espera reloj de nadie. El derecho mide su desfase contra él.
+  bool get isClockMaster => role == CameraRole.left;
 
   int? exposurePhaseNs;
   int phaseAttempt = 0;
@@ -195,7 +219,21 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
     return 'bloqueado · ${applied.whiteBalanceKelvin} K';
   }
 
+  String get linkLabel {
+    switch (linkState) {
+      case LinkState.off:
+        return standalone ? 'apagado: un solo móvil' : 'apagado';
+      case LinkState.searching:
+        return isClockMaster ? 'esperando al móvil derecho…' : 'buscando al móvil izquierdo…';
+      case LinkState.connected:
+        return 'conectado con $linkPeer';
+    }
+  }
+
   String get clockLabel {
+    if (isClockMaster && !standalone) {
+      return 'maestro: este móvil marca la hora';
+    }
     final ClockSyncEstimate? estimate = _clock.estimate;
     if (estimate == null) {
       return 'sin reloj';
@@ -220,6 +258,12 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
   Future<void> prepare({CaptureSettings? settings}) async {
     _set(SessionPhase.preparando, problem: null);
     try {
+      if (linkOnly) {
+        localNetworkAllowed = await _api.requestLocalNetworkAccess();
+        await _api.startLink(role);
+        _set(SessionPhase.esperandoReloj);
+        return;
+      }
       // El permiso va primero: sin él la sesión abre igual y no llega ni un frame.
       if (!await _api.requestCameraAccess()) {
         _set(
@@ -244,7 +288,14 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
         _set(SessionPhase.fallo, problem: wrong);
         return;
       }
-      _set(standalone ? SessionPhase.lista : SessionPhase.esperandoReloj);
+      if (standalone) {
+        _set(SessionPhase.lista);
+        return;
+      }
+      // Con la cámara en orden se abre el enlace. El maestro ya puede grabar: si el
+      // derecho no llega nunca, media cancha es mejor que ninguna (decisión 4).
+      await _api.startLink(role);
+      _set(isClockMaster ? SessionPhase.lista : SessionPhase.esperandoReloj);
     } on Exception catch (error) {
       _set(SessionPhase.fallo, problem: 'no se pudo abrir la cámara: $error');
     }
@@ -294,9 +345,18 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
   }) async {
     _set(SessionPhase.ajustandoFase);
     for (phaseAttempt = 1; phaseAttempt <= phasePolicy.maxAttempts; phaseAttempt++) {
+      // Los PTS tienen que ser posteriores al último arranque, o se mide la fase vieja.
+      await Future<void>.delayed(phaseSettle);
+      final List<int> local = await _api.recentFramePtsNs();
+      final List<int> master = await masterPtsNs();
+      if (local.isEmpty || master.isEmpty) {
+        // Alguna de las dos cámaras aún no entrega frames, o el maestro no contestó.
+        // Cuenta como intento, pero no se reinicia nada: no hay fase mala que sortear.
+        continue;
+      }
       exposurePhaseNs = measurePhaseNs(
-        localPtsNs: await _api.recentFramePtsNs(),
-        masterPtsNs: await masterPtsNs(),
+        localPtsNs: local,
+        masterPtsNs: master,
         frameIntervalNs: frameIntervalNs,
       );
       final PhaseDecision decision =
@@ -367,15 +427,54 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
     notifyListeners();
   }
 
+  @override
+  void onLinkStateChanged(LinkState state, String peerName) {
+    linkState = state;
+    linkPeer = peerName;
+    notifyListeners();
+  }
+
+  /// Los cuatro sellos de una pregunta de hora al maestro, tomados en nativo. Aquí solo
+  /// se despeja el desfase y se acumula: es la parte que se puede probar sin red.
+  @override
+  void onClockStamps(int t1Ns, int t2Ns, int t3Ns, int t4Ns) {
+    _onClockSample(solveClockSample(t1: t1Ns, t2: t2Ns, t3: t3Ns, t4: t4Ns));
+  }
+
   void _onClockSample(ClockSample sample) {
     _clock.add(sample);
     if (_clock.estimate != null) {
       unawaited(_api.setClockOffsetNs(_clock.offsetAtNs(sample.localMonotonicNs)));
-      if (phase == SessionPhase.esperandoReloj) {
+      if (kDebugMode) {
+        debugPrint('[reloj] $clockLabel · ${_clock.estimate!.samples} muestras');
+      }
+      if (phase == SessionPhase.esperandoReloj && !linkOnly) {
         _set(SessionPhase.ajustandoFase);
+        if (autoSortPhase) {
+          unawaited(_sortPhaseAgainstMaster());
+        }
       }
     }
     notifyListeners();
+  }
+
+  /// Con reloj ya se puede medir la fase: se hace sola, sin que nadie pulse nada.
+  Future<void> _sortPhaseAgainstMaster() async {
+    if (_sortingPhase) {
+      return;
+    }
+    _sortingPhase = true;
+    try {
+      await sortExposurePhase(
+        masterPtsNs: _api.masterRecentPtsNs,
+        frameIntervalNs: nsPerSecond ~/ defaultSettings(role).fps,
+      );
+    } on Exception catch (error) {
+      // Sin fase medida se graba igual: es peor costura, no un partido perdido.
+      _set(SessionPhase.lista, problem: 'no se pudo medir la fase: $error');
+    } finally {
+      _sortingPhase = false;
+    }
   }
 
   void _set(SessionPhase next, {String? problem}) {
@@ -400,6 +499,9 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
   @override
   void dispose() {
     _disposed = true;
+    if (linkState != LinkState.off || linkOnly) {
+      unawaited(_api.stopLink());
+    }
     unawaited(_clockSubscription?.cancel());
     super.dispose();
   }

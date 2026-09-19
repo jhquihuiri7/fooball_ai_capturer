@@ -12,6 +12,12 @@ import 'package:football_ai_capture/src/capture_session.dart';
 import 'package:football_ai_capture/src/constants.dart';
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
 
+/// Banco de pruebas del enlace entre móviles sin tocar la pantalla, por ejemplo en dos
+/// simuladores: `flutter run --dart-define=AUTO_ROLE=right --dart-define=LINK_ONLY=true`
+/// entra directo como ese lado y abre solo el enlace, sin cámara. Vacío en producción.
+const String _autoRole = String.fromEnvironment('AUTO_ROLE');
+const bool _linkOnly = bool.fromEnvironment('LINK_ONLY');
+
 void main() {
   runApp(const CaptureApp());
 }
@@ -27,7 +33,12 @@ class CaptureApp extends StatelessWidget {
     return MaterialApp(
       title: 'football-ai · captura',
       theme: ThemeData(colorSchemeSeed: Colors.green, brightness: Brightness.dark),
-      home: RolePage(api: api),
+      home: _autoRole.isEmpty
+          ? RolePage(api: api)
+          : CapturePage(
+              role: _autoRole == 'right' ? CameraRole.right : CameraRole.left,
+              linkOnly: _linkOnly,
+            ),
     );
   }
 }
@@ -229,6 +240,7 @@ class CapturePage extends StatefulWidget {
     this.session,
     this.standalone = false,
     this.serverHost = '',
+    this.linkOnly = false,
     super.key,
   });
 
@@ -243,13 +255,21 @@ class CapturePage extends StatefulWidget {
   /// Host o IP del servidor. Vacío: solo grabación.
   final String serverHost;
 
+  /// Solo el enlace entre móviles, sin cámara (ver `CaptureSession.linkOnly`).
+  final bool linkOnly;
+
   @override
   State<CapturePage> createState() => _CapturePageState();
 }
 
 class _CapturePageState extends State<CapturePage> {
   late final CaptureSession _session = widget.session ??
-      CaptureSession(role: widget.role, standalone: widget.standalone, serverHost: widget.serverHost);
+      CaptureSession(
+        role: widget.role,
+        standalone: widget.standalone,
+        serverHost: widget.serverHost,
+        linkOnly: widget.linkOnly,
+      );
   Timer? _refresh;
 
   @override
@@ -310,6 +330,11 @@ class _CapturePageState extends State<CapturePage> {
           ),
           const SizedBox(height: 12),
           _Row('Red local', _session.localNetworkLabel, alarm: _session.localNetworkAllowed == false),
+          _Row(
+            'Enlace entre móviles',
+            _session.linkLabel,
+            alarm: _session.linkState == LinkState.searching && !_session.isClockMaster,
+          ),
           _Row('Emisión', _session.streamLabel, alarm: _session.streamInTrouble),
           if (status != null && status.streamState != StreamState.off)
             _Row('Frames perdidos (emisión)', '${status.streamDroppedFrames}'),

@@ -76,7 +76,9 @@
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_footballai-rig._tcp</string>
+		<string>_footballai-rig._udp</string>
 		<string>_footballai-srt._tcp</string>
+		<string>_footballai-lan._tcp</string>
 	</array>
 	<!-- El fichero se saca por Finder cuando la emision se degrada y el archivo local
 	     pasa a ser el partido bueno (ADR 0012, decision 5). -->

@@ -14,6 +14,7 @@
 		3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */ = {isa = PBXBuildFile; fileRef = 3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */; };
 		58ECE88B6A9325C2B7045FEE /* SRTHaishinKit in Frameworks */ = {isa = PBXBuildFile; productRef = 4297400DDA0324015053E4F8 /* SRTHaishinKit */; };
 		627CB884C887B67E5DF909EB /* LocalNetworkAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7BDBD1AB0D8AFDBE92BC8F2 /* LocalNetworkAccess.swift */; };
+		7083343114962923E7E9A61F /* RigLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 550A646636363A33F2C7EA76 /* RigLink.swift */; };
 		74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };
 		7884E8682EC3CC0700C636F2 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */; };
 		78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */ = {isa = PBXBuildFile; productRef = 78A3181F2AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage */; };
@@ -63,6 +64,7 @@
 		331C8081294A63A400263BE5 /* RunnerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RunnerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = AppFrameworkInfo.plist; path = Flutter/AppFrameworkInfo.plist; sourceTree = "<group>"; };
 		5150A74A7D1D6F3192EFB92A /* ServerDiscovery.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ServerDiscovery.swift; sourceTree = "<group>"; };
+		550A646636363A33F2C7EA76 /* RigLink.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RigLink.swift; sourceTree = "<group>"; };
 		5C0BE040E3FBCE1ACB195CD6 /* CaptureHostApiImpl.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CaptureHostApiImpl.swift; sourceTree = "<group>"; };
 		6156F708114F91B966049E46 /* RigTimecode.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RigTimecode.swift; sourceTree = "<group>"; };
 		74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Runner-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -157,6 +159,7 @@
 				1FC3008AB8EFE5C3CF589A7A /* StreamPublisher.swift */,
 				C7BDBD1AB0D8AFDBE92BC8F2 /* LocalNetworkAccess.swift */,
 				5150A74A7D1D6F3192EFB92A /* ServerDiscovery.swift */,
+				550A646636363A33F2C7EA76 /* RigLink.swift */,
 			);
 			path = Runner;
 			sourceTree = "<group>";
@@ -330,6 +333,7 @@
 				BE93EA77B1159338482C9E3C /* StreamPublisher.swift in Sources */,
 				627CB884C887B67E5DF909EB /* LocalNetworkAccess.swift in Sources */,
 				30A153D65E62D04448669E06 /* ServerDiscovery.swift in Sources */,
+				7083343114962923E7E9A61F /* RigLink.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

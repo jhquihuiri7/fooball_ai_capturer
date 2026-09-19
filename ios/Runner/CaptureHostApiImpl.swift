@@ -13,6 +13,9 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
     private let engine = CaptureEngine()
     private let flutter: CaptureFlutterApi
 
+    /// El enlace con el otro móvil del soporte. Se crea al preparar la cámara.
+    private var link: RigLink?
+
     /// Dónde graba si Dart no dice otra cosa. `Documents` para que las grabaciones se
     /// puedan sacar por Finder sin instalar nada, que es lo que se va a querer hacer
     /// cuando la emisión se degrade y el archivo sea el partido bueno.
@@ -94,6 +97,36 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
 
     func discoverServer() async throws -> String {
         await ServerDiscovery.find()
+    }
+
+    // MARK: - Enlace entre móviles (TASK A3, A4)
+
+    func startLink(role: CameraRole) throws {
+        link?.stop()
+        let link = RigLink(role: role)
+        // El maestro contesta con los PTS de su propia cámara, ya en tiempo del soporte.
+        link.recentPts = { [weak self] in self?.engine.recentFramePtsNs() ?? [] }
+        link.onState = { [weak self] state, peer in
+            Task { @MainActor in
+                try? await self?.flutter.onLinkStateChanged(state: state, peerName: peer)
+            }
+        }
+        link.onStamps = { [weak self] t1, t2, t3, t4 in
+            Task { @MainActor in
+                try? await self?.flutter.onClockStamps(t1Ns: t1, t2Ns: t2, t3Ns: t3, t4Ns: t4)
+            }
+        }
+        self.link = link
+        link.start()
+    }
+
+    func stopLink() throws {
+        link?.stop()
+        link = nil
+    }
+
+    func masterRecentPtsNs() async throws -> [Int64] {
+        await link?.masterRecentPts() ?? []
     }
 
     /// La capa de vista previa para la vista de plataforma `capture-preview`.

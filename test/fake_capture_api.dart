@@ -72,6 +72,12 @@ class FakeCaptureApi extends CaptureHostApi {
   /// Si se pone, `configure` espera a que se complete: simula la medición de la luz.
   Completer<void>? configureGate;
 
+  /// El enlace entre móviles: con qué lado se abrió y qué PTS contesta el maestro.
+  int startLinkCalls = 0;
+  int stopLinkCalls = 0;
+  CameraRole? linkRole;
+  List<int> masterPts = <int>[0, frame30, 2 * frame30];
+
   /// La URL de emisión que llegó en el último `start`.
   String? lastSrtUrl;
 
@@ -145,4 +151,16 @@ class FakeCaptureApi extends CaptureHostApi {
 
   @override
   Future<String> discoverServer() async => discoverable;
+
+  @override
+  Future<void> startLink(CameraRole role) async {
+    startLinkCalls++;
+    linkRole = role;
+  }
+
+  @override
+  Future<void> stopLink() async => stopLinkCalls++;
+
+  @override
+  Future<List<int>> masterRecentPtsNs() async => masterPts;
 }
