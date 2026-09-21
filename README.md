@@ -15,10 +15,18 @@ arquitectura; aquí se implementa la parte que corre en el móvil.
 | Contrato Flutter ↔ nativo (Pigeon) | ✅ generado y versionado |
 | Reloj del soporte: filtro de RTT, deriva, extrapolación | ✅ con tests |
 | Fase de exposición: medida y política de reintento | ✅ con tests |
-| Ciclo de vida de la captura y UI de campo | ✅ con tests |
-| Captura nativa (AVFoundation) | ⬜ TASK A2 |
-| Enlace entre móviles (Multipeer) | ⬜ TASK A3 |
-| Emisión SRT y grabación local | ⬜ TASK A5, A8 |
+| Ciclo de vida de la captura: arranque solo, estado en vivo, avisos del nativo | ✅ con tests |
+| UI de campo con la identidad **Zero**: Lado, Captura y Partido | ✅ con tests |
+| Captura nativa (AVFoundation), vista previa y grabación local | ✅ TASK A2, A8 |
+| Enlace entre móviles y reloj común del soporte | ✅ TASK A3, A4 |
+| **Código de tiempo pintado en cada frame** | ✅ TASK A5 — enmienda B1a |
+| Emisión SRT y RTMP al canal `rig/<lado>`, servidor por Bonjour | ✅ TASK A5 |
+| Segmento nuevo tras un corte · bitrate por temperatura | ✅ TASK A9, A7 |
+| Recorte a la banda jugable | ⬜ TASK A6 |
+| Marcador y alineación publicados al overlay de la emisión | ⬜ el `MatchState` ya sale a JSON; falta el camino |
+
+El estado completo, con lo que queda en orden y el formato exacto del código de tiempo,
+está en `football-ai/docs/PROGRESS.md`, sección «Dos iPhone como cámara (ADR 0012)».
 
 **Nada de esto se ha compilado para iOS todavía.** Se escribió en Windows, donde Flutter
 analiza y ejecuta los tests de Dart pero no puede invocar a Xcode. La parte Swift está
@@ -29,8 +37,10 @@ sin compilar por definición hasta que pase por un Mac.
 ```bash
 flutter pub get
 flutter analyze                                   # 0 avisos, es el listón
-flutter test                                      # lógica pura: reloj, fase, sesión
+flutter test                                      # reloj, fase, sesión, partido y pantallas
 dart run pigeon --input pigeons/capture_api.dart  # regenerar el contrato
+dart run flutter_launcher_icons                   # icono desde assets/brand/
+dart run flutter_native_splash:create             # splash desde assets/brand/
 ```
 
 En el Mac, además:
@@ -39,6 +49,38 @@ En el Mac, además:
 cd ios && pod install && cd ..
 flutter build ios
 ```
+
+## La app: dos lugares, no uno
+
+La identidad es **Zero**: fondo `#12181A`, acento teal `#00B8A9`, Archivo para las cifras
+grandes e IBM Plex Sans/Mono para lo demás. Las fuentes viajan dentro del binario —nada de
+`google_fonts`—: la app arranca en una cancha sin red, y una fuente que no descarga es una
+pantalla ilegible. La marca son dos anillos que se solapan un 30 %, dibujados con un
+`CustomPainter` (`lib/src/theme/zero_mark.dart`) y no con un PNG, para que se vean igual a
+12 px en la barra inferior que a 22 px en la cabecera.
+
+```
+RolePage  (elegir lado)  →  ZeroShell
+                              ├── Captura   el móvil del soporte
+                              └── Partido   marcador, cronómetro y posiciones
+```
+
+Están separados a propósito. El móvil que está en el soporte no debe ver el marcador, y
+quien lleva el marcador no debe poder tocar la cámara: compartir pantalla es un toque
+accidental en GRABAR a mitad de partido.
+
+Dos reglas de la capa de presentación que conviene no romper:
+
+- **No se rellena con guiones.** Si un dato todavía no existe, la fila no se dibuja o dice
+  por qué no existe. Un `—` en la pantalla se lee como «cero» desde tres metros.
+- **Lo que se enseña es lo aplicado, no lo pedido.** El ISO, la obturación, los kelvin,
+  el estado de la emisión y el archivo salen de lo que devuelve el nativo
+  (`CaptureStatus`), no de `defaultSettings`: AVFoundation acepta peticiones que luego no
+  cumple, y enterarse por la cara del vídeo no es una opción.
+
+La lógica de captura no la toca nada de esto. `CaptureSession` solo ganó un getter de
+solo lectura (`recordingElapsed`, para el reloj del HUD); cómo se agrupa y se colorea cada
+dato vive aparte, en `lib/src/capture_labels.dart`.
 
 ## Lo que no es negociable
 

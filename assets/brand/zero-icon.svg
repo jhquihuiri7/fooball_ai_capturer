@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Marca Zero: dos anillos que se solapan un 30 % — dos lentes que se funden en una
+       imagen. El marco de la marca mide 1.7·D por D; si fuera cuadrado los anillos se
+       apilarían y el logo se perdería. Trazo 0.18·D. El anillo derecho va encima. -->
+  <rect width="1024" height="1024" fill="#12181A"/>
+  <g fill="none" stroke-width="78.065">
+    <circle cx="360.207" cy="512.000" r="177.815" stroke="#FAFAF7"/>
+    <circle cx="663.793" cy="512.000" r="177.815" stroke="#00B8A9"/>
+  </g>
+</svg>

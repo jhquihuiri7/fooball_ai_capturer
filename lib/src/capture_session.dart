@@ -120,6 +120,10 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
 
   bool get recording => phase == SessionPhase.grabando;
 
+  /// Cuánto lleva grabando el segmento en curso. Es el mismo reloj que usa
+  /// [recordingLabel]; el HUD lo enseña solo, sin el nombre del archivo.
+  Duration get recordingElapsed => _recordingClock.elapsed;
+
   /// Solo se graba con la cámara lista. Dejar grabar antes es la forma más fácil de
   /// volver a casa con dos vídeos que no parean.
   bool get canRecord => phase == SessionPhase.lista || phase == SessionPhase.grabando;
