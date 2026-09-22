@@ -33,7 +33,10 @@ case "${1:-status}" in
     [ -n "$FLIP" ] && ARGS="$ARGS --flip $FLIP"
     [ -f "$SERVER/models/onnx/rfdetr-small.onnx" ] && ARGS="$ARGS --model models/onnx/rfdetr-small.onnx"
     [ -f rele.env ] && ARGS="$ARGS --publish rtmp://127.0.0.1:1935/salida --bitrate ${BITRATE:-6}"
-    ARGS="$ARGS --port 8090 --no-browser --open-timeout 30 --read-timeout 30"
+    # --no-preview: la vista previa WebRTC sale por el puerto 8889 de MediaMTX, que desde
+    # internet no se alcanza; con ella «sana», la pagina la pediria y se veria rota. Sin
+    # ella, la pagina usa el MJPEG del propio panel, que si pasa por nginx.
+    ARGS="$ARGS --no-preview --port 8090 --no-browser --open-timeout 30 --read-timeout 30"
     # `bucle-panel` es solo una marca para encontrar el bucle con pgrep/pkill.
     # El QR de las camaras del panel: la direccion publica del RTMP, que solo conoce quien
     # despliega (tools/pod.sh la pasa en FOOTBALL_CAMERA_URL). Se guarda para los
@@ -48,7 +51,9 @@ case "${1:-status}" in
       pgrep -f stream_relay.py >/dev/null || bg rele.log bash -c "set -a; . /root/football-ai/rele.env; set +a; cd $SERVER && exec uv run --group gpu --locked python tools/stream_relay.py"
     fi
 
-    # Instancia propia de nginx: la de la imagen de RunPod no se toca.
+    # Instancia propia de nginx: la de la imagen de RunPod no se toca. Las claves van a
+    # /etc/nginx porque sus workers no son root y no pueden leer dentro de /root.
+    install -m 644 panel.htpasswd /etc/nginx/panel.htpasswd
     [ -f /run/nginx-panel.pid ] && kill -0 "$(cat /run/nginx-panel.pid)" 2>/dev/null || nginx -c /root/football-ai/nginx-panel.conf
     echo encendido
     ;;
