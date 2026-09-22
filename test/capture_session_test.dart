@@ -448,6 +448,21 @@ void main() {
       expect(session.streamLabel, 'RECONECTANDO · se perdió el enlace');
       expect(session.streamInTrouble, isTrue);
     });
+
+    test('la etiqueta enseña el bitrate real cuando la red obligó a bajarlo', () async {
+      // Medido contra un pod: 2 Mbit/s de subida con 15 codificados llegaban con minutos
+      // de retraso. El nativo baja el bitrate y la pantalla tiene que decir a cuánto va.
+      final CaptureSession session = CaptureSession(
+        role: CameraRole.left,
+        api: FakeCaptureApi(
+          status: fakeStatus(streamState: StreamState.streaming, streamBitrateBps: 6200000),
+        ),
+        serverHost: 'rtmp://rig:clave@47.47.180.47:33185',
+      );
+      await session.prepare();
+      expect(session.streamLabel, 'EMITIENDO por RTMP a 47.47.180.47 · 6.2 Mbit/s');
+      expect(CaptureSession.formatMbps(15000000), '15');
+    });
   });
 
   group('defaultSettings', () {

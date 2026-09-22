@@ -169,6 +169,12 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
   /// (`izquierda` / `derecha`), con el búfer SRT que aguanta los traspasos de Starlink.
   String get streamUrl => buildStreamUrl(serverHost, role);
 
+  /// `15000000` → `15`, `6200000` → `6.2`: sin decimales cuando son cero.
+  static String formatMbps(int bps) {
+    final double mbps = bps / 1e6;
+    return mbps.toStringAsFixed(mbps == mbps.roundToDouble() ? 0 : 1);
+  }
+
   String get streamLabel {
     final CaptureStatus? applied = status;
     switch (applied?.streamState ?? StreamState.off) {
@@ -181,7 +187,7 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
         return 'conectando por ${describeStreamTarget(serverHost)}…';
       case StreamState.streaming:
         return 'EMITIENDO por ${describeStreamTarget(serverHost)} · '
-            '${defaultSettings(role).bitrateBps ~/ 1000000} Mbit/s';
+            '${formatMbps(applied!.streamBitrateBps > 0 ? applied.streamBitrateBps : defaultSettings(role).bitrateBps)} Mbit/s';
       case StreamState.reconnecting:
         return 'RECONECTANDO · ${applied!.streamDetail}';
       case StreamState.failed:

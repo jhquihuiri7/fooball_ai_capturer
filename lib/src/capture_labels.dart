@@ -216,9 +216,14 @@ class CaptureReadout {
   };
 
   String get bitrateLabel {
-    final double mbps = defaultSettings(session.role).bitrateBps * _heatFraction / 1e6;
-    final String value = mbps.toStringAsFixed(mbps == mbps.roundToDouble() ? 0 : 1);
-    return _heatFraction < 1 ? '$value Mbit/s · bajada por calor' : '$value Mbit/s · fijo';
+    final int ceiling = (defaultSettings(session.role).bitrateBps * _heatFraction).round();
+    final int actual = _status?.streamBitrateBps ?? 0;
+    // Emitiendo, lo que dice el nativo; si no, el techo con el que arrancaría.
+    if (actual > 0 && actual < ceiling) {
+      return '${CaptureSession.formatMbps(actual)} Mbit/s · ajustado a la red';
+    }
+    final String value = CaptureSession.formatMbps(actual > 0 ? actual : ceiling);
+    return _heatFraction < 1 ? '$value Mbit/s · bajada por calor' : '$value Mbit/s · máximo';
   }
 
   ZeroTone get _localNetworkTone => switch (session.localNetworkAllowed) {

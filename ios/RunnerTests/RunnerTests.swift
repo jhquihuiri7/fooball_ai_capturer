@@ -144,3 +144,31 @@ final class RigMessageTests: XCTestCase {
         XCTAssertNil(RigLink.serviceType.range(of: "[^a-z0-9-]", options: .regularExpression))
     }
 }
+
+final class AdaptiveBitRateTests: XCTestCase {
+    func testBacksOffToWhatActuallyWentOutWithMargin() {
+        // Codificando a 15 Mbit/s salieron 2: se baja a 1,6 (el 80 % de lo que cupo).
+        XCTAssertEqual(AdaptiveBitRate.next(current: 15_000_000, measured: 2_000_000), 1_600_000)
+    }
+
+    func testNeverRaisesOnACongestionSignal() {
+        // Si lo medido supera lo codificado es un pico de la cola vaciándose: no se sube por eso.
+        XCTAssertEqual(AdaptiveBitRate.next(current: 6_000_000, measured: 20_000_000), 6_000_000)
+    }
+
+    func testInternetStreamsStartLowAndLocalOnesAtTheCeiling() {
+        // Por RTMP (un pod al otro lado de internet) se arranca bajo y se sube si la red da;
+        // por SRT (la red local) al techo, como siempre.
+        XCTAssertEqual(StreamPublisher.startBitRate(for: URL(string: "rtmp://rig:x@1.2.3.4:1935/rig/izquierda")!, configured: 15_000_000), 4_000_000)
+        XCTAssertEqual(StreamPublisher.startBitRate(for: URL(string: "rtmps://a.b/c")!, configured: 15_000_000), 4_000_000)
+        XCTAssertEqual(StreamPublisher.startBitRate(for: URL(string: "rtmp://1.2.3.4/x")!, configured: 3_000_000), 3_000_000)
+        XCTAssertEqual(StreamPublisher.startBitRate(for: URL(string: "srt://10.0.0.5:8890?streamid=x")!, configured: 15_000_000), 15_000_000)
+    }
+
+    func testHalvesWhenNothingWentOutAndNeverGoesBelowTheFloor() {
+        XCTAssertEqual(AdaptiveBitRate.next(current: 8_000_000, measured: 0), 4_000_000)
+        XCTAssertEqual(AdaptiveBitRate.next(current: 1_500_000, measured: 0), AdaptiveBitRate.minimumBitRate)
+        XCTAssertEqual(AdaptiveBitRate.next(current: 15_000_000, measured: 100_000), AdaptiveBitRate.minimumBitRate)
+    }
+}
+

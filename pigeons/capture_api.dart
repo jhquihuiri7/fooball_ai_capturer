@@ -135,6 +135,7 @@ class CaptureStatus {
     required this.streamState,
     required this.streamDetail,
     required this.streamDroppedFrames,
+    required this.streamBitrateBps,
   });
 
   final bool running;
@@ -187,6 +188,12 @@ class CaptureStatus {
 
   /// Frames que la emisión descartó porque el codificador iba por detrás.
   final int streamDroppedFrames;
+
+  /// Bitrate al que se está codificando la emisión ahora mismo. Arranca en
+  /// `CaptureSettings.bitrateBps` y baja solo si la red no lo traga (el vídeo se
+  /// acumularía en el móvil y llegaría con minutos de retraso); vuelve a subir despacio
+  /// cuando la red se recupera. 0 si no se emite.
+  final int streamBitrateBps;
 }
 
 /// Una medida de desfase entre este móvil y el maestro del reloj.

@@ -417,7 +417,8 @@ final class CaptureEngine: NSObject {
             recordingSegment: Int64(recordingSegment),
             streamState: Self.streamState(publisher.state),
             streamDetail: Self.streamDetail(publisher.state),
-            streamDroppedFrames: publisher.droppedFrames
+            streamDroppedFrames: publisher.droppedFrames,
+            streamBitrateBps: Int64(publisher.currentBitRate)
         )
     }
 

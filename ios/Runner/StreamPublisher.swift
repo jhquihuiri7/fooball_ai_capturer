@@ -5,8 +5,13 @@
 // decide el esquema de la URL. Lo que este fichero decide, y que una app de directo
 // normal no haría:
 //
-//   1. **Bitrate fijo.** Los dos móviles comparten Starlink y dos controles adaptativos
-//      se pelean hasta oscilar (ADR 0012, decisión 7). Media fija con tope por segundo.
+//   1. **Bitrate con techo, que baja solo si la red no lo traga.** El techo es el de la
+//      configuración (y el calor). Por debajo manda `AdaptiveBitRate`: si la cola del
+//      socket crece tres segundos seguidos, se baja a lo que de verdad ha salido; se sube
+//      despacio cuando lleva un rato sin cola. Sin esto, con una subida de 2 Mbit/s y
+//      15 codificados, el vídeo se acumula en el móvil y llega con minutos de retraso
+//      (medido el 2026-09-21 contra un pod). La subida lenta es lo que evita que dos
+//      móviles que comparten Starlink se peleen (ADR 0012, decisión 7).
 //   2. **Los frames entran por una cola de dos huecos que descarta el más viejo.** Si el
 //      codificador va por detrás, el frame se pierde y se cuenta; nunca se encola retraso.
 //   3. **Se reconecta sola mientras nadie pulse PARAR.** Un traspaso de satélite no puede
@@ -21,6 +26,73 @@ import Logboard
 import RTMPHaishinKit
 import SRTHaishinKit
 import VideoToolbox
+
+/// La regla de subir y bajar el bitrate según lo que la red deja pasar.
+///
+/// HaishinKit mide cada segundo cuánto ha salido por el socket y cuánto espera en su
+/// cola, y avisa con `publishInsufficientBWOccured` cuando la cola lleva tres segundos
+/// creciendo. Aquí se decide qué hacer con eso. `mamimumVideoBitRate` (sic, es el nombre
+/// del protocolo) es el techo de fábrica; el vigente, que el calor puede bajar, lo da
+/// `ceiling`.
+final actor AdaptiveBitRate: StreamBitRateStrategy {
+    /// Por debajo de esto un 4K es papilla: mejor que se note el corte a que se emita eso.
+    static let minimumBitRate = 1_000_000
+
+    /// Segundos seguidos sin cola antes de subir un escalón. Quince: subir es barato de
+    /// deshacer, pero dos móviles subiendo a la vez por un enlace justo se lo quitan uno
+    /// al otro, y despacio convergen en vez de oscilar.
+    static let raiseAfterSamples = 15
+
+    /// Fracción de lo medido a la que se baja: lo que salió menos un margen, para que la
+    /// cola se vacíe y no solo deje de crecer.
+    static let backoff = 0.8
+
+    let mamimumVideoBitRate: Int
+    let mamimumAudioBitRate = 0
+
+    private let ceiling: @Sendable () -> Int
+    private let onChange: @Sendable (Int) -> Void
+    private var stableSamples = 0
+
+    init(maximum: Int, ceiling: @escaping @Sendable () -> Int, onChange: @escaping @Sendable (Int) -> Void) {
+        mamimumVideoBitRate = maximum
+        self.ceiling = ceiling
+        self.onChange = onChange
+    }
+
+    /// A qué bajar cuando la cola crece: lo que salió con margen, nunca más de lo que
+    /// había, y nunca por debajo del mínimo. Con `measured` 0 (no salió nada) a la mitad.
+    static func next(current: Int, measured: Int) -> Int {
+        let target = measured > 0 ? Int(Double(measured) * backoff) : current / 2
+        return max(min(current, target), minimumBitRate)
+    }
+
+    func adjustBitrate(_ event: NetworkMonitorEvent, stream: some StreamConvertible) async {
+        var video = await stream.videoSettings
+        let top = max(min(mamimumVideoBitRate, ceiling()), Self.minimumBitRate)
+        switch event {
+        case .status:
+            stableSamples += 1
+            guard video.bitRate < top, stableSamples >= Self.raiseAfterSamples else { return }
+            stableSamples = 0
+            await apply(min(video.bitRate + mamimumVideoBitRate / 10, top), to: &video, on: stream)
+        case let .publishInsufficientBWOccured(report):
+            stableSamples = 0
+            await apply(Self.next(current: video.bitRate, measured: report.currentBytesOutPerSecond * 8), to: &video, on: stream)
+        case .reset:
+            // Reconexión: se conserva el bitrate, que es lo último que se sabe que cabía.
+            stableSamples = 0
+        }
+    }
+
+    private func apply(_ bitRate: Int, to video: inout VideoCodecSettings, on stream: some StreamConvertible) async {
+        guard bitRate != video.bitRate else { return }
+        video.bitRate = bitRate
+        video.dataRateLimits = [Double(bitRate) / 8.0, 1.0]
+        try? await stream.setVideoSettings(video)
+        onChange(bitRate)
+    }
+}
 
 final class StreamPublisher {
     enum StreamError: LocalizedError {
@@ -49,6 +121,14 @@ final class StreamPublisher {
     /// siguiente. Más sería encolar retraso.
     private static let frameQueueSlots = 2
 
+    /// Bitrate con el que arranca una emisión por internet (RTMP a un pod), antes de que
+    /// `AdaptiveBitRate` suba hasta el techo si la red da. Arrancar al techo (15 Mbit/s)
+    /// por una subida de 2 llenaba la cola del socket antes de que la adaptación
+    /// reaccionara, el servidor cortaba por silencio a los 10 s y se perdían dos minutos
+    /// en reconexiones (medido el 2026-09-22). Con buena subida se llega al techo en
+    /// menos de dos minutos, subiendo un escalón cada 15 s.
+    static let internetStartBitRate = 4_000_000
+
     /// Segundos entre frames clave. Dos: lo que tarda en engancharse un lector nuevo y lo
     /// que se pierde de vídeo tras un paquete perdido que SRT no recupere.
     private static let keyFrameIntervalSeconds: Int32 = 2
@@ -75,6 +155,8 @@ final class StreamPublisher {
     private var lostContinuation_: AsyncStream<Void>.Continuation?
 
     private var video_: VideoCodecSettings?
+    /// Techo vigente del bitrate: el de la configuración, bajado por calor si hace falta.
+    private var ceiling_ = 0
 
     private var connectTask: Task<Void, Never>?
     private var pumpTask: Task<Void, Never>?
@@ -93,6 +175,13 @@ final class StreamPublisher {
         return droppedFrames_
     }
 
+    /// Bitrate al que se codifica ahora mismo (el vigente tras la adaptación), o 0 apagado.
+    var currentBitRate: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return state_ == .off ? 0 : (video_?.bitRate ?? 0)
+    }
+
     // MARK: - Ciclo de vida
 
     func start(url: URL, settings: CaptureSettings, applied: AppliedCameraSettings) {
@@ -107,8 +196,16 @@ final class StreamPublisher {
             state_ = .connecting
             droppedFrames_ = 0
         }
-        let video = Self.videoSettings(settings: settings, applied: applied)
-        withLock { video_ = video }
+        let ceiling = Int(settings.bitrateBps)
+        let video = Self.videoSettings(
+            settings: settings,
+            applied: applied,
+            bitRate: Self.startBitRate(for: url, configured: ceiling)
+        )
+        withLock {
+            video_ = video
+            ceiling_ = ceiling
+        }
 
         // La bomba: saca frames de la cola, en orden, y se los da al stream si lo hay.
         // Es una sola tarea a propósito: una tarea por frame no garantiza el orden.
@@ -119,7 +216,7 @@ final class StreamPublisher {
             }
         }
         connectTask = Task.detached { [weak self] in
-            await self?.run(url: url, video: video)
+            await self?.run(url: url, video: video, maximum: ceiling)
         }
     }
 
@@ -144,13 +241,16 @@ final class StreamPublisher {
         }
     }
 
-    /// Cambia el bitrate en caliente (por calor, TASK A7). Se aplica al stream activo y
-    /// queda fijado para las reconexiones.
+    /// Baja o restablece el techo del bitrate (por calor, TASK A7). Si lo vigente supera el
+    /// techo nuevo se aplica al momento; si queda por debajo, lo sube `AdaptiveBitRate`
+    /// cuando la red lleve un rato sin cola. Se aplica al stream activo y queda para la
+    /// próxima reconexión.
     func setBitRate(_ bitRate: Int) {
         var updated: VideoCodecSettings?
         var stream: (any StreamConvertible)?
         withLock {
-            guard var video = video_, video.bitRate != bitRate else { return }
+            ceiling_ = bitRate
+            guard var video = video_, video.bitRate > bitRate else { return }
             video.bitRate = bitRate
             video.dataRateLimits = [Double(bitRate) / 8.0, 1.0]
             video_ = video
@@ -158,12 +258,27 @@ final class StreamPublisher {
             stream = currentStream_
         }
         guard let updated, let stream else { return }
-        NSLog("[stream] bitrate a %d bit/s", bitRate)
         Task { try? await stream.setVideoSettings(updated) }
+        NSLog("[stream] bitrate a %d bit/s", bitRate)
     }
 
-    /// Un frame de la cámara, ya con el código de tiempo pintado. Se llama desde la cola
-    /// de captura y no bloquea: si la cola está llena, se descarta el más viejo.
+    /// Lo que `AdaptiveBitRate` acaba de poner: se guarda para la reconexión y el estado.
+    private func adapted(to bitRate: Int) {
+        withLock {
+            guard var video = video_ else { return }
+            video.bitRate = bitRate
+            video.dataRateLimits = [Double(bitRate) / 8.0, 1.0]
+            video_ = video
+        }
+        NSLog("[stream] la red pide %d bit/s", bitRate)
+    }
+
+    private var ceiling: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return ceiling_
+    }
+
     func append(_ sampleBuffer: CMSampleBuffer) {
         lock.lock()
         defer { lock.unlock() }
@@ -175,7 +290,7 @@ final class StreamPublisher {
 
     // MARK: - Conexión
 
-    private func run(url: URL, video initialVideo: VideoCodecSettings) async {
+    private func run(url: URL, video initialVideo: VideoCodecSettings, maximum: Int) async {
         await Self.registration.value
         NSLog("[stream] emitiendo a %@", url.absoluteString)
         while wanted, !Task.isCancelled {
@@ -197,6 +312,13 @@ final class StreamPublisher {
                     await srt.setExpectedMedias([.video])
                 }
                 try await stream.setVideoSettings(video)
+                await stream.setBitRateStrategy(
+                    AdaptiveBitRate(
+                        maximum: maximum,
+                        ceiling: { [weak self] in self?.ceiling ?? maximum },
+                        onChange: { [weak self] in self?.adapted(to: $0) }
+                    )
+                )
 
                 let lost = AsyncStream<Void> { continuation in
                     self.withLock { self.lostContinuation_ = continuation }
@@ -234,11 +356,18 @@ final class StreamPublisher {
     /// HEVC a la resolución de la cámara, sin reordenar frames y con la tasa media fijada
     /// y acotada por segundo: lo más parecido a un bitrate constante que da VideoToolbox
     /// sin entrar en su modo CBR, que tiene condiciones propias por modelo.
+    /// Con qué bitrate arranca: por SRT (la red local o un relé propio) al techo; por RTMP
+    /// (internet hasta un pod) a `internetStartBitRate`, y que la adaptación suba.
+    static func startBitRate(for url: URL, configured: Int) -> Int {
+        let scheme = url.scheme?.lowercased() ?? ""
+        return scheme.hasPrefix("rtmp") ? min(configured, internetStartBitRate) : configured
+    }
+
     private static func videoSettings(
         settings: CaptureSettings,
-        applied: AppliedCameraSettings
+        applied: AppliedCameraSettings,
+        bitRate: Int
     ) -> VideoCodecSettings {
-        let bitRate = Int(settings.bitrateBps)
         return VideoCodecSettings(
             videoSize: CGSize(width: applied.width, height: applied.height),
             bitRate: bitRate,
