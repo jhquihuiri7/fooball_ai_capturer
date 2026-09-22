@@ -661,6 +661,12 @@ protocol CaptureHostApi {
   /// el banco de pruebas). Devuelve su nombre `.local`, o vacío si no hay ninguno en
   /// unos segundos. El pod, al otro lado de Starlink, no se anuncia: ahí se teclea.
   func discoverServer() async throws -> String
+  /// Abre la cámara a pantalla completa para leer el QR que enseña el panel del
+  /// servidor (tarjeta «Cámaras»): lo que devuelve es lo que va en «Servidor», tal cual
+  /// (`10.0.0.5`, `rtmp://rig:clave@1.2.3.4:10248`). Vacío si el operador cancela.
+  /// Para el pod, cuya dirección cambia con cada despliegue y no se puede teclear en
+  /// la cancha.
+  func scanServerQr() async throws -> String
   /// Abre el enlace con el otro móvil del soporte (Multipeer Connectivity, TASK A3).
   ///
   /// El izquierdo se anuncia y es el maestro del reloj; el derecho lo busca, se conecta
@@ -899,6 +905,26 @@ class CaptureHostApiSetup {
       }
     } else {
       discoverServerChannel.setMessageHandler(nil)
+    }
+    /// Abre la cámara a pantalla completa para leer el QR que enseña el panel del
+    /// servidor (tarjeta «Cámaras»): lo que devuelve es lo que va en «Servidor», tal cual
+    /// (`10.0.0.5`, `rtmp://rig:clave@1.2.3.4:10248`). Vacío si el operador cancela.
+    /// Para el pod, cuya dirección cambia con cada despliegue y no se puede teclear en
+    /// la cancha.
+    let scanServerQrChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.scanServerQr\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      scanServerQrChannel.setMessageHandler { _, reply in
+        Task { @MainActor in
+          do {
+            let result = try await api.scanServerQr()
+            reply(wrapResult(result))
+          } catch {
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      scanServerQrChannel.setMessageHandler(nil)
     }
     /// Abre el enlace con el otro móvil del soporte (Multipeer Connectivity, TASK A3).
     ///

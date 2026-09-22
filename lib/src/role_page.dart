@@ -23,7 +23,7 @@ import 'package:football_ai_capture/src/zero_shell.dart';
 /// De dónde salió lo que pone en «Servidor». Decide lo que dice la línea de debajo:
 /// atribuir a Bonjour un nombre escrito a mano haría pasar una errata por un servidor
 /// encontrado.
-enum _ServerOrigin { none, saved, bonjour, typed }
+enum _ServerOrigin { none, saved, bonjour, typed, scanned }
 
 class RolePage extends StatefulWidget {
   const RolePage({this.api, super.key});
@@ -97,6 +97,24 @@ class _RolePageState extends State<RolePage> {
     }
   }
 
+  /// El QR de la tarjeta «Cámaras» del panel trae la dirección tal cual va en el campo.
+  Future<void> _scanServer() async {
+    String found = '';
+    try {
+      found = await _api.scanServerQr();
+    } on Exception {
+      // Sin nativo (tests) no hay cámara.
+    }
+    if (found.trim().isEmpty || !mounted) {
+      return;
+    }
+    setState(() {
+      _server.text = found.trim();
+      _origin = _ServerOrigin.scanned;
+    });
+    await _saveServer(found);
+  }
+
   Future<void> _saveServer(String host) async {
     try {
       await _api.saveServerHost(host.trim());
@@ -128,6 +146,7 @@ class _RolePageState extends State<RolePage> {
     return switch (_origin) {
       _ServerOrigin.bonjour => 'encontrado por Bonjour · vacío = solo graba en el móvil',
       _ServerOrigin.saved => 'guardado en el móvil · vacío = solo graba en el móvil',
+      _ServerOrigin.scanned => 'leído del QR del panel · vacío = solo graba en el móvil',
       _ServerOrigin.typed || _ServerOrigin.none => 'vacío = solo graba en el móvil',
     };
   }
@@ -220,6 +239,7 @@ class _RolePageState extends State<RolePage> {
                       protocol: _protocol,
                       onChanged: _onTyped,
                       onFind: () => unawaited(_discoverServer()),
+                      onScan: () => unawaited(_scanServer()),
                       onProtocol: _setProtocol,
                     ),
                     const SizedBox(height: ZeroMetrics.innerGap),
@@ -359,6 +379,7 @@ class _ServerCard extends StatelessWidget {
     required this.protocol,
     required this.onChanged,
     required this.onFind,
+    required this.onScan,
     required this.onProtocol,
   });
 
@@ -368,6 +389,7 @@ class _ServerCard extends StatelessWidget {
   final String protocol;
   final ValueChanged<String> onChanged;
   final VoidCallback onFind;
+  final VoidCallback onScan;
   final ValueChanged<String> onProtocol;
 
   @override
@@ -474,6 +496,15 @@ class _ServerCard extends StatelessWidget {
                 label: 'RTMP',
                 selected: protocol == 'rtmp',
                 onTap: () => onProtocol('rtmp'),
+              ),
+              const SizedBox(width: 8),
+              // La dirección del pod cambia con cada despliegue y no se teclea en la
+              // cancha: el panel la enseña como QR (tarjeta «Cámaras») y aquí se lee.
+              Expanded(
+                child: ZeroButton.secondary(
+                  label: 'Escanear QR',
+                  onPressed: searching ? null : onScan,
+                ),
               ),
             ],
           ),

@@ -158,6 +158,41 @@ void main() {
       expect(api.serverHost, '10.10.18.100');
     });
 
+    testWidgets('el QR del panel rellena el servidor y lo guarda', (WidgetTester tester) async {
+      // La dirección del pod cambia con cada despliegue: se lee del QR, no se teclea.
+      usePhone(tester);
+      final FakeCaptureApi api = FakeCaptureApi()
+        ..serverHost = '10.10.18.100'
+        ..scannable = 'rtmp://rig:clave@47.47.180.47:10248';
+      await tester.pumpWidget(CaptureApp(api: api));
+      await tester.pump();
+
+      await tester.tap(find.text('Escanear QR'));
+      await tester.pump();
+
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'rtmp://rig:clave@47.47.180.47:10248',
+      );
+      expect(api.serverHost, 'rtmp://rig:clave@47.47.180.47:10248');
+      expect(find.textContaining('leído del QR'), findsOneWidget);
+      // Y el protocolo sigue a lo leído: era RTMP.
+      expect(find.text('Abrir cámara izquierda'), findsOneWidget);
+    });
+
+    testWidgets('cancelar el escaneo deja el servidor como estaba', (WidgetTester tester) async {
+      usePhone(tester);
+      final FakeCaptureApi api = FakeCaptureApi()..serverHost = '10.10.18.100';
+      await tester.pumpWidget(CaptureApp(api: api));
+      await tester.pump();
+
+      await tester.tap(find.text('Escanear QR'));
+      await tester.pump();
+
+      expect(tester.widget<TextField>(find.byType(TextField)).controller!.text, '10.10.18.100');
+      expect(api.serverHost, '10.10.18.100');
+    });
+
     testWidgets('el botón de abrir nombra el lado elegido', (WidgetTester tester) async {
       usePhone(tester);
       await tester.pumpWidget(CaptureApp(api: FakeCaptureApi()));

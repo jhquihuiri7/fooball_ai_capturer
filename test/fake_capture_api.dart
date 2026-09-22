@@ -152,6 +152,12 @@ class FakeCaptureApi extends CaptureHostApi {
   @override
   Future<String> discoverServer() async => discoverable;
 
+  /// Lo que «leería» la cámara al escanear el QR del panel. Vacío = cancelado.
+  String scannable = '';
+
+  @override
+  Future<String> scanServerQr() async => scannable;
+
   @override
   Future<void> startLink(CameraRole role) async {
     startLinkCalls++;

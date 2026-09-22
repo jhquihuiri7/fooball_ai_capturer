@@ -829,6 +829,30 @@ class CaptureHostApi {
     return pigeonVar_replyValue! as String;
   }
 
+  /// Abre la cámara a pantalla completa para leer el QR que enseña el panel del
+  /// servidor (tarjeta «Cámaras»): lo que devuelve es lo que va en «Servidor», tal cual
+  /// (`10.0.0.5`, `rtmp://rig:clave@1.2.3.4:10248`). Vacío si el operador cancela.
+  /// Para el pod, cuya dirección cambia con cada despliegue y no se puede teclear en
+  /// la cancha.
+  Future<String> scanServerQr() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.CaptureHostApi.scanServerQr$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as String;
+  }
+
   /// Abre el enlace con el otro móvil del soporte (Multipeer Connectivity, TASK A3).
   ///
   /// El izquierdo se anuncia y es el maestro del reloj; el derecho lo busca, se conecta

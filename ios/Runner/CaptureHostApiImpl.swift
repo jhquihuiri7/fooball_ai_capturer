@@ -99,6 +99,10 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
         await ServerDiscovery.find()
     }
 
+    func scanServerQr() async throws -> String {
+        await QrScanner.scan()
+    }
+
     // MARK: - Enlace entre móviles (TASK A3, A4)
 
     func startLink(role: CameraRole) throws {
