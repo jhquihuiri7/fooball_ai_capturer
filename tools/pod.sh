@@ -174,7 +174,7 @@ PY
       fi
       command -v nginx >/dev/null || { export DEBIAN_FRONTEND=noninteractive; apt-get update -qq && apt-get install -y -qq nginx-light; } >/dev/null 2>&1
       command -v ffmpeg >/dev/null || { export DEBIAN_FRONTEND=noninteractive; apt-get update -qq && apt-get install -y -qq ffmpeg; } >/dev/null 2>&1
-      ./servicios.sh start'
+      FOOTBALL_CAMERA_URL="rtmp://rig:'"$RTMP_PASS"'@'"$(field ip)"':'"$(field rtmp_port)"'" ./servicios.sh start'
 
     echo "Esperando al panel..."
     for _ in $(seq 1 40); do

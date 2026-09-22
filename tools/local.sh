@@ -71,6 +71,20 @@ case "${1:-status}" in
       sleep 2
     fi
 
+    # Relleno: el panel no arranca (y su página no abre) si a una cámara aún no le llega
+    # señal. Un vídeo negro sin código de tiempo ocupa el canal hasta que entra el móvil,
+    # que lo desplaza solo (MediaMTX deja que un publicador nuevo sustituya al anterior).
+    # Se lanza una vez y no se relanza: relanzado desplazaría él al móvil.
+    if [ "${2:-}" != "clip" ] && command -v ffmpeg >/dev/null; then
+      LADOS="izquierda"; [ "${2:-}" = "dos" ] && LADOS="izquierda derecha"
+      for lado in $LADOS; do
+        launch "relleno-$lado" ffmpeg -hide_banner -loglevel error -re -f lavfi \
+          -i "color=c=black:s=3840x2160:r=5" -c:v libx264 -preset ultrafast -tune zerolatency \
+          -g 5 -pix_fmt yuv420p -f rtsp -rtsp_transport tcp "rtsp://127.0.0.1:8554/rig/$lado"
+      done
+      sleep 3
+    fi
+
     # El panel se cierra si al arrancar nadie emite todavía (MediaMTX responde 404), así
     # que se relanza solo hasta que llegue la señal. El navegador se abre en ese momento.
     # Con `dos`, el panel lee también la cámara derecha y guarda la calibración del soporte.
@@ -95,6 +109,16 @@ case "${1:-status}" in
     else
       echo "IA: APAGADA, falta $MODEL"
     fi
+    # La cámara virtual (el programa sigue a los jugadores y hace los planos) necesita las
+    # dos cámaras, el soporte calibrado y el modelo. `DIRECTOR=` la apaga y sale la
+    # panorámica entera, que es lo que hace falta ver para montar y calibrar el soporte.
+    DIRECTOR="${DIRECTOR-1}"
+    if [ -n "$DIRECTOR" ] && [ "${2:-}" = "dos" ] && [ -f "$MODEL" ] && [ -f "$HOME/Movies/football-ai/soporte.json" ]; then
+      RIG_ARGS="$RIG_ARGS --director"
+      echo "Cámara virtual: ENCENDIDA (DIRECTOR= tools/local.sh start dos la apaga)"
+    else
+      echo "Cámara virtual: apagada (sale la panorámica entera)"
+    fi
     # Con clave de alguna plataforma, el panel publica el programa para el relé.
     RELAY=""
     if [ -n "${FBAI_YOUTUBE_KEY:-}${FBAI_FACEBOOK_KEY:-}${FBAI_TIKTOK_KEY:-}" ]; then
@@ -102,6 +126,8 @@ case "${1:-status}" in
       RELAY=1
       RIG_ARGS="$RIG_ARGS --publish rtmp://127.0.0.1:1935/salida --bitrate ${BITRATE:-6}"
     fi
+    # El panel enseña abajo un QR con esto: lo que va en «Servidor» de la app (host = SRT).
+    export FOOTBALL_CAMERA_URL="${FOOTBALL_CAMERA_URL:-$(ipconfig getifaddr en0 2>/dev/null)}"
     launch panel bash -c "cd '$SERVER_REPO' && while true; do uv run python tools/live_panel.py 'rtsp://127.0.0.1:8554/$CHANNEL' $RIG_ARGS --port 8090 --no-browser --open-timeout 30 --read-timeout 30; sleep 3; done"
     if [ -n "$RELAY" ]; then
       # Las claves las hereda del entorno; en el log salen tapadas.
@@ -114,7 +140,7 @@ case "${1:-status}" in
     ;;
   stop)
     echo "Apagando el servidor local:"
-    for name in rele abrir panel clip anuncio mediamtx; do halt "$name"; done
+    for name in rele abrir panel clip relleno-izquierda relleno-derecha anuncio mediamtx; do halt "$name"; done
     pkill -f '[s]tream_relay.py' 2>/dev/null
     # El panel corre como hijo del bucle que lo relanza: se le busca por su línea de comando.
     pkill -f '[l]ive_panel.py' 2>/dev/null

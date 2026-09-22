@@ -35,6 +35,13 @@ case "${1:-status}" in
     [ -f rele.env ] && ARGS="$ARGS --publish rtmp://127.0.0.1:1935/salida --bitrate ${BITRATE:-6}"
     ARGS="$ARGS --port 8090 --no-browser --open-timeout 30 --read-timeout 30"
     # `bucle-panel` es solo una marca para encontrar el bucle con pgrep/pkill.
+    # El QR de las camaras del panel: la direccion publica del RTMP, que solo conoce quien
+    # despliega (tools/pod.sh la pasa en FOOTBALL_CAMERA_URL). Se guarda para los
+    # arranques siguientes, en un fichero que solo lee root.
+    if [ -n "${FOOTBALL_CAMERA_URL:-}" ]; then
+      (umask 077; printf '%s\n' "$FOOTBALL_CAMERA_URL" > camera.url)
+    fi
+    [ -f camera.url ] && export FOOTBALL_CAMERA_URL="$(cat camera.url)"
     pgrep -f bucle-panel >/dev/null || bg panel.log bash -c ": bucle-panel; cd $SERVER && while true; do uv run --group gpu --locked python tools/live_panel.py $ARGS; sleep 3; done"
 
     if [ -f rele.env ]; then
