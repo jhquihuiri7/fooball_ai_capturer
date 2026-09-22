@@ -10,7 +10,7 @@
 - [feedback_prendelo_apagalo.md](feedback_prendelo_apagalo.md) — **"préndelo"** = `tools/local.sh start` · **"apágalo"** = `tools/local.sh stop`. Sin preguntar, respuesta de una línea.
 
 ## 🔴 ACTIVO HOY (22 Sep 2026) — Bitrate adaptativo probado y commiteado; el cuello es el panel del pod (~14 fps)
-- [session_state_pod_bitrate_22sep.md](session_state_pod_bitrate_22sep.md) — **Empezar aquí.** Commits `d2ee580` y `dd30fd6` en la app. Móvil → pod a 30 fps; el panel del pod compone a ~14 fps en CPU; lag ~2 s estable. Opciones dadas, Alexander no ha decidido. Build con arranque a 4 Mbit/s compilado, sin instalar. **Pod `6lcnlfmmm5osqp` encendido** al cerrar: borrar con `tools/pod.sh down` si sigue.
+- [session_state_pod_bitrate_22sep.md](session_state_pod_bitrate_22sep.md) — **Empezar aquí.** Commits `d2ee580` y `dd30fd6` en la app. Móvil → pod a 30 fps; el panel del pod compone a ~14 fps en CPU; lag ~2 s estable. Opciones dadas, Alexander no ha decidido. Build con arranque a 4 Mbit/s compilado, sin instalar. Pod borrado a mediodía; prenderlo por la tarde con `tools/pod.sh up`. Saldo $17,80.
 
 ## (21 Sep 2026, noche) — QR del servidor, pod probado, bitrate adaptativo sin probar
 - [session_state_pod_qr_21sep.md](session_state_pod_qr_21sep.md) — **Empezar aquí el 22 Sep.** Pull del rediseño «Zero»; QR en panel y app (commiteado); `tools/pod.sh up` probado (arreglos `--no-preview` y nginx sin commit); por RTMP el vídeo llegaba con minutos de retraso por la subida de 1,5 Mbit/s de la WiFi → bitrate adaptativo escrito e instalado en el iPhone, **sin probar y sin commit**. Pods borrados, saldo $18,59.

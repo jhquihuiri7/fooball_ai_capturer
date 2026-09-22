@@ -1,6 +1,6 @@
 ---
 name: session-state-pod-bitrate-22sep
-description: "Snapshot del 22 Sep 2026: bitrate adaptativo probado contra el pod y commiteado; medidas de fps y lag de punta a punta (el móvil manda 30 fps, el panel del pod compone a ~14 fps en CPU); opciones dadas a Alexander, sin decidir. Pod 6lcnlfmmm5osqp ENCENDIDO al escribir esto."
+description: "Snapshot del 22 Sep 2026: bitrate adaptativo probado contra el pod y commiteado; medidas de fps y lag de punta a punta (el móvil manda 30 fps, el panel del pod compone a ~14 fps en CPU); opciones dadas a Alexander, sin decidir. Pod borrado a mediodía; se vuelve a prender por la tarde."
 metadata:
   node_type: memory
   type: project
@@ -26,7 +26,8 @@ metadata:
 `http://<ip>:<puerto>` (usuario `panel`, clave en `~/.football-ai/pod.env`) → en la app
 «Escanear QR» (tarjeta Cámaras, abajo) → IZQUIERDA → GRABAR. `tools/pod.sh down` al
 terminar (pide escribir «borrar»). El pod del 22 Sep es `6lcnlfmmm5osqp`
-(81.27.69.179; RTMP 46927, panel 46928): **estaba encendido al escribir esto, $0,74/h**.
+(81.27.69.179; RTMP 46927, panel 46928): **borrado a mediodía**; Alexander pidió volver a
+prenderlo 4-5 h después (`tools/pod.sh up`, dirección nueva).
 
 ## Medido el 22 Sep (WiFi de casa de Alexander, subida ~1,5 Mbit/s)
 
