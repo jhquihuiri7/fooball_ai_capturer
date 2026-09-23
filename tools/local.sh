@@ -119,6 +119,15 @@ case "${1:-status}" in
     else
       echo "Cámara virtual: apagada (sale la panorámica entera)"
     fi
+    # Vídeos de prueba, clips y repeticiones, en ~/Movies/football-ai. Con soporte, un
+    # vídeo subido desde el panel se parte en las dos cámaras y se publica con su código
+    # de tiempo, así que se puede probar entero sin los móviles. Ojo: ese vídeo no está
+    # girado, así que para usarlo hay que apagar el enderezado con FLIP= (ver arriba).
+    TRABAJO="$HOME/Movies/football-ai"
+    mkdir -p "$TRABAJO/videos" "$TRABAJO/clips" "$TRABAJO/buffer"
+    RIG_ARGS="$RIG_ARGS --videos '$TRABAJO/videos' --clips '$TRABAJO/clips'"
+    RIG_ARGS="$RIG_ARGS --replay-buffer '$TRABAJO/buffer'"
+
     # Con clave de alguna plataforma, el panel publica el programa para el relé.
     RELAY=""
     if [ -n "${FBAI_YOUTUBE_KEY:-}${FBAI_FACEBOOK_KEY:-}${FBAI_TIKTOK_KEY:-}" ]; then
