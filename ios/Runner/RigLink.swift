@@ -169,6 +169,19 @@ final class RigLink: NSObject {
     /// Segundos que se deja a la invitación antes de volver a intentarlo.
     private static let inviteTimeout: TimeInterval = 10
 
+    /// Cada cuántos segundos, mientras no haya enlace, el derecho vuelve a buscar. Sin esto
+    /// había que encender los dos casi a la vez: la invitación se mandaba una sola vez, al
+    /// descubrir al otro, y si caducaba nadie la repetía, porque iOS no vuelve a avisar de
+    /// un par que ya vio (bug 3 del 22-09).
+    private static let retryInterval: TimeInterval = 5
+
+    /// Donde se guarda la identidad de este móvil entre arranques (ver `stablePeerID`).
+    private static let peerIDKey = "rigPeerID"
+
+    /// Bytes que admite el nombre de un par: 63 en UTF-8. Se corta por caracteres a
+    /// 40 para no partir uno de varios bytes justo en el límite.
+    private static let maxDisplayNameCharacters = 40
+
     var onState: ((LinkState, String) -> Void)?
     var onStamps: ((Int64, Int64, Int64, Int64) -> Void)?
 
@@ -195,14 +208,46 @@ final class RigLink: NSObject {
     /// con cada respuesta de hora: el maestro puede estar todavía midiendo la luz.
     private var lookReceived = false
 
+    /// Todo lo de aquí abajo se toca solo desde el hilo principal, que es donde Pigeon
+    /// llama a `start` y `stop`: así no hace falta cerrojo.
+    ///
+    /// `stopped` corta lo que llegue tarde de este enlace cuando ya hay otro. Al invertir
+    /// los lados se para uno y se crea otro, y la sesión vieja todavía avisaba de
+    /// «desconectado» después: la pantalla pasaba a «buscando» con el nuevo ya conectado,
+    /// y el derecho viejo volvía a buscar y a invitar desde una sesión muerta (bug 2).
+    private var stopped = false
+    private var retryTimer: Timer?
+    private var invitedAt: Date?
+    private var foregroundObserver: NSObjectProtocol?
+
     init(role: CameraRole) {
         self.role = role
-        let side = role == .left ? "izquierda" : "derecha"
-        // El nombre de un par no puede pasar de 63 bytes.
-        peerID = MCPeerID(displayName: String("\(UIDevice.current.name) (\(side))".prefix(40)))
+        peerID = Self.stablePeerID()
         session = MCSession(peer: peerID, securityIdentity: nil, encryptionPreference: .required)
         super.init()
         session.delegate = self
+    }
+
+    /// La identidad de este móvil en el enlace: la misma en cada arranque y en los dos lados.
+    ///
+    /// Antes el nombre llevaba el lado —«iPhone (izquierda)»—, así que cambiar de rol
+    /// fabricaba una identidad nueva para el mismo teléfono y el otro seguía con la vieja
+    /// en caché: se cruzaban los roles hasta reiniciar la app (bug 2 del 22-09). Apple pide
+    /// que el `MCPeerID` sea estable; el lado ya viaja en `discoveryInfo`, que es su sitio.
+    /// Solo se hace otro si cambia el nombre del teléfono.
+    static func stablePeerID() -> MCPeerID {
+        let name = String(UIDevice.current.name.prefix(maxDisplayNameCharacters))
+        let defaults = UserDefaults.standard
+        if let data = defaults.data(forKey: peerIDKey),
+           let saved = try? NSKeyedUnarchiver.unarchivedObject(ofClass: MCPeerID.self, from: data),
+           saved.displayName == name {
+            return saved
+        }
+        let fresh = MCPeerID(displayName: name)
+        if let data = try? NSKeyedArchiver.archivedData(withRootObject: fresh, requiringSecureCoding: true) {
+            defaults.set(data, forKey: peerIDKey)
+        }
+        return fresh
     }
 
     /// El instante actual en el reloj de los frames, en nanosegundos.
@@ -215,7 +260,75 @@ final class RigLink: NSObject {
 
     func start() {
         onState?(.searching, "")
+        rearm()
+        // Mientras no haya enlace, el derecho vuelve a buscar cada poco: el izquierdo puede
+        // encenderse minutos después, o la invitación caducar, y nadie más lo reintentaría.
+        // El izquierdo no: su anuncio sigue vivo solo, y rehacerlo cortaría una invitación
+        // que esté llegando.
+        if role == .right {
+            let timer = Timer(timeInterval: Self.retryInterval, repeats: true) { [weak self] _ in
+                guard let self, !self.stopped, self.session.connectedPeers.isEmpty,
+                      !self.invitationInFlight
+                else {
+                    return
+                }
+                self.startBrowsing()
+            }
+            RunLoop.main.add(timer, forMode: .common)
+            retryTimer = timer
+        }
+        // Con la pantalla apagada iOS suspende el anuncio y la búsqueda, y al volver no los
+        // reanuda: el izquierdo que llevaba rato apagado ya no se dejaba encontrar.
+        foregroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self, !self.stopped, self.session.connectedPeers.isEmpty,
+                  !self.invitationInFlight
+            else {
+                return
+            }
+            NSLog("[enlace] de vuelta en primer plano, se rearma")
+            self.rearm()
+        }
+    }
+
+    func stop() {
+        stopped = true
+        retryTimer?.invalidate()
+        retryTimer = nil
+        if let observer = foregroundObserver {
+            NotificationCenter.default.removeObserver(observer)
+            foregroundObserver = nil
+        }
+        queue.sync {
+            pingGeneration += 1
+            pendingPts.values.forEach { $0.resume(returning: []) }
+            pendingPts.removeAll()
+        }
+        // Sin delegados antes de desconectar: lo que la sesión vieja avise a partir de
+        // aquí ya no es de nadie, y no puede tocar la pantalla ni volver a invitar.
+        session.delegate = nil
+        advertiser?.delegate = nil
+        advertiser?.stopAdvertisingPeer()
+        advertiser = nil
+        browser?.delegate = nil
+        browser?.stopBrowsingForPeers()
+        browser = nil
+        session.disconnect()
+        onState?(.off, "")
+    }
+
+    /// Vuelve a anunciarse (el izquierdo) o a buscar (el derecho) desde cero.
+    ///
+    /// Parar y volver a empezar es lo que hace que iOS avise otra vez de un par que ya
+    /// había visto, y así se puede volver a invitar.
+    private func rearm() {
+        guard !stopped else { return }
         if role == .left {
+            advertiser?.delegate = nil
+            advertiser?.stopAdvertisingPeer()
             let advertiser = MCNearbyServiceAdvertiser(
                 peer: peerID,
                 discoveryInfo: ["role": "left"],
@@ -229,26 +342,30 @@ final class RigLink: NSObject {
         }
     }
 
-    func stop() {
-        queue.sync {
-            pingGeneration += 1
-            pendingPts.values.forEach { $0.resume(returning: []) }
-            pendingPts.removeAll()
-        }
-        advertiser?.stopAdvertisingPeer()
-        advertiser = nil
-        browser?.stopBrowsingForPeers()
-        browser = nil
-        session.disconnect()
-        onState?(.off, "")
-    }
-
     private func startBrowsing() {
+        guard !stopped else { return }
+        browser?.delegate = nil
         browser?.stopBrowsingForPeers()
         let browser = MCNearbyServiceBrowser(peer: peerID, serviceType: Self.serviceType)
         browser.delegate = self
         browser.startBrowsingForPeers()
         self.browser = browser
+    }
+
+    /// Si hay una invitación mandada que todavía no ha caducado.
+    private var invitationInFlight: Bool {
+        guard let invitedAt else { return false }
+        return Date().timeIntervalSince(invitedAt) < Self.inviteTimeout
+    }
+
+    /// Invita al izquierdo, salvo que ya haya enlace o una invitación en vuelo.
+    private func invite(_ peer: MCPeerID) {
+        guard !stopped, session.connectedPeers.isEmpty, !invitationInFlight, let browser else {
+            return
+        }
+        invitedAt = Date()
+        NSLog("[enlace] encontrado %@, invitando", peer.displayName)
+        browser.invitePeer(peer, to: session, withContext: nil, timeout: Self.inviteTimeout)
     }
 
     // MARK: - Reloj (solo el derecho pregunta)
@@ -344,6 +461,7 @@ extension RigLink: MCSessionDelegate {
         switch state {
         case .connected:
             NSLog("[enlace] conectado con %@", peerID.displayName)
+            DispatchQueue.main.async { self.invitedAt = nil }
             onState?(.connected, peerID.displayName)
             if role == .right { startPinging() }
         case .notConnected:
@@ -353,8 +471,14 @@ extension RigLink: MCSessionDelegate {
                 self.lookReceived = false
             }
             onState?(.searching, "")
-            // El buscador no vuelve a avisar de un par que ya vio: se reinicia.
-            if role == .right { DispatchQueue.main.async { self.startBrowsing() } }
+            // El buscador no vuelve a avisar de un par que ya vio: se reinicia. Si este
+            // enlace ya se paró, `startBrowsing` no hace nada.
+            if role == .right {
+                DispatchQueue.main.async {
+                    self.invitedAt = nil
+                    self.startBrowsing()
+                }
+            }
         case .connecting:
             break
         @unknown default:
@@ -408,8 +532,12 @@ extension RigLink: MCNearbyServiceAdvertiserDelegate {
         withContext context: Data?,
         invitationHandler: @escaping (Bool, MCSession?) -> Void
     ) {
-        // Un soporte son dos móviles: con el derecho ya dentro, no entra nadie más.
-        let free = session.connectedPeers.isEmpty
+        // Un soporte son dos móviles: con el derecho ya dentro, no entra nadie más. Salvo
+        // que quien invita sea ese mismo derecho: con la identidad estable, si vuelve a
+        // invitar es que reinició su enlace, y la conexión que se ve aquí es la vieja, que
+        // Multipeer tarda en dar por perdida. Rechazarlo lo dejaba fuera ese rato.
+        let connected = session.connectedPeers
+        let free = connected.isEmpty || connected.contains(peerID)
         NSLog("[enlace] invitación de %@: %@", peerID.displayName, free ? "aceptada" : "rechazada")
         invitationHandler(free, free ? session : nil)
     }
@@ -423,12 +551,15 @@ extension RigLink: MCNearbyServiceAdvertiserDelegate {
 
 extension RigLink: MCNearbyServiceBrowserDelegate {
     func browser(_ browser: MCNearbyServiceBrowser, foundPeer peerID: MCPeerID, withDiscoveryInfo info: [String: String]?) {
-        guard info?["role"] == "left", session.connectedPeers.isEmpty else { return }
-        NSLog("[enlace] encontrado %@, invitando", peerID.displayName)
-        browser.invitePeer(peerID, to: session, withContext: nil, timeout: Self.inviteTimeout)
+        guard info?["role"] == "left" else { return }
+        // Al hilo principal, que es donde vive el estado de la invitación en vuelo.
+        DispatchQueue.main.async { self.invite(peerID) }
     }
 
-    func browser(_ browser: MCNearbyServiceBrowser, lostPeer peerID: MCPeerID) {}
+    func browser(_ browser: MCNearbyServiceBrowser, lostPeer peerID: MCPeerID) {
+        // No se hace nada más: si no vuelve, el rearme periódico lo vuelve a buscar.
+        NSLog("[enlace] dejó de verse %@", peerID.displayName)
+    }
 
     func browser(_ browser: MCNearbyServiceBrowser, didNotStartBrowsingForPeers error: Error) {
         NSLog("[enlace] no se pudo buscar: %@", error.localizedDescription)

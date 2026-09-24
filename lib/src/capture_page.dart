@@ -62,6 +62,12 @@ class CapturePage extends StatefulWidget {
 }
 
 class _CapturePageState extends State<CapturePage> {
+  /// La sesión que recibe ahora los avisos del nativo. Hay un solo receptor para toda la
+  /// app, así que al cerrarse una pantalla solo lo quita si sigue siendo el suyo: volver
+  /// atrás y entrar otra vez libera la vieja después de que la nueva se haya puesto, y
+  /// quitarlo entonces dejaba a la nueva sin enlace ni reloj hasta reiniciar la app.
+  static CaptureSession? _receiver;
+
   late final CaptureSession _session =
       widget.session ??
       CaptureSession(
@@ -81,6 +87,7 @@ class _CapturePageState extends State<CapturePage> {
     _session.addListener(_onChanged);
     // Los avisos del nativo van a la sesión que está en pantalla.
     CaptureFlutterApi.setUp(_session);
+    _receiver = _session;
     // La cámara se abre sola al entrar: en la cancha nadie tiene que saber que hay un
     // paso previo. En un microtask y no aquí mismo, porque `prepare` notifica nada más
     // empezar y eso sería un `setState` en mitad del primer build.
@@ -91,7 +98,10 @@ class _CapturePageState extends State<CapturePage> {
   @override
   void dispose() {
     _refresh?.cancel();
-    CaptureFlutterApi.setUp(null);
+    if (identical(_receiver, _session)) {
+      CaptureFlutterApi.setUp(null);
+      _receiver = null;
+    }
     _session.removeListener(_onChanged);
     // La sesión la libera quien la crea. Si viene de fuera —un test—, liberarla aquí
     // dejaría al dueño con una sesión muerta.

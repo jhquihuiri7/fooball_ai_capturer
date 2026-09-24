@@ -270,7 +270,9 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
     try {
       if (linkOnly) {
         localNetworkAllowed = await _api.requestLocalNetworkAccess();
-        await _api.startLink(role);
+        if (!await _startLink()) {
+          return;
+        }
         _set(SessionPhase.esperandoReloj);
         return;
       }
@@ -304,7 +306,9 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
       }
       // Con la cámara en orden se abre el enlace. El maestro ya puede grabar: si el
       // derecho no llega nunca, media cancha es mejor que ninguna (decisión 4).
-      await _api.startLink(role);
+      if (!await _startLink()) {
+        return;
+      }
       _set(isClockMaster ? SessionPhase.lista : SessionPhase.esperandoReloj);
     } on Exception catch (error) {
       _set(SessionPhase.fallo, problem: 'no se pudo abrir la cámara: $error');
@@ -495,6 +499,24 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
 
   bool _disposed = false;
 
+  /// La última sesión que abrió el enlace. En el nativo hay un solo enlace, así que
+  /// cerrarlo es cosa de quien lo abrió **el último**: si el operador vuelve atrás y entra
+  /// otra vez (por ejemplo, para invertir los lados), la pantalla vieja se libera después
+  /// de que la nueva haya abierto el suyo, y cerrarlo entonces dejaba a la nueva sin
+  /// enlace hasta reiniciar la app (bug 2 del 22-09).
+  static CaptureSession? _linkOwner;
+
+  /// Abre el enlace, salvo que la pantalla ya se haya cerrado: abrirlo entonces lo dejaba
+  /// huérfano, sin nadie que lo cerrara. `false` si no se abrió.
+  Future<bool> _startLink() async {
+    if (_disposed) {
+      return false;
+    }
+    _linkOwner = this;
+    await _api.startLink(role);
+    return true;
+  }
+
   /// `prepare` puede terminar después de que la pantalla se haya cerrado (el operador
   /// vuelve atrás mientras la cámara mide la luz). Avisar a una sesión liberada tira la
   /// app en debug y no sirve de nada en release: se calla.
@@ -509,7 +531,10 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
   @override
   void dispose() {
     _disposed = true;
-    if (linkState != LinkState.off || linkOnly) {
+    // Por quién lo abrió y no por `linkState`: ese estado llega en un aviso del nativo
+    // que puede no haber llegado todavía, y entonces el enlace se quedaba abierto.
+    if (identical(_linkOwner, this)) {
+      _linkOwner = null;
       unawaited(_api.stopLink());
     }
     unawaited(_clockSubscription?.cancel());

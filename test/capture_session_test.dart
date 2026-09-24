@@ -130,7 +130,38 @@ void main() {
       api.configureGate!.complete();
 
       await preparing;
-      expect(session.phase, SessionPhase.esperandoReloj);
+      // Y sin abrir el enlace: abierto después de cerrar la pantalla, nadie lo cerraba.
+      expect(api.startLinkCalls, 0);
+      expect(api.stopLinkCalls, 0);
+    });
+
+    test('se cierra el enlace aunque el aviso de su estado no haya llegado', () async {
+      // `linkState` llega por un aviso del nativo. Si la pantalla se cerraba antes, el
+      // enlace se quedaba abierto (bug 2 del 22-09).
+      final FakeCaptureApi api = FakeCaptureApi();
+      final CaptureSession session = CaptureSession(role: CameraRole.left, api: api);
+      await session.prepare();
+      expect(session.linkState, LinkState.off);
+
+      session.dispose();
+
+      expect(api.stopLinkCalls, 1);
+    });
+
+    test('la pantalla vieja no cierra el enlace que ya abrió la nueva', () async {
+      // Volver atrás e invertir los lados: la nueva abre su enlace antes de que se libere
+      // la vieja. Cerrarlo entonces dejaba a la nueva sin enlace hasta reiniciar la app.
+      final FakeCaptureApi api = FakeCaptureApi();
+      final CaptureSession vieja = CaptureSession(role: CameraRole.left, api: api);
+      await vieja.prepare();
+      final CaptureSession nueva = CaptureSession(role: CameraRole.right, api: api);
+      await nueva.prepare();
+
+      vieja.dispose();
+      expect(api.stopLinkCalls, 0);
+
+      nueva.dispose();
+      expect(api.stopLinkCalls, 1);
     });
   });
 
