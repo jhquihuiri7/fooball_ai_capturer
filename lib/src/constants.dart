@@ -130,3 +130,26 @@ const String panelApiPrefix = '/api/v1/';
 
 /// Ámbito del token que deja emitir y parar la emisión (`SCOPE_STREAM`).
 const String panelScopeStream = 'stream';
+
+/// Cabecera con el nombre de este móvil, para la tarjeta Mando del panel (`DEVICE_HEADER`).
+const String panelDeviceHeader = 'X-Zero-Device';
+
+/// Plazo de la espera larga. El panel contesta como tarde a los 25 s
+/// (`LONG_POLL_TIMEOUT_S`); con diez de margen, un plazo vencido es la red y no el panel.
+const Duration panelLongPollTimeout = Duration(seconds: 35);
+
+/// Plazo de una orden. Por Starlink hasta el pod una petición va y vuelve en menos de un
+/// segundo; a los cinco, lo que haya se da por perdido y se reintenta.
+const Duration panelRequestTimeout = Duration(seconds: 5);
+
+/// Cuánto se reintenta una orden que no obtuvo respuesta, con la misma
+/// `Idempotency-Key`. Diez segundos cubren un traspaso de satélite; más tarde, un
+/// «Parar reloj» que por fin llega es peor que uno que falla y se ve fallar (ADR 0017).
+const Duration panelCommandRetryWindow = Duration(seconds: 10);
+
+/// Espera entre dos intentos de una orden.
+const Duration panelCommandRetryDelay = Duration(milliseconds: 800);
+
+/// Espera antes de volver a preguntar al panel tras un fallo de red. Sin ella, sin
+/// cobertura, el bucle giraría en vacío gastando batería.
+const Duration panelReconnectDelay = Duration(seconds: 2);
