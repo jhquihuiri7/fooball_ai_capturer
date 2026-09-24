@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:football_ai_capture/src/calibration_upload.dart';
 import 'package:football_ai_capture/src/capture_session.dart';
 import 'package:football_ai_capture/src/constants.dart';
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
@@ -507,4 +509,128 @@ void main() {
       expect(settings.shutterDenominator % 50, 0);
     });
   });
+
+  group('subir la grabación para calibrar', () {
+    const String qr = 'rtmp://camara:clave@1.2.3.4:17377?panel=https://abc-8090.proxy.runpod.net';
+
+    Future<CaptureSession> grabada({
+      required _FakeUploader subida,
+      String server = qr,
+      bool standalone = false,
+    }) async {
+      final CaptureSession session = CaptureSession(
+        role: CameraRole.left,
+        api: FakeCaptureApi(),
+        serverHost: server,
+        standalone: standalone,
+        uploader: (Uri panel, CameraRole role, ({String user, String password})? credentials) =>
+            subida..seen = (panel: panel, role: role, credentials: credentials),
+      );
+      await session.prepare();
+      await session.toggleRecording();
+      await session.toggleRecording(); // grabar y parar: ya hay fichero
+      return session;
+    }
+
+    test('sin grabación no hay nada que subir', () async {
+      final CaptureSession session =
+          CaptureSession(role: CameraRole.left, api: FakeCaptureApi(), serverHost: qr);
+      await session.prepare();
+
+      expect(session.canUploadForCalibration, isFalse);
+    });
+
+    test('grabando no se sube: el fichero todavía está abierto', () async {
+      final CaptureSession session = await grabada(subida: _FakeUploader());
+      await session.toggleRecording();
+
+      expect(session.recording, isTrue);
+      expect(session.canUploadForCalibration, isFalse);
+    });
+
+    test('sube la última grabación al panel del QR, con las credenciales de las cámaras', () async {
+      final _FakeUploader subida = _FakeUploader(calibrating: true);
+      final CaptureSession session = await grabada(subida: subida);
+      expect(session.canUploadForCalibration, isTrue);
+
+      await session.uploadForCalibration();
+
+      expect(subida.seen!.panel, Uri.parse('https://abc-8090.proxy.runpod.net'));
+      expect(subida.seen!.credentials, (user: 'camara', password: 'clave'));
+      expect(subida.file!.path, endsWith('left-1.mov'));
+      expect(session.calibrationUpload, CalibrationUpload.subida);
+      expect(session.calibrationUploadLabel, 'SUBIDA · EL SERVIDOR CALIBRA');
+    });
+
+    test('si falta la del otro móvil lo dice', () async {
+      final CaptureSession session = await grabada(subida: _FakeUploader());
+
+      await session.uploadForCalibration();
+
+      expect(session.calibrationUploadLabel, 'SUBIDA · FALTA LA DEL OTRO MÓVIL');
+    });
+
+    test('mientras sube enseña cuánto lleva', () async {
+      final _FakeUploader subida = _FakeUploader(progress: <int>[4 * 1048576])
+        ..gate = Completer<void>();
+      final CaptureSession session = await grabada(subida: subida);
+
+      final Future<void> subiendo = session.uploadForCalibration();
+      await pumpEventQueue();
+
+      expect(session.calibrationUploadLabel, 'SUBIENDO 4 / 8 MB');
+      expect(session.canUploadForCalibration, isFalse); // no se lanza dos veces
+      subida.gate!.complete();
+      await subiendo;
+    });
+
+    test('si falla, dice por qué y deja reintentar', () async {
+      final CaptureSession session = await grabada(subida: _FakeUploader(error: 'la red no deja'));
+
+      await session.uploadForCalibration();
+
+      expect(session.calibrationUpload, CalibrationUpload.fallo);
+      expect(session.uploadProblem, 'la red no deja');
+      expect(session.calibrationUploadLabel, 'NO SE SUBIÓ · REINTENTAR');
+      expect(session.canUploadForCalibration, isTrue);
+    });
+
+    test('con un solo móvil no hay soporte que calibrar', () async {
+      final CaptureSession session = await grabada(subida: _FakeUploader(), standalone: true);
+
+      expect(session.canUploadForCalibration, isFalse);
+    });
+
+    test('sin servidor no hay a dónde subir', () async {
+      final CaptureSession session = await grabada(subida: _FakeUploader(), server: '');
+
+      expect(session.canUploadForCalibration, isFalse);
+    });
+  });
+}
+
+/// Un subidor que no sube: dice lo que le pidieron y contesta lo que toca.
+class _FakeUploader extends CalibrationUploader {
+  _FakeUploader({this.calibrating = false, this.error, this.progress = const <int>[]})
+      : super(panel: Uri.parse('http://nadie'), role: CameraRole.left);
+
+  final bool calibrating;
+  final String? error;
+  final List<int> progress;
+  Completer<void>? gate;
+  ({Uri panel, CameraRole role, ({String user, String password})? credentials})? seen;
+  File? file;
+
+  @override
+  Future<bool> upload(File file, {void Function(int sent, int total)? onProgress}) async {
+    this.file = file;
+    for (final int sent in progress) {
+      onProgress?.call(sent, 8 * 1048576);
+    }
+    await gate?.future;
+    if (error != null) {
+      throw CalibrationUploadException(error!);
+    }
+    return calibrating;
+  }
 }

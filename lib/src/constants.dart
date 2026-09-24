@@ -93,3 +93,26 @@ const String streamPathPrefix = 'rig';
 /// la plataforma y cambia en cada reinicio: ahí se escribe a mano (`rtmp://IP:PUERTO`).
 const int rtmpPort = 1935;
 const int rtmpsPort = 443;
+
+// --------------------------------------------------------------------------- //
+// Subir la grabación para calibrar el soporte
+// --------------------------------------------------------------------------- //
+
+/// Puerto del panel cuando el servidor es el Mac de la cancha (`tools/local.sh`). En un
+/// pod el panel va por el proxy de RunPod, y su dirección llega en el QR (`?panel=`).
+const int localPanelPort = 8090;
+
+/// Bytes por trozo de la subida: 8 MiB, la mitad de lo que admite el panel
+/// (`RECORDING_CHUNK_MAX_BYTES`). Por Starlink una conexión sola saca 1–2 Mbit/s hasta el
+/// pod, así que un trozo son ~40 s: perder uno por un corte cuesta poco.
+const int calibrationChunkBytes = 8 * 1024 * 1024;
+
+/// Fallos seguidos antes de rendirse. Veinte con tres segundos entre medias es aguantar un
+/// minuto de corte, que es más que cualquier traspaso de satélite.
+const int calibrationMaxRetries = 20;
+
+/// Espera entre un fallo de la subida y el siguiente intento.
+const Duration calibrationRetryDelay = Duration(seconds: 3);
+
+/// Plazo de cada petición, trozo incluido: 8 MiB a 1 Mbit/s son ~70 s, con margen.
+const Duration calibrationRequestTimeout = Duration(minutes: 3);

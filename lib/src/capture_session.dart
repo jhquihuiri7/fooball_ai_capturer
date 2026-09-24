@@ -14,13 +14,32 @@
 library;
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:football_ai_capture/src/calibration_upload.dart';
 import 'package:football_ai_capture/src/constants.dart';
 import 'package:football_ai_capture/src/exposure_phase.dart';
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
 import 'package:football_ai_capture/src/rig_clock.dart';
 import 'package:football_ai_capture/src/stream_url.dart';
+
+/// Cómo va la subida de la grabación al panel para calibrar.
+enum CalibrationUpload { ninguna, subiendo, subida, fallo }
+
+/// Quién sube la grabación. Cambiable para los tests, que no tienen panel.
+typedef CalibrationUploaderFactory = CalibrationUploader Function(
+  Uri panel,
+  CameraRole role,
+  ({String user, String password})? credentials,
+);
+
+CalibrationUploader _defaultUploader(
+  Uri panel,
+  CameraRole role,
+  ({String user, String password})? credentials,
+) =>
+    CalibrationUploader(panel: panel, role: role, credentials: credentials);
 
 /// En qué punto de la preparación está esta cámara.
 enum SessionPhase {
@@ -55,6 +74,7 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
     this.autoSortPhase = true,
     this.phaseSettle = phaseSettleDelay,
     this.linkOnly = false,
+    this.uploader = _defaultUploader,
   })  : _api = api ?? CaptureHostApi(),
         _clock = clock ?? RigClock() {
     if (clockSamples != null) {
@@ -89,7 +109,19 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
 
   final CaptureHostApi _api;
   final RigClock _clock;
+
+  /// Quién sube la grabación para calibrar (ver [CalibrationUploaderFactory]).
+  final CalibrationUploaderFactory uploader;
   StreamSubscription<ClockSample>? _clockSubscription;
+
+  /// La subida de la última grabación al panel para calibrar el soporte.
+  CalibrationUpload calibrationUpload = CalibrationUpload.ninguna;
+  int uploadSent = 0;
+  int uploadTotal = 0;
+
+  /// Con esta subida el panel ya tenía las dos y se puso a calibrar.
+  bool uploadCalibrating = false;
+  String? uploadProblem;
 
   SessionPhase phase = SessionPhase.preparando;
   CaptureStatus? status;
@@ -159,10 +191,71 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
 
   /// El archivo en curso. Manda el que dice el nativo: tras un corte, la grabación
   /// sigue en un segmento nuevo que la pantalla tiene que enseñar sin que nadie pulse.
-  String? get recordingFileName {
+  String? get recordingFileName => recordingPath?.split('/').last;
+
+  /// La ruta entera de la grabación en curso o de la última, con el mismo criterio.
+  String? get recordingPath {
     final String? fromNative = status?.recordingFile;
     final String? path = (fromNative != null && fromNative.isNotEmpty) ? fromNative : recordingFile;
-    return path?.split('/').last;
+    return (path == null || path.isEmpty) ? null : path;
+  }
+
+  /// Dónde está el panel del servidor, o `null` si no hay servidor.
+  Uri? get panelUri => panelUriFrom(serverHost);
+
+  /// Se puede subir la última grabación para calibrar: hay una, ya no se está grabando,
+  /// hay panel, y es un soporte de dos (con un solo móvil no hay nada que calibrar).
+  bool get canUploadForCalibration =>
+      !standalone &&
+      !recording &&
+      recordingPath != null &&
+      panelUri != null &&
+      calibrationUpload != CalibrationUpload.subiendo;
+
+  /// Sube la última grabación al panel. Cuando el panel tenga las de los dos móviles,
+  /// calibra el soporte solo y la cámara virtual arranca con esa calibración.
+  Future<void> uploadForCalibration() async {
+    final String? path = recordingPath;
+    final Uri? panel = panelUri;
+    if (!canUploadForCalibration || path == null || panel == null) {
+      return;
+    }
+    calibrationUpload = CalibrationUpload.subiendo;
+    uploadSent = 0;
+    uploadTotal = 0;
+    uploadProblem = null;
+    notifyListeners();
+    try {
+      uploadCalibrating = await uploader(panel, role, cameraCredentialsFrom(serverHost)).upload(
+        File(path),
+        onProgress: (int sent, int total) {
+          uploadSent = sent;
+          uploadTotal = total;
+          notifyListeners();
+        },
+      );
+      calibrationUpload = CalibrationUpload.subida;
+    } on CalibrationUploadException catch (error) {
+      calibrationUpload = CalibrationUpload.fallo;
+      uploadProblem = error.message;
+    } on FileSystemException catch (error) {
+      calibrationUpload = CalibrationUpload.fallo;
+      uploadProblem = 'no se pudo leer la grabación: ${error.message}';
+    }
+    notifyListeners();
+  }
+
+  /// Lo que dice el botón de subir, en mayúsculas como los demás de esta pantalla.
+  String get calibrationUploadLabel {
+    String mb(int bytes) => (bytes / (1024 * 1024)).toStringAsFixed(0);
+    return switch (calibrationUpload) {
+      CalibrationUpload.ninguna => 'SUBIR PARA CALIBRAR',
+      CalibrationUpload.subiendo =>
+        uploadTotal == 0 ? 'SUBIENDO…' : 'SUBIENDO ${mb(uploadSent)} / ${mb(uploadTotal)} MB',
+      CalibrationUpload.subida =>
+        uploadCalibrating ? 'SUBIDA · EL SERVIDOR CALIBRA' : 'SUBIDA · FALTA LA DEL OTRO MÓVIL',
+      CalibrationUpload.fallo => 'NO SE SUBIÓ · REINTENTAR',
+    };
   }
 
   /// A dónde publica este móvil: un path por cámara en el MediaMTX del servidor

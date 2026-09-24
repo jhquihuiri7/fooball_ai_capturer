@@ -152,6 +152,7 @@ class _CapturePageState extends State<CapturePage> {
                   _RecordButton(session: _session),
                   const SizedBox(height: 10),
                   _RecordingBanner(readout: r),
+                  _CalibrationUploadButton(session: _session),
                   if (trouble.isNotEmpty) ...<Widget>[
                     const SizedBox(height: ZeroMetrics.cardGap),
                     _TroubleCard(readings: trouble),
@@ -531,6 +532,46 @@ class _RecordButton extends StatelessWidget {
             height: ZeroMetrics.recordHeight,
             textStyle: style,
           );
+  }
+}
+
+/// Sube la última grabación al panel para calibrar el soporte. Solo aparece cuando tiene
+/// sentido: hay grabación, no se está grabando y hay servidor. Si falla, dice por qué.
+class _CalibrationUploadButton extends StatelessWidget {
+  const _CalibrationUploadButton({required this.session});
+
+  final CaptureSession session;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool visible =
+        session.canUploadForCalibration || session.calibrationUpload == CalibrationUpload.subiendo;
+    if (!visible) {
+      return const SizedBox.shrink();
+    }
+    final String? problem = session.uploadProblem;
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          ZeroButton.secondary(
+            label: session.calibrationUploadLabel,
+            onPressed: session.canUploadForCalibration
+                ? () => unawaited(session.uploadForCalibration())
+                : null,
+          ),
+          if (problem != null) ...<Widget>[
+            const SizedBox(height: 6),
+            Text(
+              problem,
+              textAlign: TextAlign.center,
+              style: ZeroType.data(size: 12, weight: FontWeight.w500, color: ZeroColors.danger),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 }
 
