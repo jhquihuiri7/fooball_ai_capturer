@@ -8,6 +8,7 @@
 
 import AVFoundation
 import Flutter
+import Security
 
 final class CaptureHostApiImpl: NSObject, CaptureHostApi {
     private let engine = CaptureEngine()
@@ -101,6 +102,20 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
 
     func scanServerQr() async throws -> String {
         await QrScanner.scan()
+    }
+
+    // MARK: - Emparejamiento con el panel como mando (ADR 0017 de football-ai)
+
+    func loadPanelPairing() throws -> String {
+        try PanelPairingKeychain.read() ?? ""
+    }
+
+    func savePanelPairing(pairing: String) throws {
+        try PanelPairingKeychain.write(pairing)
+    }
+
+    func clearPanelPairing() throws {
+        try PanelPairingKeychain.delete()
     }
 
     // MARK: - Enlace entre móviles (TASK A3, A4)
@@ -244,5 +259,66 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
         case .sensitiveContentMitigationActivated: return "protección de contenido del sistema"
         @unknown default: return "motivo \(raw)"
         }
+    }
+}
+
+/// El texto del QR «Mando», en el Keychain (ADR 0017 de football-ai).
+///
+/// `ThisDeviceOnly`: el token mueve el marcador de un partido y no puede irse en la copia
+/// de seguridad a otro iPhone. `AfterFirstUnlock`: se lee con la pantalla bloqueada tras
+/// el primer desbloqueo, que es como vive el móvil en la banda. Ojo: el Keychain
+/// sobrevive a desinstalar la app; para olvidar el panel está `clearPanelPairing`.
+private enum PanelPairingKeychain {
+    private static let base: [String: Any] = [
+        kSecClass as String: kSecClassGenericPassword,
+        kSecAttrService as String: "football-ai.mando",
+        kSecAttrAccount as String: "panel",
+    ]
+
+    static func read() throws -> String? {
+        var query = base
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        if status == errSecItemNotFound {
+            return nil
+        }
+        guard status == errSecSuccess, let data = item as? Data else {
+            throw failure(status, "leer")
+        }
+        return String(data: data, encoding: .utf8)
+    }
+
+    static func write(_ pairing: String) throws {
+        let data = Data(pairing.utf8)
+        var status = SecItemUpdate(
+            base as CFDictionary,
+            [kSecValueData as String: data] as CFDictionary
+        )
+        if status == errSecItemNotFound {
+            var item = base
+            item[kSecValueData as String] = data
+            item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            status = SecItemAdd(item as CFDictionary, nil)
+        }
+        guard status == errSecSuccess else {
+            throw failure(status, "guardar")
+        }
+    }
+
+    static func delete() throws {
+        let status = SecItemDelete(base as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw failure(status, "borrar")
+        }
+    }
+
+    private static func failure(_ status: OSStatus, _ action: String) -> PigeonError {
+        PigeonError(
+            code: "keychain",
+            message: "no se pudo \(action) el emparejamiento con el panel (\(status))",
+            details: nil
+        )
     }
 }

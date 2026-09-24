@@ -676,6 +676,14 @@ protocol CaptureHostApi {
   /// Para el pod, cuya dirección cambia con cada despliegue y no se puede teclear en
   /// la cancha.
   func scanServerQr() async throws -> String
+  /// El emparejamiento con el panel como mando (ADR 0017 del repo football-ai): el texto
+  /// del QR «Mando», `https://<panel>/#mando=<token>`, tal cual. Vacío si no hay.
+  ///
+  /// En el Keychain y no en `UserDefaults`: el token mueve el marcador de un partido, y
+  /// no puede viajar en la copia de seguridad del móvil ni pasar a otro iPhone.
+  func loadPanelPairing() throws -> String
+  func savePanelPairing(pairing: String) throws
+  func clearPanelPairing() throws
   /// Abre el enlace con el otro móvil del soporte (Multipeer Connectivity, TASK A3).
   ///
   /// El izquierdo se anuncia y es el maestro del reloj; el derecho lo busca, se conecta
@@ -934,6 +942,52 @@ class CaptureHostApiSetup {
       }
     } else {
       scanServerQrChannel.setMessageHandler(nil)
+    }
+    /// El emparejamiento con el panel como mando (ADR 0017 del repo football-ai): el texto
+    /// del QR «Mando», `https://<panel>/#mando=<token>`, tal cual. Vacío si no hay.
+    ///
+    /// En el Keychain y no en `UserDefaults`: el token mueve el marcador de un partido, y
+    /// no puede viajar en la copia de seguridad del móvil ni pasar a otro iPhone.
+    let loadPanelPairingChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.loadPanelPairing\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      loadPanelPairingChannel.setMessageHandler { _, reply in
+        do {
+          let result = try api.loadPanelPairing()
+          reply(wrapResult(result))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      loadPanelPairingChannel.setMessageHandler(nil)
+    }
+    let savePanelPairingChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.savePanelPairing\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      savePanelPairingChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let pairingArg = args[0] as! String
+        do {
+          try api.savePanelPairing(pairing: pairingArg)
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      savePanelPairingChannel.setMessageHandler(nil)
+    }
+    let clearPanelPairingChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.clearPanelPairing\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      clearPanelPairingChannel.setMessageHandler { _, reply in
+        do {
+          try api.clearPanelPairing()
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      clearPanelPairingChannel.setMessageHandler(nil)
     }
     /// Abre el enlace con el otro móvil del soporte (Multipeer Connectivity, TASK A3).
     ///

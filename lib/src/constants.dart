@@ -116,3 +116,17 @@ const Duration calibrationRetryDelay = Duration(seconds: 3);
 
 /// Plazo de cada petición, trozo incluido: 8 MiB a 1 Mbit/s son ~70 s, con margen.
 const Duration calibrationRequestTimeout = Duration(minutes: 3);
+
+// --------------------------------------------------------------------------- //
+// Mando del panel (ADR 0017 del repo football-ai)
+// --------------------------------------------------------------------------- //
+
+/// Dónde va el token en el QR «Mando»: `https://<panel>/#mando=<token>`
+/// (`PAIRING_FRAGMENT` en `tools/control_token.py`).
+const String pairingFragmentKey = 'mando';
+
+/// Donde vive la API del mando en el panel (`API_V1_PREFIX`).
+const String panelApiPrefix = '/api/v1/';
+
+/// Ámbito del token que deja emitir y parar la emisión (`SCOPE_STREAM`).
+const String panelScopeStream = 'stream';

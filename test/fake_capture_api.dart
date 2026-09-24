@@ -160,6 +160,18 @@ class FakeCaptureApi extends CaptureHostApi {
   @override
   Future<String> scanServerQr() async => scannable;
 
+  /// Lo que el nativo tiene en el Keychain como emparejamiento con el panel.
+  String panelPairing = '';
+
+  @override
+  Future<String> loadPanelPairing() async => panelPairing;
+
+  @override
+  Future<void> savePanelPairing(String pairing) async => panelPairing = pairing;
+
+  @override
+  Future<void> clearPanelPairing() async => panelPairing = '';
+
   @override
   Future<void> startLink(CameraRole role) async {
     startLinkCalls++;

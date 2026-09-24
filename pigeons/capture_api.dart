@@ -290,6 +290,17 @@ abstract class CaptureHostApi {
   @async
   String scanServerQr();
 
+  /// El emparejamiento con el panel como mando (ADR 0017 del repo football-ai): el texto
+  /// del QR «Mando», `https://<panel>/#mando=<token>`, tal cual. Vacío si no hay.
+  ///
+  /// En el Keychain y no en `UserDefaults`: el token mueve el marcador de un partido, y
+  /// no puede viajar en la copia de seguridad del móvil ni pasar a otro iPhone.
+  String loadPanelPairing();
+
+  void savePanelPairing(String pairing);
+
+  void clearPanelPairing();
+
   /// Abre el enlace con el otro móvil del soporte (Multipeer Connectivity, TASK A3).
   ///
   /// El izquierdo se anuncia y es el maestro del reloj; el derecho lo busca, se conecta
