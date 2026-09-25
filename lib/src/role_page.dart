@@ -13,6 +13,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
+import 'package:football_ai_capture/src/mando_page.dart';
+import 'package:football_ai_capture/src/panel_pairing.dart';
 import 'package:football_ai_capture/src/theme/zero_colors.dart';
 import 'package:football_ai_capture/src/theme/zero_mark.dart';
 import 'package:football_ai_capture/src/theme/zero_metrics.dart';
@@ -26,10 +28,13 @@ import 'package:football_ai_capture/src/zero_shell.dart';
 enum _ServerOrigin { none, saved, bonjour, typed, scanned }
 
 class RolePage extends StatefulWidget {
-  const RolePage({this.api, super.key});
+  const RolePage({this.api, this.mandoControl, super.key});
 
   /// Inyectable para los tests.
   final CaptureHostApi? api;
+
+  /// El mando que abre «Solo mando». Inyectable para los tests, como [api].
+  final PanelControlFactory? mandoControl;
 
   @override
   State<RolePage> createState() => _RolePageState();
@@ -46,6 +51,9 @@ class _RolePageState extends State<RolePage> {
 
   bool _searching = false;
   _ServerOrigin _origin = _ServerOrigin.none;
+
+  /// Por qué no se pudo abrir el mando, si no se pudo.
+  String? _mandoProblem;
 
   @override
   void initState() {
@@ -160,6 +168,58 @@ class _RolePageState extends State<RolePage> {
     );
   }
 
+  /// El móvil como mando del panel, sin cámara (ADR 0017 de football-ai).
+  ///
+  /// Con un emparejamiento guardado entra directo; sin él, pide el QR «Mando» del panel
+  /// y lo guarda. Un QR que no es de Mando —el de «Cámaras», una web— se dice aquí, en
+  /// vez de abrir una pantalla que no va a poder conectar.
+  Future<void> _openMando() async {
+    PanelPairing? pairing;
+    try {
+      pairing = PanelPairing.parse(await _api.loadPanelPairing());
+    } on Exception {
+      // Sin nativo (tests) no hay nada guardado.
+    }
+    if (pairing == null) {
+      String scanned = '';
+      try {
+        scanned = await _api.scanServerQr();
+      } on Exception {
+        // Sin nativo no hay cámara.
+      }
+      if (scanned.trim().isEmpty) {
+        return; // cancelado
+      }
+      pairing = PanelPairing.parse(scanned);
+      if (pairing == null) {
+        if (mounted) {
+          setState(
+            () => _mandoProblem = 'Ese QR no es el de Mando: en el panel, tarjeta «Mando».',
+          );
+        }
+        return;
+      }
+      try {
+        await _api.savePanelPairing(pairing.qrText);
+      } on Exception {
+        // Si no se guarda, vale para esta vez.
+      }
+    }
+    if (!mounted) {
+      return;
+    }
+    final PanelPairing chosen = pairing;
+    setState(() => _mandoProblem = null);
+    unawaited(
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) =>
+              MandoPage(pairing: chosen, api: _api, controlFactory: widget.mandoControl),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -260,6 +320,27 @@ class _RolePageState extends State<RolePage> {
                       ),
                       onPressed: _open,
                     ),
+                    const SizedBox(height: 10),
+                    // Aparte de los dos lados: este móvil no va en el soporte y no abre la
+                    // cámara. Lleva el marcador del panel desde la banda.
+                    ZeroButton.secondary(
+                      label: 'Solo mando, sin cámara',
+                      onPressed: () => unawaited(_openMando()),
+                    ),
+                    if (_mandoProblem case final String problem)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 10),
+                        child: Text(
+                          problem,
+                          textAlign: TextAlign.center,
+                          style: ZeroType.plex(
+                            size: 13,
+                            weight: FontWeight.w500,
+                            color: ZeroColors.alarm,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),

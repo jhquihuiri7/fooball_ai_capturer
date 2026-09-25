@@ -106,7 +106,7 @@ class PanelBoard extends ChangeNotifier implements MatchBoard {
   }
 
   @override
-  bool get busy => _busy;
+  bool get busy => _busy || control.link != PanelLink.online;
 
   @override
   bool get confirmsDestructive => true;

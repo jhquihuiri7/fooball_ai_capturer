@@ -153,3 +153,11 @@ const Duration panelCommandRetryDelay = Duration(milliseconds: 800);
 /// Espera antes de volver a preguntar al panel tras un fallo de red. Sin ella, sin
 /// cobertura, el bucle giraría en vacío gastando batería.
 const Duration panelReconnectDelay = Duration(seconds: 2);
+
+/// Cómo se presenta este móvil en la tarjeta Mando del panel. Fijo: desde iOS 16 el
+/// nombre del dispositivo sin permiso especial es «iPhone» a secas, que tampoco distingue.
+/// Con dos mandos a la vez la tarjeta los contará, pero no dirá cuál es cuál.
+const String mandoDeviceName = 'Zero · mando';
+
+/// Cada cuánto se repinta «sin panel desde hace N s» mientras el panel no contesta.
+const Duration mandoSilenceRefresh = Duration(seconds: 1);

@@ -23,7 +23,8 @@ arquitectura; aquí se implementa la parte que corre en el móvil.
 | Emisión SRT y RTMP al canal `rig/<lado>`, servidor por Bonjour | ✅ TASK A5 |
 | Segmento nuevo tras un corte · bitrate por temperatura | ✅ TASK A9, A7 |
 | Recorte a la banda jugable | ⬜ TASK A6 |
-| Marcador y alineación publicados al overlay de la emisión | ⬜ el `MatchState` ya sale a JSON; falta el camino |
+| **Mando del panel**: Partido lleva el marcador del panel (ADR 0017 de football-ai) | ✅ con tests, contra el panel real — rama `feat/mando-panel`, Keychain sin compilar |
+| Marcador local publicado al overlay de la emisión | ⬜ ya no hace falta para emitir: el marcador que sale es el del panel, y el mando lo lleva |
 
 El estado completo, con lo que queda en orden y el formato exacto del código de tiempo,
 está en `football-ai/docs/PROGRESS.md`, sección «Dos iPhone como cámara (ADR 0012)».
@@ -63,7 +64,14 @@ pantalla ilegible. La marca son dos anillos que se solapan un 30 %, dibujados co
 RolePage  (elegir lado)  →  ZeroShell
                               ├── Captura   el móvil del soporte
                               └── Partido   marcador, cronómetro y posiciones
+          (solo mando)   →  MandoPage   Partido sobre el marcador del panel, sin cámara
 ```
+
+**El mando** (ADR 0017 del repo `football-ai`) es un tercer móvil que no va en el
+soporte: escanea el QR «Mando» del panel, lo guarda en el Keychain y lleva el marcador
+que sale al aire. Es la misma pestaña Partido (`MatchPage` sobre `MatchBoard`), pero lo
+que enseña es lo que contestó el panel y cada botón es una orden: con una en camino o
+sin panel, los botones se quedan quietos; reiniciar y parar la emisión preguntan antes.
 
 Están separados a propósito. El móvil que está en el soporte no debe ver el marcador, y
 quien lleva el marcador no debe poder tocar la cámara: compartir pantalla es un toque

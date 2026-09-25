@@ -264,13 +264,24 @@ class ZeroPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color foreground = selected ? ZeroColors.accentLight : ZeroColors.ink;
+    // Quieta, en el gris terciario como `ZeroButton`: una píldora que no responde y
+    // parece que sí se lee como un fallo. La elegida se sigue distinguiendo por el borde.
+    final bool enabled = onTap != null;
+    final Color foreground = !enabled
+        ? ZeroColors.inkTertiary
+        : (selected ? ZeroColors.accentLight : ZeroColors.ink);
+    final Color fill = selected
+        ? (enabled ? ZeroColors.accentFill : ZeroColors.surface)
+        : Colors.transparent;
+    final Color edge = selected
+        ? (enabled ? ZeroColors.accent : ZeroColors.outline)
+        : (enabled ? ZeroColors.outline : ZeroColors.border);
     final Widget pill = ZeroTappable(
       onTap: onTap,
       borderRadius: BorderRadius.circular(999),
       decoration: BoxDecoration(
-        color: selected ? ZeroColors.accentFill : Colors.transparent,
-        border: Border.all(color: selected ? ZeroColors.accent : ZeroColors.outline),
+        color: fill,
+        border: Border.all(color: edge),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Container(
@@ -299,6 +310,7 @@ class ZeroPill extends StatelessWidget {
     // sin decir cuál se va a usar.
     final Widget labelled = Semantics(
       button: true,
+      enabled: enabled,
       selected: selected,
       inMutuallyExclusiveGroup: true,
       child: pill,
@@ -463,8 +475,11 @@ class ZeroStepper extends StatelessWidget {
     // `excludeSemantics` se lleva también la acción del `InkWell`, así que el toque se
     // declara aquí: sin `onTap`, VoiceOver y TalkBack anuncian el botón pero no pueden
     // pulsarlo.
+    // Quieto, como `ZeroButton`: en gris terciario y sin el color del equipo.
+    final bool enabled = onTap != null;
     return Semantics(
       button: true,
+      enabled: enabled,
       label: semanticLabel,
       onTap: onTap,
       excludeSemantics: true,
@@ -472,8 +487,8 @@ class ZeroStepper extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(ZeroMetrics.stepperRadius),
         decoration: BoxDecoration(
-          color: background,
-          border: Border.all(color: border),
+          color: enabled ? background : ZeroColors.surface,
+          border: Border.all(color: enabled ? border : ZeroColors.border),
           borderRadius: BorderRadius.circular(ZeroMetrics.stepperRadius),
         ),
         child: Container(
@@ -482,7 +497,12 @@ class ZeroStepper extends StatelessWidget {
           alignment: Alignment.center,
           child: Text(
             sign,
-            style: ZeroType.data(size: 19, weight: FontWeight.w500, color: foreground, height: 1.0),
+            style: ZeroType.data(
+              size: 19,
+              weight: FontWeight.w500,
+              color: enabled ? foreground : ZeroColors.inkTertiary,
+              height: 1.0,
+            ),
           ),
         ),
       ),

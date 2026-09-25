@@ -46,8 +46,9 @@ abstract interface class MatchBoard implements Listenable {
   /// Lo que dice la tarjeta Salida al aire; `null` para el texto de siempre.
   String? get onAirNote;
 
-  /// Hay una orden en camino: hasta que el panel conteste, los botones esperan. Un
-  /// segundo toque con la primera sin respuesta es el gol doble que se quiere evitar.
+  /// Ahora no se puede mandar nada: hay una orden en camino, o el panel no contesta.
+  /// Los botones esperan. Un segundo toque con la primera sin respuesta es el gol doble
+  /// que se quiere evitar, y uno sin panel es una orden que nadie va a recibir.
   bool get busy;
 
   /// Reiniciar el reloj, reiniciar el marcador y parar la emisión piden confirmación.
