@@ -23,7 +23,7 @@ arquitectura; aquí se implementa la parte que corre en el móvil.
 | Emisión SRT y RTMP al canal `rig/<lado>`, servidor por Bonjour | ✅ TASK A5 |
 | Segmento nuevo tras un corte · bitrate por temperatura | ✅ TASK A9, A7 |
 | Recorte a la banda jugable | ⬜ TASK A6 |
-| **Mando del panel**: Partido lleva el marcador del panel (ADR 0017 de football-ai) | ✅ con tests, contra el panel real — rama `feat/mando-panel`, Keychain sin compilar |
+| **Mando del panel**: Partido lleva el marcador del panel (ADR 0017 de football-ai) | ✅ con tests y contra el panel real; el Keychain, sin compilar |
 | Marcador local publicado al overlay de la emisión | ⬜ ya no hace falta para emitir: el marcador que sale es el del panel, y el mando lo lleva |
 
 El estado completo, con lo que queda en orden y el formato exacto del código de tiempo,
