@@ -253,7 +253,9 @@ class ZeroPill extends StatelessWidget {
 
   final String label;
   final bool selected;
-  final VoidCallback onTap;
+
+  /// `null` la deja quieta: con una orden al panel en camino, nada se pulsa dos veces.
+  final VoidCallback? onTap;
 
   /// Una formación es un dato, no una palabra: va en monoespaciada.
   final bool mono;
@@ -446,7 +448,9 @@ class ZeroStepper extends StatelessWidget {
   });
 
   final String sign;
-  final VoidCallback onTap;
+
+  /// `null` lo deja quieto, como en [ZeroPill].
+  final VoidCallback? onTap;
 
   /// Un `+` suelto no dice nada en voz alta: aquí va «un gol más al local».
   final String semanticLabel;

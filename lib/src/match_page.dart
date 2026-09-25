@@ -11,6 +11,7 @@ library;
 import 'package:flutter/material.dart';
 
 import 'package:football_ai_capture/src/capture_labels.dart' show formatClock;
+import 'package:football_ai_capture/src/match_board.dart';
 import 'package:football_ai_capture/src/match_state.dart';
 import 'package:football_ai_capture/src/theme/zero_colors.dart';
 import 'package:football_ai_capture/src/theme/zero_mark.dart';
@@ -19,9 +20,14 @@ import 'package:football_ai_capture/src/theme/zero_type.dart';
 import 'package:football_ai_capture/src/widgets/zero_widgets.dart';
 
 class MatchPage extends StatefulWidget {
-  const MatchPage({required this.match, this.destinations = 0, super.key});
+  const MatchPage({required this.match, this.destinations = 0, this.banner, super.key});
 
-  final MatchState match;
+  /// El partido que se enseña y se opera: el de este móvil o el del panel (`match_board.dart`).
+  final MatchBoard match;
+
+  /// Lo que va justo debajo de la cabecera, si hay algo que avisar: el mando lo usa para
+  /// decir que el panel no contesta o que la transmisión terminó.
+  final Widget? banner;
 
   /// Cuántos destinos hay configurados. Sale de lo que se eligió en la pantalla de
   /// lado, no de un número escrito aquí: decir «2 destinos» cuando no hay ninguno es
@@ -53,12 +59,14 @@ class _MatchPageState extends State<MatchPage> {
 
   @override
   Widget build(BuildContext context) {
-    final MatchState m = widget.match;
+    final MatchBoard m = widget.match;
+    final Widget? banner = widget.banner;
     return SafeArea(
       bottom: false,
       child: Column(
         children: <Widget>[
           _MatchHeader(onAir: m.streaming),
+          ?banner,
           Expanded(
             child: ListView(
               padding: const EdgeInsets.fromLTRB(ZeroMetrics.gutter, 14, ZeroMetrics.gutter, 28),
@@ -140,7 +148,7 @@ class _MatchHeader extends StatelessWidget {
 class _ScoreboardStrip extends StatelessWidget {
   const _ScoreboardStrip({required this.match});
 
-  final MatchState match;
+  final MatchBoard match;
 
   @override
   Widget build(BuildContext context) {
@@ -267,7 +275,7 @@ class _StripClock extends StatelessWidget {
 class _ClockCard extends StatelessWidget {
   const _ClockCard({required this.match});
 
-  final MatchState match;
+  final MatchBoard match;
 
   @override
   Widget build(BuildContext context) {
@@ -308,13 +316,26 @@ class _ClockCard extends StatelessWidget {
             children: <Widget>[
               Expanded(
                 child: match.running
-                    ? ZeroButton.destructive(label: 'Parar', onPressed: match.stopClock)
-                    : ZeroButton.primary(label: 'Iniciar', onPressed: match.startClock),
+                    ? ZeroButton.destructive(
+                        label: 'Parar',
+                        onPressed: match.busy ? null : match.stopClock,
+                      )
+                    : ZeroButton.primary(
+                        label: 'Iniciar',
+                        onPressed: match.busy ? null : match.startClock,
+                      ),
               ),
               const SizedBox(width: 8),
               ZeroButton.secondary(
                 label: 'Reiniciar',
-                onPressed: match.resetClock,
+                onPressed: match.busy
+                    ? null
+                    : () => _confirmThen(
+                        context,
+                        match,
+                        '¿Reiniciar el cronómetro a 00:00?',
+                        match.resetClock,
+                      ),
                 height: ZeroMetrics.pillHeight,
                 expand: false,
                 textStyle: ZeroType.plex(
@@ -330,11 +351,17 @@ class _ClockCard extends StatelessWidget {
           Row(
             children: <Widget>[
               Expanded(
-                child: _MinuteButton(label: '−1 min', onTap: () => match.nudgeClock(-1)),
+                child: _MinuteButton(
+                  label: '−1 min',
+                  onTap: match.busy ? null : () => match.nudgeClock(-1),
+                ),
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: _MinuteButton(label: '+1 min', onTap: () => match.nudgeClock(1)),
+                child: _MinuteButton(
+                  label: '+1 min',
+                  onTap: match.busy ? null : () => match.nudgeClock(1),
+                ),
               ),
             ],
           ),
@@ -349,7 +376,7 @@ class _MinuteButton extends StatelessWidget {
   const _MinuteButton({required this.label, required this.onTap});
 
   final String label;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -370,7 +397,7 @@ class _MinuteButton extends StatelessWidget {
 class _ScoreCard extends StatelessWidget {
   const _ScoreCard({required this.match});
 
-  final MatchState match;
+  final MatchBoard match;
 
   @override
   Widget build(BuildContext context) {
@@ -386,8 +413,8 @@ class _ScoreCard extends StatelessWidget {
             plusFill: ZeroColors.homeFill,
             plusBorder: ZeroColors.homeStrong,
             plusInk: ZeroColors.homeLight,
-            onPlus: () => match.addGoal(MatchTeam.home, 1),
-            onMinus: () => match.addGoal(MatchTeam.home, -1),
+            onPlus: match.busy ? null : () => match.addGoal(MatchTeam.home, 1),
+            onMinus: match.busy ? null : () => match.addGoal(MatchTeam.home, -1),
           ),
           const Divider(height: 1, thickness: 1, color: ZeroColors.border),
           Padding(
@@ -399,14 +426,21 @@ class _ScoreCard extends StatelessWidget {
               plusFill: ZeroColors.accentFill,
               plusBorder: ZeroColors.accentStrong,
               plusInk: ZeroColors.accentLight,
-              onPlus: () => match.addGoal(MatchTeam.away, 1),
-              onMinus: () => match.addGoal(MatchTeam.away, -1),
+              onPlus: match.busy ? null : () => match.addGoal(MatchTeam.away, 1),
+              onMinus: match.busy ? null : () => match.addGoal(MatchTeam.away, -1),
               padded: false,
             ),
           ),
           ZeroButton.secondary(
             label: 'Reiniciar marcador',
-            onPressed: match.resetScore,
+            onPressed: match.busy
+                ? null
+                : () => _confirmThen(
+                    context,
+                    match,
+                    '¿Poner el marcador a 0-0?',
+                    match.resetScore,
+                  ),
             foreground: ZeroColors.inkSecondary,
             height: ZeroMetrics.stepperSize,
             textStyle: ZeroType.plex(
@@ -441,8 +475,8 @@ class _TeamScoreRow extends StatelessWidget {
   final Color plusFill;
   final Color plusBorder;
   final Color plusInk;
-  final VoidCallback onPlus;
-  final VoidCallback onMinus;
+  final VoidCallback? onPlus;
+  final VoidCallback? onMinus;
   final bool padded;
 
   @override
@@ -515,7 +549,7 @@ class _TeamScoreRow extends StatelessWidget {
 class _LineupCard extends StatelessWidget {
   const _LineupCard({required this.match});
 
-  final MatchState match;
+  final MatchBoard match;
 
   @override
   Widget build(BuildContext context) {
@@ -561,11 +595,11 @@ class _LineupCard extends StatelessWidget {
             spacing: 7,
             runSpacing: 7,
             children: <Widget>[
-              for (final Formation f in formations)
+              for (final String f in match.formationNames)
                 ZeroPill(
-                  label: f.name,
-                  selected: f.name == match.visibleFormation,
-                  onTap: () => match.setFormation(f.name),
+                  label: f,
+                  selected: f == match.visibleFormation,
+                  onTap: match.busy ? null : () => match.setFormation(f),
                   mono: true,
                   // El diseño las dibuja a 40; a 44, porque son tres objetivos
                   // separados 7 px que se aciertan de pie y sin mirar.
@@ -583,6 +617,33 @@ class _LineupCard extends StatelessWidget {
                 _PlayerRow(slot: slot, fill: teamFill, ink: teamInk),
             ],
           ),
+          if (match.lineupNote case final String note) ...<Widget>[
+            const SizedBox(height: 10),
+            Text(
+              note,
+              style: ZeroType.data(
+                size: 11,
+                weight: FontWeight.w400,
+                color: ZeroColors.inkTertiary,
+                height: 1.6,
+              ),
+            ),
+          ],
+          // Sacarla al aire solo cuando el marcador tiene camino hasta la emisión: el
+          // local no lo tiene, y un botón que no hace nada se lee como un fallo.
+          if (match.visibleLineupOnAir case final bool onAir) ...<Widget>[
+            const SizedBox(height: 14),
+            if (onAir)
+              ZeroButton.destructive(
+                label: 'Quitar alineación del aire',
+                onPressed: match.busy ? null : match.toggleLineupOnAir,
+              )
+            else
+              ZeroButton.secondary(
+                label: 'Sacar alineación al aire',
+                onPressed: match.busy ? null : match.toggleLineupOnAir,
+              ),
+          ],
         ],
       ),
     );
@@ -655,7 +716,7 @@ class _PlayerRow extends StatelessWidget {
 class _OnAirCard extends StatelessWidget {
   const _OnAirCard({required this.match, required this.destinations});
 
-  final MatchState match;
+  final MatchBoard match;
   final int destinations;
 
   /// TODO: el diseño dice «marcador y alineación sobre la señal» al emitir. Hoy
@@ -682,12 +743,25 @@ class _OnAirCard extends StatelessWidget {
         children: <Widget>[
           const ZeroSectionHeader('Salida al aire'),
           if (match.streaming)
-            ZeroButton.destructive(label: 'Parar emisión', onPressed: match.toggleStreaming)
+            ZeroButton.destructive(
+              label: 'Parar emisión',
+              onPressed: match.busy || !match.canStream
+                  ? null
+                  : () => _confirmThen(
+                      context,
+                      match,
+                      '¿Parar la emisión? El público deja de ver el partido.',
+                      match.toggleStreaming,
+                    ),
+            )
           else
-            ZeroButton.primary(label: 'Emitir', onPressed: match.toggleStreaming),
+            ZeroButton.primary(
+              label: 'Emitir',
+              onPressed: match.busy || !match.canStream ? null : match.toggleStreaming,
+            ),
           const SizedBox(height: 11),
           Text(
-            _meta,
+            match.onAirNote ?? _meta,
             style: ZeroType.data(
               size: 11,
               weight: FontWeight.w400,
@@ -698,5 +772,34 @@ class _OnAirCard extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// Hace `action`, preguntando antes si el marcador lo pide ([MatchBoard.confirmsDestructive]).
+///
+/// Con el mando, un toque de más en Reiniciar o en Parar emisión no se deshace desde la
+/// banda: sale al aire. En el marcador local se hace sin preguntar, como siempre.
+Future<void> _confirmThen(
+  BuildContext context,
+  MatchBoard match,
+  String question,
+  VoidCallback action,
+) async {
+  if (!match.confirmsDestructive) {
+    action();
+    return;
+  }
+  final bool? sure = await showDialog<bool>(
+    context: context,
+    builder: (BuildContext dialog) => AlertDialog(
+      content: Text(question),
+      actions: <Widget>[
+        TextButton(onPressed: () => Navigator.of(dialog).pop(false), child: const Text('Cancelar')),
+        TextButton(onPressed: () => Navigator.of(dialog).pop(true), child: const Text('Sí')),
+      ],
+    ),
+  );
+  if (sure ?? false) {
+    action();
   }
 }

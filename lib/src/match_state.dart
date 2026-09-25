@@ -16,6 +16,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:football_ai_capture/src/match_board.dart';
+
 /// Clave única: el estado del partido se guarda como un solo JSON y no campo a campo.
 /// Guardar campo a campo deja estados a medias cuando la app muere entre dos escrituras.
 const String matchStateKey = 'zero.match';
@@ -188,8 +190,8 @@ const List<Player> _defaultAwaySquad = <Player>[
   Player(number: 19, name: 'M. Intriago', role: PlayerRole.lw),
 ];
 
-/// El estado del partido que se pinta sobre la señal.
-class MatchState extends ChangeNotifier {
+/// El estado del partido que se pinta sobre la señal, cuando lo lleva este móvil.
+class MatchState extends ChangeNotifier implements MatchBoard {
   MatchState({
     this.homeName = 'BELLAVISTA',
     this.awayName = 'PROGRESO',
@@ -198,20 +200,26 @@ class MatchState extends ChangeNotifier {
   }) : homeSquad = homeSquad ?? _defaultHomeSquad,
        awaySquad = awaySquad ?? _defaultAwaySquad;
 
+  @override
   String homeName;
+  @override
   String awayName;
   List<Player> homeSquad;
   List<Player> awaySquad;
 
+  @override
   int homeGoals = 0;
+  @override
   int awayGoals = 0;
 
   String homeFormation = '4-3-3';
   String awayFormation = '4-3-3';
 
   /// Qué plantilla se está mirando. No afecta a lo que sale al aire.
+  @override
   MatchTeam lineupTeam = MatchTeam.home;
 
+  @override
   bool streaming = false;
 
   /// Milisegundos ya acumulados por el cronómetro mientras estuvo parado.
@@ -234,11 +242,13 @@ class MatchState extends ChangeNotifier {
 
   bool _disposed = false;
 
+  @override
   bool get running => _runningSince != null;
 
   /// Va con la hora de pared y no con un reloj monótono a propósito: es lo único que
   /// sobrevive a cerrar la app. Si iOS corrige la hora hacia atrás, el tramo en marcha
   /// cuenta cero en vez de restar minutos al partido.
+  @override
   Duration get elapsed => Duration(milliseconds: _elapsedMs);
 
   int get _elapsedMs {
@@ -248,11 +258,14 @@ class MatchState extends ChangeNotifier {
   }
 
   /// La formación de la plantilla que se está mirando.
+  @override
   String get visibleFormation => lineupTeam == MatchTeam.home ? homeFormation : awayFormation;
 
+  @override
   String get visibleTeamName => lineupTeam == MatchTeam.home ? homeName : awayName;
 
   /// Los once ya colocados, en el orden en que se leen.
+  @override
   List<PlayerSlot> get visibleLineup {
     final List<Player> squad = lineupTeam == MatchTeam.home ? homeSquad : awaySquad;
     return formationByName(visibleFormation).lineUp(squad);
@@ -262,6 +275,7 @@ class MatchState extends ChangeNotifier {
   // Cronómetro
   // ------------------------------------------------------------------------- //
 
+  @override
   void startClock() {
     if (running) {
       return;
@@ -271,6 +285,7 @@ class MatchState extends ChangeNotifier {
     _changed();
   }
 
+  @override
   void stopClock() {
     if (!running) {
       return;
@@ -283,6 +298,7 @@ class MatchState extends ChangeNotifier {
 
   void toggleClock() => running ? stopClock() : startClock();
 
+  @override
   void resetClock() {
     _baseMs = 0;
     _runningSince = null;
@@ -292,6 +308,7 @@ class MatchState extends ChangeNotifier {
 
   /// Corrige el cronómetro en minutos enteros. Nunca por debajo de cero: un partido en
   /// el minuto −1 no existe y el overlay lo enseñaría igual.
+  @override
   void nudgeClock(int minutes) {
     final int next = _elapsedMs + minutes * Duration.millisecondsPerMinute;
     _baseMs = next < 0 ? 0 : next;
@@ -305,6 +322,7 @@ class MatchState extends ChangeNotifier {
   // Marcador
   // ------------------------------------------------------------------------- //
 
+  @override
   void addGoal(MatchTeam team, int delta) {
     if (team == MatchTeam.home) {
       homeGoals = (homeGoals + delta).clamp(0, 99);
@@ -314,6 +332,7 @@ class MatchState extends ChangeNotifier {
     _changed();
   }
 
+  @override
   void resetScore() {
     homeGoals = 0;
     awayGoals = 0;
@@ -324,11 +343,13 @@ class MatchState extends ChangeNotifier {
   // Alineaciones y emisión
   // ------------------------------------------------------------------------- //
 
+  @override
   void showLineup(MatchTeam team) {
     lineupTeam = team;
     _changed();
   }
 
+  @override
   void setFormation(String name) {
     if (lineupTeam == MatchTeam.home) {
       homeFormation = name;
@@ -338,10 +359,38 @@ class MatchState extends ChangeNotifier {
     _changed();
   }
 
+  @override
   void toggleStreaming() {
     streaming = !streaming;
     _changed();
   }
+
+  // Lo que el marcador local no tiene: todo sale del propio móvil, así que no hay
+  // orden en camino, ni lista que viva en otro sitio, ni alineación que sacar al aire.
+
+  @override
+  List<String> get formationNames => <String>[for (final Formation f in formations) f.name];
+
+  @override
+  bool? get visibleLineupOnAir => null;
+
+  @override
+  String? get lineupNote => null;
+
+  @override
+  bool get canStream => true;
+
+  @override
+  String? get onAirNote => null;
+
+  @override
+  bool get busy => false;
+
+  @override
+  bool get confirmsDestructive => false;
+
+  @override
+  void toggleLineupOnAir() {}
 
   // ------------------------------------------------------------------------- //
   // Lo que sale al aire
