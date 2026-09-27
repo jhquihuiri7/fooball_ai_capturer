@@ -56,6 +56,16 @@ case "${1:-status}" in
     done
     [ -d "$SERVER_REPO" ] || { echo "no encuentro el servidor en $SERVER_REPO (usa SERVER_REPO=...)"; exit 1; }
 
+    # El mando desde el movil (ADR 0017) solo existe si el panel arranca con un secreto.
+    # Se genera una vez y se guarda fuera del repo, como las claves del pod: si cambiara
+    # en cada arranque, el movil emparejado dejaria de valer y habria que escanear otra vez.
+    SECRETO="$HOME/.football-ai/control.secret"
+    if [ ! -f "$SECRETO" ]; then
+      mkdir -p "$HOME/.football-ai" && chmod 700 "$HOME/.football-ai"
+      (umask 077; openssl rand -hex 32 > "$SECRETO")
+    fi
+    export FOOTBALL_CONTROL_SECRET="${FOOTBALL_CONTROL_SECRET:-$(cat "$SECRETO")}"
+
     echo "Encendiendo el servidor local:"
     cd "$REPO" || exit 1
     launch mediamtx mediamtx tools/mediamtx-banco.yml
@@ -146,6 +156,8 @@ case "${1:-status}" in
     echo "Panel: $PANEL_URL (se abre solo en el navegador cuando haya señal)"
     echo "IP de este Mac para la app: $(ipconfig getifaddr en0 2>/dev/null || echo '?') (la app la encuentra sola)"
     [ "${2:-}" = "clip" ] || echo "Ahora en el iPhone: abrir la app, IZQUIERDA, GRABAR."
+    echo "Mando desde el movil: encendido. Para escanear el «QR marcador» hay que abrir"
+    echo "el panel por la IP del Mac, no por 127.0.0.1:  python3 tools/lan_proxy.py"
     ;;
   stop)
     echo "Apagando el servidor local:"
