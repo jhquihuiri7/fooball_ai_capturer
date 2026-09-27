@@ -235,7 +235,28 @@ final class CaptureEngine: NSObject {
         recordingWanted = true
         recordingDirectory = directory
         recordingSegment = 1
+        // Antes de abrir la nueva, fuera las anteriores: en el móvil solo se guarda la
+        // última. A 45 Mbit/s son ~340 MB por minuto y nadie las borraba, así que unas
+        // pocas pruebas llenaban el teléfono. Se borra al **empezar** otra, no al parar,
+        // para que la última siga entera hasta que se decida grabar de nuevo: es la que
+        // se sube al panel para calibrar.
+        Self.removeRecordings(in: directory)
         return try openSegment()
+    }
+
+    /// Borra los `.mov` de la carpeta de grabaciones. No toca nada más: ahí solo escribe
+    /// esta app, y los segmentos de la grabación en curso aún no existen.
+    static func removeRecordings(in directory: String) {
+        let manager = FileManager.default
+        guard let names = try? manager.contentsOfDirectory(atPath: directory) else { return }
+        var borrados = 0
+        for name in names where name.hasSuffix(".mov") {
+            let path = (directory as NSString).appendingPathComponent(name)
+            if (try? manager.removeItem(atPath: path)) != nil { borrados += 1 }
+        }
+        if borrados > 0 {
+            NSLog("[grabacion] %d grabaciones anteriores borradas", borrados)
+        }
     }
 
     /// Abre el archivo del segmento actual. Un fichero por arranque, con el lado en el

@@ -172,3 +172,31 @@ final class AdaptiveBitRateTests: XCTestCase {
     }
 }
 
+final class RecordingCleanupTests: XCTestCase {
+    /// El móvil se llenaba: a 45 Mbit/s cada minuto son ~340 MB y nadie borraba nada.
+    func testOnlyTheNewRecordingSurvivesAStart() throws {
+        let manager = FileManager.default
+        let carpeta = manager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try manager.createDirectory(at: carpeta, withIntermediateDirectories: true)
+        defer { try? manager.removeItem(at: carpeta) }
+
+        // Dos sesiones viejas, una de ellas partida en dos por un corte.
+        for nombre in ["left-1790000000.mov", "left-1790000000-2.mov", "right-1790000100.mov"] {
+            manager.createFile(atPath: carpeta.appendingPathComponent(nombre).path, contents: Data())
+        }
+        // Y algo que no es una grabación: no se toca.
+        manager.createFile(atPath: carpeta.appendingPathComponent("soporte.json").path, contents: Data())
+
+        CaptureEngine.removeRecordings(in: carpeta.path)
+
+        let quedan = try manager.contentsOfDirectory(atPath: carpeta.path).sorted()
+        XCTAssertEqual(quedan, ["soporte.json"])
+    }
+
+    func testCleaningAnEmptyOrMissingFolderIsHarmless() {
+        // La primera grabación del móvil: la carpeta está vacía, o ni existe.
+        CaptureEngine.removeRecordings(in: FileManager.default.temporaryDirectory.path)
+        CaptureEngine.removeRecordings(in: "/no/existe/esta/carpeta")
+    }
+}
+
