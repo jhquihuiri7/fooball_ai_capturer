@@ -231,9 +231,53 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
     if (!canCalibrate) {
       return;
     }
+    calibrationResult = null;
+    final CalibrationUploader panel =
+        uploader(panelUri!, role, cameraCredentialsFrom(serverHost));
+    // Antes de nada, por qué intento va el panel: así se distingue el resultado de esta
+    // calibración del de la anterior, que puede seguir ahí de hace un rato.
+    final int previous = await panel.lastAttempt();
+
     await _orderPeer(RigCommand.calibrate);
     await _recordClip(recordingDirectory: recordingDirectory);
     await uploadForCalibration();
+    if (calibrationUpload != CalibrationUpload.subida) {
+      return; // la subida ya dejó dicho qué falló
+    }
+
+    calibrationWaiting = true;
+    notifyListeners();
+    calibrationResult = await panel.waitForResult(previousAttempt: previous);
+    calibrationWaiting = false;
+    notifyListeners();
+
+    // Si el soporte quedó calibrado, a emitir: es lo que se iba a hacer a continuación
+    // de todos modos, y con el soporte ya bueno.
+    if (calibrationResult?.ok ?? false) {
+      await toggleRecording(recordingDirectory: recordingDirectory);
+    }
+  }
+
+  /// Cómo acabó la última calibración, según el panel. `null` mientras no se haya pedido
+  /// ninguna o si el panel no contestó a tiempo.
+  CalibrationResult? calibrationResult;
+
+  /// Se está esperando a que el panel termine de calibrar.
+  bool calibrationWaiting = false;
+
+  /// Lo que la pantalla enseña de la calibración: una línea, la que importa.
+  String? get calibrationResultLabel {
+    if (calibrationWaiting) {
+      return 'calibrando en el servidor…';
+    }
+    final CalibrationResult? result = calibrationResult;
+    if (result == null) {
+      return null;
+    }
+    if (result.ok) {
+      return 'CALIBRADO · ${result.message}';
+    }
+    return 'NO CALIBRÓ · ${result.message}${result.hint.isEmpty ? '' : '\n${result.hint}'}';
   }
 
   /// Graba `calibrationClipDuration` y para. Lo usan el botón CALIBRAR del izquierdo y

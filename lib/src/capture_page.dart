@@ -570,6 +570,23 @@ class _CalibrationUploadButton extends StatelessWidget {
                   ? () => unawaited(session.uploadForCalibration())
                   : null,
             ),
+          // Cómo acabó la calibración, que es lo que el operador está esperando.
+          if (session.calibrationResultLabel != null) ...<Widget>[
+            const SizedBox(height: 8),
+            Text(
+              session.calibrationResultLabel!,
+              style: ZeroType.data(
+                size: 12,
+                weight: FontWeight.w500,
+                color: session.calibrationWaiting
+                    ? ZeroColors.inkSecondary
+                    : (session.calibrationResult?.ok ?? false)
+                        ? ZeroColors.accent
+                        : ZeroColors.danger,
+                height: 1.4,
+              ),
+            ),
+          ],
           if (problem != null) ...<Widget>[
             const SizedBox(height: 6),
             Text(

@@ -113,6 +113,15 @@ const int localPanelPort = 8090;
 /// que tres minutos son 1 GB y hora y media (medido el 27-09-2026).
 const Duration calibrationClipDuration = Duration(seconds: 10);
 
+/// Cuánto se espera a que el panel termine de calibrar antes de rendirse.
+///
+/// Calibrar cuesta décimas, pero el panel lo hace cuando tiene **las dos** grabaciones, y
+/// la del otro móvil puede ir más lenta por la red del campo.
+const Duration calibrationResultTimeout = Duration(minutes: 3);
+
+/// Cada cuánto se le pregunta al panel si ya calibró.
+const Duration calibrationPollDelay = Duration(seconds: 2);
+
 const int calibrationChunkBytes = 8 * 1024 * 1024;
 
 /// Fallos seguidos antes de rendirse. Veinte con tres segundos entre medias es aguantar un

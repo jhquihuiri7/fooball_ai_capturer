@@ -522,24 +522,80 @@ void main() {
       expect(session.recording, isFalse);
     });
 
-    test('CALIBRAR graba un clip en los dos y lo sube, en un solo paso', () async {
-      // Antes eran cuatro pasos a mano y salian grabaciones de 1 GB que tardaban hora y
-      // media en subir (medido el 27-09). Ahora: una orden, diez segundos y arriba.
+    test('CALIBRAR: graba en los dos, sube, avisa del resultado y arranca la emisión',
+        () async {
+      // El flujo entero de un toque, tal como se pidió: antes eran cuatro pasos a mano y
+      // salían grabaciones de 1 GB que tardaban hora y media (medido el 27-09).
       final FakeCaptureApi api = FakeCaptureApi();
+      final _FakeUploader panel = _FakeUploader(calibrating: true)
+        ..result = const CalibrationResult(
+          attempt: 4,
+          ok: true,
+          message: 'calibrado con 60 de 147 puntos',
+          hint: '',
+        );
       final CaptureSession session = CaptureSession(
         role: CameraRole.left,
         api: api,
         serverHost: 'rtmp://rig:c@1.2.3.4:1935?panel=http://1.2.3.4:8090',
+        uploader: (Uri uri, CameraRole rol, ({String user, String password})? creds) => panel,
       );
       await session.prepare();
       session.onLinkStateChanged(LinkState.connected, 'iPhone (derecha)');
       expect(session.canCalibrate, isTrue);
 
+      await session.calibrateNow();
+
+      // Mandó calibrar al derecho, subió, y el soporte quedó calibrado...
+      expect(api.peerCommands.first, RigCommand.calibrate);
+      expect(panel.file, isNotNull);
+      expect(session.calibrationResult?.ok, isTrue);
+      expect(session.calibrationResultLabel, startsWith('CALIBRADO'));
+      // ...así que arrancó la emisión, en los dos.
+      expect(session.recording, isTrue);
+      expect(api.peerCommands, contains(RigCommand.record));
+    });
+
+    test('si no calibra, se dice por qué y no se arranca a emitir', () async {
+      final FakeCaptureApi api = FakeCaptureApi();
+      final _FakeUploader panel = _FakeUploader(calibrating: true)
+        ..result = const CalibrationResult(
+          attempt: 2,
+          ok: false,
+          message: 'solo 28 de 76 emparejamientos son coherentes con una rotacion',
+          hint: 'apunta a algo lejano, a mas de diez metros',
+        );
+      final CaptureSession session = CaptureSession(
+        role: CameraRole.left,
+        api: api,
+        serverHost: 'rtmp://rig:c@1.2.3.4:1935?panel=http://1.2.3.4:8090',
+        uploader: (Uri uri, CameraRole rol, ({String user, String password})? creds) => panel,
+      );
+      await session.prepare();
+      session.onLinkStateChanged(LinkState.connected, 'iPhone (derecha)');
+
+      await session.calibrateNow();
+
+      expect(session.calibrationResultLabel, startsWith('NO CALIBRÓ'));
+      expect(session.calibrationResultLabel, contains('diez metros'));
+      expect(session.recording, isFalse, reason: 'sin soporte bueno no se emite');
+    });
+
+    test('el clip dura lo que dice la constante, y para solo', () async {
+      final FakeCaptureApi api = FakeCaptureApi();
+      final CaptureSession session = CaptureSession(
+        role: CameraRole.left,
+        api: api,
+        serverHost: 'rtmp://rig:c@1.2.3.4:1935?panel=http://1.2.3.4:8090',
+        uploader: (Uri uri, CameraRole rol, ({String user, String password})? creds) =>
+            _FakeUploader(),
+      );
+      await session.prepare();
+      session.onLinkStateChanged(LinkState.connected, 'iPhone (derecha)');
+
       await fakeAsync((FakeAsync async) {
         unawaited(session.calibrateNow());
         async.flushMicrotasks();
-        // Arranca la suya y manda al derecho, pero no le manda «graba» aparte.
-        expect(api.peerCommands, <RigCommand>[RigCommand.calibrate]);
         expect(session.recording, isTrue);
 
         async.elapse(const Duration(seconds: 9));
@@ -746,6 +802,11 @@ class _FakeUploader extends CalibrationUploader {
   final bool calibrating;
   final String? error;
   final List<int> progress;
+
+  /// Lo que el panel contesta cuando se le pregunta cómo fue. `null` = no contestó a
+  /// tiempo, que es distinto de «falló».
+  CalibrationResult? result;
+  int attempts = 0;
   Completer<void>? gate;
   ({Uri panel, CameraRole role, ({String user, String password})? credentials})? seen;
   File? file;
@@ -762,4 +823,15 @@ class _FakeUploader extends CalibrationUploader {
     }
     return calibrating;
   }
+
+  @override
+  Future<int> lastAttempt() async => attempts;
+
+  @override
+  Future<CalibrationResult?> waitForResult({
+    required int previousAttempt,
+    Duration timeout = calibrationResultTimeout,
+    Duration pollDelay = calibrationPollDelay,
+  }) async =>
+      result;
 }

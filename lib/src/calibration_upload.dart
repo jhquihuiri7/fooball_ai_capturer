@@ -81,6 +81,27 @@ class _Behind implements Exception {
 }
 
 /// Sube una grabación al panel, trozo a trozo.
+/// Cómo acabó una calibración en el panel, tal como se la cuenta al móvil.
+class CalibrationResult {
+  const CalibrationResult({
+    required this.attempt,
+    required this.ok,
+    required this.message,
+    required this.hint,
+  });
+
+  /// Cuántas veces se ha calibrado en este panel. Sirve para saber si el resultado que
+  /// llega es el de esta vez o el de antes.
+  final int attempt;
+  final bool ok;
+
+  /// Qué pasó, con los números del servidor.
+  final String message;
+
+  /// Qué tocar si falló. Vacío si salió bien.
+  final String hint;
+}
+
 class CalibrationUploader {
   CalibrationUploader({
     required this.panel,
@@ -153,6 +174,51 @@ class CalibrationUploader {
       return done['calibrating'] == true;
     } finally {
       await reader.close();
+    }
+  }
+
+  /// Cómo fue la calibración, esperando a que el panel la termine.
+  ///
+  /// El panel calibra en su hilo en cuanto tiene las dos grabaciones, así que no hay una
+  /// respuesta que esperar: se pregunta cada `pollDelay` hasta que conteste con un
+  /// intento nuevo. `null` si se acaba el tiempo, que es distinto de «falló»: no se sabe.
+  Future<CalibrationResult?> waitForResult({
+    required int previousAttempt,
+    Duration timeout = calibrationResultTimeout,
+    Duration pollDelay = calibrationPollDelay,
+  }) async {
+    final DateTime limit = DateTime.now().add(timeout);
+    while (DateTime.now().isBefore(limit)) {
+      try {
+        final Map<String, Object?> status = await _send('GET', const <String, String>{}, null);
+        final Object? raw = status['calibration'];
+        if (raw is Map<String, Object?>) {
+          final int attempt = (raw['attempt'] as num?)?.toInt() ?? 0;
+          if (attempt > previousAttempt) {
+            return CalibrationResult(
+              attempt: attempt,
+              ok: raw['ok'] == true,
+              message: (raw['message'] as String?) ?? '',
+              hint: (raw['hint'] as String?) ?? '',
+            );
+          }
+        }
+      } on Exception {
+        // El panel puede tardar o cortar mientras calibra: se vuelve a preguntar.
+      }
+      await Future<void>.delayed(pollDelay);
+    }
+    return null;
+  }
+
+  /// El número del último intento que el panel dice tener, para saber cuál es nuevo.
+  Future<int> lastAttempt() async {
+    try {
+      final Map<String, Object?> status = await _send('GET', const <String, String>{}, null);
+      final Object? raw = status['calibration'];
+      return raw is Map<String, Object?> ? (raw['attempt'] as num?)?.toInt() ?? 0 : 0;
+    } on Exception {
+      return 0;
     }
   }
 
