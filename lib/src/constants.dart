@@ -105,6 +105,14 @@ const int localPanelPort = 8090;
 /// Bytes por trozo de la subida: 8 MiB, la mitad de lo que admite el panel
 /// (`RECORDING_CHUNK_MAX_BYTES`). Por Starlink una conexión sola saca 1–2 Mbit/s hasta el
 /// pod, así que un trozo son ~40 s: perder uno por un corte cuesta poco.
+/// Segundos que se graban al pulsar CALIBRAR.
+///
+/// Diez bastan: el servidor no usa la grabación entera, escoge unos pocos instantes y
+/// los empareja por el código de tiempo. Y el tamaño manda, porque esto se sube por la
+/// red del campo: diez segundos a 45 Mbit/s son ~56 MB y suben en unos minutos, mientras
+/// que tres minutos son 1 GB y hora y media (medido el 27-09-2026).
+const Duration calibrationClipDuration = Duration(seconds: 10);
+
 const int calibrationChunkBytes = 8 * 1024 * 1024;
 
 /// Fallos seguidos antes de rendirse. Veinte con tres segundos entre medias es aguantar un

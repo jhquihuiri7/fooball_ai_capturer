@@ -39,6 +39,20 @@ enum CameraRole {
 enum ThermalState { nominal, fair, serious, critical }
 
 /// Estado del enlace entre los dos móviles del soporte (TASK A3).
+/// Lo que el móvil izquierdo, que es el maestro, le manda al derecho por el enlace.
+///
+/// Poner a grabar los dos móviles a mano es el paso donde más fácil es equivocarse en la
+/// cancha: uno se queda sin grabar, o empiezan con medio minuto de diferencia. El
+/// izquierdo manda y el derecho solo pone la cámara.
+enum RigCommand {
+  /// Empieza a grabar y a emitir, con los ajustes que ya tiene cada uno.
+  record,
+  stop,
+
+  /// Graba unos segundos, para y sube la grabación al panel para calibrar el soporte.
+  calibrate,
+}
+
 enum LinkState {
   /// Sin enlace: modo de un solo móvil, o antes de preparar la cámara.
   off,
@@ -301,6 +315,11 @@ abstract class CaptureHostApi {
 
   void clearPanelPairing();
 
+  /// Manda una orden al otro móvil por el enlace. Solo el izquierdo la usa; en el
+  /// derecho no hace nada. Sin enlace se pierde, y es lo correcto: quien está solo
+  /// graba solo.
+  void sendPeerCommand(RigCommand command);
+
   /// Abre el enlace con el otro móvil del soporte (Multipeer Connectivity, TASK A3).
   ///
   /// El izquierdo se anuncia y es el maestro del reloj; el derecho lo busca, se conecta
@@ -337,4 +356,7 @@ abstract class CaptureFlutterApi {
   /// de la pregunta y `t4` llegada de la respuesta (reloj de este móvil); `t2` llegada y
   /// `t3` salida en el maestro (su reloj). Dart despeja el desfase (`solveClockSample`).
   void onClockStamps(int t1Ns, int t2Ns, int t3Ns, int t4Ns);
+
+  /// Llegó una orden del móvil izquierdo. Solo la recibe el derecho.
+  void onPeerCommand(RigCommand command);
 }

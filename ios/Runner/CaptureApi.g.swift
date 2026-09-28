@@ -209,6 +209,19 @@ enum ThermalState: Int, CaseIterable {
 }
 
 /// Estado del enlace entre los dos móviles del soporte (TASK A3).
+/// Lo que el móvil izquierdo, que es el maestro, le manda al derecho por el enlace.
+///
+/// Poner a grabar los dos móviles a mano es el paso donde más fácil es equivocarse en la
+/// cancha: uno se queda sin grabar, o empiezan con medio minuto de diferencia. El
+/// izquierdo manda y el derecho solo pone la cámara.
+enum RigCommand: Int, CaseIterable {
+  /// Empieza a grabar y a emitir, con los ajustes que ya tiene cada uno.
+  case record = 0
+  case stop = 1
+  /// Graba unos segundos, para y sube la grabación al panel para calibrar el soporte.
+  case calibrate = 2
+}
+
 enum LinkState: Int, CaseIterable {
   /// Sin enlace: modo de un solo móvil, o antes de preparar la cámara.
   case off = 0
@@ -553,20 +566,26 @@ private class CaptureApiPigeonCodecReader: FlutterStandardReader {
     case 131:
       let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
       if let enumResultAsInt = enumResultAsInt {
-        return LinkState(rawValue: enumResultAsInt)
+        return RigCommand(rawValue: enumResultAsInt)
       }
       return nil
     case 132:
       let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
       if let enumResultAsInt = enumResultAsInt {
-        return StreamState(rawValue: enumResultAsInt)
+        return LinkState(rawValue: enumResultAsInt)
       }
       return nil
     case 133:
-      return CaptureSettings.fromList(self.readValue() as! [Any?])
+      let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
+      if let enumResultAsInt = enumResultAsInt {
+        return StreamState(rawValue: enumResultAsInt)
+      }
+      return nil
     case 134:
-      return CaptureStatus.fromList(self.readValue() as! [Any?])
+      return CaptureSettings.fromList(self.readValue() as! [Any?])
     case 135:
+      return CaptureStatus.fromList(self.readValue() as! [Any?])
+    case 136:
       return ClockSample.fromList(self.readValue() as! [Any?])
     default:
       return super.readValue(ofType: type)
@@ -582,20 +601,23 @@ private class CaptureApiPigeonCodecWriter: FlutterStandardWriter {
     } else if let value = value as? ThermalState {
       super.writeByte(130)
       super.writeValue(value.rawValue)
-    } else if let value = value as? LinkState {
+    } else if let value = value as? RigCommand {
       super.writeByte(131)
       super.writeValue(value.rawValue)
-    } else if let value = value as? StreamState {
+    } else if let value = value as? LinkState {
       super.writeByte(132)
       super.writeValue(value.rawValue)
-    } else if let value = value as? CaptureSettings {
+    } else if let value = value as? StreamState {
       super.writeByte(133)
-      super.writeValue(value.toList())
-    } else if let value = value as? CaptureStatus {
+      super.writeValue(value.rawValue)
+    } else if let value = value as? CaptureSettings {
       super.writeByte(134)
       super.writeValue(value.toList())
-    } else if let value = value as? ClockSample {
+    } else if let value = value as? CaptureStatus {
       super.writeByte(135)
+      super.writeValue(value.toList())
+    } else if let value = value as? ClockSample {
+      super.writeByte(136)
       super.writeValue(value.toList())
     } else {
       super.writeValue(value)
@@ -684,6 +706,10 @@ protocol CaptureHostApi {
   func loadPanelPairing() throws -> String
   func savePanelPairing(pairing: String) throws
   func clearPanelPairing() throws
+  /// Manda una orden al otro móvil por el enlace. Solo el izquierdo la usa; en el
+  /// derecho no hace nada. Sin enlace se pierde, y es lo correcto: quien está solo
+  /// graba solo.
+  func sendPeerCommand(command: RigCommand) throws
   /// Abre el enlace con el otro móvil del soporte (Multipeer Connectivity, TASK A3).
   ///
   /// El izquierdo se anuncia y es el maestro del reloj; el derecho lo busca, se conecta
@@ -989,6 +1015,24 @@ class CaptureHostApiSetup {
     } else {
       clearPanelPairingChannel.setMessageHandler(nil)
     }
+    /// Manda una orden al otro móvil por el enlace. Solo el izquierdo la usa; en el
+    /// derecho no hace nada. Sin enlace se pierde, y es lo correcto: quien está solo
+    /// graba solo.
+    let sendPeerCommandChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.sendPeerCommand\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      sendPeerCommandChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let commandArg = args[0] as! RigCommand
+        do {
+          try api.sendPeerCommand(command: commandArg)
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      sendPeerCommandChannel.setMessageHandler(nil)
+    }
     /// Abre el enlace con el otro móvil del soporte (Multipeer Connectivity, TASK A3).
     ///
     /// El izquierdo se anuncia y es el maestro del reloj; el derecho lo busca, se conecta
@@ -1059,6 +1103,8 @@ protocol CaptureFlutterApiProtocol {
   /// de la pregunta y `t4` llegada de la respuesta (reloj de este móvil); `t2` llegada y
   /// `t3` salida en el maestro (su reloj). Dart despeja el desfase (`solveClockSample`).
   @MainActor func onClockStamps(t1Ns t1NsArg: Int64, t2Ns t2NsArg: Int64, t3Ns t3NsArg: Int64, t4Ns t4NsArg: Int64) async throws
+  /// Llegó una orden del móvil izquierdo. Solo la recibe el derecho.
+  @MainActor func onPeerCommand(command commandArg: RigCommand) async throws
 }
 class CaptureFlutterApi: CaptureFlutterApiProtocol {
   private let binaryMessenger: FlutterBinaryMessenger
@@ -1182,6 +1228,27 @@ class CaptureFlutterApi: CaptureFlutterApiProtocol {
       let channelName: String = "dev.flutter.pigeon.football_ai_capture.CaptureFlutterApi.onClockStamps\(messageChannelSuffix)"
       let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
       channel.sendMessage([t1NsArg, t2NsArg, t3NsArg, t4NsArg] as [Any?]) { response in
+        guard let listResponse = response as? [Any?] else {
+          continuation.resume(throwing: createConnectionError(withChannelName: channelName))
+          return
+        }
+        if listResponse.count > 1 {
+          let code: String = listResponse[0] as! String
+          let message: String? = nilOrValue(listResponse[1])
+          let details: String? = nilOrValue(listResponse[2])
+          continuation.resume(throwing: PigeonError(code: code, message: message, details: details))
+        } else {
+          continuation.resume()
+        }
+      }
+    }
+  }
+  /// Llegó una orden del móvil izquierdo. Solo la recibe el derecho.
+  @MainActor func onPeerCommand(command commandArg: RigCommand) async throws {
+    return try await withCheckedThrowingContinuation { continuation in
+      let channelName: String = "dev.flutter.pigeon.football_ai_capture.CaptureFlutterApi.onPeerCommand\(messageChannelSuffix)"
+      let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
+      channel.sendMessage([commandArg] as [Any?]) { response in
         guard let listResponse = response as? [Any?] else {
           continuation.resume(throwing: createConnectionError(withChannelName: channelName))
           return

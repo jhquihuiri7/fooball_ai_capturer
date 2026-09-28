@@ -544,8 +544,9 @@ class _CalibrationUploadButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool visible =
-        session.canUploadForCalibration || session.calibrationUpload == CalibrationUpload.subiendo;
+    final bool visible = session.canCalibrate ||
+        session.canUploadForCalibration ||
+        session.calibrationUpload == CalibrationUpload.subiendo;
     if (!visible) {
       return const SizedBox.shrink();
     }
@@ -555,12 +556,20 @@ class _CalibrationUploadButton extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          ZeroButton.secondary(
-            label: session.calibrationUploadLabel,
-            onPressed: session.canUploadForCalibration
-                ? () => unawaited(session.uploadForCalibration())
-                : null,
-          ),
+          // Un solo botón en el izquierdo: graba el clip en los dos móviles y lo sube.
+          // El de subir a mano se queda para el derecho y para reintentar una subida.
+          if (session.canCalibrate)
+            ZeroButton.secondary(
+              label: 'CALIBRAR SOPORTE',
+              onPressed: () => unawaited(session.calibrateNow()),
+            )
+          else
+            ZeroButton.secondary(
+              label: session.calibrationUploadLabel,
+              onPressed: session.canUploadForCalibration
+                  ? () => unawaited(session.uploadForCalibration())
+                  : null,
+            ),
           if (problem != null) ...<Widget>[
             const SizedBox(height: 6),
             Text(

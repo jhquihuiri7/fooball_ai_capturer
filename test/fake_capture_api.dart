@@ -160,6 +160,12 @@ class FakeCaptureApi extends CaptureHostApi {
   @override
   Future<String> scanServerQr() async => scannable;
 
+  /// Las órdenes que este móvil mandó al otro, en orden.
+  final List<RigCommand> peerCommands = <RigCommand>[];
+
+  @override
+  Future<void> sendPeerCommand(RigCommand command) async => peerCommands.add(command);
+
   /// Lo que el nativo tiene en el Keychain como emparejamiento con el panel.
   String panelPairing = '';
 

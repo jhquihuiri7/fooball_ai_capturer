@@ -212,6 +212,52 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
       panelUri != null &&
       calibrationUpload != CalibrationUpload.subiendo;
 
+  /// Se puede pedir una calibración: soporte de dos, con panel, sin estar grabando ya.
+  /// Solo el izquierdo lo ofrece, porque es quien manda al derecho.
+  bool get canCalibrate =>
+      isClockMaster &&
+      !standalone &&
+      !recording &&
+      panelUri != null &&
+      phase == SessionPhase.lista &&
+      calibrationUpload != CalibrationUpload.subiendo;
+
+  /// Graba un clip corto en los dos móviles y lo sube al panel para calibrar el soporte.
+  ///
+  /// Un paso en vez de cuatro: antes había que grabar a mano en los dos, pararlos, y
+  /// subir desde cada uno. Lo que se sube es la grabación local (45 Mbit/s con el código
+  /// de tiempo pintado), no la emisión, que por Starlink llega sin esquinas.
+  Future<void> calibrateNow({String recordingDirectory = ''}) async {
+    if (!canCalibrate) {
+      return;
+    }
+    await _orderPeer(RigCommand.calibrate);
+    await _recordClip(recordingDirectory: recordingDirectory);
+    await uploadForCalibration();
+  }
+
+  /// Graba `calibrationClipDuration` y para. Lo usan el botón CALIBRAR del izquierdo y
+  /// la orden que le llega al derecho, para que los dos clips se solapen en el tiempo.
+  Future<void> _recordClip({String recordingDirectory = ''}) async {
+    _clipping = true;
+    try {
+      await _recordClipInner(recordingDirectory: recordingDirectory);
+    } finally {
+      _clipping = false;
+    }
+  }
+
+  Future<void> _recordClipInner({String recordingDirectory = ''}) async {
+    await toggleRecording(recordingDirectory: recordingDirectory);
+    if (!recording) {
+      return; // no arrancó: `toggleRecording` ya dejó dicho por qué
+    }
+    await Future<void>.delayed(calibrationClipDuration);
+    if (recording) {
+      await toggleRecording();
+    }
+  }
+
   /// Sube la última grabación al panel. Cuando el panel tenga las de los dos móviles,
   /// calibra el soporte solo y la cámara virtual arranca con esa calibración.
   Future<void> uploadForCalibration() async {
@@ -480,6 +526,10 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
 
   bool _toggling = false;
 
+  /// Mientras dura el clip de calibración, `toggleRecording` no manda nada al otro
+  /// móvil: ya recibió `calibrate` y está haciendo su propio clip.
+  bool _clipping = false;
+
   Future<void> toggleRecording({String? srtUrl, String recordingDirectory = ''}) async {
     // Dos toques seguidos son uno: el segundo llegaría con el nativo a medio abrir.
     if (_toggling) {
@@ -491,9 +541,14 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
         await _api.stop();
         _recordingClock.stop();
         _set(SessionPhase.lista);
+        await _orderPeer(RigCommand.stop);
         return;
       }
       recordingFile = await _api.start(srtUrl ?? streamUrl, recordingDirectory);
+      // Con el soporte montado, el izquierdo manda: poner a grabar los dos a mano es
+      // donde más fácil es dejarse uno sin grabar o empezarlos con medio minuto de
+      // diferencia. Va después de arrancar la propia: si esta falla, no se manda nada.
+      await _orderPeer(RigCommand.record);
       _recordingClock
         ..reset()
         ..start();
@@ -504,6 +559,43 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
       _set(SessionPhase.lista, problem: 'no se pudo grabar: $error');
     } finally {
       _toggling = false;
+    }
+  }
+
+  /// Manda una orden al otro móvil. Solo el izquierdo manda, y solo con enlace: el que
+  /// está solo graba solo, sin esperar a nadie.
+  Future<void> _orderPeer(RigCommand command) async {
+    if (_clipping && command != RigCommand.calibrate) {
+      return;
+    }
+    if (!isClockMaster || linkState != LinkState.connected || standalone) {
+      return;
+    }
+    try {
+      await _api.sendPeerCommand(command);
+    } on Exception {
+      // Que la orden no salga no puede parar la grabación de este móvil, que es la que
+      // el operador acaba de pedir con el dedo.
+    }
+  }
+
+  /// Lo que hace el derecho cuando el izquierdo manda. `calibrate` llega en la segunda
+  /// parte de esto; por ahora se ignora, que es mejor que grabar sin saber cuánto.
+  @override
+  void onPeerCommand(RigCommand command) {
+    switch (command) {
+      case RigCommand.record:
+        if (!recording) {
+          unawaited(toggleRecording());
+        }
+      case RigCommand.stop:
+        if (recording) {
+          unawaited(toggleRecording());
+        }
+      case RigCommand.calibrate:
+        if (!recording) {
+          unawaited(_recordClip().then((_) => uploadForCalibration()));
+        }
     }
   }
 

@@ -142,9 +142,20 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
         } else {
             link.onLook = { [weak self] look in self?.engine.adopt(masterLook: look) }
             engine.onLookLocked = nil
+            // Las órdenes del maestro se ejecutan en Dart, que es quien sabe con qué URL
+            // emitir y en qué carpeta grabar.
+            link.onCommand = { [weak self] command in
+                Task { @MainActor in
+                    try? await self?.flutter.onPeerCommand(command: command)
+                }
+            }
         }
         self.link = link
         link.start()
+    }
+
+    func sendPeerCommand(command: RigCommand) throws {
+        link?.send(command: command)
     }
 
     func stopLink() throws {

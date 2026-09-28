@@ -128,6 +128,19 @@ enum ThermalState {
 }
 
 /// Estado del enlace entre los dos móviles del soporte (TASK A3).
+/// Lo que el móvil izquierdo, que es el maestro, le manda al derecho por el enlace.
+///
+/// Poner a grabar los dos móviles a mano es el paso donde más fácil es equivocarse en la
+/// cancha: uno se queda sin grabar, o empiezan con medio minuto de diferencia. El
+/// izquierdo manda y el derecho solo pone la cámara.
+enum RigCommand {
+  /// Empieza a grabar y a emitir, con los ajustes que ya tiene cada uno.
+  record,
+  stop,
+  /// Graba unos segundos, para y sube la grabación al panel para calibrar el soporte.
+  calibrate;
+}
+
 enum LinkState {
   /// Sin enlace: modo de un solo móvil, o antes de preparar la cámara.
   off,
@@ -495,20 +508,23 @@ class _PigeonCodec extends StandardMessageCodec {
     }    else if (value is ThermalState) {
       buffer.putUint8(130);
       writeValue(buffer, value.index);
-    }    else if (value is LinkState) {
+    }    else if (value is RigCommand) {
       buffer.putUint8(131);
       writeValue(buffer, value.index);
-    }    else if (value is StreamState) {
+    }    else if (value is LinkState) {
       buffer.putUint8(132);
       writeValue(buffer, value.index);
-    }    else if (value is CaptureSettings) {
+    }    else if (value is StreamState) {
       buffer.putUint8(133);
-      writeValue(buffer, value.encode());
-    }    else if (value is CaptureStatus) {
+      writeValue(buffer, value.index);
+    }    else if (value is CaptureSettings) {
       buffer.putUint8(134);
       writeValue(buffer, value.encode());
-    }    else if (value is ClockSample) {
+    }    else if (value is CaptureStatus) {
       buffer.putUint8(135);
+      writeValue(buffer, value.encode());
+    }    else if (value is ClockSample) {
+      buffer.putUint8(136);
       writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
@@ -526,15 +542,18 @@ class _PigeonCodec extends StandardMessageCodec {
         return value == null ? null : ThermalState.values[value];
       case 131:
         final value = readValue(buffer) as int?;
-        return value == null ? null : LinkState.values[value];
+        return value == null ? null : RigCommand.values[value];
       case 132:
         final value = readValue(buffer) as int?;
-        return value == null ? null : StreamState.values[value];
+        return value == null ? null : LinkState.values[value];
       case 133:
-        return CaptureSettings.decode(readValue(buffer)!);
+        final value = readValue(buffer) as int?;
+        return value == null ? null : StreamState.values[value];
       case 134:
-        return CaptureStatus.decode(readValue(buffer)!);
+        return CaptureSettings.decode(readValue(buffer)!);
       case 135:
+        return CaptureStatus.decode(readValue(buffer)!);
+      case 136:
         return ClockSample.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
@@ -922,6 +941,27 @@ class CaptureHostApi {
     ;
   }
 
+  /// Manda una orden al otro móvil por el enlace. Solo el izquierdo la usa; en el
+  /// derecho no hace nada. Sin enlace se pierde, y es lo correcto: quien está solo
+  /// graba solo.
+  Future<void> sendPeerCommand(RigCommand command) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.CaptureHostApi.sendPeerCommand$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[command]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
   /// Abre el enlace con el otro móvil del soporte (Multipeer Connectivity, TASK A3).
   ///
   /// El izquierdo se anuncia y es el maestro del reloj; el derecho lo busca, se conecta
@@ -1007,6 +1047,9 @@ abstract class CaptureFlutterApi {
   /// de la pregunta y `t4` llegada de la respuesta (reloj de este móvil); `t2` llegada y
   /// `t3` salida en el maestro (su reloj). Dart despeja el desfase (`solveClockSample`).
   void onClockStamps(int t1Ns, int t2Ns, int t3Ns, int t4Ns);
+
+  /// Llegó una orden del móvil izquierdo. Solo la recibe el derecho.
+  void onPeerCommand(RigCommand command);
 
   static void setUp(CaptureFlutterApi? api, {
     BinaryMessenger? binaryMessenger, 
@@ -1133,6 +1176,27 @@ abstract class CaptureFlutterApi {
           final int arg_t4Ns = args[3]! as int;
           try {
             api.onClockStamps(arg_t1Ns, arg_t2Ns, arg_t3Ns, arg_t4Ns);
+            return wrapResponse(empty: true);
+          } on PlatformException catch (e) {
+            return wrapResponse(error: e);
+          }          catch (e) {
+            return wrapResponse(error: PlatformException(code: 'error', message: e.toString()));
+          }
+        });
+      }
+    }
+    {
+      final pigeonVar_channel = BasicMessageChannel<Object?>(
+          'dev.flutter.pigeon.football_ai_capture.CaptureFlutterApi.onPeerCommand$messageChannelSuffix', pigeonChannelCodec,
+          binaryMessenger: binaryMessenger);
+      if (api == null) {
+        pigeonVar_channel.setMessageHandler(null);
+      } else {
+        pigeonVar_channel.setMessageHandler((Object? message) async {
+          final List<Object?> args = message! as List<Object?>;
+          final RigCommand arg_command = args[0]! as RigCommand;
+          try {
+            api.onPeerCommand(arg_command);
             return wrapResponse(empty: true);
           } on PlatformException catch (e) {
             return wrapResponse(error: e);

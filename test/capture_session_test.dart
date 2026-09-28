@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:football_ai_capture/src/calibration_upload.dart';
 import 'package:football_ai_capture/src/capture_session.dart';
@@ -463,6 +464,134 @@ void main() {
       await session.toggleRecording();
 
       expect(api.lastSrtUrl, startsWith('srt://10.0.0.5:8890'));
+    });
+
+    test('el izquierdo pone a grabar al derecho, y a parar', () async {
+      // En la cancha, poner a grabar los dos a mano es donde se queda uno sin grabar.
+      final FakeCaptureApi api = FakeCaptureApi();
+      final CaptureSession session =
+          CaptureSession(role: CameraRole.left, api: api, serverHost: '10.0.0.5');
+      session.onLinkStateChanged(LinkState.connected, 'iPhone (derecha)');
+
+      await session.toggleRecording();
+      expect(api.peerCommands, <RigCommand>[RigCommand.record]);
+
+      await session.toggleRecording();
+      expect(api.peerCommands, <RigCommand>[RigCommand.record, RigCommand.stop]);
+    });
+
+    test('sin enlace no se manda nada: quien está solo graba solo', () async {
+      final FakeCaptureApi api = FakeCaptureApi();
+      final CaptureSession session =
+          CaptureSession(role: CameraRole.left, api: api, serverHost: '10.0.0.5');
+
+      await session.toggleRecording();
+
+      expect(session.recording, isTrue);
+      expect(api.peerCommands, isEmpty);
+    });
+
+    test('el derecho nunca manda: dos móviles mandándose serían un bucle', () async {
+      final FakeCaptureApi api = FakeCaptureApi();
+      final CaptureSession session =
+          CaptureSession(role: CameraRole.right, api: api, serverHost: '10.0.0.5');
+      session.onLinkStateChanged(LinkState.connected, 'iPhone (izquierda)');
+
+      await session.toggleRecording();
+
+      expect(api.peerCommands, isEmpty);
+    });
+
+    test('el derecho obedece la orden del izquierdo', () async {
+      final FakeCaptureApi api = FakeCaptureApi();
+      final CaptureSession session =
+          CaptureSession(role: CameraRole.right, api: api, serverHost: '10.0.0.5');
+      session.onLinkStateChanged(LinkState.connected, 'iPhone (izquierda)');
+
+      session.onPeerCommand(RigCommand.record);
+      await Future<void>.delayed(Duration.zero);
+      expect(session.recording, isTrue);
+
+      // Repetir la orden no abre una segunda grabación.
+      session.onPeerCommand(RigCommand.record);
+      await Future<void>.delayed(Duration.zero);
+      expect(session.recording, isTrue);
+
+      session.onPeerCommand(RigCommand.stop);
+      await Future<void>.delayed(Duration.zero);
+      expect(session.recording, isFalse);
+    });
+
+    test('CALIBRAR graba un clip en los dos y lo sube, en un solo paso', () async {
+      // Antes eran cuatro pasos a mano y salian grabaciones de 1 GB que tardaban hora y
+      // media en subir (medido el 27-09). Ahora: una orden, diez segundos y arriba.
+      final FakeCaptureApi api = FakeCaptureApi();
+      final CaptureSession session = CaptureSession(
+        role: CameraRole.left,
+        api: api,
+        serverHost: 'rtmp://rig:c@1.2.3.4:1935?panel=http://1.2.3.4:8090',
+      );
+      await session.prepare();
+      session.onLinkStateChanged(LinkState.connected, 'iPhone (derecha)');
+      expect(session.canCalibrate, isTrue);
+
+      await fakeAsync((FakeAsync async) {
+        unawaited(session.calibrateNow());
+        async.flushMicrotasks();
+        // Arranca la suya y manda al derecho, pero no le manda «graba» aparte.
+        expect(api.peerCommands, <RigCommand>[RigCommand.calibrate]);
+        expect(session.recording, isTrue);
+
+        async.elapse(const Duration(seconds: 9));
+        expect(session.recording, isTrue, reason: 'antes de los diez segundos sigue');
+
+        async.elapse(const Duration(seconds: 2));
+        async.flushMicrotasks();
+        expect(session.recording, isFalse, reason: 'para sola a los diez segundos');
+      });
+    });
+
+    test('el derecho, al recibir calibrate, graba su clip sin que nadie lo toque', () {
+      final FakeCaptureApi api = FakeCaptureApi();
+      final CaptureSession session = CaptureSession(
+        role: CameraRole.right,
+        api: api,
+        serverHost: 'rtmp://rig:c@1.2.3.4:1935?panel=http://1.2.3.4:8090',
+      );
+      session.onLinkStateChanged(LinkState.connected, 'iPhone (izquierda)');
+
+      fakeAsync((FakeAsync async) {
+        session.onPeerCommand(RigCommand.calibrate);
+        async.flushMicrotasks();
+        expect(session.recording, isTrue);
+
+        async.elapse(const Duration(seconds: 11));
+        async.flushMicrotasks();
+        expect(session.recording, isFalse);
+        // Y el derecho nunca manda ordenes, ni siquiera haciendo su clip.
+        expect(api.peerCommands, isEmpty);
+      });
+    });
+
+    test('solo el izquierdo ofrece calibrar', () async {
+      final FakeCaptureApi api = FakeCaptureApi();
+      final CaptureSession derecho = CaptureSession(
+        role: CameraRole.right,
+        api: api,
+        serverHost: 'rtmp://rig:c@1.2.3.4:1935?panel=http://1.2.3.4:8090',
+      );
+      await derecho.prepare();
+      expect(derecho.canCalibrate, isFalse);
+
+      // Y con un solo movil no hay soporte que calibrar.
+      final CaptureSession solo = CaptureSession(
+        role: CameraRole.left,
+        api: FakeCaptureApi(),
+        serverHost: 'rtmp://rig:c@1.2.3.4:1935?panel=http://1.2.3.4:8090',
+        standalone: true,
+      );
+      await solo.prepare();
+      expect(solo.canCalibrate, isFalse);
     });
 
     test('la etiqueta dice en qué está la emisión y avisa cuando va mal', () async {

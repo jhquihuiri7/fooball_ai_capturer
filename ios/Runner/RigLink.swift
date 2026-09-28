@@ -35,9 +35,12 @@ enum RigMessage: Equatable {
     case lookRequest(seq: UInt32)
     /// ...y el maestro contesta; también lo manda por su cuenta cuando los cambia.
     case look(seq: UInt32, look: CameraLook)
+    /// El maestro manda: grabar, parar o calibrar. Va por el canal fiable, porque
+    /// perder un «graba» deja el partido a media cámara y nadie se entera hasta el final.
+    case command(seq: UInt32, command: RigCommand)
 
     private enum Kind: UInt8 {
-        case ping = 1, pong, ptsRequest, ptsReply, lookRequest, look
+        case ping = 1, pong, ptsRequest, ptsReply, lookRequest, look, command
     }
 
     func encode() -> Data {
@@ -70,6 +73,10 @@ enum RigMessage: Equatable {
             data.appendBigEndian(look.exposureNs)
             // Los decimales viajan con sus bits tal cual: sin redondeos ni escalas que acordar.
             [look.iso, look.aperture, look.kelvin, look.tint].forEach { data.appendBigEndian($0.bitPattern) }
+        case let .command(seq, command):
+            data.append(Kind.command.rawValue)
+            data.appendBigEndian(seq)
+            data.append(UInt8(command.rawValue))
         }
         return data
     }
@@ -126,6 +133,14 @@ enum RigMessage: Equatable {
                 return nil
             }
             return .look(seq: seq, look: look)
+        case .command:
+            // Una orden que este móvil no conoce se ignora entera: mejor no grabar que
+            // grabar por un byte que vino de una versión distinta de la app.
+            guard let raw = reader.read(UInt8.self), let command = RigCommand(rawValue: Int(raw))
+            else {
+                return nil
+            }
+            return .command(seq: seq, command: command)
         }
     }
 
@@ -191,6 +206,9 @@ final class RigLink: NSObject {
     /// De dónde saca el maestro cómo ve su cámara, y qué hace el derecho cuando le llega.
     var currentLook: (() -> CameraLook?)?
     var onLook: ((CameraLook) -> Void)?
+
+    /// Qué hace el derecho cuando el maestro le manda grabar, parar o calibrar.
+    var onCommand: ((RigCommand) -> Void)?
 
     private let role: CameraRole
     private let peerID: MCPeerID
@@ -435,6 +453,22 @@ final class RigLink: NSObject {
         }
     }
 
+    /// El maestro manda una orden al derecho. Sin enlace no hace nada: quien está solo
+    /// graba solo, y es mejor eso que esperar a un móvil que no está.
+    func send(command: RigCommand) {
+        guard role == .left, !session.connectedPeers.isEmpty else { return }
+        queue.async {
+            self.seq &+= 1
+            let message = RigMessage.command(seq: self.seq, command: command)
+            do {
+                try self.session.send(message.encode(), toPeers: self.session.connectedPeers, with: .reliable)
+                NSLog("[enlace] orden enviada: %d", command.rawValue)
+            } catch {
+                NSLog("[enlace] no se pudo mandar la orden: %@", error.localizedDescription)
+            }
+        }
+    }
+
     // MARK: - PTS del maestro (TASK A4)
 
     /// Los PTS recientes del maestro, o vacío si no hay enlace o no contesta a tiempo.
@@ -508,6 +542,12 @@ extension RigLink: MCSessionDelegate {
             // Sin ajustes todavía no se contesta: el derecho vuelve a preguntar.
             guard role == .left, let look = currentLook?() else { return }
             try? session.send(RigMessage.look(seq: seq, look: look).encode(), toPeers: [peerID], with: .reliable)
+        case let .command(_, command):
+            // Solo el derecho obedece: si el izquierdo recibiera una orden, dos móviles
+            // mandándose el uno al otro se quedarían en un bucle.
+            guard role == .right else { return }
+            NSLog("[enlace] orden recibida: %d", command.rawValue)
+            onCommand?(command)
         case let .look(_, look):
             guard role == .right else { return }
             queue.async { self.lookReceived = true }
