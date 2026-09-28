@@ -130,14 +130,22 @@ class FakeCaptureApi extends CaptureHostApi {
   Future<void> restartForPhase() async => restarts++;
 
   @override
-  Future<String> start(String srtUrl, String recordingDirectory) async {
+  Future<String> start(String srtUrl, String recordingDirectory, bool saveVideo) async {
     startCalls++;
     lastSrtUrl = srtUrl;
+    lastSaveVideo = saveVideo;
     if (failStart) {
       throw Exception('disco lleno');
     }
+    // Sin guardar no hay fichero: el nativo devuelve vacío.
+    if (!saveVideo) {
+      return '';
+    }
     return '${recordingDirectory.isEmpty ? 'Documents' : recordingDirectory}/left-1.mov';
   }
+
+  /// Si la última vez se pidió guardar el vídeo además de emitir.
+  bool lastSaveVideo = false;
 
   @override
   Future<void> stop() async => stopCalls++;

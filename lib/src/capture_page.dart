@@ -151,6 +151,7 @@ class _CapturePageState extends State<CapturePage> {
                   const SizedBox(height: 16),
                   _RecordButton(session: _session),
                   const SizedBox(height: 10),
+                  _SaveVideoRow(session: _session),
                   _RecordingBanner(readout: r),
                   _CalibrationUploadButton(session: _session),
                   if (trouble.isNotEmpty) ...<Widget>[
@@ -602,6 +603,102 @@ class _CalibrationUploadButton extends StatelessWidget {
 }
 
 /// Una sola línea debajo del botón: minutos, segmento y dónde queda el fichero.
+/// Guardar el vídeo en el móvil, además de emitirlo.
+///
+/// Apagado por defecto: un partido son ~40 GB por móvil y llenaba el teléfono en dos. Se
+/// enciende para volver con el partido en local cuando la red del campo no es de fiar.
+class _SaveVideoRow extends StatelessWidget {
+  const _SaveVideoRow({required this.session});
+
+  final CaptureSession session;
+
+  @override
+  Widget build(BuildContext context) {
+    // Grabando no se cambia: el nativo ya abrió (o no) el fichero de esta grabación.
+    final VoidCallback? onTap =
+        session.recording ? null : () => session.setSaveVideo(!session.saveVideo);
+    return Semantics(
+      toggled: session.saveVideo,
+      label: 'Guardar vídeo en el móvil',
+      onTap: onTap,
+      excludeSemantics: true,
+      child: ZeroTappable(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(ZeroMetrics.cardRadius),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: <Widget>[
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'Guardar vídeo',
+                      style: ZeroType.plex(
+                        size: 14,
+                        weight: FontWeight.w600,
+                        color: session.recording ? ZeroColors.inkTertiary : ZeroColors.ink,
+                        height: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      session.saveVideo
+                          ? 'se guarda en el móvil: ~20 GB por hora'
+                          : 'solo se transmite, sin llenar el móvil',
+                      style: ZeroType.data(
+                        size: 11,
+                        weight: FontWeight.w400,
+                        color: ZeroColors.inkTertiary,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 14),
+              _SaveSwitch(value: session.saveVideo, enabled: !session.recording),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SaveSwitch extends StatelessWidget {
+  const _SaveSwitch({required this.value, required this.enabled});
+
+  final bool value;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: enabled ? 1 : 0.5,
+      child: Container(
+        width: 52,
+        height: 32,
+        decoration: BoxDecoration(
+          color: value ? ZeroColors.accent : ZeroColors.switchTrack,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: AnimatedAlign(
+          duration: const Duration(milliseconds: 180),
+          alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+          child: Container(
+            margin: const EdgeInsets.all(3),
+            width: 26,
+            height: 26,
+            decoration: const BoxDecoration(color: ZeroColors.white, shape: BoxShape.circle),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _RecordingBanner extends StatelessWidget {
   const _RecordingBanner({required this.readout});
 

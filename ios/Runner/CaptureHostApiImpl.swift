@@ -62,15 +62,17 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
         }
     }
 
-    func start(srtUrl: String, recordingDirectory: String) throws -> String {
+    func start(srtUrl: String, recordingDirectory: String, saveVideo: Bool) throws -> String {
         let directory = recordingDirectory.isEmpty ? defaultDirectory : recordingDirectory
-        let path: String
-        do {
-            // El orden importa: primero el fichero, después la emisión. Si algo falla,
-            // que falle lo prescindible (ADR 0012, decisión 5).
-            path = try engine.startRecording(directory: directory)
-        } catch {
-            throw PigeonError(code: "record", message: error.localizedDescription, details: nil)
+        var path = ""
+        if saveVideo {
+            do {
+                // El orden importa: primero el fichero, después la emisión. Si algo falla,
+                // que falle lo prescindible (ADR 0012, decisión 5).
+                path = try engine.startRecording(directory: directory)
+            } catch {
+                throw PigeonError(code: "record", message: error.localizedDescription, details: nil)
+            }
         }
 
         if !srtUrl.isEmpty {

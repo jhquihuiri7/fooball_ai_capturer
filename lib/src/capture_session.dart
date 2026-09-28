@@ -258,6 +258,25 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
     }
   }
 
+  /// Borra del móvil la grabación que se acaba de subir.
+  ///
+  /// El clip se graba solo para calibrar: con «Guardar vídeo» apagado, dejarlo sería
+  /// justo lo que este ajuste evita. Si no se puede borrar, no pasa nada: la próxima
+  /// grabación lo hará igual.
+  Future<void> _discardRecording() async {
+    final String? path = recordingPath;
+    if (path == null) {
+      return;
+    }
+    try {
+      await File(path).delete();
+      recordingFile = null;
+      notifyListeners();
+    } on FileSystemException {
+      // El fichero ya no estaba, o el sistema no deja: no es motivo para avisar de nada.
+    }
+  }
+
   /// Cómo acabó la última calibración, según el panel. `null` mientras no se haya pedido
   /// ninguna o si el panel no contestó a tiempo.
   CalibrationResult? calibrationResult;
@@ -292,7 +311,9 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
   }
 
   Future<void> _recordClipInner({String recordingDirectory = ''}) async {
-    await toggleRecording(recordingDirectory: recordingDirectory);
+    // El clip se graba aunque «Guardar vídeo» esté apagado: es justo el fichero que se
+    // sube, y se borra en cuanto el panel lo tiene.
+    await toggleRecording(recordingDirectory: recordingDirectory, save: true);
     if (!recording) {
       return; // no arrancó: `toggleRecording` ya dejó dicho por qué
     }
@@ -325,6 +346,9 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
         },
       );
       calibrationUpload = CalibrationUpload.subida;
+      if (!saveVideo) {
+        await _discardRecording();
+      }
     } on CalibrationUploadException catch (error) {
       calibrationUpload = CalibrationUpload.fallo;
       uploadProblem = error.message;
@@ -570,11 +594,31 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
 
   bool _toggling = false;
 
+  /// Guardar el vídeo en el móvil además de emitirlo.
+  ///
+  /// Apagado por defecto: un partido son ~40 GB por móvil a 45 Mbit/s y llena el
+  /// teléfono en dos. Se enciende cuando hace falta el respaldo en local, por ejemplo si
+  /// la red del campo no es de fiar y se prefiere volver con el partido en diferido.
+  bool saveVideo = false;
+
+  void setSaveVideo(bool value) {
+    if (saveVideo == value) {
+      return;
+    }
+    saveVideo = value;
+    notifyListeners();
+    unawaited(_orderPeer(value ? RigCommand.recordAndSave : RigCommand.record));
+  }
+
   /// Mientras dura el clip de calibración, `toggleRecording` no manda nada al otro
   /// móvil: ya recibió `calibrate` y está haciendo su propio clip.
   bool _clipping = false;
 
-  Future<void> toggleRecording({String? srtUrl, String recordingDirectory = ''}) async {
+  Future<void> toggleRecording({
+    String? srtUrl,
+    String recordingDirectory = '',
+    bool? save,
+  }) async {
     // Dos toques seguidos son uno: el segundo llegaría con el nativo a medio abrir.
     if (_toggling) {
       return;
@@ -588,11 +632,13 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
         await _orderPeer(RigCommand.stop);
         return;
       }
-      recordingFile = await _api.start(srtUrl ?? streamUrl, recordingDirectory);
+      final bool guardar = save ?? saveVideo;
+      final String file = await _api.start(srtUrl ?? streamUrl, recordingDirectory, guardar);
+      recordingFile = file.isEmpty ? null : file;
       // Con el soporte montado, el izquierdo manda: poner a grabar los dos a mano es
       // donde más fácil es dejarse uno sin grabar o empezarlos con medio minuto de
       // diferencia. Va después de arrancar la propia: si esta falla, no se manda nada.
-      await _orderPeer(RigCommand.record);
+      await _orderPeer(guardar ? RigCommand.recordAndSave : RigCommand.record);
       _recordingClock
         ..reset()
         ..start();
@@ -629,8 +675,11 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
   void onPeerCommand(RigCommand command) {
     switch (command) {
       case RigCommand.record:
+      case RigCommand.recordAndSave:
+        final bool guardar = command == RigCommand.recordAndSave;
+        saveVideo = guardar;
         if (!recording) {
-          unawaited(toggleRecording());
+          unawaited(toggleRecording(save: guardar));
         }
       case RigCommand.stop:
         if (recording) {

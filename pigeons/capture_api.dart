@@ -45,8 +45,12 @@ enum ThermalState { nominal, fair, serious, critical }
 /// cancha: uno se queda sin grabar, o empiezan con medio minuto de diferencia. El
 /// izquierdo manda y el derecho solo pone la cámara.
 enum RigCommand {
-  /// Empieza a grabar y a emitir, con los ajustes que ya tiene cada uno.
+  /// Empieza a emitir, sin guardar el vídeo en el móvil.
   record,
+
+  /// Emite y además guarda el vídeo: el interruptor «Guardar vídeo» del izquierdo manda
+  /// en los dos, para no volver con una grabación de una sola cámara.
+  recordAndSave,
   stop,
 
   /// Graba unos segundos, para y sube la grabación al panel para calibrar el soporte.
@@ -258,12 +262,16 @@ abstract class CaptureHostApi {
   @async
   CaptureStatus configure(CaptureSettings settings);
 
-  /// Empieza a grabar en local y a emitir por SRT. La grabación local no es opcional:
-  /// es lo que convierte un fallo de red en un partido en diferido (ADR 0012, dec. 5).
+  /// Empieza a emitir por SRT y, si `saveVideo`, a grabar también en local.
   ///
-  /// Devuelve la ruta del archivo que se está escribiendo: la pantalla lo enseña, y
-  /// quien lo busque después en Finder sabe cuál es.
-  String start(String srtUrl, String recordingDirectory);
+  /// **Grabar es opcional desde el 27-09-2026.** El ADR 0012 (decisión 5) lo daba por
+  /// hecho, porque una grabación local convierte un fallo de red en un partido en
+  /// diferido; pero un partido son ~40 GB por móvil a 45 Mbit/s y llena el teléfono en
+  /// dos partidos. Lo decide el operador con un interruptor, y para calibrar se graba
+  /// igualmente, porque el clip es justo lo que se sube.
+  ///
+  /// Devuelve la ruta del archivo que se está escribiendo, o vacío si no se graba.
+  String start(String srtUrl, String recordingDirectory, bool saveVideo);
 
   void stop();
 

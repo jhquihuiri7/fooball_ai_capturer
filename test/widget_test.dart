@@ -276,6 +276,27 @@ void main() {
       await closeCapture(tester, session);
     });
 
+    testWidgets('el interruptor de guardar vídeo está apagado y se puede encender', (
+      WidgetTester tester,
+    ) async {
+      // Un partido son ~40 GB por móvil: emitir ya no implica llenar el teléfono.
+      final FakeCaptureApi api = FakeCaptureApi();
+      final CaptureSession session = await openCapture(tester, api: api, standalone: true);
+
+      expect(find.text('Guardar vídeo'), findsOneWidget);
+      expect(find.text('solo se transmite, sin llenar el móvil'), findsOneWidget);
+
+      await tester.tap(find.text('Guardar vídeo'));
+      await tester.pump();
+      expect(find.text('se guarda en el móvil: ~20 GB por hora'), findsOneWidget);
+
+      await tester.tap(find.text('GRABAR'));
+      await tester.pump();
+      expect(api.lastSaveVideo, isTrue);
+
+      await closeCapture(tester, session);
+    });
+
     testWidgets('en modo un solo móvil se graba sin reloj y la pantalla lo avisa', (
       WidgetTester tester,
     ) async {
@@ -291,12 +312,15 @@ void main() {
       expect(api.startCalls, 1);
       expect(find.text('PARAR'), findsOneWidget);
       expect(find.text('GRABANDO'), findsWidgets);
-      expect(find.textContaining('left-1.mov'), findsOneWidget);
+      // Emitir ya no deja fichero: guardar el vídeo es un interruptor aparte, porque un
+      // partido son ~40 GB por móvil y llenaba el teléfono en dos.
+      expect(api.lastSaveVideo, isFalse);
+      expect(find.textContaining('left-1.mov'), findsNothing);
 
       await tester.tap(find.text('PARAR'));
       await tester.pump();
 
-      expect(find.text('no está grabando · último: left-1.mov'), findsOneWidget);
+      expect(find.text('no está grabando'), findsOneWidget);
 
       await closeCapture(tester, session);
     });

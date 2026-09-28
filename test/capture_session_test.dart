@@ -405,7 +405,7 @@ void main() {
       final FakeCaptureApi api = FakeCaptureApi();
       final CaptureSession session = CaptureSession(role: CameraRole.left, api: api);
       await session.prepare();
-      await session.toggleRecording();
+      await session.toggleRecording(save: true);
       expect(session.recordingFileName, 'left-1.mov');
 
       // El nativo reabrió en otro archivo y lo cuenta en el estado.
@@ -421,10 +421,42 @@ void main() {
       final CaptureSession session = CaptureSession(role: CameraRole.left, api: FakeCaptureApi());
       expect(session.recordingFileName, isNull);
 
-      await session.toggleRecording();
+      await session.toggleRecording(save: true);
 
       expect(session.recordingFileName, 'left-1.mov');
       expect(session.recordingLabel, matches(r'^\d\d:\d\d · left-1\.mov$'));
+    });
+
+    test('emitir sin guardar no deja fichero en el móvil', () async {
+      // Lo de siempre: un partido son ~40 GB por móvil y llenaba el teléfono en dos.
+      final FakeCaptureApi api = FakeCaptureApi();
+      final CaptureSession session = CaptureSession(role: CameraRole.left, api: api);
+
+      await session.toggleRecording();
+
+      expect(session.recording, isTrue, reason: 'emite igual');
+      expect(api.lastSaveVideo, isFalse);
+      expect(session.recordingFileName, isNull, reason: 'pero no graba');
+    });
+
+    test('el interruptor de guardar manda también en el otro móvil', () async {
+      final FakeCaptureApi api = FakeCaptureApi();
+      final CaptureSession session =
+          CaptureSession(role: CameraRole.left, api: api, serverHost: '10.0.0.5');
+      session.onLinkStateChanged(LinkState.connected, 'iPhone (derecha)');
+
+      session.setSaveVideo(true);
+      await session.toggleRecording();
+
+      expect(api.lastSaveVideo, isTrue);
+      expect(api.peerCommands, contains(RigCommand.recordAndSave));
+
+      // Y el derecho obedece: guarda solo si se lo dicen.
+      final FakeCaptureApi apiDer = FakeCaptureApi();
+      final CaptureSession derecho = CaptureSession(role: CameraRole.right, api: apiDer);
+      derecho.onPeerCommand(RigCommand.record);
+      await Future<void>.delayed(Duration.zero);
+      expect(apiDer.lastSaveVideo, isFalse);
     });
   });
 
@@ -712,7 +744,7 @@ void main() {
             subida..seen = (panel: panel, role: role, credentials: credentials),
       );
       await session.prepare();
-      await session.toggleRecording();
+      await session.toggleRecording(save: true);
       await session.toggleRecording(); // grabar y parar: ya hay fichero
       return session;
     }
