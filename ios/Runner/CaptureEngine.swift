@@ -404,9 +404,19 @@ final class CaptureEngine: NSObject {
         publisher.stop()
     }
 
+    /// Para la grabación y la emisión, y **deja la cámara viva**.
+    ///
+    /// Apagarla aquí era lo que obligaba a cerrar la app para volver a grabar: tras PARAR
+    /// la sesión de captura quedaba parada, `startRecording` solo abre el fichero, y el
+    /// siguiente GRABAR se quedaba esperando unos frames que ya no llegaban (visto en los
+    /// dos móviles el 27-09-2026). Además dejaba la vista previa congelada.
     func stop() {
         publisher.stop()
         stopRecording()
+    }
+
+    /// Apaga la cámara. Al salir de la pantalla de captura, no al parar de grabar.
+    func releaseCamera() {
         queue.async { [weak self] in
             self?.session.stopRunning()
         }

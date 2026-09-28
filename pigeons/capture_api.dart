@@ -273,7 +273,13 @@ abstract class CaptureHostApi {
   /// Devuelve la ruta del archivo que se está escribiendo, o vacío si no se graba.
   String start(String srtUrl, String recordingDirectory, bool saveVideo);
 
+  /// Para la grabación y la emisión. **No apaga la cámara**: así se puede volver a
+  /// grabar sin cerrar la app, y la vista previa no se queda congelada.
   void stop();
+
+  /// Apaga la cámara. Se llama al salir de la pantalla de captura; parar de grabar no la
+  /// apaga, porque entonces habría que cerrar la app para volver a grabar.
+  void releaseCamera();
 
   CaptureStatus status();
 

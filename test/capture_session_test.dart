@@ -377,6 +377,35 @@ void main() {
       expect(api.stopCalls, 1);
     });
 
+    test('parar y volver a grabar, sin cerrar la app', () async {
+      // Pasaba en los dos móviles el 27-09: PARAR apagaba la camara entera y el siguiente
+      // GRABAR se quedaba esperando frames que ya no llegaban. Habia que cerrar la app.
+      final FakeCaptureApi api = FakeCaptureApi();
+      final CaptureSession session = CaptureSession(role: CameraRole.left, api: api);
+
+      await session.toggleRecording();
+      await session.toggleRecording();
+      await session.toggleRecording();
+
+      expect(session.recording, isTrue);
+      expect(api.startCalls, 2);
+      // Parar no suelta la camara: eso es lo que rompia la segunda grabacion.
+      expect(api.releaseCalls, 0);
+    });
+
+    test('la cámara se suelta al salir de la pantalla, no al parar', () async {
+      final FakeCaptureApi api = FakeCaptureApi();
+      final CaptureSession session = CaptureSession(role: CameraRole.left, api: api);
+      await session.toggleRecording();
+      await session.toggleRecording();
+      expect(api.releaseCalls, 0);
+
+      session.dispose();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(api.releaseCalls, 1);
+    });
+
     test('dos toques seguidos son una sola grabación', () async {
       final FakeCaptureApi api = FakeCaptureApi();
       final CaptureSession session = CaptureSession(role: CameraRole.left, api: api);

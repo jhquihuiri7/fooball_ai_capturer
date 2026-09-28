@@ -147,6 +147,13 @@ class FakeCaptureApi extends CaptureHostApi {
   /// Si la última vez se pidió guardar el vídeo además de emitir.
   bool lastSaveVideo = false;
 
+  /// Veces que se soltó la cámara. Parar de grabar no cuenta: eso dejaría la app sin
+  /// poder volver a grabar.
+  int releaseCalls = 0;
+
+  @override
+  Future<void> releaseCamera() async => releaseCalls++;
+
   @override
   Future<void> stop() async => stopCalls++;
 

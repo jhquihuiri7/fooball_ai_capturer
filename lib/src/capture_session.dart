@@ -809,6 +809,8 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
   @override
   void dispose() {
     _disposed = true;
+    // La cámara se suelta al salir de la pantalla. Parar de grabar ya no la apaga.
+    unawaited(_api.releaseCamera());
     // Por quién lo abrió y no por `linkState`: ese estado llega en un aviso del nativo
     // que puede no haber llegado todavía, y entonces el enlace se quedaba abierto.
     if (identical(_linkOwner, this)) {

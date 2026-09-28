@@ -63,6 +63,9 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
     }
 
     func start(srtUrl: String, recordingDirectory: String, saveVideo: Bool) throws -> String {
+        // Por si la cámara se quedó parada (una interrupción que no se recuperó, por
+        // ejemplo): sin frames no hay ni grabación ni emisión, y no se ve por qué.
+        engine.startRunning()
         let directory = recordingDirectory.isEmpty ? defaultDirectory : recordingDirectory
         var path = ""
         if saveVideo {
@@ -178,6 +181,10 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
 
     func stop() throws {
         engine.stop()
+    }
+
+    func releaseCamera() throws {
+        engine.releaseCamera()
     }
 
     func status() throws -> CaptureStatus {

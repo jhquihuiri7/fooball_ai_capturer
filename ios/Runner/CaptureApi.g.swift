@@ -677,7 +677,12 @@ protocol CaptureHostApi {
   ///
   /// Devuelve la ruta del archivo que se está escribiendo, o vacío si no se graba.
   func start(srtUrl: String, recordingDirectory: String, saveVideo: Bool) throws -> String
+  /// Para la grabación y la emisión. **No apaga la cámara**: así se puede volver a
+  /// grabar sin cerrar la app, y la vista previa no se queda congelada.
   func stop() throws
+  /// Apaga la cámara. Se llama al salir de la pantalla de captura; parar de grabar no la
+  /// apaga, porque entonces habría que cerrar la app para volver a grabar.
+  func releaseCamera() throws
   func status() throws -> CaptureStatus
   /// PTS de los últimos frames capturados, ya en tiempo del soporte (TASK A4).
   ///
@@ -837,6 +842,8 @@ class CaptureHostApiSetup {
     } else {
       startChannel.setMessageHandler(nil)
     }
+    /// Para la grabación y la emisión. **No apaga la cámara**: así se puede volver a
+    /// grabar sin cerrar la app, y la vista previa no se queda congelada.
     let stopChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.stop\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       stopChannel.setMessageHandler { _, reply in
@@ -849,6 +856,21 @@ class CaptureHostApiSetup {
       }
     } else {
       stopChannel.setMessageHandler(nil)
+    }
+    /// Apaga la cámara. Se llama al salir de la pantalla de captura; parar de grabar no la
+    /// apaga, porque entonces habría que cerrar la app para volver a grabar.
+    let releaseCameraChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.releaseCamera\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      releaseCameraChannel.setMessageHandler { _, reply in
+        do {
+          try api.releaseCamera()
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      releaseCameraChannel.setMessageHandler(nil)
     }
     let statusChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.status\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
