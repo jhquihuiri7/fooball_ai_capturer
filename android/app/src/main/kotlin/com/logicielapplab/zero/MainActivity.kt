@@ -1,4 +1,4 @@
-package io.footballai.football_ai_capture
+package com.logicielapplab.zero
 
 import io.flutter.embedding.android.FlutterActivity
 

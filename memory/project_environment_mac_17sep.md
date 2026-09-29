@@ -23,7 +23,7 @@ $F analyze && $F test                       # 54 tests el 17 Sep
 $F build ios --no-codesign                  # solo compilar
 $F build ios --release                      # firmado (equipo 5AKXUHD733, automático)
 $F install --release -d 00008150-001619460278401C   # iPhone de Alexander, por WiFi
-xcrun devicectl device info apps --device 00008150-001619460278401C | grep footballai
+xcrun devicectl device info apps --device 00008150-001619460278401C | grep logicielapplab
 dart run pigeon --input pigeons/capture_api.dart    # regenerar el contrato (con $F/../dart)
 ```
 
