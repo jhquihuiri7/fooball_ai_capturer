@@ -3,8 +3,6 @@
 // Aquí no hay lógica: traduce llamadas y convierte errores en algo que se pueda leer en
 // la pantalla del móvil, en la cancha. Cualquier decisión que se parezca a una regla va
 // en `CaptureEngine` o en Dart.
-//
-// NO COMPILADO. Se escribió en Windows: no ha pasado por Xcode ni por un dispositivo.
 
 import AVFoundation
 import Flutter

@@ -9,8 +9,6 @@
 //      costura aparece como una línea vertical de otro color en cuanto entra una nube.
 //   3. Una obturación que no sea múltiplo de la red eléctrica produce bandas con los
 //      focos del campo, y ninguna corrección posterior las quita.
-//
-// NO COMPILADO. Se escribió en Windows: no ha pasado por Xcode ni por un dispositivo.
 
 import AVFoundation
 

@@ -29,9 +29,7 @@ arquitectura; aquí se implementa la parte que corre en el móvil.
 El estado completo, con lo que queda en orden y el formato exacto del código de tiempo,
 está en `football-ai/docs/PROGRESS.md`, sección «Dos iPhone como cámara (ADR 0012)».
 
-**Nada de esto se ha compilado para iOS todavía.** Se escribió en Windows, donde Flutter
-analiza y ejecuta los tests de Dart pero no puede invocar a Xcode. La parte Swift está
-sin compilar por definición hasta que pase por un Mac.
+La app pide iOS 26 como mínimo.
 
 ## Comandos
 

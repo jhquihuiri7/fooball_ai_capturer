@@ -9,8 +9,6 @@
 //      marca de tiempo sin saber nada de relojes (ADR 0012, decisión 2).
 //   2. **Graba siempre en local mientras emite.** La emisión es best-effort sobre un
 //      enlace que pierde paquetes cada 15 segundos; el fichero es la verdad (decisión 5).
-//
-// NO COMPILADO. Se escribió en Windows: no ha pasado por Xcode ni por un dispositivo.
 
 import AVFoundation
 import UIKit

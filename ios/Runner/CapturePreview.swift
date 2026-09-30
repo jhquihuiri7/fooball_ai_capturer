@@ -71,24 +71,15 @@ final class CapturePreviewView: UIView {
     private func rotateWithInterface() {
         guard let connection = previewLayer.connection else { return }
         let orientation = window?.windowScene?.interfaceOrientation ?? .portrait
-        if #available(iOS 17.0, *) {
-            let angle: CGFloat
-            switch orientation {
-            case .landscapeRight: angle = 0
-            case .landscapeLeft: angle = 180
-            case .portraitUpsideDown: angle = 270
-            default: angle = 90
-            }
-            if connection.isVideoRotationAngleSupported(angle) {
-                connection.videoRotationAngle = angle
-            }
-        } else if connection.isVideoOrientationSupported {
-            switch orientation {
-            case .landscapeRight: connection.videoOrientation = .landscapeRight
-            case .landscapeLeft: connection.videoOrientation = .landscapeLeft
-            case .portraitUpsideDown: connection.videoOrientation = .portraitUpsideDown
-            default: connection.videoOrientation = .portrait
-            }
+        let angle: CGFloat
+        switch orientation {
+        case .landscapeRight: angle = 0
+        case .landscapeLeft: angle = 180
+        case .portraitUpsideDown: angle = 270
+        default: angle = 90
+        }
+        if connection.isVideoRotationAngleSupported(angle) {
+            connection.videoRotationAngle = angle
         }
     }
 }
