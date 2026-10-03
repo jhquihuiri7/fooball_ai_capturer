@@ -33,6 +33,10 @@ import 'package:football_ai_capture/src/widgets/zero_widgets.dart';
 /// misma sesión que graba, así que enseña el encuadre real y no cuesta CPU.
 const String capturePreviewViewType = 'capture-preview';
 
+/// IOS-07: la vista previa montada, y la tarjeta que la sustituye mientras se emite.
+const Key capturePreviewLiveKey = Key('capture-preview-live');
+const Key capturePreviewHiddenKey = Key('capture-preview-hidden');
+
 class CapturePage extends StatefulWidget {
   const CapturePage({
     required this.role,
@@ -81,6 +85,11 @@ class _CapturePageState extends State<CapturePage> {
   /// repinta una vez por segundo, que es lo que hace avanzar el reloj del HUD.
   Timer? _refresh;
 
+  /// IOS-07: mientras se emite la vista previa se desmonta (GPU y batería); un toque
+  /// la enseña este rato y vuelve a esconderse sola.
+  Timer? _peekTimer;
+  bool _peeking = false;
+
   @override
   void initState() {
     super.initState();
@@ -97,6 +106,7 @@ class _CapturePageState extends State<CapturePage> {
 
   @override
   void dispose() {
+    _peekTimer?.cancel();
     _refresh?.cancel();
     if (identical(_receiver, _session)) {
       CaptureFlutterApi.setUp(null);
@@ -112,9 +122,30 @@ class _CapturePageState extends State<CapturePage> {
   }
 
   void _onChanged() {
+    // Si la emisión paró, el vistazo ya no pinta nada: la vista previa vuelve sola.
+    if (!_session.recording && _peeking) {
+      _peekTimer?.cancel();
+      _peeking = false;
+    }
     if (mounted) {
       setState(() {});
     }
+  }
+
+  /// El toque sobre la tarjeta: enseña la imagen un rato, con el brillo de vuelta.
+  void _peek() {
+    _peekTimer?.cancel();
+    _session.screenDim(false);
+    setState(() => _peeking = true);
+    _peekTimer = Timer(previewPeekDuration, () {
+      if (!mounted) {
+        return;
+      }
+      if (_session.recording) {
+        _session.screenDim(true);
+      }
+      setState(() => _peeking = false);
+    });
   }
 
   @override
@@ -147,7 +178,10 @@ class _CapturePageState extends State<CapturePage> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(ZeroMetrics.gutter, 14, ZeroMetrics.gutter, 28),
                 children: <Widget>[
-                  _Preview(readout: r),
+                  if (_session.recording && !_peeking)
+                    _HiddenPreviewCard(readout: r, onTap: _peek)
+                  else
+                    _Preview(readout: r),
                   const SizedBox(height: 16),
                   _RecordButton(session: _session),
                   const SizedBox(height: 10),
@@ -243,6 +277,57 @@ class _Header extends StatelessWidget {
   }
 }
 
+/// IOS-07: lo que queda en pantalla mientras se emite, a 1 Hz, sin capa de vídeo.
+class _HiddenPreviewCard extends StatelessWidget {
+  const _HiddenPreviewCard({required this.readout, required this.onTap});
+
+  final CaptureReadout readout;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      key: capturePreviewHiddenKey,
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 22),
+        decoration: BoxDecoration(
+          color: ZeroColors.black,
+          border: Border.all(color: ZeroColors.previewBorder),
+          borderRadius: BorderRadius.circular(ZeroMetrics.previewRadius),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              'GRABANDO · ${readout.session.recordingLabel}',
+              style: ZeroType.archivo(
+                size: 15,
+                weight: FontWeight.w600,
+                color: ZeroColors.ink,
+                letterSpacing: -0.2,
+                height: 1.0,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Vista previa apagada para no calentar el móvil. '
+              'Toca para verla ${previewPeekDuration.inSeconds} s.',
+              style: ZeroType.plex(
+                size: 12,
+                weight: FontWeight.w400,
+                color: ZeroColors.inkTertiary,
+                height: 1.5,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// La vista previa con el HUD encima.
 class _Preview extends StatelessWidget {
   const _Preview({required this.readout});
@@ -256,6 +341,7 @@ class _Preview extends StatelessWidget {
     final String? phase = readout.phaseChipLabel;
 
     return ClipRRect(
+      key: capturePreviewLiveKey,
       borderRadius: BorderRadius.circular(ZeroMetrics.previewRadius),
       child: Container(
         decoration: BoxDecoration(

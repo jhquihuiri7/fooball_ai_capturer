@@ -12,6 +12,37 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-03 · IOS-07 — modo partido: pantalla mínima en los móviles del soporte · ✅
+
+Emitiendo, el móvil ya no gasta GPU ni brillo en enseñarse a sí mismo.
+
+**Hecho**
+- `capture_page.dart`: mientras se emite, la vista `capture-preview` se **desmonta**
+  (el UiKitView sale del árbol y la capa nativa se libera) y queda una tarjeta negra a
+  1 Hz con «GRABANDO · reloj» y la pista del toque. Un toque la enseña
+  `previewPeekDuration` (30 s, en constants.dart) y se vuelve a esconder sola; si la
+  emisión para en mitad del vistazo, el temporizador se cancela.
+- Pigeon `setScreenDim(bool)`: el brillo a 0,05 (no a cero: un móvil «apagado» en la
+  cancha invita a que alguien lo encienda) guardando el que había, y restaurado al
+  salir. Lo dispara la **sesión** al entrar y salir de `grabando` —no la página—, para
+  que un stop por orden del maestro también restaure; el vistazo lo levanta y lo
+  vuelve a bajar.
+- `Info.plist`: `CADisableMinimumFrameDurationOnPhone` estaba en `true` (ProMotion a
+  120 Hz liberado) y la tarjeta pide `false`: corregido. La UI no necesita más de
+  60 Hz y el calor sí importa.
+
+**Aceptación**
+- widget_test (fake_async): al GRABAR se desmonta la vista y `setScreenDim(true)`; al
+  PARAR vuelve y restaura; el toque la enseña y a los 30 s se esconde y re-atenúa,
+  con la secuencia exacta [true, false, true] en el fake. `flutter test` 211;
+  `flutter analyze` 0; build de dispositivo ✅.
+- El «−50 % de GPU en 10 min» es un objetivo de Instruments: se mide en la próxima
+  sesión con el móvil enchufado (va junto al vistazo de signposts de IOS-05).
+
+**Siguiente**: IOS-08 (modo banco), que es la prueba de una sola acción de Alexander.
+
+---
+
 ## 2026-10-03 · IOS-06 — temperatura y presión con escalera de degradación · ✅
 
 El orden del propietario, en código: primero se suelta la IA, después la calidad del

@@ -178,3 +178,7 @@ const String mandoDeviceName = 'Zero · mando';
 
 /// Cada cuánto se repinta «sin panel desde hace N s» mientras el panel no contesta.
 const Duration mandoSilenceRefresh = Duration(seconds: 1);
+
+/// IOS-07: cuánto se enseña la vista previa al tocar la tarjeta mientras se emite.
+/// Lo justo para encuadrar o comprobar algo; después vuelve a apagarse sola.
+const Duration previewPeekDuration = Duration(seconds: 30);

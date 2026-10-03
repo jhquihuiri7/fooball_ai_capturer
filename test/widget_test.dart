@@ -12,7 +12,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:football_ai_capture/main.dart';
+import 'package:football_ai_capture/src/capture_page.dart';
 import 'package:football_ai_capture/src/capture_session.dart';
+import 'package:football_ai_capture/src/constants.dart';
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
 import 'package:football_ai_capture/src/theme/zero_colors.dart';
 import 'package:football_ai_capture/src/widgets/zero_widgets.dart';
@@ -672,6 +674,58 @@ void main() {
       await tester.pump();
 
       expect(find.textContaining('sin destino configurado'), findsOneWidget);
+    });
+  });
+
+  group('pantalla mínima emitiendo (IOS-07)', () {
+    testWidgets('al grabar se desmonta la vista previa y se atenúa la pantalla', (
+      WidgetTester tester,
+    ) async {
+      final FakeCaptureApi api = FakeCaptureApi();
+      final CaptureSession session = await openCapture(tester, api: api, standalone: true);
+
+      expect(find.byKey(capturePreviewLiveKey), findsOneWidget);
+      expect(api.screenDims, isEmpty);
+
+      await tester.tap(find.text('GRABAR'));
+      await tester.pump();
+
+      expect(find.byKey(capturePreviewLiveKey), findsNothing);
+      expect(find.byKey(capturePreviewHiddenKey), findsOneWidget);
+      expect(find.textContaining('Vista previa apagada'), findsOneWidget);
+      expect(api.screenDims, <bool>[true]);
+
+      await tester.tap(find.text('PARAR'));
+      await tester.pump();
+
+      expect(find.byKey(capturePreviewLiveKey), findsOneWidget);
+      expect(api.screenDims, <bool>[true, false]);
+
+      await closeCapture(tester, session);
+    });
+
+    testWidgets('el toque enseña la vista previa 30 s y vuelve a esconderla', (
+      WidgetTester tester,
+    ) async {
+      final FakeCaptureApi api = FakeCaptureApi();
+      final CaptureSession session = await openCapture(tester, api: api, standalone: true);
+      await tester.tap(find.text('GRABAR'));
+      await tester.pump();
+
+      await tester.tap(find.byKey(capturePreviewHiddenKey));
+      await tester.pump();
+
+      expect(find.byKey(capturePreviewLiveKey), findsOneWidget);
+      expect(api.screenDims, <bool>[true, false]);
+
+      // Pasa el plazo del vistazo: se esconde y se vuelve a atenuar sola.
+      await tester.pump(previewPeekDuration + const Duration(seconds: 1));
+
+      expect(find.byKey(capturePreviewLiveKey), findsNothing);
+      expect(find.byKey(capturePreviewHiddenKey), findsOneWidget);
+      expect(api.screenDims, <bool>[true, false, true]);
+
+      await closeCapture(tester, session);
     });
   });
 }

@@ -12,6 +12,23 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
     private let engine = CaptureEngine()
     private let flutter: CaptureFlutterApi
 
+    /// IOS-07: brillo mientras se emite. No es cero: con cero, en la cancha parece un
+    /// móvil apagado y alguien lo «enciende». Lo que había se guarda y se restaura.
+    private static let dimmedScreenBrightness: CGFloat = 0.05
+    private var brightnessBeforeDim: CGFloat?
+
+    func setScreenDim(dimmed: Bool) throws {
+        if dimmed {
+            if brightnessBeforeDim == nil {
+                brightnessBeforeDim = UIScreen.main.brightness
+            }
+            UIScreen.main.brightness = Self.dimmedScreenBrightness
+        } else if let previo = brightnessBeforeDim {
+            UIScreen.main.brightness = previo
+            brightnessBeforeDim = nil
+        }
+    }
+
     /// El enlace con el otro móvil del soporte. Se crea al preparar la cámara.
     private var link: RigLink?
 

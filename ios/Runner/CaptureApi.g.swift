@@ -691,6 +691,10 @@ protocol CaptureHostApi {
   /// cámara: si saltara en mitad de la emisión, los paquetes se tirarían en silencio.
   /// `false` también si el operador no contesta en 20 s.
   func requestLocalNetworkAccess() async throws -> Bool
+  /// Atenúa la pantalla mientras se emite (IOS-07): el brillo al mínimo, y se
+  /// restaura el que había al salir. La pantalla encendida a pleno sol es calor y
+  /// batería que la escalera (IOS-06) acaba pagando.
+  func setScreenDim(dimmed: Bool) throws
   /// `true` si este iPhone tiene ultra gran angular.
   ///
   /// Se resuelve con `AVCaptureDevice.DiscoverySession`, **nunca con una lista de
@@ -811,6 +815,24 @@ class CaptureHostApiSetup {
       }
     } else {
       requestLocalNetworkAccessChannel.setMessageHandler(nil)
+    }
+    /// Atenúa la pantalla mientras se emite (IOS-07): el brillo al mínimo, y se
+    /// restaura el que había al salir. La pantalla encendida a pleno sol es calor y
+    /// batería que la escalera (IOS-06) acaba pagando.
+    let setScreenDimChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.setScreenDim\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      setScreenDimChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let dimmedArg = args[0] as! Bool
+        do {
+          try api.setScreenDim(dimmed: dimmedArg)
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      setScreenDimChannel.setMessageHandler(nil)
     }
     /// `true` si este iPhone tiene ultra gran angular.
     ///

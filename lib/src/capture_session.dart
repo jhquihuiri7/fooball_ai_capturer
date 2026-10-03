@@ -770,9 +770,22 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
   }
 
   void _set(SessionPhase next, {String? problem}) {
+    final bool grababa = phase == SessionPhase.grabando;
     phase = next;
     this.problem = problem;
+    // IOS-07: la pantalla se atenúa al empezar a emitir y vuelve al parar. Va aquí y
+    // no en la página, para que un stop por orden del maestro también la restaure.
+    final bool graba = next == SessionPhase.grabando;
+    if (graba != grababa) {
+      screenDim(graba);
+    }
     notifyListeners();
+  }
+
+  /// IOS-07: el toque de «ver 30 s» de la página levanta el brillo y lo vuelve a
+  /// bajar. Un fallo del canal no puede tumbar la emisión: se ignora.
+  void screenDim(bool dimmed) {
+    unawaited(_api.setScreenDim(dimmed).catchError((Object _) {}));
   }
 
   bool _disposed = false;

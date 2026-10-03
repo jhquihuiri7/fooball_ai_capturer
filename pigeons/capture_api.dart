@@ -265,6 +265,11 @@ abstract class CaptureHostApi {
   @async
   bool requestLocalNetworkAccess();
 
+  /// Atenúa la pantalla mientras se emite (IOS-07): el brillo al mínimo, y se
+  /// restaura el que había al salir. La pantalla encendida a pleno sol es calor y
+  /// batería que la escalera (IOS-06) acaba pagando.
+  void setScreenDim(bool dimmed);
+
   /// `true` si este iPhone tiene ultra gran angular.
   ///
   /// Se resuelve con `AVCaptureDevice.DiscoverySession`, **nunca con una lista de

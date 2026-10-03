@@ -659,6 +659,27 @@ class CaptureHostApi {
     return pigeonVar_replyValue! as bool;
   }
 
+  /// Atenúa la pantalla mientras se emite (IOS-07): el brillo al mínimo, y se
+  /// restaura el que había al salir. La pantalla encendida a pleno sol es calor y
+  /// batería que la escalera (IOS-06) acaba pagando.
+  Future<void> setScreenDim(bool dimmed) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.CaptureHostApi.setScreenDim$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[dimmed]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
   /// `true` si este iPhone tiene ultra gran angular.
   ///
   /// Se resuelve con `AVCaptureDevice.DiscoverySession`, **nunca con una lista de

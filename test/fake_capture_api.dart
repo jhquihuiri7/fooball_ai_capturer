@@ -61,6 +61,14 @@ class FakeCaptureApi extends CaptureHostApi {
   /// Simula que el nativo no puede abrir el archivo.
   final bool failStart;
 
+  /// IOS-07: cada llamada a setScreenDim, en orden. true = atenuada.
+  final List<bool> screenDims = <bool>[];
+
+  @override
+  Future<void> setScreenDim(bool dimmed) async {
+    screenDims.add(dimmed);
+  }
+
   final bool cameraAccess;
   final bool localNetwork;
   final bool ultraWide;
