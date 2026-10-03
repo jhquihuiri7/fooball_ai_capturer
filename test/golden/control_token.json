@@ -94,6 +94,28 @@
       }
     },
     {
+      "name": "verify_con_rig",
+      "fn": "control_token.verify",
+      "inputs": {
+        "secret": "dorados-del-mando-0123456789abcdef0123456789abcdef0123456789abcd",
+        "token": "eyJtIjoibV8yMDI2MDcwM18yMDMwX2ExYjIiLCJzIjpbIm1hdGNoIiwicmlnIl0sImUiOjE3OTAwMTAwMDB9.GkgRzEBeExIDE58LWk2I5noqz59sFH12Q2dLlYtQo84",
+        "match_id": "m_20260703_2030_a1b2",
+        "now_s": 1790000000
+      },
+      "expected": {
+        "match_id": "m_20260703_2030_a1b2",
+        "scopes": [
+          "match",
+          "rig"
+        ],
+        "expires_s": 1790010000
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
       "name": "verify_caducado",
       "fn": "control_token.verify",
       "inputs": {

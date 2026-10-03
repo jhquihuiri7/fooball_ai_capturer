@@ -14,6 +14,12 @@ import Foundation
 /// Las constantes de comportamiento de libs/vision, con los nombres de Python en
 /// camelCase. En RigCore no se escribe ninguna a mano: se usa esta enumeración.
 public enum RigConstants {
+    /// Grados. Alabeo máximo creíble de una cámara del soporte tras calibrar. Un soporte bien
+    /// montado se queda en unos pocos; los 180 de una cámara sin enderezar son otra cosa, y 45
+    /// separa las dos sin dudas.
+    /// (Python: `RIG_MAX_ROLL_DEG`.)
+    public static let rigMaxRollDeg: Double = 45.0
+
     /// Nanosegundos (16 ms). Desfase máximo para dar dos frames por simultáneos.
     ///
     /// Es medio frame a 30 fps, que es exactamente el peor caso de dos sensores que corren

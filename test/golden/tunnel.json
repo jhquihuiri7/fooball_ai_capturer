@@ -1,0 +1,1598 @@
+{
+  "schema": 1,
+  "module": "tunnel",
+  "conventions": {
+    "axes": "Ejes del soporte: X a la derecha, Y hacia abajo, Z hacia delante (rig.py).",
+    "rotation": "R = R_yaw · R_pitch · R_roll, de cámara a soporte; ortonormal (CameraPose.matrix), así que la inversa es la traspuesta.",
+    "angles": "Radianes. Yaw positivo gira la cámara a la derecha; pitch positivo, hacia arriba.",
+    "pixel_center": "El convenio de rig.py: el píxel i cubre [i, i+1) y su centro continuo está en i+0,5; CameraIntrinsics.scaled reescala pasando por ese centro.",
+    "homography": "Las homografías de vista van del programa a la cámara (view_homography).",
+    "scalars": "Float con el repr de Python: ida y vuelta exacta a Double en Swift.",
+    "tensors": "{dtype: f64|f32|u8|i32, shape, b64}, little-endian y orden C; en Swift, Data(base64Encoded:)."
+  },
+  "cases": [
+    {
+      "name": "valido_hello_maestro",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "master",
+        "text": "{\"v\":1,\"type\":\"hello\",\"id\":\"k3v9q2m7x1:1\",\"rig_ms\":5400001,\"data\":{\"rig_id\":\"rig_norte_01\",\"match_id\":\"m_20260703_2030_a1b2\",\"role\":\"master\",\"side\":\"left\",\"device_id\":\"iphone-izq\",\"term\":1,\"app_version\":\"0.9.0+42\",\"models_sha\":\"9ad6116f947e6bb1c9b58d580b46c15fd5d1d73500abe572eab5027ede9c0f4f\",\"boot\":\"k3v9q2m7x1\",\"rev\":12,\"calib\":{\"rig\":\"cedb60dfefb0ead1fa5a3ccb3c68e0ceaf4bb3415df80c79863092f362bd5ab9\",\"pitch\":\"c21103725243507a4e7c7b497026d734f80cf152e188e3a3d88fa1f864b26085\",\"band_left\":null,\"band_right\":null}}}"
+      },
+      "expected": {
+        "message": {
+          "v": 1,
+          "type": "hello",
+          "id": "k3v9q2m7x1:1",
+          "rig_ms": 5400001,
+          "data": {
+            "rig_id": "rig_norte_01",
+            "match_id": "m_20260703_2030_a1b2",
+            "role": "master",
+            "side": "left",
+            "device_id": "iphone-izq",
+            "term": 1,
+            "app_version": "0.9.0+42",
+            "models_sha": "9ad6116f947e6bb1c9b58d580b46c15fd5d1d73500abe572eab5027ede9c0f4f",
+            "boot": "k3v9q2m7x1",
+            "rev": 12,
+            "calib": {
+              "rig": "cedb60dfefb0ead1fa5a3ccb3c68e0ceaf4bb3415df80c79863092f362bd5ab9",
+              "pitch": "c21103725243507a4e7c7b497026d734f80cf152e188e3a3d88fa1f864b26085",
+              "band_left": null,
+              "band_right": null
+            }
+          }
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "valido_hello_esclavo",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "slave",
+        "text": "{\"v\":1,\"type\":\"hello\",\"id\":\"p7d2w9c4:1\",\"rig_ms\":5400001,\"data\":{\"rig_id\":\"rig_norte_01\",\"match_id\":\"m_20260703_2030_a1b2\",\"role\":\"slave\",\"side\":\"right\",\"device_id\":\"iphone-der\",\"term\":1,\"app_version\":\"0.9.0+42\",\"boot\":\"p7d2w9c4\",\"rev\":12,\"calib\":{\"rig\":\"cedb60dfefb0ead1fa5a3ccb3c68e0ceaf4bb3415df80c79863092f362bd5ab9\",\"pitch\":\"c21103725243507a4e7c7b497026d734f80cf152e188e3a3d88fa1f864b26085\",\"band_left\":null,\"band_right\":null}}}"
+      },
+      "expected": {
+        "message": {
+          "v": 1,
+          "type": "hello",
+          "id": "p7d2w9c4:1",
+          "rig_ms": 5400001,
+          "data": {
+            "rig_id": "rig_norte_01",
+            "match_id": "m_20260703_2030_a1b2",
+            "role": "slave",
+            "side": "right",
+            "device_id": "iphone-der",
+            "term": 1,
+            "app_version": "0.9.0+42",
+            "boot": "p7d2w9c4",
+            "rev": 12,
+            "calib": {
+              "rig": "cedb60dfefb0ead1fa5a3ccb3c68e0ceaf4bb3415df80c79863092f362bd5ab9",
+              "pitch": "c21103725243507a4e7c7b497026d734f80cf152e188e3a3d88fa1f864b26085",
+              "band_left": null,
+              "band_right": null
+            }
+          }
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "valido_welcome",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "hub",
+        "text": "{\"v\":1,\"type\":\"welcome\",\"id\":\"h:1\",\"reply_to\":\"k3v9q2m7x1:1\",\"data\":{\"role\":\"master\",\"term\":1}}"
+      },
+      "expected": {
+        "message": {
+          "v": 1,
+          "type": "welcome",
+          "id": "h:1",
+          "reply_to": "k3v9q2m7x1:1",
+          "data": {
+            "role": "master",
+            "term": 1
+          }
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "valido_state",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "master",
+        "text": "{\"v\":1,\"type\":\"state\",\"id\":\"k3v9q2m7x1:2\",\"rig_ms\":5400002,\"data\":{\"match_id\":\"m_20260703_2030_a1b2\",\"boot\":\"k3v9q2m7x1\",\"rev\":12,\"home\":{\"name\":\"Atlético Norte\",\"goals\":1,\"formation\":\"4-4-2\",\"players\":18},\"away\":{\"name\":\"Deportivo Sur\",\"goals\":0,\"formation\":null,\"players\":0},\"clock_ms\":1754000,\"clock_running\":true,\"clock_restored\":false,\"lineup_on_air\":null,\"streaming\":true,\"can_stream\":true,\"formations\":[\"4-4-2\",\"4-3-3\"],\"save_error\":null}}"
+      },
+      "expected": {
+        "message": {
+          "v": 1,
+          "type": "state",
+          "id": "k3v9q2m7x1:2",
+          "rig_ms": 5400002,
+          "data": {
+            "match_id": "m_20260703_2030_a1b2",
+            "boot": "k3v9q2m7x1",
+            "rev": 12,
+            "home": {
+              "name": "Atlético Norte",
+              "goals": 1,
+              "formation": "4-4-2",
+              "players": 18
+            },
+            "away": {
+              "name": "Deportivo Sur",
+              "goals": 0,
+              "formation": null,
+              "players": 0
+            },
+            "clock_ms": 1754000,
+            "clock_running": true,
+            "clock_restored": false,
+            "lineup_on_air": null,
+            "streaming": true,
+            "can_stream": true,
+            "formations": [
+              "4-4-2",
+              "4-3-3"
+            ],
+            "save_error": null
+          }
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "valido_telemetry",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "master",
+        "text": "{\"v\":1,\"type\":\"telemetry\",\"id\":\"k3v9q2m7x1:3\",\"rig_ms\":5400003,\"data\":{\"side\":\"left\",\"role\":\"master\",\"snapshot\":{\"side\":\"left\",\"fps\":30.0,\"temp_c\":38.5,\"battery_pct\":81,\"infer_ms\":{\"dfine_n\":9.8,\"ball_roi\":2.1}}}}"
+      },
+      "expected": {
+        "message": {
+          "v": 1,
+          "type": "telemetry",
+          "id": "k3v9q2m7x1:3",
+          "rig_ms": 5400003,
+          "data": {
+            "side": "left",
+            "role": "master",
+            "snapshot": {
+              "side": "left",
+              "fps": 30.0,
+              "temp_c": 38.5,
+              "battery_pct": 81,
+              "infer_ms": {
+                "dfine_n": 9.8,
+                "ball_roi": 2.1
+              }
+            }
+          }
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "valido_anchor",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "master",
+        "text": "{\"v\":1,\"type\":\"anchor\",\"id\":\"k3v9q2m7x1:4\",\"rig_ms\":5400004,\"data\":{\"rig_ms\":5399971,\"program_pts_ms\":1742366}}"
+      },
+      "expected": {
+        "message": {
+          "v": 1,
+          "type": "anchor",
+          "id": "k3v9q2m7x1:4",
+          "rig_ms": 5400004,
+          "data": {
+            "rig_ms": 5399971,
+            "program_pts_ms": 1742366
+          }
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "valido_mark",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "master",
+        "text": "{\"v\":1,\"type\":\"mark\",\"id\":\"k3v9q2m7x1:5\",\"rig_ms\":5400005,\"data\":{\"kind\":\"goal\",\"rig_ms\":5394000,\"source\":\"operator\",\"confidence\":null,\"auto\":false}}"
+      },
+      "expected": {
+        "message": {
+          "v": 1,
+          "type": "mark",
+          "id": "k3v9q2m7x1:5",
+          "rig_ms": 5400005,
+          "data": {
+            "kind": "goal",
+            "rig_ms": 5394000,
+            "source": "operator",
+            "confidence": null,
+            "auto": false
+          }
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "valido_events",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "master",
+        "text": "{\"v\":1,\"type\":\"events\",\"id\":\"k3v9q2m7x1:6\",\"rig_ms\":5400006,\"data\":{\"side\":\"left\",\"lines\":[{\"schema\":1,\"match_id\":\"m_20260703_2030_a1b2\",\"rig_id\":\"rig_norte_01\",\"app_version\":\"0.9.0+42\"},{\"type\":\"mark\",\"rig_ms\":5394000,\"kind\":\"goal\",\"source\":\"operator\"}],\"dropped\":0}}"
+      },
+      "expected": {
+        "message": {
+          "v": 1,
+          "type": "events",
+          "id": "k3v9q2m7x1:6",
+          "rig_ms": 5400006,
+          "data": {
+            "side": "left",
+            "lines": [
+              {
+                "schema": 1,
+                "match_id": "m_20260703_2030_a1b2",
+                "rig_id": "rig_norte_01",
+                "app_version": "0.9.0+42"
+              },
+              {
+                "type": "mark",
+                "rig_ms": 5394000,
+                "kind": "goal",
+                "source": "operator"
+              }
+            ],
+            "dropped": 0
+          }
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "valido_thumb",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "master",
+        "binary_b64": "AId7InYiOjEsInR5cGUiOiJ0aHVtYiIsImlkIjoiazN2OXEybTd4MTo3IiwicmlnX21zIjo1NDAwMDA3LCJkYXRhIjp7InNpZGUiOiJwcm9ncmFtIiwid2lkdGgiOjY0MCwiaGVpZ2h0IjozNjAsImNhcHR1cmVfcmlnX21zIjo1Mzk5OTc0fX3/2P/gABBKRklGAAEBAAABAAEAAP/Z"
+      },
+      "expected": {
+        "message": {
+          "v": 1,
+          "type": "thumb",
+          "id": "k3v9q2m7x1:7",
+          "rig_ms": 5400007,
+          "data": {
+            "side": "program",
+            "width": 640,
+            "height": 360,
+            "capture_rig_ms": 5399974
+          }
+        },
+        "jpeg_b64": "/9j/4AAQSkZJRgABAQAAAQABAAD/2Q=="
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "valido_relay_command",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "master",
+        "text": "{\"v\":1,\"type\":\"relay_command\",\"id\":\"k3v9q2m7x1:8\",\"rig_ms\":5400008,\"data\":{\"action\":\"start\",\"destinations\":[\"youtube\"]}}"
+      },
+      "expected": {
+        "message": {
+          "v": 1,
+          "type": "relay_command",
+          "id": "k3v9q2m7x1:8",
+          "rig_ms": 5400008,
+          "data": {
+            "action": "start",
+            "destinations": [
+              "youtube"
+            ]
+          }
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "valido_command_del_mando",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "hub",
+        "text": "{\"v\":1,\"type\":\"command\",\"id\":\"h:2\",\"data\":{\"method\":\"POST\",\"path\":\"/api/v1/match/goal\",\"headers\":{\"authorization\":\"Bearer eyJtIjoibV8yMDI2MDcwMyJ9.c2lnbmF0dXJh\",\"idempotency-key\":\"b2c3d4e5\",\"x-zero-device\":\"ipad-banda\",\"content-type\":\"application/json\"},\"principal\":\"bearer\",\"body\":{\"side\":\"home\"}}}"
+      },
+      "expected": {
+        "message": {
+          "v": 1,
+          "type": "command",
+          "id": "h:2",
+          "data": {
+            "method": "POST",
+            "path": "/api/v1/match/goal",
+            "headers": {
+              "authorization": "Bearer eyJtIjoibV8yMDI2MDcwMyJ9.c2lnbmF0dXJh",
+              "idempotency-key": "b2c3d4e5",
+              "x-zero-device": "ipad-banda",
+              "content-type": "application/json"
+            },
+            "principal": "bearer",
+            "body": {
+              "side": "home"
+            }
+          }
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "valido_command_del_panel",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "hub",
+        "text": "{\"v\":1,\"type\":\"command\",\"id\":\"h:3\",\"data\":{\"method\":\"GET\",\"path\":\"/api/v1/match\",\"headers\":{},\"principal\":\"operator\",\"body\":null}}"
+      },
+      "expected": {
+        "message": {
+          "v": 1,
+          "type": "command",
+          "id": "h:3",
+          "data": {
+            "method": "GET",
+            "path": "/api/v1/match",
+            "headers": {},
+            "principal": "operator",
+            "body": null
+          }
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "valido_response_del_maestro",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "master",
+        "text": "{\"v\":1,\"type\":\"response\",\"id\":\"k3v9q2m7x1:9\",\"reply_to\":\"h:2\",\"rig_ms\":5400009,\"data\":{\"status\":200,\"headers\":{\"content-type\":\"application/json\"},\"body\":{\"match_id\":\"m_20260703_2030_a1b2\",\"boot\":\"k3v9q2m7x1\",\"rev\":12,\"home\":{\"name\":\"Atlético Norte\",\"goals\":1,\"formation\":\"4-4-2\",\"players\":18},\"away\":{\"name\":\"Deportivo Sur\",\"goals\":0,\"formation\":null,\"players\":0},\"clock_ms\":1754000,\"clock_running\":true,\"clock_restored\":false,\"lineup_on_air\":null,\"streaming\":true,\"can_stream\":true,\"formations\":[\"4-4-2\",\"4-3-3\"],\"save_error\":null,\"scopes\":[\"match\",\"stream\"]}}}"
+      },
+      "expected": {
+        "message": {
+          "v": 1,
+          "type": "response",
+          "id": "k3v9q2m7x1:9",
+          "reply_to": "h:2",
+          "rig_ms": 5400009,
+          "data": {
+            "status": 200,
+            "headers": {
+              "content-type": "application/json"
+            },
+            "body": {
+              "match_id": "m_20260703_2030_a1b2",
+              "boot": "k3v9q2m7x1",
+              "rev": 12,
+              "home": {
+                "name": "Atlético Norte",
+                "goals": 1,
+                "formation": "4-4-2",
+                "players": 18
+              },
+              "away": {
+                "name": "Deportivo Sur",
+                "goals": 0,
+                "formation": null,
+                "players": 0
+              },
+              "clock_ms": 1754000,
+              "clock_running": true,
+              "clock_restored": false,
+              "lineup_on_air": null,
+              "streaming": true,
+              "can_stream": true,
+              "formations": [
+                "4-4-2",
+                "4-3-3"
+              ],
+              "save_error": null,
+              "scopes": [
+                "match",
+                "stream"
+              ]
+            }
+          }
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "valido_response_del_hub",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "hub",
+        "text": "{\"v\":1,\"type\":\"response\",\"id\":\"h:9\",\"reply_to\":\"k3v9q2m7x1:5\",\"data\":{\"status\":429,\"headers\":{\"content-type\":\"application/problem+json\"},\"body\":{\"type\":\"about:blank\",\"title\":\"Too Many Requests\",\"status\":429}}}"
+      },
+      "expected": {
+        "message": {
+          "v": 1,
+          "type": "response",
+          "id": "h:9",
+          "reply_to": "k3v9q2m7x1:5",
+          "data": {
+            "status": 429,
+            "headers": {
+              "content-type": "application/problem+json"
+            },
+            "body": {
+              "type": "about:blank",
+              "title": "Too Many Requests",
+              "status": 429
+            }
+          }
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "valido_calibration_ready",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "hub",
+        "text": "{\"v\":1,\"type\":\"calibration_ready\",\"id\":\"h:4\",\"data\":{\"pair_id\":\"par_0007\",\"kind\":\"pitch\",\"files\":{\"rig.json\":{\"sha256\":\"cedb60dfefb0ead1fa5a3ccb3c68e0ceaf4bb3415df80c79863092f362bd5ab9\",\"text\":\"{\\\"version\\\": 1}\\n\"},\"pitch.json\":{\"sha256\":\"c21103725243507a4e7c7b497026d734f80cf152e188e3a3d88fa1f864b26085\",\"text\":\"{\\\"version\\\": 1, \\\"length_m\\\": 105.0}\\n\"},\"band_left.json\":{\"sha256\":\"ed0267492d2f084b18b8855ce193295d1e6e7e1d937feec2773708716decb4ae\",\"text\":\"{\\\"version\\\": 1, \\\"side\\\": \\\"left\\\"}\\n\"},\"band_right.json\":{\"sha256\":\"9891fcb27d6654cb5fc8f63cf3b66b9ada8f77e6252358bc4241811e99a25ff8\",\"text\":\"{\\\"version\\\": 1, \\\"side\\\": \\\"right\\\"}\\n\"}}}}"
+      },
+      "expected": {
+        "message": {
+          "v": 1,
+          "type": "calibration_ready",
+          "id": "h:4",
+          "data": {
+            "pair_id": "par_0007",
+            "kind": "pitch",
+            "files": {
+              "rig.json": {
+                "sha256": "cedb60dfefb0ead1fa5a3ccb3c68e0ceaf4bb3415df80c79863092f362bd5ab9",
+                "text": "{\"version\": 1}\n"
+              },
+              "pitch.json": {
+                "sha256": "c21103725243507a4e7c7b497026d734f80cf152e188e3a3d88fa1f864b26085",
+                "text": "{\"version\": 1, \"length_m\": 105.0}\n"
+              },
+              "band_left.json": {
+                "sha256": "ed0267492d2f084b18b8855ce193295d1e6e7e1d937feec2773708716decb4ae",
+                "text": "{\"version\": 1, \"side\": \"left\"}\n"
+              },
+              "band_right.json": {
+                "sha256": "9891fcb27d6654cb5fc8f63cf3b66b9ada8f77e6252358bc4241811e99a25ff8",
+                "text": "{\"version\": 1, \"side\": \"right\"}\n"
+              }
+            }
+          }
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "valido_relay_state",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "hub",
+        "text": "{\"v\":1,\"type\":\"relay_state\",\"id\":\"h:5\",\"data\":{\"streaming\":true,\"can_stream\":true,\"destinations\":[{\"name\":\"youtube\",\"label\":\"YouTube\",\"on_air\":true,\"status\":\"live\"}]}}"
+      },
+      "expected": {
+        "message": {
+          "v": 1,
+          "type": "relay_state",
+          "id": "h:5",
+          "data": {
+            "streaming": true,
+            "can_stream": true,
+            "destinations": [
+              {
+                "name": "youtube",
+                "label": "YouTube",
+                "on_air": true,
+                "status": "live"
+              }
+            ]
+          }
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "valido_ads_changed",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "hub",
+        "text": "{\"v\":1,\"type\":\"ads_changed\",\"id\":\"h:6\",\"data\":{\"manifest_sha256\":\"f4a7768c49e978bca6d2fb39f76ea93cde7eb8b3e2537d4305695617a7466f75\",\"url\":\"/ads/f4a7768c49e978bca6d2fb39f76ea93cde7eb8b3e2537d4305695617a7466f75/m.json\"}}"
+      },
+      "expected": {
+        "message": {
+          "v": 1,
+          "type": "ads_changed",
+          "id": "h:6",
+          "data": {
+            "manifest_sha256": "f4a7768c49e978bca6d2fb39f76ea93cde7eb8b3e2537d4305695617a7466f75",
+            "url": "/ads/f4a7768c49e978bca6d2fb39f76ea93cde7eb8b3e2537d4305695617a7466f75/m.json"
+          }
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "valido_subscribe",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "hub",
+        "text": "{\"v\":1,\"type\":\"subscribe\",\"id\":\"h:7\",\"data\":{\"thumbs\":[\"program\",\"left\"]}}"
+      },
+      "expected": {
+        "message": {
+          "v": 1,
+          "type": "subscribe",
+          "id": "h:7",
+          "data": {
+            "thumbs": [
+              "program",
+              "left"
+            ]
+          }
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "valido_ping",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "hub",
+        "text": "{\"v\":1,\"type\":\"ping\",\"id\":\"h:8\",\"data\":{}}"
+      },
+      "expected": {
+        "message": {
+          "v": 1,
+          "type": "ping",
+          "id": "h:8",
+          "data": {}
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "valido_pong",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "master",
+        "text": "{\"v\":1,\"type\":\"pong\",\"id\":\"k3v9q2m7x1:10\",\"reply_to\":\"h:8\",\"rig_ms\":5400010,\"data\":{}}"
+      },
+      "expected": {
+        "message": {
+          "v": 1,
+          "type": "pong",
+          "id": "k3v9q2m7x1:10",
+          "reply_to": "h:8",
+          "rig_ms": 5400010,
+          "data": {}
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "valido_error_del_maestro",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "master",
+        "text": "{\"v\":1,\"type\":\"error\",\"id\":\"k3v9q2m7x1:11\",\"reply_to\":\"h:10\",\"rig_ms\":5400011,\"data\":{\"code\":\"unknown_type\",\"field\":\"type\",\"detail\":\"?\"}}"
+      },
+      "expected": {
+        "message": {
+          "v": 1,
+          "type": "error",
+          "id": "k3v9q2m7x1:11",
+          "reply_to": "h:10",
+          "rig_ms": 5400011,
+          "data": {
+            "code": "unknown_type",
+            "field": "type",
+            "detail": "?"
+          }
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "valido_error_del_hub_sin_id",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "hub",
+        "text": "{\"v\":1,\"type\":\"error\",\"id\":\"h:10\",\"data\":{\"code\":\"bad_json\",\"field\":null,\"detail\":\"JSON roto\"}}"
+      },
+      "expected": {
+        "message": {
+          "v": 1,
+          "type": "error",
+          "id": "h:10",
+          "data": {
+            "code": "bad_json",
+            "field": null,
+            "detail": "JSON roto"
+          }
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "valido_replica_del_maestro",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "master",
+        "text": "{\"v\":1,\"type\":\"replica\",\"id\":\"k3v9q2m7x1:12\",\"rig_ms\":5400012,\"data\":{\"match_id\":\"m_20260703_2030_a1b2\",\"term\":1,\"seq\":42,\"rig_ms\":5400012,\"clock_domain\":\"q8w2e4r6t1\",\"boot\":\"k3v9q2m7x1\",\"rev\":13,\"match\":{\"accumulated_ms\":1754000,\"running\":true,\"started_rig_ms\":3646000},\"lineups\":{\"teams\":{},\"on_air_side\":null},\"calib\":{\"rig\":\"cedb60dfefb0ead1fa5a3ccb3c68e0ceaf4bb3415df80c79863092f362bd5ab9\",\"pitch\":\"c21103725243507a4e7c7b497026d734f80cf152e188e3a3d88fa1f864b26085\",\"band_left\":null,\"band_right\":null},\"director\":{\"mode\":\"auto\",\"view\":{\"yaw_deg\":3.5,\"pitch_deg\":-8.0,\"hfov_deg\":42.0}},\"ai\":true,\"ads\":{\"manifest_sha256\":\"f4a7768c49e978bca6d2fb39f76ea93cde7eb8b3e2537d4305695617a7466f75\",\"override\":null},\"idempotency\":[{\"key\":\"b2c3d4e5\",\"status\":200,\"rev\":13}]}}"
+      },
+      "expected": {
+        "message": {
+          "v": 1,
+          "type": "replica",
+          "id": "k3v9q2m7x1:12",
+          "rig_ms": 5400012,
+          "data": {
+            "match_id": "m_20260703_2030_a1b2",
+            "term": 1,
+            "seq": 42,
+            "rig_ms": 5400012,
+            "clock_domain": "q8w2e4r6t1",
+            "boot": "k3v9q2m7x1",
+            "rev": 13,
+            "match": {
+              "accumulated_ms": 1754000,
+              "running": true,
+              "started_rig_ms": 3646000
+            },
+            "lineups": {
+              "teams": {},
+              "on_air_side": null
+            },
+            "calib": {
+              "rig": "cedb60dfefb0ead1fa5a3ccb3c68e0ceaf4bb3415df80c79863092f362bd5ab9",
+              "pitch": "c21103725243507a4e7c7b497026d734f80cf152e188e3a3d88fa1f864b26085",
+              "band_left": null,
+              "band_right": null
+            },
+            "director": {
+              "mode": "auto",
+              "view": {
+                "yaw_deg": 3.5,
+                "pitch_deg": -8.0,
+                "hfov_deg": 42.0
+              }
+            },
+            "ai": true,
+            "ads": {
+              "manifest_sha256": "f4a7768c49e978bca6d2fb39f76ea93cde7eb8b3e2537d4305695617a7466f75",
+              "override": null
+            },
+            "idempotency": [
+              {
+                "key": "b2c3d4e5",
+                "status": 200,
+                "rev": 13
+              }
+            ]
+          }
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "valido_replica_al_esclavo",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "hub",
+        "text": "{\"v\":1,\"type\":\"replica\",\"id\":\"h:11\",\"data\":{\"match_id\":\"m_20260703_2030_a1b2\",\"term\":1,\"seq\":42,\"rig_ms\":5400012,\"clock_domain\":\"q8w2e4r6t1\",\"boot\":\"k3v9q2m7x1\",\"rev\":13,\"match\":{\"accumulated_ms\":1754000,\"running\":true,\"started_rig_ms\":3646000},\"lineups\":{\"teams\":{},\"on_air_side\":null},\"calib\":{\"rig\":\"cedb60dfefb0ead1fa5a3ccb3c68e0ceaf4bb3415df80c79863092f362bd5ab9\",\"pitch\":\"c21103725243507a4e7c7b497026d734f80cf152e188e3a3d88fa1f864b26085\",\"band_left\":null,\"band_right\":null},\"director\":{\"mode\":\"auto\",\"view\":{\"yaw_deg\":3.5,\"pitch_deg\":-8.0,\"hfov_deg\":42.0}},\"ai\":true,\"ads\":{\"manifest_sha256\":\"f4a7768c49e978bca6d2fb39f76ea93cde7eb8b3e2537d4305695617a7466f75\",\"override\":null},\"idempotency\":[{\"key\":\"b2c3d4e5\",\"status\":200,\"rev\":13}]}}"
+      },
+      "expected": {
+        "message": {
+          "v": 1,
+          "type": "replica",
+          "id": "h:11",
+          "data": {
+            "match_id": "m_20260703_2030_a1b2",
+            "term": 1,
+            "seq": 42,
+            "rig_ms": 5400012,
+            "clock_domain": "q8w2e4r6t1",
+            "boot": "k3v9q2m7x1",
+            "rev": 13,
+            "match": {
+              "accumulated_ms": 1754000,
+              "running": true,
+              "started_rig_ms": 3646000
+            },
+            "lineups": {
+              "teams": {},
+              "on_air_side": null
+            },
+            "calib": {
+              "rig": "cedb60dfefb0ead1fa5a3ccb3c68e0ceaf4bb3415df80c79863092f362bd5ab9",
+              "pitch": "c21103725243507a4e7c7b497026d734f80cf152e188e3a3d88fa1f864b26085",
+              "band_left": null,
+              "band_right": null
+            },
+            "director": {
+              "mode": "auto",
+              "view": {
+                "yaw_deg": 3.5,
+                "pitch_deg": -8.0,
+                "hfov_deg": 42.0
+              }
+            },
+            "ai": true,
+            "ads": {
+              "manifest_sha256": "f4a7768c49e978bca6d2fb39f76ea93cde7eb8b3e2537d4305695617a7466f75",
+              "override": null
+            },
+            "idempotency": [
+              {
+                "key": "b2c3d4e5",
+                "status": 200,
+                "rev": 13
+              }
+            ]
+          }
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "valido_master_status",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "hub",
+        "text": "{\"v\":1,\"type\":\"master_status\",\"id\":\"h:12\",\"data\":{\"state\":\"up\",\"term\":1,\"device_id\":\"iphone-izq\",\"for_ms\":0}}"
+      },
+      "expected": {
+        "message": {
+          "v": 1,
+          "type": "master_status",
+          "id": "h:12",
+          "data": {
+            "state": "up",
+            "term": 1,
+            "device_id": "iphone-izq",
+            "for_ms": 0
+          }
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "roto_json_roto",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "master",
+        "text": "{\"v\":1,\"type\":\"mark\""
+      },
+      "expected": {
+        "error": {
+          "code": "bad_json",
+          "field": null,
+          "reply_to": null
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "roto_clave_repetida",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "hub",
+        "text": "{\"v\":1,\"v\":1,\"type\":\"ping\",\"id\":\"h:1\",\"data\":{}}"
+      },
+      "expected": {
+        "error": {
+          "code": "bad_json",
+          "field": null,
+          "reply_to": null
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "roto_nan_no_es_json",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "master",
+        "text": "{\"v\":1,\"type\":\"mark\",\"id\":\"k3v9q2m7x1:5\",\"rig_ms\":5400005,\"data\":{\"kind\":\"goal\",\"rig_ms\":5394000,\"source\":\"operator\",\"confidence\":NaN,\"auto\":false}}"
+      },
+      "expected": {
+        "error": {
+          "code": "bad_json",
+          "field": null,
+          "reply_to": null
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "roto_no_es_un_objeto",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "hub",
+        "text": "[1,2]"
+      },
+      "expected": {
+        "error": {
+          "code": "bad_envelope",
+          "field": null,
+          "reply_to": null
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "roto_thumb_en_texto",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "master",
+        "text": "{\"v\":1,\"type\":\"thumb\",\"id\":\"k3v9q2m7x1:7\",\"rig_ms\":5400007,\"data\":{\"side\":\"program\",\"width\":640,\"height\":360,\"capture_rig_ms\":5399974}}"
+      },
+      "expected": {
+        "error": {
+          "code": "bad_envelope",
+          "field": "type",
+          "reply_to": "k3v9q2m7x1:7"
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "roto_binaria_que_no_es_thumb",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "master",
+        "binary_b64": "AJV7InYiOjEsInR5cGUiOiJtYXJrIiwiaWQiOiJrM3Y5cTJtN3gxOjUiLCJyaWdfbXMiOjU0MDAwMDUsImRhdGEiOnsia2luZCI6ImdvYWwiLCJyaWdfbXMiOjUzOTQwMDAsInNvdXJjZSI6Im9wZXJhdG9yIiwiY29uZmlkZW5jZSI6bnVsbCwiYXV0byI6ZmFsc2V9ff/Y/+AAEEpGSUYAAQEAAAEAAQAA/9k="
+      },
+      "expected": {
+        "error": {
+          "code": "bad_envelope",
+          "field": "type",
+          "reply_to": "k3v9q2m7x1:5"
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "roto_el_esclavo_no_manda_state",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "slave",
+        "text": "{\"v\":1,\"type\":\"state\",\"id\":\"k3v9q2m7x1:2\",\"rig_ms\":5400002,\"data\":{\"match_id\":\"m_20260703_2030_a1b2\",\"boot\":\"k3v9q2m7x1\",\"rev\":12,\"home\":{\"name\":\"Atlético Norte\",\"goals\":1,\"formation\":\"4-4-2\",\"players\":18},\"away\":{\"name\":\"Deportivo Sur\",\"goals\":0,\"formation\":null,\"players\":0},\"clock_ms\":1754000,\"clock_running\":true,\"clock_restored\":false,\"lineup_on_air\":null,\"streaming\":true,\"can_stream\":true,\"formations\":[\"4-4-2\",\"4-3-3\"],\"save_error\":null}}"
+      },
+      "expected": {
+        "error": {
+          "code": "not_allowed",
+          "field": "type",
+          "reply_to": "k3v9q2m7x1:2"
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "roto_el_hub_no_manda_hello",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "hub",
+        "text": "{\"v\":1,\"type\":\"hello\",\"id\":\"k3v9q2m7x1:1\",\"rig_ms\":5400001,\"data\":{\"rig_id\":\"rig_norte_01\",\"match_id\":\"m_20260703_2030_a1b2\",\"role\":\"master\",\"side\":\"left\",\"device_id\":\"iphone-izq\",\"term\":1,\"app_version\":\"0.9.0+42\",\"models_sha\":\"9ad6116f947e6bb1c9b58d580b46c15fd5d1d73500abe572eab5027ede9c0f4f\",\"boot\":\"k3v9q2m7x1\",\"rev\":12,\"calib\":{\"rig\":\"cedb60dfefb0ead1fa5a3ccb3c68e0ceaf4bb3415df80c79863092f362bd5ab9\",\"pitch\":\"c21103725243507a4e7c7b497026d734f80cf152e188e3a3d88fa1f864b26085\",\"band_left\":null,\"band_right\":null}}}"
+      },
+      "expected": {
+        "error": {
+          "code": "not_allowed",
+          "field": "type",
+          "reply_to": "k3v9q2m7x1:1"
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "roto_ancla_de_mas_de_256_b",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "master",
+        "text": "{\"v\":1,\"type\":\"anchor\",\"id\":\"k3v9q2m7x1:4\",\"rig_ms\":5400004,\"data\":{\"rig_ms\":5399971,\"program_pts_ms\":1742366}                                                                                                                                                                                                        }"
+      },
+      "expected": {
+        "error": {
+          "code": "too_large",
+          "field": null,
+          "reply_to": "k3v9q2m7x1:4"
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "roto_miniatura_que_no_es_jpeg",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "master",
+        "binary_b64": "AId7InYiOjEsInR5cGUiOiJ0aHVtYiIsImlkIjoiazN2OXEybTd4MTo3IiwicmlnX21zIjo1NDAwMDA3LCJkYXRhIjp7InNpZGUiOiJwcm9ncmFtIiwid2lkdGgiOjY0MCwiaGVpZ2h0IjozNjAsImNhcHR1cmVfcmlnX21zIjo1Mzk5OTc0fX1HSUY4OWE="
+      },
+      "expected": {
+        "error": {
+          "code": "bad_field",
+          "field": "jpeg",
+          "reply_to": "k3v9q2m7x1:7"
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "roto_sin_v",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "master",
+        "text": "{\"type\":\"mark\",\"id\":\"k3v9q2m7x1:5\",\"rig_ms\":5400005,\"data\":{\"kind\":\"goal\",\"rig_ms\":5394000,\"source\":\"operator\",\"confidence\":null,\"auto\":false}}"
+      },
+      "expected": {
+        "error": {
+          "code": "bad_envelope",
+          "field": "v",
+          "reply_to": "k3v9q2m7x1:5"
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "roto_version_2",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "master",
+        "text": "{\"v\":2,\"type\":\"mark\",\"id\":\"k3v9q2m7x1:5\",\"rig_ms\":5400005,\"data\":{\"kind\":\"goal\",\"rig_ms\":5394000,\"source\":\"operator\",\"confidence\":null,\"auto\":false}}"
+      },
+      "expected": {
+        "error": {
+          "code": "bad_version",
+          "field": "v",
+          "reply_to": "k3v9q2m7x1:5"
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "roto_publisher_sigue_reservado",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "master",
+        "text": "{\"v\":1,\"type\":\"publisher\",\"id\":\"k3v9q2m7x1:5\",\"rig_ms\":5400005,\"data\":{\"kind\":\"goal\",\"rig_ms\":5394000,\"source\":\"operator\",\"confidence\":null,\"auto\":false}}"
+      },
+      "expected": {
+        "error": {
+          "code": "unknown_type",
+          "field": "type",
+          "reply_to": "k3v9q2m7x1:5"
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "roto_clave_de_mas_en_el_sobre",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "master",
+        "text": "{\"v\":1,\"type\":\"mark\",\"id\":\"k3v9q2m7x1:5\",\"rig_ms\":5400005,\"data\":{\"kind\":\"goal\",\"rig_ms\":5394000,\"source\":\"operator\",\"confidence\":null,\"auto\":false},\"ts\":1}"
+      },
+      "expected": {
+        "error": {
+          "code": "bad_envelope",
+          "field": "ts",
+          "reply_to": "k3v9q2m7x1:5"
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "roto_id_con_espacio",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "master",
+        "text": "{\"v\":1,\"type\":\"mark\",\"id\":\"k3v9 q2m7:5\",\"rig_ms\":5400005,\"data\":{\"kind\":\"goal\",\"rig_ms\":5394000,\"source\":\"operator\",\"confidence\":null,\"auto\":false}}"
+      },
+      "expected": {
+        "error": {
+          "code": "bad_envelope",
+          "field": "id",
+          "reply_to": null
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "roto_el_movil_siempre_manda_rig_ms",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "master",
+        "text": "{\"v\":1,\"type\":\"mark\",\"id\":\"k3v9q2m7x1:5\",\"data\":{\"kind\":\"goal\",\"rig_ms\":5394000,\"source\":\"operator\",\"confidence\":null,\"auto\":false}}"
+      },
+      "expected": {
+        "error": {
+          "code": "bad_envelope",
+          "field": "rig_ms",
+          "reply_to": "k3v9q2m7x1:5"
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "roto_el_hub_nunca_manda_rig_ms",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "hub",
+        "text": "{\"v\":1,\"type\":\"ping\",\"id\":\"h:8\",\"data\":{},\"rig_ms\":5}"
+      },
+      "expected": {
+        "error": {
+          "code": "bad_envelope",
+          "field": "rig_ms",
+          "reply_to": "h:8"
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "roto_reply_to_en_una_marca",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "master",
+        "text": "{\"v\":1,\"type\":\"mark\",\"id\":\"k3v9q2m7x1:5\",\"rig_ms\":5400005,\"data\":{\"kind\":\"goal\",\"rig_ms\":5394000,\"source\":\"operator\",\"confidence\":null,\"auto\":false},\"reply_to\":\"h:1\"}"
+      },
+      "expected": {
+        "error": {
+          "code": "bad_envelope",
+          "field": "reply_to",
+          "reply_to": "k3v9q2m7x1:5"
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "roto_pong_sin_reply_to",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "master",
+        "text": "{\"v\":1,\"type\":\"pong\",\"id\":\"k3v9q2m7x1:10\",\"rig_ms\":5400010,\"data\":{}}"
+      },
+      "expected": {
+        "error": {
+          "code": "bad_envelope",
+          "field": "reply_to",
+          "reply_to": "k3v9q2m7x1:10"
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "roto_data_que_no_es_objeto",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "hub",
+        "text": "{\"v\":1,\"type\":\"ping\",\"id\":\"h:8\",\"data\":[]}"
+      },
+      "expected": {
+        "error": {
+          "code": "bad_envelope",
+          "field": "data",
+          "reply_to": "h:8"
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "roto_hello_con_rol_desconocido",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "master",
+        "text": "{\"v\":1,\"type\":\"hello\",\"id\":\"k3v9q2m7x1:1\",\"rig_ms\":5400001,\"data\":{\"rig_id\":\"rig_norte_01\",\"match_id\":\"m_20260703_2030_a1b2\",\"role\":\"boss\",\"side\":\"left\",\"device_id\":\"iphone-izq\",\"term\":1,\"app_version\":\"0.9.0+42\",\"models_sha\":\"9ad6116f947e6bb1c9b58d580b46c15fd5d1d73500abe572eab5027ede9c0f4f\",\"boot\":\"k3v9q2m7x1\",\"rev\":12,\"calib\":{\"rig\":\"cedb60dfefb0ead1fa5a3ccb3c68e0ceaf4bb3415df80c79863092f362bd5ab9\",\"pitch\":\"c21103725243507a4e7c7b497026d734f80cf152e188e3a3d88fa1f864b26085\",\"band_left\":null,\"band_right\":null}}}"
+      },
+      "expected": {
+        "error": {
+          "code": "bad_field",
+          "field": "data.role",
+          "reply_to": "k3v9q2m7x1:1"
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "roto_hello_con_barra_en_match_id",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "master",
+        "text": "{\"v\":1,\"type\":\"hello\",\"id\":\"k3v9q2m7x1:1\",\"rig_ms\":5400001,\"data\":{\"rig_id\":\"rig_norte_01\",\"match_id\":\"m/1\",\"role\":\"master\",\"side\":\"left\",\"device_id\":\"iphone-izq\",\"term\":1,\"app_version\":\"0.9.0+42\",\"models_sha\":\"9ad6116f947e6bb1c9b58d580b46c15fd5d1d73500abe572eab5027ede9c0f4f\",\"boot\":\"k3v9q2m7x1\",\"rev\":12,\"calib\":{\"rig\":\"cedb60dfefb0ead1fa5a3ccb3c68e0ceaf4bb3415df80c79863092f362bd5ab9\",\"pitch\":\"c21103725243507a4e7c7b497026d734f80cf152e188e3a3d88fa1f864b26085\",\"band_left\":null,\"band_right\":null}}}"
+      },
+      "expected": {
+        "error": {
+          "code": "bad_field",
+          "field": "data.match_id",
+          "reply_to": "k3v9q2m7x1:1"
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "roto_hello_sin_boot",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "master",
+        "text": "{\"v\":1,\"type\":\"hello\",\"id\":\"k3v9q2m7x1:1\",\"rig_ms\":5400001,\"data\":{\"rig_id\":\"rig_norte_01\",\"match_id\":\"m_20260703_2030_a1b2\",\"role\":\"master\",\"side\":\"left\",\"device_id\":\"iphone-izq\",\"term\":1,\"app_version\":\"0.9.0+42\",\"models_sha\":\"9ad6116f947e6bb1c9b58d580b46c15fd5d1d73500abe572eab5027ede9c0f4f\",\"rev\":12,\"calib\":{\"rig\":\"cedb60dfefb0ead1fa5a3ccb3c68e0ceaf4bb3415df80c79863092f362bd5ab9\",\"pitch\":\"c21103725243507a4e7c7b497026d734f80cf152e188e3a3d88fa1f864b26085\",\"band_left\":null,\"band_right\":null}}}"
+      },
+      "expected": {
+        "error": {
+          "code": "bad_field",
+          "field": "data.boot",
+          "reply_to": "k3v9q2m7x1:1"
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "roto_hello_con_calib_que_no_es_sha",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "master",
+        "text": "{\"v\":1,\"type\":\"hello\",\"id\":\"k3v9q2m7x1:1\",\"rig_ms\":5400001,\"data\":{\"rig_id\":\"rig_norte_01\",\"match_id\":\"m_20260703_2030_a1b2\",\"role\":\"master\",\"side\":\"left\",\"device_id\":\"iphone-izq\",\"term\":1,\"app_version\":\"0.9.0+42\",\"models_sha\":\"9ad6116f947e6bb1c9b58d580b46c15fd5d1d73500abe572eab5027ede9c0f4f\",\"boot\":\"k3v9q2m7x1\",\"rev\":12,\"calib\":{\"rig\":\"ab\",\"pitch\":\"c21103725243507a4e7c7b497026d734f80cf152e188e3a3d88fa1f864b26085\",\"band_left\":null,\"band_right\":null}}}"
+      },
+      "expected": {
+        "error": {
+          "code": "bad_field",
+          "field": "data.calib.rig",
+          "reply_to": "k3v9q2m7x1:1"
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "roto_hello_con_models_sha_null",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "master",
+        "text": "{\"v\":1,\"type\":\"hello\",\"id\":\"k3v9q2m7x1:1\",\"rig_ms\":5400001,\"data\":{\"rig_id\":\"rig_norte_01\",\"match_id\":\"m_20260703_2030_a1b2\",\"role\":\"master\",\"side\":\"left\",\"device_id\":\"iphone-izq\",\"term\":1,\"app_version\":\"0.9.0+42\",\"models_sha\":null,\"boot\":\"k3v9q2m7x1\",\"rev\":12,\"calib\":{\"rig\":\"cedb60dfefb0ead1fa5a3ccb3c68e0ceaf4bb3415df80c79863092f362bd5ab9\",\"pitch\":\"c21103725243507a4e7c7b497026d734f80cf152e188e3a3d88fa1f864b26085\",\"band_left\":null,\"band_right\":null}}}"
+      },
+      "expected": {
+        "error": {
+          "code": "bad_field",
+          "field": "data.models_sha",
+          "reply_to": "k3v9q2m7x1:1"
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "roto_hello_con_term_booleano",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "master",
+        "text": "{\"v\":1,\"type\":\"hello\",\"id\":\"k3v9q2m7x1:1\",\"rig_ms\":5400001,\"data\":{\"rig_id\":\"rig_norte_01\",\"match_id\":\"m_20260703_2030_a1b2\",\"role\":\"master\",\"side\":\"left\",\"device_id\":\"iphone-izq\",\"term\":true,\"app_version\":\"0.9.0+42\",\"models_sha\":\"9ad6116f947e6bb1c9b58d580b46c15fd5d1d73500abe572eab5027ede9c0f4f\",\"boot\":\"k3v9q2m7x1\",\"rev\":12,\"calib\":{\"rig\":\"cedb60dfefb0ead1fa5a3ccb3c68e0ceaf4bb3415df80c79863092f362bd5ab9\",\"pitch\":\"c21103725243507a4e7c7b497026d734f80cf152e188e3a3d88fa1f864b26085\",\"band_left\":null,\"band_right\":null}}}"
+      },
+      "expected": {
+        "error": {
+          "code": "bad_field",
+          "field": "data.term",
+          "reply_to": "k3v9q2m7x1:1"
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "roto_marca_con_confianza_1_5",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "master",
+        "text": "{\"v\":1,\"type\":\"mark\",\"id\":\"k3v9q2m7x1:5\",\"rig_ms\":5400005,\"data\":{\"kind\":\"goal\",\"rig_ms\":5394000,\"source\":\"operator\",\"confidence\":1.5,\"auto\":false}}"
+      },
+      "expected": {
+        "error": {
+          "code": "bad_field",
+          "field": "data.confidence",
+          "reply_to": "k3v9q2m7x1:5"
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "roto_marca_con_campo_de_mas",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "master",
+        "text": "{\"v\":1,\"type\":\"mark\",\"id\":\"k3v9q2m7x1:5\",\"rig_ms\":5400005,\"data\":{\"kind\":\"goal\",\"rig_ms\":5394000,\"source\":\"operator\",\"confidence\":null,\"auto\":false,\"by\":\"operator\"}}"
+      },
+      "expected": {
+        "error": {
+          "code": "bad_field",
+          "field": "data.by",
+          "reply_to": "k3v9q2m7x1:5"
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "roto_ancla_con_rig_ms_de_2_53",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "master",
+        "text": "{\"v\":1,\"type\":\"anchor\",\"id\":\"k3v9q2m7x1:4\",\"rig_ms\":5400004,\"data\":{\"rig_ms\":9007199254740992,\"program_pts_ms\":1742366}}"
+      },
+      "expected": {
+        "error": {
+          "code": "bad_field",
+          "field": "data.rig_ms",
+          "reply_to": "k3v9q2m7x1:4"
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "roto_state_con_scopes",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "master",
+        "text": "{\"v\":1,\"type\":\"state\",\"id\":\"k3v9q2m7x1:2\",\"rig_ms\":5400002,\"data\":{\"match_id\":\"m_20260703_2030_a1b2\",\"boot\":\"k3v9q2m7x1\",\"rev\":12,\"home\":{\"name\":\"Atlético Norte\",\"goals\":1,\"formation\":\"4-4-2\",\"players\":18},\"away\":{\"name\":\"Deportivo Sur\",\"goals\":0,\"formation\":null,\"players\":0},\"clock_ms\":1754000,\"clock_running\":true,\"clock_restored\":false,\"lineup_on_air\":null,\"streaming\":true,\"can_stream\":true,\"formations\":[\"4-4-2\",\"4-3-3\"],\"save_error\":null,\"scopes\":[\"match\"]}}"
+      },
+      "expected": {
+        "error": {
+          "code": "bad_field",
+          "field": "data.scopes",
+          "reply_to": "k3v9q2m7x1:2"
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "roto_orden_con_cookie",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "hub",
+        "text": "{\"v\":1,\"type\":\"command\",\"id\":\"h:2\",\"data\":{\"method\":\"POST\",\"path\":\"/api/v1/match/goal\",\"headers\":{\"authorization\":\"Bearer eyJtIjoibV8yMDI2MDcwMyJ9.c2lnbmF0dXJh\",\"idempotency-key\":\"b2c3d4e5\",\"x-zero-device\":\"ipad-banda\",\"content-type\":\"application/json\",\"cookie\":\"x\"},\"principal\":\"bearer\",\"body\":{\"side\":\"home\"}}}"
+      },
+      "expected": {
+        "error": {
+          "code": "bad_field",
+          "field": "data.headers.cookie",
+          "reply_to": "h:2"
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "roto_orden_con_punto_punto",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "hub",
+        "text": "{\"v\":1,\"type\":\"command\",\"id\":\"h:2\",\"data\":{\"method\":\"POST\",\"path\":\"/api/v1/../admin\",\"headers\":{\"authorization\":\"Bearer eyJtIjoibV8yMDI2MDcwMyJ9.c2lnbmF0dXJh\",\"idempotency-key\":\"b2c3d4e5\",\"x-zero-device\":\"ipad-banda\",\"content-type\":\"application/json\"},\"principal\":\"bearer\",\"body\":{\"side\":\"home\"}}}"
+      },
+      "expected": {
+        "error": {
+          "code": "bad_field",
+          "field": "data.path",
+          "reply_to": "h:2"
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "roto_sha_de_calib_que_no_casa",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "hub",
+        "text": "{\"v\":1,\"type\":\"calibration_ready\",\"id\":\"h:4\",\"data\":{\"pair_id\":\"par_0007\",\"kind\":\"pitch\",\"files\":{\"rig.json\":{\"sha256\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"text\":\"{\\\"version\\\": 1}\\n\"},\"pitch.json\":{\"sha256\":\"c21103725243507a4e7c7b497026d734f80cf152e188e3a3d88fa1f864b26085\",\"text\":\"{\\\"version\\\": 1, \\\"length_m\\\": 105.0}\\n\"},\"band_left.json\":{\"sha256\":\"ed0267492d2f084b18b8855ce193295d1e6e7e1d937feec2773708716decb4ae\",\"text\":\"{\\\"version\\\": 1, \\\"side\\\": \\\"left\\\"}\\n\"},\"band_right.json\":{\"sha256\":\"9891fcb27d6654cb5fc8f63cf3b66b9ada8f77e6252358bc4241811e99a25ff8\",\"text\":\"{\\\"version\\\": 1, \\\"side\\\": \\\"right\\\"}\\n\"}}}}"
+      },
+      "expected": {
+        "error": {
+          "code": "bad_field",
+          "field": "data.files.rig.json.sha256",
+          "reply_to": "h:4"
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "roto_miniatura_de_1280",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "master",
+        "binary_b64": "AIh7InYiOjEsInR5cGUiOiJ0aHVtYiIsImlkIjoiazN2OXEybTd4MTo3IiwicmlnX21zIjo1NDAwMDA3LCJkYXRhIjp7InNpZGUiOiJwcm9ncmFtIiwid2lkdGgiOjEyODAsImhlaWdodCI6MzYwLCJjYXB0dXJlX3JpZ19tcyI6NTM5OTk3NH19/9j/4AAQSkZJRgABAQAAAQABAAD/2Q=="
+      },
+      "expected": {
+        "error": {
+          "code": "bad_field",
+          "field": "data.width",
+          "reply_to": "k3v9q2m7x1:7"
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "roto_suscripcion_repetida",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "hub",
+        "text": "{\"v\":1,\"type\":\"subscribe\",\"id\":\"h:7\",\"data\":{\"thumbs\":[\"left\",\"left\"]}}"
+      },
+      "expected": {
+        "error": {
+          "code": "bad_field",
+          "field": "data.thumbs",
+          "reply_to": "h:7"
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "roto_anuncios_de_otro_dominio",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "hub",
+        "text": "{\"v\":1,\"type\":\"ads_changed\",\"id\":\"h:6\",\"data\":{\"manifest_sha256\":\"f4a7768c49e978bca6d2fb39f76ea93cde7eb8b3e2537d4305695617a7466f75\",\"url\":\"https://otro.example/m\"}}"
+      },
+      "expected": {
+        "error": {
+          "code": "bad_field",
+          "field": "data.url",
+          "reply_to": "h:6"
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "roto_pitch_sin_banda",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "hub",
+        "text": "{\"v\":1,\"type\":\"calibration_ready\",\"id\":\"h:4\",\"data\":{\"pair_id\":\"par_0007\",\"kind\":\"pitch\",\"files\":{\"rig.json\":{\"sha256\":\"cedb60dfefb0ead1fa5a3ccb3c68e0ceaf4bb3415df80c79863092f362bd5ab9\",\"text\":\"{\\\"version\\\": 1}\\n\"},\"pitch.json\":{\"sha256\":\"c21103725243507a4e7c7b497026d734f80cf152e188e3a3d88fa1f864b26085\",\"text\":\"{\\\"version\\\": 1, \\\"length_m\\\": 105.0}\\n\"},\"band_right.json\":{\"sha256\":\"9891fcb27d6654cb5fc8f63cf3b66b9ada8f77e6252358bc4241811e99a25ff8\",\"text\":\"{\\\"version\\\": 1, \\\"side\\\": \\\"right\\\"}\\n\"}}}}"
+      },
+      "expected": {
+        "error": {
+          "code": "bad_field",
+          "field": "data.files",
+          "reply_to": "h:4"
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "roto_fuente_desconocida",
+      "fn": "tunnel.parse",
+      "inputs": {
+        "sender": "hub",
+        "text": "{\"v\":1,\"type\":\"subscribe\",\"id\":\"h:7\",\"data\":{\"thumbs\":[\"front\"]}}"
+      },
+      "expected": {
+        "error": {
+          "code": "bad_field",
+          "field": "data.thumbs[0]",
+          "reply_to": "h:7"
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "cierres",
+      "fn": "tunnel.close",
+      "inputs": {
+        "term": 3
+      },
+      "expected": {
+        "codes": {
+          "token": 4401,
+          "scope": 4403,
+          "replaced": 4408,
+          "term": 4409,
+          "match_closed": 4410,
+          "protocol": 1008,
+          "too_large": 1009
+        },
+        "term_reason": "term=3",
+        "term_back": 3,
+        "reason_max_bytes": 123
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    }
+  ]
+}
