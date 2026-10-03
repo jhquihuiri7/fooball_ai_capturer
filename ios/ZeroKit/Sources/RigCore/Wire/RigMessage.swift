@@ -80,7 +80,7 @@ public enum RigMessage: Equatable, Sendable {
 
     /// `nil` si el paquete está truncado o no es nuestro: se ignora, no se revienta.
     public static func decode(_ data: Data) -> RigMessage? {
-        var reader = Reader(data: data)
+        var reader = BigEndianReader(data: data)
         guard let raw = reader.read(UInt8.self), let kind = Kind(rawValue: raw),
               let seq = reader.read(UInt32.self)
         else {
@@ -139,25 +139,4 @@ public enum RigMessage: Equatable, Sendable {
         }
     }
 
-    private struct Reader {
-        let data: Data
-        var offset = 0
-
-        mutating func read<T: FixedWidthInteger>(_: T.Type) -> T? {
-            let size = MemoryLayout<T>.size
-            guard offset + size <= data.count else { return nil }
-            var value: T = 0
-            let start = data.startIndex + offset
-            _ = withUnsafeMutableBytes(of: &value) { data.copyBytes(to: $0, from: start..<(start + size)) }
-            offset += size
-            return T(bigEndian: value)
-        }
-    }
-}
-
-private extension Data {
-    mutating func appendBigEndian<T: FixedWidthInteger>(_ value: T) {
-        // `Swift.`: dentro de una extensión de `Data`, el nombre a secas es el método de `Data`.
-        Swift.withUnsafeBytes(of: value.bigEndian) { append(contentsOf: $0) }
-    }
 }

@@ -12,6 +12,40 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-03 · IOS-10 — protocolo del enlace: tramas, tipos y fragmentación · ✅
+
+El cable entre los dos móviles, escrito antes de abrir ningún socket (el formato manda
+el ADR 0023 §1-§2, que es quien define la tarjeta).
+
+**Hecho**
+- `RigCore/Wire/LinkConstants.swift`: LINK_DATAGRAM_PAYLOAD_B=1200 (cabe en el MTU
+  mínimo de IPv6), LINK_MAX_FRAME_B=1 MiB y LINK_REASSEMBLY_FRAMES=4, los tres que la
+  tarjeta manda fijar aquí.
+- `RigCore/Wire/LinkFrame.swift`: la trama del ADR —magic «ZL», versión, type, flags
+  (IDR, vista extrapolada), session, seq, rig_ms u64, length— más el tag de 16 B, que
+  no va en hello/auth. El catálogo entero con sus 24 códigos fijos (hello…color_means),
+  el canal de cada tipo (control TCP / medios UDP) y el decode de stream con tres
+  salidas: trama, faltan bytes, o inválida (y por control se cierra). Una length
+  disparatada es «inválida», no una reserva de 50 MB.
+- Payload de `detections` cerrado: infer_ms u16 + n u16 + **10 B por caja** (u16×4
+  nativos, clase u8, score u8). La tarjeta decía «9 B», pero su propia aceptación
+  —30 cajas ≤300 B— da 10; anotado en el código.
+- `RigCore/Wire/Fragmenter.swift` + `Reassembler`: troceo a ≤1200 B con cabecera
+  {magic, session, seq, índice, total}; reensamblado por seq con 4 tramas a medias
+  como mucho (acotado por número, como FramePairer); duplicados ignorados, totales
+  contradictorios y basura contados, fragmento perdido = trama fuera y contada.
+- El `Reader` de RigMessage asciende a `BigEndianReader` del módulo: una sola
+  implementación de lectura/escritura big-endian para todo el cable.
+
+**Aceptación**: todos los tipos van y vuelven iguales; 10.000 tramas aleatorias o
+truncadas sin reventar; reensamblado desordenado ✓; fragmento perdido descarta y
+cuenta ✓; 30 detecciones = 300 B ✓. `swift test` 68/68, capas limpias, build ✅.
+
+**Siguiente**: IOS-12/IOS-13 (reloj y emparejado sobre el enlace) o IOS-16; IOS-11
+necesita los hubs físicos.
+
+---
+
 ## 2026-10-03 · IOS-09 — enganche del pipeline sin retener los búferes de la cámara · 🚧 falta el remojo en el iPhone
 
 **Hecho**
