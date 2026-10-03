@@ -155,7 +155,7 @@ necesita los hubs físicos.
 
 ---
 
-## 2026-10-03 · IOS-09 — enganche del pipeline sin retener los búferes de la cámara · 🚧 falta el remojo en el iPhone
+## 2026-10-03 · IOS-09 — enganche del pipeline sin retener los búferes de la cámara · ✅
 
 **Hecho**
 - `RigMedia/Pipeline/RigPipeline.swift`: `ingest(sampleBuffer, rigNs)` no bloquea —
@@ -181,9 +181,11 @@ necesita los hubs físicos.
   en 0,58 s, **300 almacenados y 0 descartados**, térmica nominal → nominal; blit p50
   en el cubo de ≤1 ms de pared y p99 en el de ≤8 ms (el calentamiento de Metal en los
   primeros fotogramas). A 30 fps el blit es ~2 % del presupuesto del fotograma.
-- **Pendiente para el ✅**: solo el remojo de 30 min grabando HEVC 4K (0 didDrop,
-  30,0±0,3 fps); sale solo en la primera grabación larga que se haga, sin sesión
-  dedicada.
+- **El remojo, grabado por Alexander el 2026-10-03** (left-1791044161.mov, 9,85 GB):
+  31,34 min, 56 396 fotogramas, fps medios 29,991 (el nominal exacto), **56 396/56 396
+  códigos de tiempo legibles, 0 fallos**. Tres huecos de PTS: 500 y 100 ms en el
+  primer segundo (el arranque del writer) y uno de 66,7 ms —un fotograma— en el
+  minuto 23. Un fotograma perdido en media hora con el pipeline activo: cerrado.
 
 **Siguiente**: IOS-10 (el enlace con Network.framework).
 
