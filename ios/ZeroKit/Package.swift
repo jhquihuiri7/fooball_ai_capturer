@@ -33,6 +33,8 @@ let package = Package(
         .target(
             name: "RigMedia",
             dependencies: ["RigCore"],
+            // Los .metal compilan a default.metallib dentro de Bundle.module.
+            resources: [.process("Metal/Shaders.metal")],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .target(

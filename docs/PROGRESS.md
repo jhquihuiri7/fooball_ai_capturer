@@ -12,6 +12,44 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-03 · IOS-04 — colas acotadas, pools IOSurface y anillo de fotogramas · ✅
+
+Los cimientos de memoria del pipeline: nada se reserva dentro del bucle de frames y
+ante saturación se descarta y se cuenta, como en el servidor.
+
+**Hecho**
+- `RigCore/Runtime/BoundedQueue.swift`: anillo genérico de capacidad fija, con
+  `dropOldest` y `dropNewest` y contadores exactos (pushed = popped + dropped). No
+  sincroniza: el cerrojo lo pone quien la usa.
+- `RigMedia/Metal/MetalContext.swift`: MTLDevice, cola, CVMetalTextureCache y la
+  `default.metallib` de `Bundle.module`; si el CLI no la trae, cae a
+  `makeLibrary(source:)` con el noop. Las vistas MTLTexture salen de aquí: NV12
+  r8/rg8, BGRA y r16Float.
+- `RigMedia/Metal/Shaders.metal`: el primer `.metal` del paquete (solo `rig_noop`),
+  que es lo que hace existir `Bundle.module` y la metallib; los kernels reales llegan
+  con IOS-20+.
+- `RigMedia/Metal/PixelBufferPool.swift`: CVPixelBufferPool IOSurface + Metal,
+  precalentado; con `kCVPixelBufferPoolAllocationThresholdKey`, `take()` da `nil` en
+  vez de reservar por encima del tope.
+- `RigMedia/Capture/FrameRing.swift`: K fotogramas NV12 propios indexados por rigMs,
+  búsqueda del más cercano con distancia máxima, y recuento de referencias con
+  generaciones: un hueco referenciado no se reutiliza y una liberación tardía de una
+  generación vieja no puede soltar al ocupante nuevo (la generación sube al reclamar,
+  no al terminar el fill).
+- `RigMedia/Constants/PipelineConstants.swift`: `frameRingSlots = 4` (≈50 MB en 4K) y
+  `pixelPoolHeadroom = 2`, con unidades y motivo.
+
+**Aceptación, medida en el Mac**
+- 10.000 ciclos de take tras el precalentamiento reciclan las MISMAS IOSurface (≤2
+  ids distintas con capacidad 2): Allocations plano por construcción.
+- Los contadores de la cola cuadran bajo 1.000 operaciones mezcladas.
+- El fotograma referenciado sobrevive a tres stores seguidos y la liberación doble
+  del lease viejo no libera al nuevo. `swift test`: 35/35.
+
+**Siguiente**: IOS-05.
+
+---
+
 ## 2026-10-03 · IOS-03 — arnés de vectores dorados en XCTest · ✅
 
 El primer `--sync` real de REF-10 dejó los ocho ficheros del servidor en
