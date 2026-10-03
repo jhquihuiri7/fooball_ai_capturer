@@ -1,0 +1,655 @@
+{
+  "schema": 1,
+  "module": "color",
+  "conventions": {
+    "axes": "Ejes del soporte: X a la derecha, Y hacia abajo, Z hacia delante (rig.py).",
+    "rotation": "R = R_yaw · R_pitch · R_roll, de cámara a soporte; ortonormal (CameraPose.matrix), así que la inversa es la traspuesta.",
+    "angles": "Radianes. Yaw positivo gira la cámara a la derecha; pitch positivo, hacia arriba.",
+    "pixel_center": "El convenio de rig.py: el píxel i cubre [i, i+1) y su centro continuo está en i+0,5; CameraIntrinsics.scaled reescala pasando por ese centro.",
+    "homography": "Las homografías de vista van del programa a la cámara (view_homography).",
+    "scalars": "Float con el repr de Python: ida y vuelta exacta a Double en Swift.",
+    "tensors": "{dtype: f64|f32|u8|i32, shape, b64}, little-endian y orden C; en Swift, Data(base64Encoded:)."
+  },
+  "cases": [
+    {
+      "name": "observe_equilibrada_se_queda_en_uno",
+      "fn": "PanoramaStitcher.observe_color",
+      "inputs": {
+        "observations": [
+          {
+            "mean_left": [
+              96.0,
+              128.0,
+              160.0
+            ],
+            "mean_right": [
+              96.0,
+              128.0,
+              160.0
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "gain_left": {
+          "dtype": "f64",
+          "shape": [
+            3
+          ],
+          "b64": "AAAAAAAA8D8AAAAAAADwPwAAAAAAAPA/"
+        },
+        "gain_right": {
+          "dtype": "f64",
+          "shape": [
+            3
+          ],
+          "b64": "AAAAAAAA8D8AAAAAAADwPwAAAAAAAPA/"
+        }
+      },
+      "tol": {
+        "abs": 1e-06,
+        "rel": 1e-06
+      }
+    },
+    {
+      "name": "observe_desbalance_en_un_canal",
+      "fn": "PanoramaStitcher.observe_color",
+      "inputs": {
+        "observations": [
+          {
+            "mean_left": [
+              100.0,
+              100.0,
+              100.0
+            ],
+            "mean_right": [
+              144.0,
+              100.0,
+              100.0
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "gain_left": {
+          "dtype": "f64",
+          "shape": [
+            3
+          ],
+          "b64": "zczMzMzM8D8AAAAAAADwPwAAAAAAAPA/"
+        },
+        "gain_right": {
+          "dtype": "f64",
+          "shape": [
+            3
+          ],
+          "b64": "q6qqqqqq7j8AAAAAAADwPwAAAAAAAPA/"
+        }
+      },
+      "tol": {
+        "abs": 1e-06,
+        "rel": 1e-06
+      }
+    },
+    {
+      "name": "observe_desbalance_en_tres_canales",
+      "fn": "PanoramaStitcher.observe_color",
+      "inputs": {
+        "observations": [
+          {
+            "mean_left": [
+              96.0,
+              128.0,
+              160.0
+            ],
+            "mean_right": [
+              120.0,
+              126.0,
+              128.0
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "gain_left": {
+          "dtype": "f64",
+          "shape": [
+            3
+          ],
+          "b64": "Kv3l5t148D9YHa/f7+/vP3b7b3HJJ+8/"
+        },
+        "gain_right": {
+          "dtype": "f64",
+          "shape": [
+            3
+          ],
+          "b64": "dvtvcckn7z+m/htRGAjwPyr95ebdePA/"
+        }
+      },
+      "tol": {
+        "abs": 1e-06,
+        "rel": 1e-06
+      }
+    },
+    {
+      "name": "observe_oscuras_no_se_mide",
+      "fn": "PanoramaStitcher.observe_color",
+      "inputs": {
+        "observations": [
+          {
+            "mean_left": [
+              6.0,
+              6.0,
+              6.0
+            ],
+            "mean_right": [
+              11.9,
+              40.0,
+              40.0
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "gain_left": {
+          "dtype": "f64",
+          "shape": [
+            3
+          ],
+          "b64": "AAAAAAAA8D8AAAAAAADwPwAAAAAAAPA/"
+        },
+        "gain_right": {
+          "dtype": "f64",
+          "shape": [
+            3
+          ],
+          "b64": "AAAAAAAA8D8AAAAAAADwPwAAAAAAAPA/"
+        }
+      },
+      "tol": {
+        "abs": 1e-06,
+        "rel": 1e-06
+      }
+    },
+    {
+      "name": "observe_extremo_recortado_por_canal",
+      "fn": "PanoramaStitcher.observe_color",
+      "inputs": {
+        "observations": [
+          {
+            "mean_left": [
+              20.0,
+              50.0,
+              200.0
+            ],
+            "mean_right": [
+              200.0,
+              50.0,
+              20.0
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "gain_left": {
+          "dtype": "f64",
+          "shape": [
+            3
+          ],
+          "b64": "ZmZmZmZm8j8AAAAAAADwPwAAAAAAAO0/"
+        },
+        "gain_right": {
+          "dtype": "f64",
+          "shape": [
+            3
+          ],
+          "b64": "AAAAAAAA7T8AAAAAAADwP2ZmZmZmZvI/"
+        }
+      },
+      "tol": {
+        "abs": 1e-06,
+        "rel": 1e-06
+      }
+    },
+    {
+      "name": "observe_suavizado_converge",
+      "fn": "PanoramaStitcher.observe_color",
+      "inputs": {
+        "observations": [
+          {
+            "mean_left": [
+              96.0,
+              128.0,
+              160.0
+            ],
+            "mean_right": [
+              120.0,
+              126.0,
+              128.0
+            ]
+          },
+          {
+            "mean_left": [
+              96.0,
+              128.0,
+              160.0
+            ],
+            "mean_right": [
+              120.0,
+              126.0,
+              128.0
+            ]
+          },
+          {
+            "mean_left": [
+              96.0,
+              128.0,
+              160.0
+            ],
+            "mean_right": [
+              120.0,
+              126.0,
+              128.0
+            ]
+          },
+          {
+            "mean_left": [
+              96.0,
+              128.0,
+              160.0
+            ],
+            "mean_right": [
+              120.0,
+              126.0,
+              128.0
+            ]
+          },
+          {
+            "mean_left": [
+              96.0,
+              128.0,
+              160.0
+            ],
+            "mean_right": [
+              120.0,
+              126.0,
+              128.0
+            ]
+          },
+          {
+            "mean_left": [
+              96.0,
+              128.0,
+              160.0
+            ],
+            "mean_right": [
+              120.0,
+              126.0,
+              128.0
+            ]
+          },
+          {
+            "mean_left": [
+              96.0,
+              128.0,
+              160.0
+            ],
+            "mean_right": [
+              120.0,
+              126.0,
+              128.0
+            ]
+          },
+          {
+            "mean_left": [
+              96.0,
+              128.0,
+              160.0
+            ],
+            "mean_right": [
+              120.0,
+              126.0,
+              128.0
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "gain_left": {
+          "dtype": "f64",
+          "shape": [
+            3
+          ],
+          "b64": "M0Mt3xCz8T9kWe0zLsbvP+nRrv669ew/"
+        },
+        "gain_right": {
+          "dtype": "f64",
+          "shape": [
+            3
+          ],
+          "b64": "6dGu/rr17D+0AJVnIx3wPzNDLd8Qs/E/"
+        }
+      },
+      "tol": {
+        "abs": 1e-06,
+        "rel": 1e-06
+      }
+    },
+    {
+      "name": "observe_secuencia_cambiante",
+      "fn": "PanoramaStitcher.observe_color",
+      "inputs": {
+        "observations": [
+          {
+            "mean_left": [
+              96.0,
+              128.0,
+              160.0
+            ],
+            "mean_right": [
+              120.0,
+              126.0,
+              128.0
+            ]
+          },
+          {
+            "mean_left": [
+              96.0,
+              128.0,
+              160.0
+            ],
+            "mean_right": [
+              120.0,
+              126.0,
+              128.0
+            ]
+          },
+          {
+            "mean_left": [
+              96.0,
+              128.0,
+              160.0
+            ],
+            "mean_right": [
+              96.0,
+              128.0,
+              160.0
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "gain_left": {
+          "dtype": "f64",
+          "shape": [
+            3
+          ],
+          "b64": "SNwNP6Oe8D+E1pXV6urvPwr64mQ45O4/"
+        },
+        "gain_right": {
+          "dtype": "f64",
+          "shape": [
+            3
+          ],
+          "b64": "CvriZDjk7j86vnTqnwrwP0jcDT+jnvA/"
+        }
+      },
+      "tol": {
+        "abs": 1e-06,
+        "rel": 1e-06
+      }
+    },
+    {
+      "name": "compose_mide_el_desbalance",
+      "fn": "PanoramaStitcher.color_match",
+      "inputs": {
+        "left_bgr": [
+          96.0,
+          128.0,
+          160.0
+        ],
+        "right_bgr": [
+          120.0,
+          126.0,
+          128.0
+        ],
+        "timecode_ms": null,
+        "blind": false,
+        "sides": "both",
+        "rounds": 1
+      },
+      "expected": {
+        "gain_left": {
+          "dtype": "f64",
+          "shape": [
+            3
+          ],
+          "b64": "Kv3l5t148D9YHa/f7+/vP3b7b3HJJ+8/"
+        },
+        "gain_right": {
+          "dtype": "f64",
+          "shape": [
+            3
+          ],
+          "b64": "dvtvcckn7z+m/htRGAjwPyr95ebdePA/"
+        },
+        "measurable": true,
+        "pending_request": false
+      },
+      "tol": {
+        "abs": 1e-06,
+        "rel": 1e-06
+      }
+    },
+    {
+      "name": "compose_con_codigo_sin_tapar",
+      "fn": "PanoramaStitcher.color_match",
+      "inputs": {
+        "left_bgr": [
+          96.0,
+          128.0,
+          160.0
+        ],
+        "right_bgr": [
+          120.0,
+          126.0,
+          128.0
+        ],
+        "timecode_ms": 73456123,
+        "blind": false,
+        "sides": "both",
+        "rounds": 1
+      },
+      "expected": {
+        "gain_left": {
+          "dtype": "f64",
+          "shape": [
+            3
+          ],
+          "b64": "Mzurz9t48D++UJkowPDvP9eCX3v4KO8/"
+        },
+        "gain_right": {
+          "dtype": "f64",
+          "shape": [
+            3
+          ],
+          "b64": "9o7Pycwn7z8Lc0+QrgfwPwZYAKAgePA/"
+        },
+        "measurable": true,
+        "pending_request": false
+      },
+      "tol": {
+        "abs": 1e-06,
+        "rel": 1e-06
+      }
+    },
+    {
+      "name": "compose_con_codigo_tapado",
+      "fn": "PanoramaStitcher.color_match",
+      "inputs": {
+        "left_bgr": [
+          96.0,
+          128.0,
+          160.0
+        ],
+        "right_bgr": [
+          120.0,
+          126.0,
+          128.0
+        ],
+        "timecode_ms": 73456123,
+        "blind": true,
+        "sides": "both",
+        "rounds": 1
+      },
+      "expected": {
+        "gain_left": {
+          "dtype": "f64",
+          "shape": [
+            3
+          ],
+          "b64": "Kv3l5t148D9YHa/f7+/vP3b7b3HJJ+8/"
+        },
+        "gain_right": {
+          "dtype": "f64",
+          "shape": [
+            3
+          ],
+          "b64": "dvtvcckn7z+m/htRGAjwPyr95ebdePA/"
+        },
+        "measurable": true,
+        "pending_request": false
+      },
+      "tol": {
+        "abs": 1e-06,
+        "rel": 1e-06
+      }
+    },
+    {
+      "name": "compose_tres_medidas_seguidas",
+      "fn": "PanoramaStitcher.color_match",
+      "inputs": {
+        "left_bgr": [
+          96.0,
+          128.0,
+          160.0
+        ],
+        "right_bgr": [
+          120.0,
+          126.0,
+          128.0
+        ],
+        "timecode_ms": null,
+        "blind": false,
+        "sides": "both",
+        "rounds": 3
+      },
+      "expected": {
+        "gain_left": {
+          "dtype": "f64",
+          "shape": [
+            3
+          ],
+          "b64": "ctnzJYEX8T/c80S12trvP4D1UtYBDO4/"
+        },
+        "gain_right": {
+          "dtype": "f64",
+          "shape": [
+            3
+          ],
+          "b64": "gPVS1gEM7j/gvJA7uBLwP3LZ8yWBF/E/"
+        },
+        "measurable": true,
+        "pending_request": false
+      },
+      "tol": {
+        "abs": 1e-06,
+        "rel": 1e-06
+      }
+    },
+    {
+      "name": "compose_un_lado_caido",
+      "fn": "PanoramaStitcher.color_match",
+      "inputs": {
+        "left_bgr": [
+          96.0,
+          128.0,
+          160.0
+        ],
+        "right_bgr": [
+          120.0,
+          126.0,
+          128.0
+        ],
+        "timecode_ms": null,
+        "blind": false,
+        "sides": "left",
+        "rounds": 1
+      },
+      "expected": {
+        "gain_left": {
+          "dtype": "f64",
+          "shape": [
+            3
+          ],
+          "b64": "AAAAAAAA8D8AAAAAAADwPwAAAAAAAPA/"
+        },
+        "gain_right": {
+          "dtype": "f64",
+          "shape": [
+            3
+          ],
+          "b64": "AAAAAAAA8D8AAAAAAADwPwAAAAAAAPA/"
+        },
+        "measurable": true,
+        "pending_request": true
+      },
+      "tol": {
+        "abs": 1e-06,
+        "rel": 1e-06
+      }
+    },
+    {
+      "name": "compose_sin_luz_no_se_mide",
+      "fn": "PanoramaStitcher.color_match",
+      "inputs": {
+        "left_bgr": [
+          5.0,
+          5.0,
+          5.0
+        ],
+        "right_bgr": [
+          8.0,
+          8.0,
+          8.0
+        ],
+        "timecode_ms": null,
+        "blind": false,
+        "sides": "both",
+        "rounds": 1
+      },
+      "expected": {
+        "gain_left": {
+          "dtype": "f64",
+          "shape": [
+            3
+          ],
+          "b64": "AAAAAAAA8D8AAAAAAADwPwAAAAAAAPA/"
+        },
+        "gain_right": {
+          "dtype": "f64",
+          "shape": [
+            3
+          ],
+          "b64": "AAAAAAAA8D8AAAAAAADwPwAAAAAAAPA/"
+        },
+        "measurable": true,
+        "pending_request": false
+      },
+      "tol": {
+        "abs": 1e-06,
+        "rel": 1e-06
+      }
+    }
+  ]
+}
