@@ -12,6 +12,37 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-03 · IOS-08 — modo banco, informes JSON y contrato Pigeon del pipeline · 🚧 falta la pasada noop en el iPhone
+
+La prueba de una sola acción, montada de punta a punta.
+
+**Hecho**
+- `pigeons/rig_api.dart` (nuevo contrato del pipeline, separado del de la cámara):
+  `runBench(name, paramsJson)` asíncrono y `RigFlutterApi.onBenchProgress`. Generado
+  con `includeErrorClass: false` para no redeclarar el PigeonError de CaptureApi (el
+  primer intento rompió el build y quedó aprendido).
+- `RigMedia/Obs/BenchRunner.swift`: registro de bancos (`noop` prueba la tubería),
+  informe Codable con utsname.machine, versión de iOS, línea térmica (al empezar y al
+  acabar), histogramas por etapa, contadores y parámetros; escrito en
+  Documents/bench/<nombre>-<epoch>.json con claves ordenadas.
+- `ios/Runner/RigHostApiImpl.swift` (async/await, registrado con la gema) +
+  AppDelegate lo retiene. `lib/src/bench_page.dart`: con
+  `--dart-define=BENCH=<nombre>` arranca sola, enseña progreso y la ruta del informe.
+- `tools/bench_pull.sh` (devicectl, UDID del iPhone de Alexander por defecto) y
+  `tools/bench_summary.dart` (corre en Mac y Windows; `summarize()` probado).
+
+**Aceptación**
+- Mac: `swift test` 53/53 (BenchReportTests fija las claves del JSON como contrato de
+  bench_summary carácter a carácter); `flutter test` 212; analyze 0; build ✅.
+- **Pendiente para el ✅**: `flutter run --dart-define=BENCH=noop` en el iPhone deja el
+  JSON con el identificador del 17, `bench_pull.sh` lo baja y `bench_summary.dart` lo
+  resume, sin tocar la pantalla. Es una acción de Alexander (o un lanzamiento por
+  cable/WiFi con el móvil desbloqueado).
+
+**Siguiente**: IOS-09 mientras llega la pasada.
+
+---
+
 ## 2026-10-03 · IOS-07 — modo partido: pantalla mínima en los móviles del soporte · ✅
 
 Emitiendo, el móvil ya no gasta GPU ni brillo en enseñarse a sí mismo.

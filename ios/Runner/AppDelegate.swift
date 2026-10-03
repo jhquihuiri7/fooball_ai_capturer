@@ -7,6 +7,7 @@ import UIKit
   /// deja caer, el canal queda registrado contra nada y la primera llamada desde Dart
   /// se pierde sin error.
   private var captureApi: CaptureHostApiImpl?
+  private var rigApi: RigHostApiImpl?
 
   override func application(
     _ application: UIApplication,
@@ -27,6 +28,7 @@ import UIKit
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     let api = CaptureHostApiImpl(binaryMessenger: engineBridge.applicationRegistrar.messenger())
     captureApi = api
+    rigApi = RigHostApiImpl(binaryMessenger: engineBridge.applicationRegistrar.messenger())
     // La imagen de la cámara en pantalla: una vista de plataforma sobre la misma sesión
     // que graba, así que enseña el encuadre real (`CapturePreview.swift`).
     engineBridge.pluginRegistry

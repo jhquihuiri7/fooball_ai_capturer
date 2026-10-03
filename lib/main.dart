@@ -14,6 +14,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
+import 'package:football_ai_capture/src/bench_page.dart';
 import 'package:football_ai_capture/src/role_page.dart';
 import 'package:football_ai_capture/src/theme/zero_theme.dart';
 import 'package:football_ai_capture/src/zero_shell.dart';
@@ -31,6 +32,10 @@ export 'package:football_ai_capture/src/zero_shell.dart' show ZeroShell;
 /// entra directo como ese lado y abre solo el enlace, sin cámara. Vacío en producción.
 const String _autoRole = String.fromEnvironment('AUTO_ROLE');
 const bool _linkOnly = bool.fromEnvironment('LINK_ONLY');
+
+/// IOS-08: `flutter run --dart-define=BENCH=<nombre>` abre el modo banco, que corre
+/// solo y deja su informe en Documents/bench/. Vacío en producción.
+const String _bench = String.fromEnvironment('BENCH');
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -56,7 +61,9 @@ class CaptureApp extends StatelessWidget {
       // Un solo tema: la app es oscura siempre. En una cancha de noche, un tema claro
       // deslumbra a quien mira el móvil y ciega a quien mira el campo después.
       themeMode: ThemeMode.dark,
-      home: _autoRole.isEmpty
+      home: _bench.isNotEmpty
+          ? BenchPage(name: _bench)
+          : _autoRole.isEmpty
           ? RolePage(api: api)
           : ZeroShell(
               role: _autoRole == 'right' ? CameraRole.right : CameraRole.left,

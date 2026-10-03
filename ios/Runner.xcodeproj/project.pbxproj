@@ -13,6 +13,7 @@
 		331C808B294A63AB00263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C807B294A618700263BE5 /* RunnerTests.swift */; };
 		383A35E7C9A637439D7AA409 /* QrScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90110DA665A21E87B40990DC /* QrScanner.swift */; };
 		3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */ = {isa = PBXBuildFile; fileRef = 3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */; };
+		3E35415A19B5C85C1ABFE9BC /* RigApi.g.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56D34A51E0C67CB844CA77B5 /* RigApi.g.swift */; };
 		58ECE88B6A9325C2B7045FEE /* SRTHaishinKit in Frameworks */ = {isa = PBXBuildFile; productRef = 4297400DDA0324015053E4F8 /* SRTHaishinKit */; };
 		627CB884C887B67E5DF909EB /* LocalNetworkAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7BDBD1AB0D8AFDBE92BC8F2 /* LocalNetworkAccess.swift */; };
 		7083343114962923E7E9A61F /* RigLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 550A646636363A33F2C7EA76 /* RigLink.swift */; };
@@ -30,6 +31,7 @@
 		C191B261C5CEF0625CF121FA /* CaptureEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6386D157B1CCE800D9D25B8 /* CaptureEngine.swift */; };
 		C2787637CA67F80499196302 /* HaishinKit in Frameworks */ = {isa = PBXBuildFile; productRef = DB432E64DE2C65DC05887E2C /* HaishinKit */; };
 		C9E99AD11E6380D4551F24F8 /* CaptureApi.g.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F7AA4C807562B3E041044F9 /* CaptureApi.g.swift */; };
+		DF4C9F724178D730A80E1688 /* RigHostApiImpl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52F74B9E50D45DC14F860CD4 /* RigHostApiImpl.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -67,7 +69,9 @@
 		351095C0F488DFAF0554A046 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = AppFrameworkInfo.plist; path = Flutter/AppFrameworkInfo.plist; sourceTree = "<group>"; };
 		5150A74A7D1D6F3192EFB92A /* ServerDiscovery.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ServerDiscovery.swift; sourceTree = "<group>"; };
+		52F74B9E50D45DC14F860CD4 /* RigHostApiImpl.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RigHostApiImpl.swift; sourceTree = "<group>"; };
 		550A646636363A33F2C7EA76 /* RigLink.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RigLink.swift; sourceTree = "<group>"; };
+		56D34A51E0C67CB844CA77B5 /* RigApi.g.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RigApi.g.swift; sourceTree = "<group>"; };
 		5C0BE040E3FBCE1ACB195CD6 /* CaptureHostApiImpl.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CaptureHostApiImpl.swift; sourceTree = "<group>"; };
 		74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Runner-Bridging-Header.h"; sourceTree = "<group>"; };
 		74858FAE1ED2DC5600515810 /* AppDelegate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -165,6 +169,8 @@
 				351095C0F488DFAF0554A046 /* PrivacyInfo.xcprivacy */,
 				90110DA665A21E87B40990DC /* QrScanner.swift */,
 				00C8AFA1D6E4139B531C055A /* Runner.entitlements */,
+				56D34A51E0C67CB844CA77B5 /* RigApi.g.swift */,
+				52F74B9E50D45DC14F860CD4 /* RigHostApiImpl.swift */,
 			);
 			path = Runner;
 			sourceTree = "<group>";
@@ -346,6 +352,8 @@
 				30A153D65E62D04448669E06 /* ServerDiscovery.swift in Sources */,
 				7083343114962923E7E9A61F /* RigLink.swift in Sources */,
 				383A35E7C9A637439D7AA409 /* QrScanner.swift in Sources */,
+				3E35415A19B5C85C1ABFE9BC /* RigApi.g.swift in Sources */,
+				DF4C9F724178D730A80E1688 /* RigHostApiImpl.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
