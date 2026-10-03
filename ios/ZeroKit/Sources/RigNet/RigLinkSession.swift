@@ -1,0 +1,405 @@
+// La sesión del enlace sobre LinkTransport (IOS-12, ADR 0023).
+//
+// Es el RigLink de hoy reescrito sobre el transporte nuevo: mismo contrato hacia
+// fuera (estado, sellos de reloj, PTS, color, órdenes), otro cable por debajo. Lo que
+// cambia con el ADR:
+//   - las preguntas de hora van por MEDIOS (`clock_ping`/`clock_pong`) y solo
+//     pregunta el esclavo: un reenvío de TCP falsearía la ida y vuelta;
+//   - PTS, color y órdenes van por CONTROL, encapsulando el RigMessage de hoy en
+//     tramas `legacy` hasta que cada tipo estrene su payload propio;
+//   - todo pasa por el apretón de manos de IOS-16: hello → auth → clave de sesión →
+//     tag por trama, con la ventana de 64 en medios.
+//
+// Sin reloj propio: los plazos entran por la cola que inyecta quien la crea, y los
+// tests la sustituyen por una síncrona.
+
+import CryptoKit
+import Foundation
+import os
+import RigCore
+
+public final class RigLinkSession {
+    public enum Side: String, Codable, Sendable {
+        case left, right
+    }
+
+    public enum State: Equatable, Sendable {
+        case searching
+        case authenticating
+        case connected(peer: String)
+        case rejected(String)
+        case off
+    }
+
+    /// El hello, en JSON como manda la decisión 1.
+    struct Hello: Codable, Equatable {
+        var linkVersion: Int
+        var side: String
+        var role: String
+        var term: Int
+        var matchId: String?
+        var deviceId: String
+        var appVersion: String
+        var nonce: String  // 16 B en base64url
+
+        enum CodingKeys: String, CodingKey {
+            case linkVersion = "link_version"
+            case side, role, term
+            case matchId = "match_id"
+            case deviceId = "device_id"
+            case appVersion = "app_version"
+            case nonce
+        }
+    }
+
+    public static let linkVersion = 1
+
+    /// La ráfaga del reloj: 10 × 250 ms y después cada RIG_CLOCK_STEADY_S (5 s).
+    static let clockBurstCount = 10
+    static let clockBurstIntervalS = 0.25
+    static let clockSteadyIntervalS = 5.0
+    static let ptsTimeoutS = 1.5
+
+    public var onState: ((State) -> Void)?
+    /// Los cuatro sellos de una pregunta de hora, en ns del reloj de host.
+    public var onStamps: ((Int64, Int64, Int64, Int64) -> Void)?
+    public var onLook: ((CameraLook) -> Void)?
+    public var onCommand: ((RigWireCommand) -> Void)?
+    /// De dónde saca el maestro sus PTS y su color cuando el esclavo los pide.
+    public var recentPts: (() -> [Int64])?
+    public var currentLook: (() -> CameraLook?)?
+    /// El reloj de host, inyectable para los tests.
+    public var hostNowNs: () -> Int64 = { 0 }
+
+    public private(set) var state: State = .off {
+        didSet { if oldValue != state { onState?(state) } }
+    }
+
+    private let transport: LinkTransport
+    private let secret: Data
+    private let side: Side
+    private let deviceId: String
+    private let appVersion: String
+    private let queue: DispatchQueue
+    private let log = Logger(subsystem: "io.footballai.zero", category: "link-session")
+
+    private var myHelloBytes = Data()
+    private var theirHelloBytes = Data()
+    private var theirHello: Hello?
+    private var myNonce = Data()
+    private var sessionKey: CryptoSessionKey?
+    private var sessionId: UInt32 = 0
+    private var seqControl: UInt32 = 0
+    private var seqMedia: UInt32 = 0
+    private var replay = ReplayWindow()
+    private var pingGeneration = 0
+    private var sentPings = 0
+    private var pingT1BySeq: [UInt32: Int64] = [:]
+    private var pendingPts: [(deadline: Date, completion: ([Int64]) -> Void)] = []
+
+    public init(
+        transport: LinkTransport,
+        secret: Data,
+        side: Side,
+        deviceId: String,
+        appVersion: String,
+        queue: DispatchQueue = DispatchQueue(label: "io.footballai.zero.link-session")
+    ) {
+        self.transport = transport
+        self.secret = secret
+        self.side = side
+        self.deviceId = deviceId
+        self.appVersion = appVersion
+        self.queue = queue
+        transport.onFrame = { [weak self] frame, channel in
+            self?.queue.async { self?.handle(frame: frame, on: channel) }
+        }
+        transport.onState = { [weak self] estado in
+            self?.queue.async { self?.transportChanged(estado) }
+        }
+    }
+
+    // MARK: - Ciclo de vida
+
+    public func start() {
+        queue.async { [self] in
+            state = .searching
+            transport.start()
+        }
+    }
+
+    public func stop() {
+        queue.async { [self] in
+            pingGeneration += 1
+            transport.stop()
+            resetSession()
+            state = .off
+        }
+    }
+
+    private func resetSession() {
+        sessionKey = nil
+        sessionId = 0
+        seqControl = 0
+        seqMedia = 0
+        replay = ReplayWindow()
+        theirHello = nil
+        theirHelloBytes = Data()
+        pingT1BySeq.removeAll()
+    }
+
+    private func transportChanged(_ estado: LinkTransportState) {
+        switch estado {
+        case .connected:
+            sendHello()
+        case .listening, .connecting:
+            resetSession()
+            if state != .off { state = .searching }
+        case .failed, .idle:
+            resetSession()
+        }
+    }
+
+    // MARK: - El apretón de manos
+
+    private func sendHello() {
+        myNonce = Data((0..<16).map { _ in UInt8.random(in: 0...255) })
+        let hello = Hello(
+            linkVersion: Self.linkVersion,
+            side: side.rawValue,
+            role: side == .left ? "master" : "slave",
+            term: 0,
+            matchId: nil,
+            deviceId: deviceId,
+            appVersion: appVersion,
+            nonce: myNonce.base64EncodedString()
+        )
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        myHelloBytes = (try? encoder.encode(hello)) ?? Data()
+        state = .authenticating
+        send(type: .hello, payload: myHelloBytes, preSession: true)
+    }
+
+    private func handleHello(_ frame: LinkFrame) {
+        guard let hello = try? JSONDecoder().decode(Hello.self, from: frame.payload) else {
+            return reject("hello ilegible")
+        }
+        guard hello.linkVersion == Self.linkVersion else {
+            return reject("versiones distintas (\(hello.linkVersion) y \(Self.linkVersion))")
+        }
+        guard hello.side != side.rawValue else {
+            return reject("los dos dicen \(side.rawValue): invierte un lado")
+        }
+        theirHello = hello
+        theirHelloBytes = frame.payload
+        let mac = LinkAuth.authMac(secret: secret, myHello: myHelloBytes, theirHello: theirHelloBytes)
+        send(type: .auth, payload: mac, preSession: true)
+    }
+
+    private func handleAuth(_ frame: LinkFrame) {
+        guard let hello = theirHello else { return reject("auth antes del hello") }
+        guard LinkAuth.verifyAuth(
+            secret: secret, mac: frame.payload,
+            theirHello: theirHelloBytes, myHello: myHelloBytes
+        ) else {
+            return reject("secreto distinto: empareja de nuevo")
+        }
+        guard let suNonce = Data(base64Encoded: hello.nonce) else {
+            return reject("nonce ilegible")
+        }
+        let (nonceIzq, nonceDer) = side == .left ? (myNonce, suNonce) : (suNonce, myNonce)
+        let key = LinkAuth.sessionKey(secret: secret, nonceLeft: nonceIzq, nonceRight: nonceDer)
+        sessionKey = CryptoSessionKey(key: key)
+        sessionId = LinkAuth.sessionId(key: key)
+        state = .connected(peer: hello.deviceId)
+        if side == .right {
+            startPinging()
+        }
+    }
+
+    private func reject(_ motivo: String) {
+        log.error("enlace rechazado: \(motivo)")
+        resetSession()
+        state = .rejected(motivo)
+    }
+
+    // MARK: - El reloj (solo pregunta el esclavo, por medios)
+
+    private func startPinging() {
+        pingGeneration += 1
+        sentPings = 0
+        schedulePing(generation: pingGeneration, after: 0)
+    }
+
+    private func schedulePing(generation: Int, after delay: TimeInterval) {
+        queue.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self, generation == self.pingGeneration,
+                  case .connected = self.state
+            else {
+                return
+            }
+            self.seqMedia &+= 1
+            let seq = self.seqMedia
+            // El sello, lo más pegado posible al envío.
+            let t1 = self.hostNowNs()
+            self.pingT1BySeq[seq] = t1
+            var payload = Data()
+            payload.appendBigEndian(t1)
+            self.send(type: .clockPing, payload: payload, seq: seq, channel: .media)
+            self.sentPings += 1
+            let siguiente = self.sentPings < Self.clockBurstCount
+                ? Self.clockBurstIntervalS
+                : Self.clockSteadyIntervalS
+            self.schedulePing(generation: generation, after: siguiente)
+        }
+    }
+
+    // MARK: - PTS, color y órdenes (por control)
+
+    /// Los PTS recientes del maestro, o vacío si no contesta a tiempo.
+    public func masterRecentPts(completion: @escaping ([Int64]) -> Void) {
+        queue.async { [self] in
+            guard case .connected = state else { return completion([]) }
+            pendingPts.append((Date().addingTimeInterval(Self.ptsTimeoutS), completion))
+            sendLegacy(.ptsRequest(seq: nextControlSeq()))
+            queue.asyncAfter(deadline: .now() + Self.ptsTimeoutS) { [weak self] in
+                self?.expirePendingPts()
+            }
+        }
+    }
+
+    private func expirePendingPts() {
+        let ahora = Date()
+        let vencidas = pendingPts.filter { $0.deadline <= ahora }
+        pendingPts.removeAll { $0.deadline <= ahora }
+        vencidas.forEach { $0.completion([]) }
+    }
+
+    /// El maestro manda una orden. El esclavo nunca manda: dos móviles mandándose el
+    /// uno al otro se quedarían en un bucle.
+    public func send(command: RigWireCommand) {
+        queue.async { [self] in
+            guard side == .left, case .connected = state else { return }
+            sendLegacy(.command(seq: nextControlSeq(), command: command))
+        }
+    }
+
+    public func publish(look: CameraLook) {
+        queue.async { [self] in
+            guard side == .left, case .connected = state else { return }
+            sendLegacy(.look(seq: nextControlSeq(), look: look))
+        }
+    }
+
+    // MARK: - Recepción
+
+    private func handle(frame: LinkFrame, on channel: LinkChannel) {
+        let llegada = hostNowNs()
+        switch frame.type {
+        case .hello:
+            return handleHello(frame)
+        case .auth:
+            return handleAuth(frame)
+        default:
+            break
+        }
+        // Del apretón para abajo, todo va firmado y con la sesión puesta.
+        guard let sessionKey, frame.session == sessionId,
+              LinkAuth.verifyTag(key: sessionKey.key, frame: frame)
+        else {
+            return
+        }
+        if channel == .media, !replay.accept(frame.seq) {
+            return
+        }
+        switch frame.type {
+        case .clockPing:
+            guard side == .left else { return }
+            var reader = BigEndianReader(data: frame.payload)
+            guard let t1 = reader.read(Int64.self) else { return }
+            var payload = Data()
+            payload.appendBigEndian(t1)
+            payload.appendBigEndian(llegada)          // t2
+            payload.appendBigEndian(hostNowNs())      // t3
+            seqMedia &+= 1
+            send(type: .clockPong, payload: payload, seq: seqMedia, channel: .media)
+        case .clockPong:
+            guard side == .right else { return }
+            var reader = BigEndianReader(data: frame.payload)
+            guard let t1 = reader.read(Int64.self),
+                  let t2 = reader.read(Int64.self),
+                  let t3 = reader.read(Int64.self)
+            else {
+                return
+            }
+            onStamps?(t1, t2, t3, llegada)
+        case .legacy:
+            handleLegacy(frame.payload)
+        default:
+            break
+        }
+    }
+
+    private func handleLegacy(_ payload: Data) {
+        guard let mensaje = RigMessage.decode(payload) else { return }
+        switch mensaje {
+        case let .ptsRequest(seq):
+            guard side == .left else { return }
+            sendLegacy(.ptsReply(seq: seq, pts: recentPts?() ?? []))
+        case let .ptsReply(_, pts):
+            let pendientes = pendingPts
+            pendingPts.removeAll()
+            pendientes.forEach { $0.completion(pts) }
+        case let .lookRequest(seq):
+            guard side == .left, let look = currentLook?() else { return }
+            sendLegacy(.look(seq: seq, look: look))
+        case let .look(_, look):
+            guard side == .right else { return }
+            onLook?(look)
+        case let .command(_, command):
+            guard side == .right else { return }
+            onCommand?(command)
+        case .ping, .pong:
+            break  // el reloj va por clock_ping/clock_pong, no por legacy
+        }
+    }
+
+    // MARK: - Envío
+
+    private func nextControlSeq() -> UInt32 {
+        seqControl &+= 1
+        return seqControl
+    }
+
+    private func sendLegacy(_ mensaje: RigMessage) {
+        send(type: .legacy, payload: mensaje.encode(), seq: nextControlSeq(), channel: .control)
+    }
+
+    private func send(
+        type: LinkFrameType,
+        payload: Data,
+        seq: UInt32 = 0,
+        channel: LinkChannel = .control,
+        preSession: Bool = false
+    ) {
+        var frame = LinkFrame(
+            type: type,
+            session: preSession ? 0 : sessionId,
+            seq: seq,
+            rigMs: 0,
+            payload: payload,
+            tag: Data()
+        )
+        if !preSession {
+            guard let sessionKey else { return }
+            frame.tag = LinkAuth.tag(key: sessionKey.key, frame: frame)
+        }
+        transport.send(frame, on: channel)
+    }
+}
+
+/// La clave vive envuelta para no exponer CryptoKit en la firma pública.
+struct CryptoSessionKey {
+    let key: SymmetricKey
+}

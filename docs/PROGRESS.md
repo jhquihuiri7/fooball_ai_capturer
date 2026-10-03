@@ -12,6 +12,21 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-03 · IOS-12 — RigLink sobre Network.framework · 🚧 en curso
+
+RigNet/RigLinkSession.swift escrito y compilando (83/83 del paquete siguen en verde):
+el apretón hello → auth → clave de sesión → tag por trama; el reloj por MEDIOS
+(clock_ping/clock_pong, ráfaga de 10 × 250 ms y después cada 5 s, solo pregunta el
+esclavo, sellos pegados al envío); PTS, color y órdenes por CONTROL encapsulando el
+RigMessage de hoy en tramas legacy; ventana de 64 en medios; órdenes solo del maestro.
+
+**Falta**: sus tests con el transporte falso (calendario de pings, plazo de
+ptsRequest, rechazo por secreto), el cambio de clase en CaptureHostApiImpl tras el
+interruptor RIG_LINK_MULTIPEER (el Multipeer de hoy sigue siendo el predeterminado
+hasta que haya hubs), y la aceptación de campo con dos iPhone por Ethernet.
+
+---
+
 ## 2026-10-03 · IOS-16 — medios del enlace por UDP y hello con HMAC · 🚧 falta el campo (hubs)
 
 **Hecho**
@@ -29,7 +44,7 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
   separadas >100 ms como parones. La basura por medios se cuenta y NO cierra (solo
   control cierra, §2). En los tests el UDP ata el puerto TCP+1 cuando el efímero ya se
   conoce.
-- Tests (paquete 85/85): auth que abre con el secreto bueno y cierra con el malo o con
+- Tests (paquete 83/83): auth que abre con el secreto bueno y cierra con el malo o con
   un hello tocado; misma sesión en los dos lados y distinta al reconectar; tag que
   pilla un payload alterado; token del mando por partido; ventana de 64 completa; y el
   loopback de medios con una trama de 2,5 datagramas que llega entera y el parón

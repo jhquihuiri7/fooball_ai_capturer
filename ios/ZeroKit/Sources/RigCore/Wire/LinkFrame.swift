@@ -246,11 +246,15 @@ public enum DetectionsPayload {
 
 /// El lector de RigMessage, ascendido a utilidad del módulo: lo usan la trama, los
 /// fragmentos y los payloads binarios.
-struct BigEndianReader {
-    let data: Data
-    var offset = 0
+public struct BigEndianReader {
+    public let data: Data
+    public var offset = 0
 
-    mutating func read<T: FixedWidthInteger>(_: T.Type) -> T? {
+    public init(data: Data) {
+        self.data = data
+    }
+
+    public mutating func read<T: FixedWidthInteger>(_: T.Type) -> T? {
         let size = MemoryLayout<T>.size
         guard offset + size <= data.count else { return nil }
         var value: T = 0
@@ -261,7 +265,7 @@ struct BigEndianReader {
     }
 }
 
-extension Data {
+public extension Data {
     mutating func appendBigEndian<T: FixedWidthInteger>(_ value: T) {
         Swift.withUnsafeBytes(of: value.bigEndian) { append(contentsOf: $0) }
     }
