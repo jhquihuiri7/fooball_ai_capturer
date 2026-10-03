@@ -108,8 +108,9 @@ public struct LinkFrame: Equatable, Sendable {
         self.tag = tag
     }
 
-    public func encode() -> Data {
-        var data = Data(capacity: Self.headerLength + payload.count + Self.tagLength)
+    /// Cabecera ‖ payload, sin el tag: exactamente lo que se firma (ADR 0023 §3).
+    public func signableBytes() -> Data {
+        var data = Data(capacity: Self.headerLength + payload.count)
         data.appendBigEndian(Self.magic)
         data.append(Self.version)
         data.append(type.rawValue)
@@ -119,6 +120,11 @@ public struct LinkFrame: Equatable, Sendable {
         data.appendBigEndian(rigMs)
         data.appendBigEndian(UInt32(payload.count))
         data.append(payload)
+        return data
+    }
+
+    public func encode() -> Data {
+        var data = signableBytes()
         if !type.preSession {
             // Un tag que no mida 16 B es un error del emisor, no del formato.
             precondition(tag.count == Self.tagLength, "el tag debe medir 16 B")

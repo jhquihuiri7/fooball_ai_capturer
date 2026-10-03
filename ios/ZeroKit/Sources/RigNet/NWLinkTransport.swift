@@ -30,6 +30,10 @@ public final class NWLinkTransport: LinkTransport {
     }
 
     public static let serviceType = "_footballai-rig._tcp"
+    public static let mediaServiceType = "_footballai-media._udp"
+
+    /// Un hueco entre llegadas de medios mayor que esto es un parón (ADR 0023 §6).
+    static let mediaStallMs: Double = 100
 
     /// Espera creciente de la reconexión, con el tope de 2 s de la decisión 3.
     static let reconnectDelaysS: [Double] = [0.25, 0.5, 1.0, 2.0]
@@ -60,6 +64,16 @@ public final class NWLinkTransport: LinkTransport {
     private var reconnectAttempt = 0
     private var stopped = false
 
+    // IOS-16: el canal de medios (UDP, sin reintentos).
+    private var mediaListener: NWListener?
+    private var mediaBrowser: NWBrowser?
+    private var mediaConnection: NWConnection?
+    private var reassembler = Reassembler()
+    private var mediaSeq: UInt32 = 0
+    private var lastMediaSeq: UInt32?
+    private var lastMediaArrival: Date?
+    public private(set) var mediaLocalPort: UInt16 = 0
+
     /// `interfaceType` por defecto: Ethernet por el hub (ADR 0023). `.wifi` para el
     /// banco sin cables y `nil` para el loopback de los tests.
     public init(mode: Mode, interfaceType: NWInterface.InterfaceType? = .wiredEthernet) {
@@ -74,6 +88,7 @@ public final class NWLinkTransport: LinkTransport {
             stopped = false
             startPathMonitor()
             open()
+            openMedia()
         }
     }
 
@@ -86,6 +101,12 @@ public final class NWLinkTransport: LinkTransport {
             listener = nil
             browser?.cancel()
             browser = nil
+            mediaConnection?.cancel()
+            mediaConnection = nil
+            mediaListener?.cancel()
+            mediaListener = nil
+            mediaBrowser?.cancel()
+            mediaBrowser = nil
             pathMonitor?.cancel()
             pathMonitor = nil
             state = .idle
@@ -94,14 +115,25 @@ public final class NWLinkTransport: LinkTransport {
 
     public func send(_ frame: LinkFrame, on channel: LinkChannel) {
         queue.async { [self] in
-            // Los medios (UDP) llegan con IOS-16: hasta entonces todo va por control.
-            guard channel == .control else { return }
-            guard let connection, state == .connected else { return }
-            connection.send(content: frame.encode(), completion: .contentProcessed { [weak self] error in
-                if error == nil {
-                    self?.stats.framesSent += 1
+            switch channel {
+            case .control:
+                guard let connection, state == .connected else { return }
+                connection.send(content: frame.encode(), completion: .contentProcessed { [weak self] error in
+                    if error == nil {
+                        self?.stats.framesSent += 1
+                    }
+                })
+            case .media:
+                guard let mediaConnection else { return }
+                mediaSeq &+= 1
+                let datagramas = Fragmenter.fragment(
+                    frame: frame.encode(), session: frame.session, seq: mediaSeq
+                )
+                for datagrama in datagramas {
+                    mediaConnection.send(content: datagrama, completion: .contentProcessed { _ in })
                 }
-            })
+                stats.framesSent += 1
+            }
         }
     }
 
@@ -293,6 +325,138 @@ public final class NWLinkTransport: LinkTransport {
                 return
             }
         }
+    }
+
+    // MARK: - Medios por UDP (IOS-16)
+
+    private func mediaParameters() -> NWParameters {
+        let params = NWParameters.udp
+        if let interfaceType {
+            params.requiredInterfaceType = interfaceType
+        }
+        params.includePeerToPeer = false
+        return params
+    }
+
+    private func openMedia() {
+        guard !stopped else { return }
+        switch mode {
+        case let .advertise(name, txt):
+            openMediaListener(service: NWListener.Service(
+                name: name,
+                type: Self.mediaServiceType,
+                txtRecord: NWTXTRecord(txt)
+            ), port: nil)
+        case let .listen(port):
+            // En los tests el puerto UDP es el TCP + 1. Con puerto 0, el TCP sale
+            // efímero: se espera a conocerlo antes de atar el UDP al suyo + 1.
+            if port > 0 {
+                openMediaListener(service: nil, port: port + 1)
+            } else if localPort > 0 {
+                openMediaListener(service: nil, port: localPort + 1)
+            } else {
+                queue.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                    guard let self, !self.stopped else { return }
+                    self.openMedia()
+                }
+            }
+        case .browse:
+            openMediaBrowser()
+        case let .connect(host, port):
+            openMediaConnection(to: NWEndpoint.hostPort(
+                host: NWEndpoint.Host(host),
+                port: NWEndpoint.Port(rawValue: port + 1)!
+            ))
+        }
+    }
+
+    private func openMediaListener(service: NWListener.Service?, port: UInt16?) {
+        do {
+            let listener: NWListener
+            if let port, port > 0, let nwPort = NWEndpoint.Port(rawValue: port) {
+                listener = try NWListener(using: mediaParameters(), on: nwPort)
+            } else {
+                listener = try NWListener(using: mediaParameters())
+            }
+            listener.service = service
+            listener.newConnectionHandler = { [weak self] nueva in
+                guard let self else { return }
+                self.mediaConnection?.cancel()
+                self.mediaConnection = nueva
+                nueva.start(queue: self.queue)
+                self.receiveMedia(on: nueva)
+            }
+            listener.stateUpdateHandler = { [weak self] estado in
+                if case .ready = estado {
+                    self?.mediaLocalPort = listener.port?.rawValue ?? 0
+                }
+            }
+            mediaListener = listener
+            listener.start(queue: queue)
+        } catch {
+            log.error("medios sin listener: \(String(describing: error))")
+        }
+    }
+
+    private func openMediaBrowser() {
+        let browser = NWBrowser(
+            for: .bonjourWithTXTRecord(type: Self.mediaServiceType, domain: nil),
+            using: mediaParameters()
+        )
+        browser.browseResultsChangedHandler = { [weak self] results, _ in
+            guard let self, self.mediaConnection == nil, let primero = results.first else { return }
+            self.openMediaConnection(to: primero.endpoint)
+        }
+        mediaBrowser = browser
+        browser.start(queue: queue)
+    }
+
+    private func openMediaConnection(to endpoint: NWEndpoint) {
+        let conexion = NWConnection(to: endpoint, using: mediaParameters())
+        mediaConnection = conexion
+        conexion.stateUpdateHandler = { [weak self] estado in
+            if case .ready = estado {
+                self?.receiveMedia(on: conexion)
+            }
+        }
+        conexion.start(queue: queue)
+    }
+
+    private func receiveMedia(on connection: NWConnection) {
+        connection.receiveMessage { [weak self] data, _, _, error in
+            guard let self else { return }
+            if let data, !data.isEmpty {
+                self.handleMediaDatagram(data)
+            }
+            if error == nil {
+                self.receiveMedia(on: connection)
+            }
+        }
+    }
+
+    private func handleMediaDatagram(_ datagram: Data) {
+        guard let trama = reassembler.push(datagram) else { return }
+        guard case let .frame(frame, _) = LinkFrame.decode(from: trama) else {
+            // Por medios la basura se cuenta y se sigue: cerrar aquí sería dejar que
+            // un datagrama roto tire el canal entero (ADR 0023 §2 solo cierra control).
+            stats.invalidFrames += 1
+            return
+        }
+        let ahora = Date()
+        if let anterior = lastMediaArrival,
+           ahora.timeIntervalSince(anterior) * 1000 > Self.mediaStallMs {
+            stats.mediaStallsOver100Ms += 1
+        }
+        lastMediaArrival = ahora
+        if let previo = lastMediaSeq, frame.seq > previo + 1 {
+            stats.mediaLossGaps += Int(frame.seq - previo - 1)
+        }
+        if lastMediaSeq == nil || frame.seq > lastMediaSeq! {
+            lastMediaSeq = frame.seq
+        }
+        stats.mediaFramesReceived += 1
+        stats.framesReceived += 1
+        onFrame?(frame, .media)
     }
 
     // MARK: - La ruta a internet

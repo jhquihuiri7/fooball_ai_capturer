@@ -24,6 +24,13 @@ public struct LinkTransportStats: Equatable, Sendable {
     /// cierra la conexión (ADR 0023 §2).
     public var invalidFrames = 0
 
+    // El canal de medios (IOS-16): lo que la tarjeta pide contar.
+    public var mediaFramesReceived = 0
+    /// Tramas que faltaron, medidas por los huecos de `seq`.
+    public var mediaLossGaps = 0
+    /// Llegadas de medios separadas por más de 100 ms de la anterior.
+    public var mediaStallsOver100Ms = 0
+
     public init() {}
 }
 

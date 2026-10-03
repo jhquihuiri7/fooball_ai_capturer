@@ -12,6 +12,36 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-03 · IOS-16 — medios del enlace por UDP y hello con HMAC · 🚧 falta el campo (hubs)
+
+**Hecho**
+- `RigNet/LinkAuth.swift` (la decisión 3 del ADR 0023, con CryptoKit — en RigNet a
+  propósito: RigCore solo importa Foundation): la huella de la TXT (8 hex), el `mac`
+  del auth mutuo sobre los dos hello tal como viajaron, la clave de sesión por HKDF de
+  los dos nonces, el `session` (4 bytes derivados), el `tag` de 16 B por trama sobre
+  cabecera‖payload (`LinkFrame.signableBytes()`, nuevo), y el secreto del mando
+  derivado por partido (base64url, 43 caracteres). Comparaciones en tiempo constante.
+- `RigCore/Wire/ReplayWindow.swift`: la ventana de 64 contra repeticiones, estilo
+  IPsec: desorden dentro de la ventana sí, duplicado o retrasado no, con cuentas.
+- `NWLinkTransport` gana el canal de medios: `_footballai-media._udp` anunciado con la
+  misma TXT, envío con el `Fragmenter` (seq propio por trama), recepción con el
+  `Reassembler`, y las cuentas de la tarjeta: huecos de `seq` como pérdidas y llegadas
+  separadas >100 ms como parones. La basura por medios se cuenta y NO cierra (solo
+  control cierra, §2). En los tests el UDP ata el puerto TCP+1 cuando el efímero ya se
+  conoce.
+- Tests (paquete 85/85): auth que abre con el secreto bueno y cierra con el malo o con
+  un hello tocado; misma sesión en los dos lados y distinta al reconectar; tag que
+  pilla un payload alterado; token del mando por partido; ventana de 64 completa; y el
+  loopback de medios con una trama de 2,5 datagramas que llega entera y el parón
+  contado.
+
+**Pendiente para el ✅** (con los hubs): hello malo rechazado entre dos iPhone reales y
+el informe de RTT/pérdidas/parones por Ethernet. El Keychain lo aprovisiona IOS-97.
+
+**Siguiente**: IOS-12 (RigLinkSession sobre este transporte).
+
+---
+
 ## 2026-10-03 · IOS-11 — transporte de control del enlace por Ethernet · 🚧 falta el campo (hubs)
 
 **Hecho**
