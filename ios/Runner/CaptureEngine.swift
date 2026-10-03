@@ -32,6 +32,10 @@ final class CaptureEngine: NSObject {
     // acciones gobernarán el pipeline cuando IOS-25/IOS-44/IOS-50 las consuman.
     private let thermalMonitor = ThermalMonitor()
     private var ladder = DegradationLadder()
+
+    // IOS-09: el enganche del pipeline. Copia cada fotograma al anillo propio sin
+    // retener más de un búfer de la cámara; sus consumidores llegan con IOS-23+.
+    private var pipeline: RigPipeline?
     private var ladderSteppedAt = CMClockGetTime(CMClockGetHostTimeClock())
 
     private var writer: AVAssetWriter?
@@ -131,6 +135,9 @@ final class CaptureEngine: NSObject {
         self.settings = settings
         self.applied = applied
         thermalMonitor.observe(device: device)
+        if pipeline == nil {
+            pipeline = RigPipeline(width: applied.width, height: applied.height)
+        }
 
         // Exposición y balance: la cámara mide en automático un momento y después se
         // congela lo medido, trasladado a una obturación sin parpadeo. Fijar un ISO a
@@ -549,6 +556,10 @@ extension CaptureEngine: AVCaptureVideoDataOutputSampleBufferDelegate {
         } else {
             timecodeFailures += 1
         }
+
+        // IOS-09: el pipeline copia el fotograma a su anillo sin bloquear y sin retener
+        // más de un búfer de la cámara. La grabación y la emisión no pasan por él.
+        pipeline?.ingest(sampleBuffer, rigNs: rigNs)
 
         // Al stream va el mismo buffer ya pintado. No bloquea: si el codificador va por
         // detrás, el frame se descarta y se cuenta.

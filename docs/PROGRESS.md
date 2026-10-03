@@ -12,6 +12,36 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-03 · IOS-09 — enganche del pipeline sin retener los búferes de la cámara · 🚧 falta el remojo en el iPhone
+
+**Hecho**
+- `RigMedia/Pipeline/RigPipeline.swift`: `ingest(sampleBuffer, rigNs)` no bloquea —
+  apunta y vuelve—; una cola propia copia los dos planos NV12 al FrameRing con
+  MTLBlitCommandEncoder y suelta el búfer de la cámara al completar. Con un blit en
+  vuelo, el nuevo se descarta sin retener nada: **uno retenido como mucho**, por
+  construcción. Guarda por fotograma rigNs, PTS local, índice y la matriz intrínseca
+  del adjunto (columnas de matrix_float3x3 → filas, saltando el relleno). Consumidores
+  vacíos (`onFrame`): el detector llega con IOS-23+.
+- `CaptureEngine.captureOutput`: la llamada va tras `RigTimecode.write` y antes de
+  `publisher.append`, como pide la tarjeta; la grabación y la emisión no cambian. El
+  pipeline se crea al configurar la cámara con el tamaño real aplicado.
+- Banco `pipeline-noop` registrado en BenchRunner (IOS-08): fotogramas sintéticos 4K
+  por el blit, histograma de la copia, contadores stored/dropped; parámetros frames/
+  width/height.
+- RigPipelineTests (3): la luma copiada de verdad al anillo con sus metadatos; el
+  segundo fotograma con uno en vuelo se descarta sin retenerse (gancho de test que
+  frena el blit); los índices entregados conservan el orden.
+
+**Aceptación**
+- Mac: `swift test` 56/56; analyze 0; `flutter test` 212; build ✅; capas limpias.
+- **Pendiente para el ✅**: el remojo de la tarjeta —30 min en el iPhone 17 grabando
+  HEVC 4K con 0 didDrop, 30,0±0,3 fps y blit ≤0,5 ms— sale del banco `pipeline-noop`
+  más una grabación larga; se hace junto a la pasada noop de IOS-08.
+
+**Siguiente**: IOS-10 (el enlace con Network.framework).
+
+---
+
 ## 2026-10-03 · IOS-08 — modo banco, informes JSON y contrato Pigeon del pipeline · 🚧 falta la pasada noop en el iPhone
 
 La prueba de una sola acción, montada de punta a punta.
