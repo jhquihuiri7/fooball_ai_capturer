@@ -1,0 +1,1464 @@
+{
+  "schema": 1,
+  "module": "postprocess",
+  "conventions": {
+    "axes": "Ejes del soporte: X a la derecha, Y hacia abajo, Z hacia delante (rig.py).",
+    "rotation": "R = R_yaw · R_pitch · R_roll, de cámara a soporte; ortonormal (CameraPose.matrix), así que la inversa es la traspuesta.",
+    "angles": "Radianes. Yaw positivo gira la cámara a la derecha; pitch positivo, hacia arriba.",
+    "pixel_center": "El convenio de rig.py: el píxel i cubre [i, i+1) y su centro continuo está en i+0,5; CameraIntrinsics.scaled reescala pasando por ese centro.",
+    "homography": "Las homografías de vista van del programa a la cámara (view_homography).",
+    "scalars": "Float con el repr de Python: ida y vuelta exacta a Double en Swift.",
+    "tensors": "{dtype: f64|f32|u8|i32, shape, b64}, little-endian y orden C; en Swift, Data(base64Encoded:)."
+  },
+  "cases": [
+    {
+      "name": "sigmoid_logits_extremos",
+      "fn": "sigmoid",
+      "inputs": {
+        "x": {
+          "dtype": "f32",
+          "shape": [
+            5
+          ],
+          "b64": "AADIwgAAoMEAAAAAAACgQQAAyEI="
+        }
+      },
+      "expected": {
+        "scores": {
+          "dtype": "f32",
+          "shape": [
+            5
+          ],
+          "b64": "AAAAAAAAAAAAAAA/AACAPwAAgD8="
+        }
+      },
+      "tol": {
+        "abs": 1e-07,
+        "rel": 1e-07
+      }
+    },
+    {
+      "name": "sigmoid_rango_de_trabajo",
+      "fn": "sigmoid",
+      "inputs": {
+        "x": {
+          "dtype": "f32",
+          "shape": [
+            13
+          ],
+          "b64": "AADAwAAAoMAAAIDAAABAwAAAAMAAAIC/AAAAAAAAgD8AAABAAABAQAAAgEAAAKBAAADAQA=="
+        }
+      },
+      "expected": {
+        "scores": {
+          "dtype": "f32",
+          "shape": [
+            13
+          ],
+          "b64": "gAsiO8BP2zvQV5M8qEFCPagg9D2wsok+AAAAP6gmOz/re2E/5ttzP0Jlez9gSX4/9F1/Pw=="
+        }
+      },
+      "tol": {
+        "abs": 1e-07,
+        "rel": 1e-07
+      }
+    },
+    {
+      "name": "sigmoid_matriz_de_queries",
+      "fn": "sigmoid",
+      "inputs": {
+        "x": {
+          "dtype": "f32",
+          "shape": [
+            2,
+            3
+          ],
+          "b64": "AACAwAAAgEAAAAA/AAAgQAAAIMAAAAC/"
+        }
+      },
+      "expected": {
+        "scores": {
+          "dtype": "f32",
+          "shape": [
+            2,
+            3
+          ],
+          "b64": "0FeTPEJlez9/WR8/j5RsP4hbmz0DTcE+"
+        }
+      },
+      "tol": {
+        "abs": 1e-07,
+        "rel": 1e-07
+      }
+    },
+    {
+      "name": "corners_basico_640",
+      "fn": "decode_boxes_to_corners",
+      "inputs": {
+        "boxes": {
+          "dtype": "f32",
+          "shape": [
+            3,
+            4
+          ],
+          "b64": "AAAAPwAAAD8AAIA+AAAAP83MzD3NzEw+zcxMPs3MzD1mZmY/ZmZmP5qZmT6amZk+"
+        },
+        "width": 640.0,
+        "height": 360.0
+      },
+      "expected": {
+        "x1": {
+          "dtype": "f32",
+          "shape": [
+            3
+          ],
+          "b64": "AABwQwAAAAAAAPBD"
+        },
+        "y1": {
+          "dtype": "f32",
+          "shape": [
+            3
+          ],
+          "b64": "AAC0QgAAWEIAAIdD"
+        },
+        "x2": {
+          "dtype": "f32",
+          "shape": [
+            3
+          ],
+          "b64": "AADIQwAAAEMAAChE"
+        },
+        "y2": {
+          "dtype": "f32",
+          "shape": [
+            3
+          ],
+          "b64": "AACHQwAAtEIAAL1D"
+        }
+      },
+      "tol": {
+        "abs": 1e-06,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "corners_con_offset_de_roi",
+      "fn": "decode_boxes_to_corners",
+      "inputs": {
+        "boxes": {
+          "dtype": "f32",
+          "shape": [
+            3,
+            4
+          ],
+          "b64": "AAAAPwAAAD8AAIA+AAAAP83MzD3NzEw+zcxMPs3MzD1mZmY/ZmZmP5qZmT6amZk+"
+        },
+        "width": 256.0,
+        "height": 256.0,
+        "offset_x": 1200.0,
+        "offset_y": 700.0
+      },
+      "expected": {
+        "x1": {
+          "dtype": "f32",
+          "shape": [
+            3
+          ],
+          "b64": "AACiRAAAlkQAAK5E"
+        },
+        "y1": {
+          "dtype": "f32",
+          "shape": [
+            3
+          ],
+          "b64": "AAA/RJqZOEQAAF9E"
+        },
+        "x2": {
+          "dtype": "f32",
+          "shape": [
+            3
+          ],
+          "b64": "AACqRGZmnESambdE"
+        },
+        "y2": {
+          "dtype": "f32",
+          "shape": [
+            3
+          ],
+          "b64": "AABfRAAAP0Q0M3JE"
+        }
+      },
+      "tol": {
+        "abs": 1e-06,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "corners_fuera_de_rango_no_se_recorta",
+      "fn": "decode_boxes_to_corners",
+      "inputs": {
+        "boxes": {
+          "dtype": "f32",
+          "shape": [
+            2,
+            4
+          ],
+          "b64": "AAAAAAAAAADNzMw+zczMPgAAgD8AAIA/AAAAPwAAAD8="
+        },
+        "width": 100.0,
+        "height": 100.0
+      },
+      "expected": {
+        "x1": {
+          "dtype": "f32",
+          "shape": [
+            2
+          ],
+          "b64": "AACgwQAAlkI="
+        },
+        "y1": {
+          "dtype": "f32",
+          "shape": [
+            2
+          ],
+          "b64": "AACgwQAAlkI="
+        },
+        "x2": {
+          "dtype": "f32",
+          "shape": [
+            2
+          ],
+          "b64": "AACgQQAA+kI="
+        },
+        "y2": {
+          "dtype": "f32",
+          "shape": [
+            2
+          ],
+          "b64": "AACgQQAA+kI="
+        }
+      },
+      "tol": {
+        "abs": 1e-06,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "layout_region_unica_ida_y_vuelta",
+      "fn": "InputLayout.map",
+      "inputs": {
+        "layout": {
+          "regions": [
+            {
+              "dst": [
+                0,
+                0,
+                192,
+                64
+              ],
+              "src": [
+                0.0,
+                40.0,
+                384.0,
+                128.0
+              ]
+            }
+          ]
+        },
+        "points_input": [
+          [
+            0.0,
+            0.0
+          ],
+          [
+            96.0,
+            32.0
+          ],
+          [
+            191.0,
+            63.0
+          ]
+        ]
+      },
+      "expected": {
+        "region": {
+          "dtype": "i32",
+          "shape": [
+            3
+          ],
+          "b64": "AAAAAAAAAAAAAAAA"
+        },
+        "native": {
+          "dtype": "f64",
+          "shape": [
+            3,
+            2
+          ],
+          "b64": "AAAAAAAAAAAAAAAAAABEQAAAAAAAAGhAAAAAAAAAWkAAAAAAAOB3QAAAAAAAwGRA"
+        },
+        "back_to_input": {
+          "dtype": "f64",
+          "shape": [
+            3,
+            2
+          ],
+          "b64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAFhAAAAAAAAAQEAAAAAAAOBnQAAAAAAAgE9A"
+        }
+      },
+      "tol": {
+        "abs": 1e-06,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "layout_mosaico_cada_region_reclama_lo_suyo",
+      "fn": "InputLayout.map",
+      "inputs": {
+        "layout": {
+          "regions": [
+            {
+              "dst": [
+                0,
+                0,
+                192,
+                40
+              ],
+              "src": [
+                0.0,
+                20.0,
+                384.0,
+                80.0
+              ]
+            },
+            {
+              "dst": [
+                0,
+                40,
+                96,
+                24
+              ],
+              "src": [
+                0.0,
+                100.0,
+                384.0,
+                96.0
+              ]
+            }
+          ]
+        },
+        "points_input": [
+          [
+            10.0,
+            10.0
+          ],
+          [
+            50.0,
+            50.0
+          ],
+          [
+            95.0,
+            63.0
+          ]
+        ]
+      },
+      "expected": {
+        "region": {
+          "dtype": "i32",
+          "shape": [
+            3
+          ],
+          "b64": "AAAAAAEAAAABAAAA"
+        },
+        "native": {
+          "dtype": "f64",
+          "shape": [
+            3,
+            2
+          ],
+          "b64": "AAAAAAAANEAAAAAAAABEQAAAAAAAAGlAAAAAAACAYUAAAAAAAMB3QAAAAAAAAGhA"
+        },
+        "back_to_input": {
+          "dtype": "f64",
+          "shape": [
+            3,
+            2
+          ],
+          "b64": "AAAAAAAAJEAAAAAAAAAkQAAAAAAAAElAAAAAAAAASUAAAAAAAMBXQAAAAAAAgE9A"
+        }
+      },
+      "tol": {
+        "abs": 1e-06,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "layout_punto_fuera_va_a_la_region_mas_cercana",
+      "fn": "InputLayout.map",
+      "inputs": {
+        "layout": {
+          "regions": [
+            {
+              "dst": [
+                0,
+                0,
+                192,
+                40
+              ],
+              "src": [
+                0.0,
+                20.0,
+                384.0,
+                80.0
+              ]
+            },
+            {
+              "dst": [
+                0,
+                40,
+                96,
+                24
+              ],
+              "src": [
+                0.0,
+                100.0,
+                384.0,
+                96.0
+              ]
+            }
+          ]
+        },
+        "points_input": [
+          [
+            150.0,
+            50.0
+          ],
+          [
+            191.0,
+            39.0
+          ],
+          [
+            120.0,
+            45.0
+          ]
+        ]
+      },
+      "expected": {
+        "region": {
+          "dtype": "i32",
+          "shape": [
+            3
+          ],
+          "b64": "AAAAAAAAAAAAAAAA"
+        },
+        "native": {
+          "dtype": "f64",
+          "shape": [
+            3,
+            2
+          ],
+          "b64": "AAAAAADAckAAAAAAAABeQAAAAAAA4HdAAAAAAACAWEAAAAAAAABuQAAAAAAAgFtA"
+        },
+        "back_to_input": {
+          "dtype": "f64",
+          "shape": [
+            3,
+            2
+          ],
+          "b64": "AAAAAADAYkAAAAAAAABJQAAAAAAA4GdAAAAAAACAQ0AAAAAAAABeQAAAAAAAgEZA"
+        }
+      },
+      "tol": {
+        "abs": 1e-06,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "cxcywh_layout_region_unica",
+      "fn": "decode_cxcywh_layout",
+      "inputs": {
+        "boxes": {
+          "dtype": "f32",
+          "shape": [
+            3,
+            4
+          ],
+          "b64": "AAAAP5qZmT7NzEw+zcxMPgAAgD7NzEw/mpmZPs3MTD5mZmY/MzNzP83MzD3NzEw9"
+        },
+        "layout": {
+          "regions": [
+            {
+              "dst": [
+                0,
+                0,
+                192,
+                64
+              ],
+              "src": [
+                0.0,
+                40.0,
+                384.0,
+                128.0
+              ]
+            }
+          ]
+        },
+        "input_w": 192,
+        "input_h": 64
+      },
+      "expected": {
+        "x1": {
+          "dtype": "f32",
+          "shape": [
+            3
+          ],
+          "b64": "mpkZQ5mZGUIzM6ND"
+        },
+        "y1": {
+          "dtype": "f32",
+          "shape": [
+            3
+          ],
+          "b64": "MzODQpqZAUNmZh5D"
+        },
+        "x2": {
+          "dtype": "f32",
+          "shape": [
+            3
+          ],
+          "b64": "ZmZmQ5qZGUNmZrZD"
+        },
+        "y2": {
+          "dtype": "f32",
+          "shape": [
+            3
+          ],
+          "b64": "Z2a2QjMzG0PNzCRD"
+        }
+      },
+      "tol": {
+        "abs": 1e-06,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "cxcywh_layout_mosaico_y_junta",
+      "fn": "decode_cxcywh_layout",
+      "inputs": {
+        "boxes": {
+          "dtype": "f32",
+          "shape": [
+            3,
+            4
+          ],
+          "b64": "AAAAP83MTD7NzEw+zcxMPgAAAD+amRk/mpmZPgAAAD9mZuY+zcxMP83MTD7NzEw+"
+        },
+        "layout": {
+          "regions": [
+            {
+              "dst": [
+                0,
+                0,
+                192,
+                40
+              ],
+              "src": [
+                0.0,
+                20.0,
+                384.0,
+                80.0
+              ]
+            },
+            {
+              "dst": [
+                0,
+                40,
+                96,
+                24
+              ],
+              "src": [
+                0.0,
+                100.0,
+                384.0,
+                96.0
+              ]
+            }
+          ]
+        },
+        "input_w": 192,
+        "input_h": 64
+      },
+      "expected": {
+        "x1": {
+          "dtype": "f32",
+          "shape": [
+            3
+          ],
+          "b64": "mpkZQ2ZmBkNmZoZD"
+        },
+        "y1": {
+          "dtype": "f32",
+          "shape": [
+            3
+          ],
+          "b64": "MzMDQpqZgUJnZu5C"
+        },
+        "x2": {
+          "dtype": "f32",
+          "shape": [
+            3
+          ],
+          "b64": "ZmZmQ5qZeUMAAMBD"
+        },
+        "y2": {
+          "dtype": "f32",
+          "shape": [
+            3
+          ],
+          "b64": "mplpQgAAyEJnZipD"
+        }
+      },
+      "tol": {
+        "abs": 1e-06,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "xyxy_input_px_region_unica",
+      "fn": "decode_xyxy_input_px",
+      "inputs": {
+        "boxes": {
+          "dtype": "f32",
+          "shape": [
+            2,
+            4
+          ],
+          "b64": "AAAgQQAAoEAAAHBCAAAgQgAAyEIAAKBBAAA0QwAAcEI="
+        },
+        "layout": {
+          "regions": [
+            {
+              "dst": [
+                0,
+                0,
+                192,
+                64
+              ],
+              "src": [
+                0.0,
+                40.0,
+                384.0,
+                128.0
+              ]
+            }
+          ]
+        }
+      },
+      "expected": {
+        "x1": {
+          "dtype": "f32",
+          "shape": [
+            2
+          ],
+          "b64": "AACgQQAASEM="
+        },
+        "y1": {
+          "dtype": "f32",
+          "shape": [
+            2
+          ],
+          "b64": "AABIQgAAoEI="
+        },
+        "x2": {
+          "dtype": "f32",
+          "shape": [
+            2
+          ],
+          "b64": "AADwQgAAtEM="
+        },
+        "y2": {
+          "dtype": "f32",
+          "shape": [
+            2
+          ],
+          "b64": "AADwQgAAIEM="
+        }
+      },
+      "tol": {
+        "abs": 1e-06,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "xyxy_input_px_mosaico",
+      "fn": "decode_xyxy_input_px",
+      "inputs": {
+        "boxes": {
+          "dtype": "f32",
+          "shape": [
+            2,
+            4
+          ],
+          "b64": "AAAgQQAAoEAAAHBCAAAMQgAAoEEAAChCAACgQgAAeEI="
+        },
+        "layout": {
+          "regions": [
+            {
+              "dst": [
+                0,
+                0,
+                192,
+                40
+              ],
+              "src": [
+                0.0,
+                20.0,
+                384.0,
+                80.0
+              ]
+            },
+            {
+              "dst": [
+                0,
+                40,
+                96,
+                24
+              ],
+              "src": [
+                0.0,
+                100.0,
+                384.0,
+                96.0
+              ]
+            }
+          ]
+        }
+      },
+      "expected": {
+        "x1": {
+          "dtype": "f32",
+          "shape": [
+            2
+          ],
+          "b64": "AACgQQAAoEI="
+        },
+        "y1": {
+          "dtype": "f32",
+          "shape": [
+            2
+          ],
+          "b64": "AADwQQAA2EI="
+        },
+        "x2": {
+          "dtype": "f32",
+          "shape": [
+            2
+          ],
+          "b64": "AADwQgAAoEM="
+        },
+        "y2": {
+          "dtype": "f32",
+          "shape": [
+            2
+          ],
+          "b64": "AAC0QgAAPEM="
+        }
+      },
+      "tol": {
+        "abs": 1e-06,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "nms_suprime_el_solape_de_la_misma_clase",
+      "fn": "nms",
+      "inputs": {
+        "boxes": {
+          "dtype": "f32",
+          "shape": [
+            4,
+            4
+          ],
+          "b64": "AAAgQQAAIEEAAEhCAABIQgAAQEEAAEBBAABQQgAAUEIAAMhCAADIQgAADEMAAAxDAAAwQQAAMEEAAExCAABMQg=="
+        },
+        "scores": {
+          "dtype": "f32",
+          "shape": [
+            4
+          ],
+          "b64": "ZmZmP83MTD8zMzM/mpkZPw=="
+        },
+        "classes": {
+          "dtype": "i32",
+          "shape": [
+            4
+          ],
+          "b64": "AAAAAAAAAAAAAAAAAAAAAA=="
+        },
+        "iou_threshold": 0.5,
+        "max_detections": 10,
+        "pre_topk": 300
+      },
+      "expected": {
+        "keep": {
+          "dtype": "i32",
+          "shape": [
+            2
+          ],
+          "b64": "AAAAAAIAAAA="
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "nms_clases_distintas_no_se_suprimen",
+      "fn": "nms",
+      "inputs": {
+        "boxes": {
+          "dtype": "f32",
+          "shape": [
+            4,
+            4
+          ],
+          "b64": "AAAgQQAAIEEAAEhCAABIQgAAQEEAAEBBAABQQgAAUEIAAMhCAADIQgAADEMAAAxDAAAwQQAAMEEAAExCAABMQg=="
+        },
+        "scores": {
+          "dtype": "f32",
+          "shape": [
+            4
+          ],
+          "b64": "ZmZmP83MTD8zMzM/mpkZPw=="
+        },
+        "classes": {
+          "dtype": "i32",
+          "shape": [
+            4
+          ],
+          "b64": "AAAAAAEAAAAAAAAAAgAAAA=="
+        },
+        "iou_threshold": 0.5,
+        "max_detections": 10,
+        "pre_topk": 300
+      },
+      "expected": {
+        "keep": {
+          "dtype": "i32",
+          "shape": [
+            4
+          ],
+          "b64": "AAAAAAEAAAACAAAAAwAAAA=="
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "nms_empate_gana_el_indice_menor",
+      "fn": "nms",
+      "inputs": {
+        "boxes": {
+          "dtype": "f32",
+          "shape": [
+            3,
+            4
+          ],
+          "b64": "AAAAAAAAAAAAACBBAAAgQQAAyEIAAAAAAADcQgAAIEEAAEhDAAAAAAAAUkMAACBB"
+        },
+        "scores": {
+          "dtype": "f32",
+          "shape": [
+            3
+          ],
+          "b64": "AAAAPwAAAD8AAAA/"
+        },
+        "classes": {
+          "dtype": "i32",
+          "shape": [
+            3
+          ],
+          "b64": "AAAAAAAAAAAAAAAA"
+        },
+        "iou_threshold": 0.5,
+        "max_detections": 2,
+        "pre_topk": 300
+      },
+      "expected": {
+        "keep": {
+          "dtype": "i32",
+          "shape": [
+            2
+          ],
+          "b64": "AAAAAAEAAAA="
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "nms_el_pre_topk_recorta_antes",
+      "fn": "nms",
+      "inputs": {
+        "boxes": {
+          "dtype": "f32",
+          "shape": [
+            8,
+            4
+          ],
+          "b64": "AAAAAAAAAAAAACBBAAAgQQAAoEEAAAAAAADwQQAAIEEAACBCAAAAAAAASEIAACBBAABwQgAAAAAAAIxCAAAgQQAAoEIAAAAAAAC0QgAAIEEAAMhCAAAAAAAA3EIAACBBAADwQgAAAAAAAAJDAAAgQQAADEMAAAAAAAAWQwAAIEE="
+        },
+        "scores": {
+          "dtype": "f32",
+          "shape": [
+            8
+          ],
+          "b64": "zczMPc3MTD6amZk+zczMPgAAAD+amRk/MzMzP83MTD8="
+        },
+        "classes": {
+          "dtype": "i32",
+          "shape": [
+            8
+          ],
+          "b64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+        },
+        "iou_threshold": 0.5,
+        "max_detections": 8,
+        "pre_topk": 3
+      },
+      "expected": {
+        "keep": {
+          "dtype": "i32",
+          "shape": [
+            3
+          ],
+          "b64": "BwAAAAYAAAAFAAAA"
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "nms_max_detections_corta_la_lista",
+      "fn": "nms",
+      "inputs": {
+        "boxes": {
+          "dtype": "f32",
+          "shape": [
+            6,
+            4
+          ],
+          "b64": "AAAAAAAAAAAAACBBAAAgQQAAoEEAAAAAAADwQQAAIEEAACBCAAAAAAAASEIAACBBAABwQgAAAAAAAIxCAAAgQQAAoEIAAAAAAAC0QgAAIEEAAMhCAAAAAAAA3EIAACBB"
+        },
+        "scores": {
+          "dtype": "f32",
+          "shape": [
+            6
+          ],
+          "b64": "ZmZmP83MTD8zMzM/mpkZPwAAAD/NzMw+"
+        },
+        "classes": {
+          "dtype": "i32",
+          "shape": [
+            6
+          ],
+          "b64": "AAAAAAEAAAAAAAAAAQAAAAAAAAABAAAA"
+        },
+        "iou_threshold": 0.5,
+        "max_detections": 3,
+        "pre_topk": 300
+      },
+      "expected": {
+        "keep": {
+          "dtype": "i32",
+          "shape": [
+            3
+          ],
+          "b64": "AAAAAAEAAAACAAAA"
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "nms_sin_candidatas_devuelve_vacio",
+      "fn": "nms",
+      "inputs": {
+        "boxes": {
+          "dtype": "f32",
+          "shape": [
+            0,
+            4
+          ],
+          "b64": ""
+        },
+        "scores": {
+          "dtype": "f32",
+          "shape": [
+            0
+          ],
+          "b64": ""
+        },
+        "classes": {
+          "dtype": "i32",
+          "shape": [
+            0
+          ],
+          "b64": ""
+        },
+        "iou_threshold": 0.5,
+        "max_detections": 4,
+        "pre_topk": 8
+      },
+      "expected": {
+        "keep": {
+          "dtype": "i32",
+          "shape": [
+            0
+          ],
+          "b64": ""
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "peaks_meseta_da_un_pico",
+      "fn": "heatmap_peaks",
+      "inputs": {
+        "heatmap": {
+          "dtype": "f32",
+          "shape": [
+            1,
+            8,
+            8
+          ],
+          "b64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGZmZj9mZmY/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMzMzPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+        },
+        "k": 4,
+        "threshold": 0.3,
+        "kernel": 3
+      },
+      "expected": {
+        "klass": {
+          "dtype": "i32",
+          "shape": [
+            2
+          ],
+          "b64": "AAAAAAAAAAA="
+        },
+        "row": {
+          "dtype": "i32",
+          "shape": [
+            2
+          ],
+          "b64": "AgAAAAYAAAA="
+        },
+        "col": {
+          "dtype": "i32",
+          "shape": [
+            2
+          ],
+          "b64": "AwAAAAYAAAA="
+        },
+        "score": {
+          "dtype": "f32",
+          "shape": [
+            2
+          ],
+          "b64": "ZmZmPzMzMz8="
+        }
+      },
+      "tol": {
+        "abs": 1e-07,
+        "rel": 1e-07
+      }
+    },
+    {
+      "name": "peaks_el_umbral_filtra",
+      "fn": "heatmap_peaks",
+      "inputs": {
+        "heatmap": {
+          "dtype": "f32",
+          "shape": [
+            1,
+            8,
+            8
+          ],
+          "b64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGZmZj9mZmY/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMzMzPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+        },
+        "k": 4,
+        "threshold": 0.8,
+        "kernel": 3
+      },
+      "expected": {
+        "klass": {
+          "dtype": "i32",
+          "shape": [
+            1
+          ],
+          "b64": "AAAAAA=="
+        },
+        "row": {
+          "dtype": "i32",
+          "shape": [
+            1
+          ],
+          "b64": "AgAAAA=="
+        },
+        "col": {
+          "dtype": "i32",
+          "shape": [
+            1
+          ],
+          "b64": "AwAAAA=="
+        },
+        "score": {
+          "dtype": "f32",
+          "shape": [
+            1
+          ],
+          "b64": "ZmZmPw=="
+        }
+      },
+      "tol": {
+        "abs": 1e-07,
+        "rel": 1e-07
+      }
+    },
+    {
+      "name": "peaks_dos_clases_cada_una_lo_suyo",
+      "fn": "heatmap_peaks",
+      "inputs": {
+        "heatmap": {
+          "dtype": "f32",
+          "shape": [
+            2,
+            6,
+            6
+          ],
+          "b64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM3MTD8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJqZWT8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        "k": 3,
+        "threshold": 0.3,
+        "kernel": 3
+      },
+      "expected": {
+        "klass": {
+          "dtype": "i32",
+          "shape": [
+            3
+          ],
+          "b64": "AQAAAAAAAAAAAAAA"
+        },
+        "row": {
+          "dtype": "i32",
+          "shape": [
+            3
+          ],
+          "b64": "BAAAAAEAAAAEAAAA"
+        },
+        "col": {
+          "dtype": "i32",
+          "shape": [
+            3
+          ],
+          "b64": "BAAAAAEAAAABAAAA"
+        },
+        "score": {
+          "dtype": "f32",
+          "shape": [
+            3
+          ],
+          "b64": "mplZP83MTD8AAAA/"
+        }
+      },
+      "tol": {
+        "abs": 1e-07,
+        "rel": 1e-07
+      }
+    },
+    {
+      "name": "peaks_empate_gana_clase_fila_columna",
+      "fn": "heatmap_peaks",
+      "inputs": {
+        "heatmap": {
+          "dtype": "f32",
+          "shape": [
+            2,
+            4,
+            4
+          ],
+          "b64": "mpkZPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJqZGT8AAAAAAAAAAAAAAAAAAAAAAAAAAJqZGT8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACamRk/AAAAAAAAAAAAAAAAAAAAAAAAAAA="
+        },
+        "k": 2,
+        "threshold": 0.3,
+        "kernel": 3
+      },
+      "expected": {
+        "klass": {
+          "dtype": "i32",
+          "shape": [
+            2
+          ],
+          "b64": "AAAAAAEAAAA="
+        },
+        "row": {
+          "dtype": "i32",
+          "shape": [
+            2
+          ],
+          "b64": "AAAAAAAAAAA="
+        },
+        "col": {
+          "dtype": "i32",
+          "shape": [
+            2
+          ],
+          "b64": "AAAAAAAAAAA="
+        },
+        "score": {
+          "dtype": "f32",
+          "shape": [
+            2
+          ],
+          "b64": "mpkZP5qZGT8="
+        }
+      },
+      "tol": {
+        "abs": 1e-07,
+        "rel": 1e-07
+      }
+    },
+    {
+      "name": "refine_offset_convenio_centernet",
+      "fn": "refine_offset",
+      "inputs": {
+        "offset": {
+          "dtype": "f32",
+          "shape": [
+            2,
+            2,
+            2
+          ],
+          "b64": "AACAPgAAAL8AAAAAAABAPwAAAD8AAAAAAACAvs3MzD0="
+        },
+        "rows": {
+          "dtype": "i32",
+          "shape": [
+            2
+          ],
+          "b64": "AAAAAAEAAAA="
+        },
+        "cols": {
+          "dtype": "i32",
+          "shape": [
+            2
+          ],
+          "b64": "AQAAAAAAAAA="
+        },
+        "stride": 2
+      },
+      "expected": {
+        "x_px": {
+          "dtype": "f64",
+          "shape": [
+            2
+          ],
+          "b64": "AAAAAAAA8D8AAAAAAAAAAA=="
+        },
+        "y_px": {
+          "dtype": "f64",
+          "shape": [
+            2
+          ],
+          "b64": "AAAAAAAAAAAAAAAAAAD4Pw=="
+        }
+      },
+      "tol": {
+        "abs": 1e-06,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "refine_offset_stride_grande",
+      "fn": "refine_offset",
+      "inputs": {
+        "offset": {
+          "dtype": "f32",
+          "shape": [
+            2,
+            1,
+            1
+          ],
+          "b64": "AAAAPwAAAL8="
+        },
+        "rows": {
+          "dtype": "i32",
+          "shape": [
+            1
+          ],
+          "b64": "AAAAAA=="
+        },
+        "cols": {
+          "dtype": "i32",
+          "shape": [
+            1
+          ],
+          "b64": "AAAAAA=="
+        },
+        "stride": 8
+      },
+      "expected": {
+        "x_px": {
+          "dtype": "f64",
+          "shape": [
+            1
+          ],
+          "b64": "AAAAAAAAEEA="
+        },
+        "y_px": {
+          "dtype": "f64",
+          "shape": [
+            1
+          ],
+          "b64": "AAAAAAAAEMA="
+        }
+      },
+      "tol": {
+        "abs": 1e-06,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "nms_umbral_bajo_suprime_hasta_rozar",
+      "fn": "nms",
+      "inputs": {
+        "boxes": {
+          "dtype": "f32",
+          "shape": [
+            3,
+            4
+          ],
+          "b64": "AAAAAAAAAAAAACBCAAAgQgAA8EEAAAAAAACMQgAAIEIAAKBCAAAAAAAA8EIAACBC"
+        },
+        "scores": {
+          "dtype": "f32",
+          "shape": [
+            3
+          ],
+          "b64": "ZmZmP83MTD8zMzM/"
+        },
+        "classes": {
+          "dtype": "i32",
+          "shape": [
+            3
+          ],
+          "b64": "AAAAAAAAAAAAAAAA"
+        },
+        "iou_threshold": 0.1,
+        "max_detections": 5,
+        "pre_topk": 300
+      },
+      "expected": {
+        "keep": {
+          "dtype": "i32",
+          "shape": [
+            2
+          ],
+          "b64": "AAAAAAIAAAA="
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "corners_caja_de_un_pixel",
+      "fn": "decode_boxes_to_corners",
+      "inputs": {
+        "boxes": {
+          "dtype": "f32",
+          "shape": [
+            1,
+            4
+          ],
+          "b64": "AAAAPwAAAD/NzMw6YQs2Ow=="
+        },
+        "width": 640.0,
+        "height": 360.0
+      },
+      "expected": {
+        "x1": {
+          "dtype": "f32",
+          "shape": [
+            1
+          ],
+          "b64": "AMCfQw=="
+        },
+        "y1": {
+          "dtype": "f32",
+          "shape": [
+            1
+          ],
+          "b64": "AIAzQw=="
+        },
+        "x2": {
+          "dtype": "f32",
+          "shape": [
+            1
+          ],
+          "b64": "AECgQw=="
+        },
+        "y2": {
+          "dtype": "f32",
+          "shape": [
+            1
+          ],
+          "b64": "AIA0Qw=="
+        }
+      },
+      "tol": {
+        "abs": 1e-06,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "sigmoid_media_precision_del_ane",
+      "fn": "sigmoid",
+      "inputs": {
+        "x": {
+          "dtype": "f32",
+          "shape": [
+            4
+          ],
+          "b64": "AAAAPgAAAL6kcDFBpHAxwQ=="
+        }
+      },
+      "expected": {
+        "scores": {
+          "dtype": "f32",
+          "shape": [
+            4
+          ],
+          "b64": "Vv0HP1MF8D4A/38/AACANw=="
+        }
+      },
+      "tol": {
+        "abs": 1e-07,
+        "rel": 1e-07
+      }
+    }
+  ]
+}

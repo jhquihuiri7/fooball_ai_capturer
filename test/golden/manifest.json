@@ -2,6 +2,7 @@
   "schema": 1,
   "files": {
     "action.json": "bc7e32ca75c01b4dcf33e76d0a5ad726fba41d3ed3ed2992b914a7b43803548d",
+    "band.json": "bffdb046c2d083959cc70dbdee48c991412ab5e4d6a4fbe3ff247de373385d45",
     "color.json": "d63f477ea19d1be6bc24e990347600ff5138638b10e3aa702cd5335ba0653f8e",
     "control_token.json": "a09a199ff67062158cc69a252529b4c633061b06eb27d6103a8f3456948dd809",
     "director.json": "a469e93f18928e1768d83b267cc6fa02b2e7ffe61161c0a1479ccca9e7bef74b",
@@ -9,6 +10,7 @@
     "match.json": "eb5c46eea88696f5e7050ec9a08f880e9d6abc4f1d6decfe8c1c4440aaeb91f6",
     "match_clock.json": "52608e4278498a5293b115a215d3b76c5e18cb2047a2da721cce5b7859ed7efc",
     "pitch.json": "4139fcd11c6ce07e903a3344b8a2c6f97b2a52e7aafe37eaf67e1a237f681979",
+    "postprocess.json": "e1ebc086824eddee7d62c795d563d7051cc31a96932ac72c3a98f8b4b5f51a91",
     "reprojection.json": "719030238c817889a579edebe41d0801a673745f50de04a6ca1fcf62592bebb9",
     "rig.json": "23d2d9e775f80783869d5018789f7f3762531604df0a8a89b36fba741fb9c234",
     "shot.json": "c87c652406726835bbb8dec926238869ee3ee59b7affcb44c40e644c91e62c47",
