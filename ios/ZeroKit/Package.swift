@@ -55,5 +55,10 @@ let package = Package(
             dependencies: ["RigMedia"],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
+        .testTarget(
+            name: "RigNetTests",
+            dependencies: ["RigNet"],
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
     ]
 )

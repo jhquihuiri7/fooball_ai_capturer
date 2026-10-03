@@ -12,6 +12,33 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-03 · IOS-11 — transporte de control del enlace por Ethernet · 🚧 falta el campo (hubs)
+
+**Hecho**
+- `RigNet/LinkTransport.swift`: el contrato que verá RigLinkSession (IOS-12): onFrame
+  con su canal, onState, onPath (qué interfaz lleva internet), stats y send. Quien lo
+  usa no sabe si debajo hay Network.framework, un loopback o un transporte falso.
+- `RigNet/NWLinkTransport.swift` (control TCP): el izquierdo anuncia
+  `_footballai-rig._tcp` con la TXT {lado, huella} y el derecho busca con NWBrowser,
+  en cualquier orden de arranque; `requiredInterfaceType` Ethernet (`.wifi` para el
+  banco, `nil` para el loopback de los tests). Reconexión con espera creciente y
+  **tope de 2 s** (decisión 3 del ADR 0023). Tramas separadas por su `length` con
+  `LinkFrame.decode`; la basura por control cierra la conexión y se cuenta (§2).
+  Una conexión nueva en el que escucha sustituye a la vieja (el patrón anti-fantasma
+  de RigLink). NWPathMonitor dice qué interfaz lleva internet. Los medios UDP y el
+  hello autenticado van en IOS-16.
+- RigNetTests (target nuevo, loopback de macOS): conexión y tramas en los dos
+  sentidos, reconexión tras caerse el que escucha (contra el mismo puerto), la basura
+  que cierra, y el tope del backoff. 4/4; paquete entero 72/72.
+
+**Pendiente para el ✅** (el campo, cuando lleguen los hubs USB-C PD+Ethernet y el
+switch de la lista de compras): conexión <2 s en cualquier orden, reconexión <3 s al
+reenchufar el cable, RTT p50 <2 ms y el informe diciendo qué interfaz lleva internet.
+
+**Siguiente**: IOS-16 (hello autenticado y medios UDP), que desbloquea IOS-12.
+
+---
+
 ## 2026-10-03 · IOS-10 — protocolo del enlace: tramas, tipos y fragmentación · ✅
 
 El cable entre los dos móviles, escrito antes de abrir ningún socket (el formato manda
