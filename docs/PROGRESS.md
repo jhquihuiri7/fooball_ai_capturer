@@ -12,6 +12,27 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-03 · IOS-15 — volcado NV12 crudo para el salto de dominio · 🚧 falta el partido de prueba
+
+**Hecho**
+- `RigMedia/Obs/Nv12Dumper.swift`: cada N segundos (60 por defecto) guarda el
+  fotograma de ANTES del codificador en Documents/nv12/<lado>-<rigMs>.nv12. Formato
+  acordado para ML-18: `[u32 BE longitud][cabecera JSON][plano Y][plano CbCr]`, planos
+  sin el relleno del stride y cabecera con schema, rig_ms, side, tamaño, FourCC y el
+  color (matriz, primarias, transferencia). Copia síncrona (el búfer es de quien
+  llama), escritura en cola propia, cuentas written/failures, `drain()` para tests.
+- Gancho en `CaptureEngine.captureOutput` tras el pipeline: se activa lanzando con
+  `NV12_DUMP_S=<segundos>` (y `NV12_DUMP_SIDE`) en el entorno, igual que el secreto
+  del enlace: es modo banco, sin interruptor en pantalla.
+- Nv12DumperTests (2): fichero con cabecera y planos pelados byte a byte, y el
+  intervalo respetado por tiempo del soporte. Paquete 103/103, capas, build ✓.
+
+**Pendiente para el ✅**: un partido de prueba con el volcado activo deja ficheros
+legibles por ML-18 sin didDrop ni caída de fps (se puede colar en la próxima
+grabación larga lanzando la app con el entorno puesto).
+
+---
+
 ## 2026-10-03 · IOS-50 — codificador H.264 de baja latencia con SEI rigMs · ✅
 
 **Hecho**

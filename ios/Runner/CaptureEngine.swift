@@ -65,6 +65,23 @@ final class CaptureEngine: NSObject {
     /// lleva su propio cerrojo, así que se lee desde la cola de la cámara sin más.
     var rigClock: RigClock?
 
+    /// IOS-15: el volcado NV12 para medir el salto de dominio, solo en modo banco.
+    /// Se activa lanzando con NV12_DUMP_S=<segundos> en el entorno (devicectl), igual
+    /// que el secreto del enlace: no hay interruptor en la pantalla a propósito.
+    private lazy var nv12Dumper: Nv12Dumper? = {
+        guard let valor = ProcessInfo.processInfo.environment["NV12_DUMP_S"],
+              let intervalo = Double(valor), intervalo > 0
+        else {
+            return nil
+        }
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        return Nv12Dumper(
+            directory: documents.appendingPathComponent("nv12"),
+            side: ProcessInfo.processInfo.environment["NV12_DUMP_SIDE"] ?? "left",
+            intervalS: intervalo
+        )
+    }()
+
     /// Últimos PTS entregados, en tiempo del soporte. Es lo que Dart resta contra los
     /// del otro móvil para medir la fase de exposición (TASK A4).
     private var recentPts: [Int64] = []
@@ -570,6 +587,12 @@ extension CaptureEngine: AVCaptureVideoDataOutputSampleBufferDelegate {
         // IOS-09: el pipeline copia el fotograma a su anillo sin bloquear y sin retener
         // más de un búfer de la cámara. La grabación y la emisión no pasan por él.
         pipeline?.ingest(sampleBuffer, rigNs: rigNs)
+
+        // IOS-15: el volcado NV12 en modo banco. Copia aquí (el búfer es nuestro ahora
+        // mismo) y escribe en su cola; corre una vez cada N segundos, no por fotograma.
+        if let dumper = nv12Dumper, let pixels = CMSampleBufferGetImageBuffer(sampleBuffer) {
+            dumper.maybeDump(pixels, rigMs: rigMs)
+        }
 
         // Al stream va el mismo buffer ya pintado. No bloquea: si el codificador va por
         // detrás, el frame se descarta y se cuenta.
