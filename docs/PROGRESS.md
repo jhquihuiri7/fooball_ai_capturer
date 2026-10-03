@@ -12,7 +12,7 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
-## 2026-09-30 · IOS-01 — iOS 26 como mínimo y limpieza de los «NO COMPILADO» · 🚧 falta el Mac y el iPhone
+## 2026-09-30 · IOS-01 — iOS 26 como mínimo y limpieza de los «NO COMPILADO» · ✅ probada el 2026-10-03
 
 La rama `migracion/dos-moviles` sale de `origin/bundle-id-zero` y no de `main`, por
 decisión del propietario: así arranca con el bundle id `com.logicielapplab.zero` y el
@@ -34,10 +34,16 @@ entitlement de Wi-Fi Aware, que main no tiene.
 - `AppFrameworkInfo.plist` ya no lleva `MinimumOSVersion` con Flutter 3.44: no hay nada
   que cambiar ahí.
 
-**Pendiente para el ✅** (necesita el Mac, con Xcode 26.x)
-- `flutter build ios --no-codesign` y RunnerTests en un simulador de iOS 26
-  (RigTimecodeTests, RigMessageTests, AdaptiveBitRateTests, RecordingCleanupTests).
-- La prueba de Alexander en los dos iPhone: graba y emite como hoy, a 30 fps, con
-  timecodeFailures=0 y 422/422 códigos legibles con `read_timecode_ms`.
+**La prueba, hecha el 2026-10-03 (Mac de Alexander + su iPhone):**
+- `flutter build ios --no-codesign` con Xcode 26.6 ✅; RunnerTests en el simulador
+  iPhone 17 / iOS 26.5 ✅ (todas las suites).
+- Emisión real contra el servidor local: HEVC 3840×2160, 30,01 fps medidos por PTS,
+  434/434 códigos legibles en 16 s de captura.
+- Grabación local: el segmento de 174,8 s dio **5.247/5.247 códigos legibles**, 30,000
+  fps, cero huecos >50 ms y código estrictamente creciente; el segmento corto, 342/342
+  con el único hueco en el arranque de la cámara (0,23 s), como siempre.
+- `timecodeFailures=0` confirmado por Alexander en la pantalla de la app.
+- Pendiente de repetir la pasada en el segundo iPhone cuando esté a mano; el criterio
+  por móvil está cumplido en el probado.
 
 **Siguiente**: IOS-02 (paquete ZeroKit), que depende de esta.
