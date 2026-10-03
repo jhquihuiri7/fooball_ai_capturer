@@ -20,7 +20,7 @@ xcrun devicectl device copy from \
   --domain-type appDataContainer \
   --domain-identifier "$BUNDLE" \
   --source Documents/bench \
-  --destination "$DEST/"
+  --destination "$DEST"
 
-echo "informes en $DEST/bench/:"
-ls -la "$DEST/bench/" | tail -n +2
+echo "informes en $DEST/:"
+ls -la "$DEST"/*.json | tail -n +1

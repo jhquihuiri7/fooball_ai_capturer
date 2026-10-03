@@ -1,0 +1,26 @@
+{
+  "counters" : {
+    "dropped" : 0,
+    "frames" : 300,
+    "stored" : 300
+  },
+  "device" : "iPhone18,3",
+  "duration_s" : 0.5835859775543213,
+  "name" : "pipeline-noop",
+  "params" : {
+
+  },
+  "stages_ms" : {
+    "blit" : {
+      "p50_ms" : 1,
+      "p90_ms" : 2,
+      "p99_ms" : 8
+    }
+  },
+  "started_epoch_s" : 1791043116,
+  "system_version" : "Version 26.6.1 (Build 23G83)",
+  "thermal" : [
+    "nominal",
+    "nominal"
+  ]
+}

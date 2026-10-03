@@ -1,0 +1,20 @@
+{
+  "counters" : {
+    "noop" : 1
+  },
+  "device" : "iPhone18,3",
+  "duration_s" : 0.0008759498596191406,
+  "name" : "noop",
+  "params" : {
+
+  },
+  "stages_ms" : {
+
+  },
+  "started_epoch_s" : 1791042847,
+  "system_version" : "Version 26.6.1 (Build 23G83)",
+  "thermal" : [
+    "nominal",
+    "nominal"
+  ]
+}

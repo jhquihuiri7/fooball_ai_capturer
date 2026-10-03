@@ -68,15 +68,19 @@ necesita los hubs físicos.
 
 **Aceptación**
 - Mac: `swift test` 56/56; analyze 0; `flutter test` 212; build ✅; capas limpias.
-- **Pendiente para el ✅**: el remojo de la tarjeta —30 min en el iPhone 17 grabando
-  HEVC 4K con 0 didDrop, 30,0±0,3 fps y blit ≤0,5 ms— sale del banco `pipeline-noop`
-  más una grabación larga; se hace junto a la pasada noop de IOS-08.
+- **El banco `pipeline-noop`, medido en el iPhone el 2026-10-03**: 300 fotogramas 4K
+  en 0,58 s, **300 almacenados y 0 descartados**, térmica nominal → nominal; blit p50
+  en el cubo de ≤1 ms de pared y p99 en el de ≤8 ms (el calentamiento de Metal en los
+  primeros fotogramas). A 30 fps el blit es ~2 % del presupuesto del fotograma.
+- **Pendiente para el ✅**: solo el remojo de 30 min grabando HEVC 4K (0 didDrop,
+  30,0±0,3 fps); sale solo en la primera grabación larga que se haga, sin sesión
+  dedicada.
 
 **Siguiente**: IOS-10 (el enlace con Network.framework).
 
 ---
 
-## 2026-10-03 · IOS-08 — modo banco, informes JSON y contrato Pigeon del pipeline · 🚧 falta la pasada noop en el iPhone
+## 2026-10-03 · IOS-08 — modo banco, informes JSON y contrato Pigeon del pipeline · ✅ pasada en el iPhone el 2026-10-03
 
 La prueba de una sola acción, montada de punta a punta.
 
@@ -98,12 +102,13 @@ La prueba de una sola acción, montada de punta a punta.
 **Aceptación**
 - Mac: `swift test` 53/53 (BenchReportTests fija las claves del JSON como contrato de
   bench_summary carácter a carácter); `flutter test` 212; analyze 0; build ✅.
-- **Pendiente para el ✅**: `flutter run --dart-define=BENCH=noop` en el iPhone deja el
-  JSON con el identificador del 17, `bench_pull.sh` lo baja y `bench_summary.dart` lo
-  resume, sin tocar la pantalla. Es una acción de Alexander (o un lanzamiento por
-  cable/WiFi con el móvil desbloqueado).
+- **La pasada, hecha el 2026-10-03 por WiFi y sin tocar la pantalla**: build con
+  `BENCH=noop`, instalada y lanzada con devicectl; el JSON apareció a los segundos con
+  `iPhone18,3` (el 17 base) e iOS 26.6.1; `bench_pull.sh` lo bajó (corregido el
+  destino: devicectl copia la carpeta como `bench/`, no `bench/bench/`) y
+  `bench_summary.dart` lo resumió. La misma tubería corrió después `pipeline-noop`.
 
-**Siguiente**: IOS-09 mientras llega la pasada.
+**Siguiente**: IOS-09 cerró su banco con esta misma pasada.
 
 ---
 
