@@ -12,6 +12,50 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-03 · IOS-02 — paquete Swift local ZeroKit y contrato de capas · ✅
+
+`ios/ZeroKit` con las tres capas nativas, referenciado una sola vez en Runner.xcodeproj
+con la gema `xcodeproj`. Swift 6 estricto en RigCore y Swift 5 en el resto (decisión 17
+del plan).
+
+**Hecho**
+- `Package.swift`: swift-tools 6.0, iOS 26 y macOS 26 (los tests corren en el Mac con
+  `swift test`, sin simulador), productos RigCore, RigMedia y RigNet.
+- **Movido a RigCore** (Swift puro, solo Foundation): la parte pura de RigTimecode
+  (`Time/RigTimecodeWord.swift`), `RigMessage` con su `Reader`
+  (`Wire/RigMessage.swift`) y `CameraLook` (`Wire/CameraLook.swift`), que viajaba
+  dentro del mensaje y no tocaba ningún framework.
+- **Movido a RigMedia**: el pintado sobre `CVPixelBuffer`
+  (`Capture/RigTimecodePainter.swift`), como extensión de RigTimecode: Runner sigue
+  llamando `RigTimecode.write(valueMs:into:)` igual que antes.
+- **RigNet**: el marcador del módulo; el enlace UDP (IOS-52) y libsrt (IOS-55) llegan
+  a esta capa.
+- **El catálogo del cable**: `RigCommand` lo genera pigeon y no puede entrar en
+  RigCore, así que `RigMessage.command` lleva `RigWireCommand` (el byte del formato) y
+  RigLink mapea en el borde. `RigLinkTests.testPigeonCommandsAndWireCatalogNeverDiverge`
+  falla si los dos enums dejan de ser el mismo conjunto.
+- `tools/check_layers.sh`: la réplica del `.importlinter` del servidor; falla nombrando
+  el import si RigCore importa algo distinto de Foundation (probado en negativo).
+- `RigTimecode.swift` borrado de Runner; RunnerTests queda con lo que es de Runner
+  (bitrate, limpieza, segmentos, RigLink) y los tests movidos viven en RigCoreTests y
+  RigMediaTests.
+
+**Aceptación, medida el 2026-10-03**
+- `swift test --package-path ios/ZeroKit`: 12 tests ✅ en el Mac.
+- `flutter build ios` ✅; `flutter analyze` 0 avisos; `flutter test` 207 ✅;
+  RunnerTests en simulador iOS 26: 10 ✅.
+- CRC de «123456789» = 0xF4 (RigCoreTests) ✅. `check_layers.sh` sale con 0 ✅.
+- Grabación nueva con la app troceada: 5.247/5.247 códigos legibles a 30,000 fps.
+
+**Quedó fuera**
+- RigNet no se linka aún en Runner: se añade cuando entre el primer tipo real.
+- Los dorados del servidor llegarán a `Tests/RigCoreTests/Golden/` con el `--sync` de
+  su REF-10.
+
+**Siguiente**: IOS-03.
+
+---
+
 ## 2026-09-30 · IOS-01 — iOS 26 como mínimo y limpieza de los «NO COMPILADO» · ✅ probada el 2026-10-03
 
 La rama `migracion/dos-moviles` sale de `origin/bundle-id-zero` y no de `main`, por

@@ -11,6 +11,7 @@
 //      focos del campo, y ninguna corrección posterior las quita.
 
 import AVFoundation
+import RigCore
 
 enum CameraSetupError: LocalizedError {
     case noUltraWideCamera
@@ -39,26 +40,6 @@ struct AppliedCameraSettings {
     var whiteBalanceKelvin: Float = 0
     var whiteBalanceTint: Float = 0
     var focusLocked: Bool
-}
-
-/// Cómo «ve» una cámara: lo que el maestro le pasa al otro móvil para que las dos mitades
-/// de la panorámica salgan del mismo color y con la misma luz.
-///
-/// Viaja en unidades que no dependen del móvil: el balance en temperatura y tinte (las
-/// ganancias son de cada sensor) y la apertura junto al ISO, para que un móvil con otra
-/// lente compense la luz que le entra de más o de menos.
-struct CameraLook: Equatable {
-    var exposureNs: Int64
-    var iso: Float
-    var aperture: Float
-    var kelvin: Float
-    var tint: Float
-
-    /// El ISO que da la misma luz con otra apertura: la luz va con el cuadrado del número f.
-    func iso(forAperture other: Float) -> Float {
-        guard aperture > 0, other > 0 else { return iso }
-        return iso * (other * other) / (aperture * aperture)
-    }
 }
 
 enum UltraWideCamera {

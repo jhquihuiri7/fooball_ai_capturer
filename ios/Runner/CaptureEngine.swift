@@ -11,6 +11,8 @@
 //      enlace que pierde paquetes cada 15 segundos; el fichero es la verdad (decisión 5).
 
 import AVFoundation
+import RigCore
+import RigMedia
 import UIKit
 
 final class CaptureEngine: NSObject {
