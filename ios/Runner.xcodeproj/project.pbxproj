@@ -21,6 +21,7 @@
 		7884E8682EC3CC0700C636F2 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */; };
 		78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */ = {isa = PBXBuildFile; productRef = 78A3181F2AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage */; };
 		7A7EA13E8A4A57CDC91D3DFA /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 351095C0F488DFAF0554A046 /* PrivacyInfo.xcprivacy */; };
+		8EB9189660F580C1BACC4B9B /* RigNet in Frameworks */ = {isa = PBXBuildFile; productRef = 7F44B51BEA518A1AEE9EE66D /* RigNet */; };
 		932A4BF39D12B65F6E366D50 /* CapturePreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 323F9049728479B1DD01C32B /* CapturePreview.swift */; };
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
@@ -30,6 +31,7 @@
 		BE93EA77B1159338482C9E3C /* StreamPublisher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FC3008AB8EFE5C3CF589A7A /* StreamPublisher.swift */; };
 		C191B261C5CEF0625CF121FA /* CaptureEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6386D157B1CCE800D9D25B8 /* CaptureEngine.swift */; };
 		C2787637CA67F80499196302 /* HaishinKit in Frameworks */ = {isa = PBXBuildFile; productRef = DB432E64DE2C65DC05887E2C /* HaishinKit */; };
+		C7242A14EAAAF04A686CC5A3 /* RigLinkNW.swift in Sources */ = {isa = PBXBuildFile; fileRef = 007E952D254849DA00061E3B /* RigLinkNW.swift */; };
 		C9E99AD11E6380D4551F24F8 /* CaptureApi.g.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F7AA4C807562B3E041044F9 /* CaptureApi.g.swift */; };
 		DF4C9F724178D730A80E1688 /* RigHostApiImpl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52F74B9E50D45DC14F860CD4 /* RigHostApiImpl.swift */; };
 /* End PBXBuildFile section */
@@ -58,6 +60,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		007E952D254849DA00061E3B /* RigLinkNW.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RigLinkNW.swift; sourceTree = "<group>"; };
 		00C8AFA1D6E4139B531C055A /* Runner.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
 		097B554979A583E770A366B6 /* UltraWideCamera.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = UltraWideCamera.swift; sourceTree = "<group>"; };
 		1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GeneratedPluginRegistrant.h; sourceTree = "<group>"; };
@@ -100,6 +103,7 @@
 				C2787637CA67F80499196302 /* HaishinKit in Frameworks */,
 				58ECE88B6A9325C2B7045FEE /* SRTHaishinKit in Frameworks */,
 				29130493FFB6D7166959BD48 /* RTMPHaishinKit in Frameworks */,
+				8EB9189660F580C1BACC4B9B /* RigNet in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -171,6 +175,7 @@
 				00C8AFA1D6E4139B531C055A /* Runner.entitlements */,
 				56D34A51E0C67CB844CA77B5 /* RigApi.g.swift */,
 				52F74B9E50D45DC14F860CD4 /* RigHostApiImpl.swift */,
+				007E952D254849DA00061E3B /* RigLinkNW.swift */,
 			);
 			path = Runner;
 			sourceTree = "<group>";
@@ -221,6 +226,7 @@
 				FA72810F08DA0153C6116349 /* RTMPHaishinKit */,
 				65D6AEF1B6BC69F621AFC14E /* RigCore */,
 				82BC04F8117761D58E849EBB /* RigMedia */,
+				7F44B51BEA518A1AEE9EE66D /* RigNet */,
 			);
 			productName = Runner;
 			productReference = 97C146EE1CF9000F007C117D /* Runner.app */;
@@ -354,6 +360,7 @@
 				383A35E7C9A637439D7AA409 /* QrScanner.swift in Sources */,
 				3E35415A19B5C85C1ABFE9BC /* RigApi.g.swift in Sources */,
 				DF4C9F724178D730A80E1688 /* RigHostApiImpl.swift in Sources */,
+				C7242A14EAAAF04A686CC5A3 /* RigLinkNW.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -737,6 +744,10 @@
 		78A3181F2AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = FlutterGeneratedPluginSwiftPackage;
+		};
+		7F44B51BEA518A1AEE9EE66D /* RigNet */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RigNet;
 		};
 		82BC04F8117761D58E849EBB /* RigMedia */ = {
 			isa = XCSwiftPackageProductDependency;

@@ -30,7 +30,13 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
     }
 
     /// El enlace con el otro móvil del soporte. Se crea al preparar la cámara.
-    private var link: RigLink?
+    private var link: PeerLinking?
+
+    /// RIG_LINK_MULTIPEER=0 cambia al enlace nuevo sobre Network (IOS-12). El Multipeer
+    /// de hoy sigue siendo el predeterminado hasta la aceptación de campo con hubs.
+    private static var useMultipeer: Bool {
+        ProcessInfo.processInfo.environment["RIG_LINK_MULTIPEER"] != "0"
+    }
 
     /// Dónde graba si Dart no dice otra cosa. `Documents` para que las grabaciones se
     /// puedan sacar por Finder sin instalar nada, que es lo que se va a querer hacer
@@ -142,7 +148,19 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
 
     func startLink(role: CameraRole) throws {
         link?.stop()
-        let link = RigLink(role: role)
+        let link: PeerLinking
+        if Self.useMultipeer {
+            link = RigLink(role: role)
+        } else {
+            guard let secreto = RigLinkNW.benchSecret() else {
+                throw PigeonError(
+                    code: "link",
+                    message: "sin secreto de enlace: define RIG_LINK_SECRET (IOS-97 lo llevará al Keychain)",
+                    details: nil
+                )
+            }
+            link = RigLinkNW(role: role, secret: secreto)
+        }
         // El maestro contesta con los PTS de su propia cámara, ya en tiempo del soporte.
         link.recentPts = { [weak self] in self?.engine.recentFramePtsNs() ?? [] }
         link.onState = { [weak self] state, peer in

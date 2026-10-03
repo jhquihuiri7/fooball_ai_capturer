@@ -12,18 +12,28 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
-## 2026-10-03 · IOS-12 — RigLink sobre Network.framework · 🚧 en curso
+## 2026-10-03 · IOS-12 — RigLink sobre Network.framework · 🚧 falta el campo (hubs)
 
-RigNet/RigLinkSession.swift escrito y compilando (83/83 del paquete siguen en verde):
-el apretón hello → auth → clave de sesión → tag por trama; el reloj por MEDIOS
-(clock_ping/clock_pong, ráfaga de 10 × 250 ms y después cada 5 s, solo pregunta el
-esclavo, sellos pegados al envío); PTS, color y órdenes por CONTROL encapsulando el
-RigMessage de hoy en tramas legacy; ventana de 64 en medios; órdenes solo del maestro.
+**Hecho**
+- `RigNet/RigLinkSession.swift`: el apretón hello → auth → clave de sesión → tag por
+  trama; el reloj por MEDIOS (clock_ping/clock_pong, ráfaga de 10 × 250 ms y después
+  cada 5 s, solo pregunta el esclavo, sellos pegados al envío); PTS, color y órdenes
+  por CONTROL encapsulando el RigMessage de hoy en tramas legacy; ventana de 64 en
+  medios; órdenes solo del maestro.
+- `RigLinkSessionTests` con un transporte falso con buzón (un socket cerrado no
+  entrega): conecta con el mismo secreto, rechaza con el malo o con dos del mismo
+  lado, la ráfaga del reloj y los sellos crecientes, el pong repetido que la ventana
+  tira, los PTS que llegan o vencen a vacío con el cable cortado, y las órdenes que
+  solo viajan del maestro. Paquete 90/90.
+- El interruptor en `CaptureHostApiImpl`: `RIG_LINK_MULTIPEER=0` levanta
+  `RigLinkNW` (adaptador del protocolo `PeerLinking`, nuevo en Runner) sobre
+  `NWLinkTransport`; sin la variable sigue el Multipeer de hoy. El secreto entra por
+  `RIG_LINK_SECRET` (base64) hasta que IOS-97 lo lleve al Keychain; sin secreto,
+  error claro. RigNet enlazado al target Runner. flutter analyze limpio, 212 tests
+  Dart, build de dispositivo ✓.
 
-**Falta**: sus tests con el transporte falso (calendario de pings, plazo de
-ptsRequest, rechazo por secreto), el cambio de clase en CaptureHostApiImpl tras el
-interruptor RIG_LINK_MULTIPEER (el Multipeer de hoy sigue siendo el predeterminado
-hasta que haya hubs), y la aceptación de campo con dos iPhone por Ethernet.
+**Pendiente para el ✅** (con los hubs): la aceptación de campo con dos iPhone por
+Ethernet — conectar, reloj vivo, órdenes y PTS — con RIG_LINK_MULTIPEER=0.
 
 ---
 
