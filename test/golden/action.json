@@ -1,0 +1,365 @@
+{
+  "schema": 1,
+  "module": "action",
+  "conventions": {
+    "axes": "Ejes del soporte: X a la derecha, Y hacia abajo, Z hacia delante (rig.py).",
+    "rotation": "R = R_yaw · R_pitch · R_roll, de cámara a soporte; ortonormal (CameraPose.matrix), así que la inversa es la traspuesta.",
+    "angles": "Radianes. Yaw positivo gira la cámara a la derecha; pitch positivo, hacia arriba.",
+    "pixel_center": "El convenio de rig.py: el píxel i cubre [i, i+1) y su centro continuo está en i+0,5; CameraIntrinsics.scaled reescala pasando por ese centro.",
+    "homography": "Las homografías de vista van del programa a la cámara (view_homography).",
+    "scalars": "Float con el repr de Python: ida y vuelta exacta a Double en Swift.",
+    "tensors": "{dtype: f64|f32|u8|i32, shape, b64}, little-endian y orden C; en Swift, Data(base64Encoded:)."
+  },
+  "cases": [
+    {
+      "name": "densidad_dos_grupos",
+      "fn": "yaw_density",
+      "inputs": {
+        "yaws": {
+          "dtype": "f64",
+          "shape": [
+            9
+          ],
+          "b64": "pHA9Ctej4L+4HoXrUbjev5qZmZmZmeG/AAAAAAAA4L/NzMzMzMzcv5qZmZmZmdk/KVyPwvUo3D9SuB6F61HYP+F6FK5H4do/"
+        },
+        "weights": {
+          "dtype": "f64",
+          "shape": [
+            9
+          ],
+          "b64": "zczMzMzM7D8zMzMzMzPrP5qZmZmZmek/ZmZmZmZm5j8AAAAAAADoP2ZmZmZmZu4/zczMzMzM7D+amZmZmZnpPzMzMzMzM+s/"
+        },
+        "bandwidth_rad": 0.175,
+        "step_rad": 0.035
+      },
+      "expected": {
+        "grid": {
+          "dtype": "f64",
+          "shape": [
+            60
+          ],
+          "b64": "MzMzMzMz8b+kcD0K16PwvxWuR+F6FPC/DNejcD0K77/uUbgehevtv9DMzMzMzOy/skfhehSu67+UwvUoXI/qv3Y9CtejcOm/WLgehetR6L86MzMzMzPnvxyuR+F6FOa//ihcj8L15L/go3A9Ctfjv8IehetRuOK/pJmZmZmZ4b+GFK5H4Xrgv9AehetRuN6/lBSuR+F63L9YCtejcD3avxwAAAAAANi/4PUoXI/C1b+k61G4HoXTv2jhehSuR9G/WK5H4XoUzr/gmZmZmZnJv2iF61G4HsW/8HA9CtejwL/wuB6F61G4vwAghetRuK6/QJyZmZmZmb8AD65H4XqEP6DVo3A9Cqc/wBOuR+F6tD+wPArXo3C9P9AyMzMzM8M/SEfhehSuxz/AW4/C9SjMPxy4HoXrUdA/WML1KFyP0j+UzMzMzMzUP9DWo3A9Ctc/DOF6FK5H2T9I61G4HoXbP4T1KFyPwt0/wP//////3z/+hOtRuB7hPxwK16NwPeI/Oo/C9Shc4z9YFK5H4XrkP3aZmZmZmeU/lB6F61G45j+yo3A9CtfnP9AoXI/C9eg/7q1H4XoU6j8MMzMzMzPrPyq4HoXrUew/SD0K16Nw7T9mwvUoXI/uP4RH4XoUru8/"
+        },
+        "density": {
+          "dtype": "f64",
+          "shape": [
+            60
+          ],
+          "b64": "UljbzdBelj8pgFbpLq2kP92cpL45YrI/PxT2OX5yvz+NCQ6J9d/JP5ZEzf47e9Q/uelRRZsx3z8xeMYBgtrmP/mV+wXIG/A/gbvfXBrZ9T9e4LDwqIL8P0OyFYTh5QFAaXAuvAufBUDsqNnQjSEJQDUWpPYcGwxAPcpORJE+DkCH/0V7tFAPQBFm0drKMg9AUVuvyz/oDUAOkPMhBZYLQE54tKfQewhAFJpdJPPoBECir1cehi8BQDIR302yMfs/COSxHca69D9kQyaNSoXuP9rUm1ll1uU/r+bV8X3i3j9Ti+rTmXbWP8FEF0SnH9I//sydiv2m0T9BNuTUeP7UPx6ohf1HQdw/aTSmTvnP4z9f56/Qnp3rP2BI5DVOvfI/vMgF6sqQ+D8zfSaxUAP/P66Hu14M1QJAuLaiy0n+BUDQHxJaDrIIQNlaMZ/+qApAgH057ZurC0BSuvKWQZwLQN0kYvuxfApAWPadBL1tCEAEFiA9FakFQNTjiwfsdgJAhP9KctND/j/5TXegg9j3P7NSDvgHEPI/Ky5kx65O6j9wuNT09mriPxwLDO7pytg/y3VLDtYK0D9qgvW2Z/XDP5W7TMsX37c/DMgcY65yqz8+obV4JVeeP81ZbqfbHpA/"
+        }
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "accion_unimodal",
+      "fn": "action_from_players",
+      "inputs": {
+        "bandwidth_rad": 0.175,
+        "min_players": 3,
+        "detections": [
+          {
+            "yaw_rad": 0.28,
+            "pitch_rad": -0.12,
+            "cls": "player",
+            "score": 0.9
+          },
+          {
+            "yaw_rad": 0.31,
+            "pitch_rad": -0.11,
+            "cls": "player",
+            "score": 0.85
+          },
+          {
+            "yaw_rad": 0.35,
+            "pitch_rad": -0.13,
+            "cls": "player",
+            "score": 0.8
+          },
+          {
+            "yaw_rad": 0.25,
+            "pitch_rad": -0.1,
+            "cls": "player",
+            "score": 0.7
+          },
+          {
+            "yaw_rad": 0.3,
+            "pitch_rad": -0.12,
+            "cls": "player",
+            "score": 0.95
+          },
+          {
+            "yaw_rad": 0.38,
+            "pitch_rad": -0.14,
+            "cls": "player",
+            "score": 0.6
+          },
+          {
+            "yaw_rad": 0.22,
+            "pitch_rad": -0.11,
+            "cls": "player",
+            "score": 0.75
+          },
+          {
+            "yaw_rad": 0.33,
+            "pitch_rad": -0.12,
+            "cls": "player",
+            "score": 0.88
+          }
+        ]
+      },
+      "expected": {
+        "evidence": {
+          "yaw_rad": 0.30153965785381026,
+          "pitch_rad": -0.11844479004665631,
+          "spread_rad": 0.046009934330692774,
+          "players": 8,
+          "bimodality": 0.0,
+          "confidence": 0.6714285714285714,
+          "sigma_rad": 0.15638297872340426
+        }
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "accion_bimodal",
+      "fn": "action_from_players",
+      "inputs": {
+        "bandwidth_rad": 0.175,
+        "min_players": 3,
+        "detections": [
+          {
+            "yaw_rad": -0.52,
+            "pitch_rad": -0.12,
+            "cls": "player",
+            "score": 0.9
+          },
+          {
+            "yaw_rad": -0.48,
+            "pitch_rad": -0.11,
+            "cls": "player",
+            "score": 0.85
+          },
+          {
+            "yaw_rad": -0.55,
+            "pitch_rad": -0.13,
+            "cls": "player",
+            "score": 0.8
+          },
+          {
+            "yaw_rad": -0.5,
+            "pitch_rad": -0.12,
+            "cls": "player",
+            "score": 0.7
+          },
+          {
+            "yaw_rad": -0.45,
+            "pitch_rad": -0.1,
+            "cls": "player",
+            "score": 0.75
+          },
+          {
+            "yaw_rad": 0.4,
+            "pitch_rad": -0.12,
+            "cls": "player",
+            "score": 0.95
+          },
+          {
+            "yaw_rad": 0.44,
+            "pitch_rad": -0.13,
+            "cls": "player",
+            "score": 0.9
+          },
+          {
+            "yaw_rad": 0.38,
+            "pitch_rad": -0.11,
+            "cls": "player",
+            "score": 0.8
+          },
+          {
+            "yaw_rad": 0.42,
+            "pitch_rad": -0.12,
+            "cls": "player",
+            "score": 0.85
+          }
+        ]
+      },
+      "expected": {
+        "evidence": {
+          "yaw_rad": -0.500875,
+          "pitch_rad": -0.11612499999999999,
+          "spread_rad": 0.45562928888394444,
+          "players": 9,
+          "bimodality": 0.8836060555059925,
+          "confidence": 0.4719556289806447,
+          "sigma_rad": 0.2224785415247291
+        }
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "accion_pocos_jugadores",
+      "fn": "action_from_players",
+      "inputs": {
+        "bandwidth_rad": 0.175,
+        "min_players": 3,
+        "detections": [
+          {
+            "yaw_rad": 0.28,
+            "pitch_rad": -0.12,
+            "cls": "player",
+            "score": 0.9
+          },
+          {
+            "yaw_rad": 0.31,
+            "pitch_rad": -0.11,
+            "cls": "player",
+            "score": 0.85
+          }
+        ]
+      },
+      "expected": {
+        "evidence": null
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "accion_plantilla_completa",
+      "fn": "action_from_players",
+      "inputs": {
+        "bandwidth_rad": 0.175,
+        "min_players": 3,
+        "detections": [
+          {
+            "yaw_rad": -0.6,
+            "pitch_rad": -0.12,
+            "cls": "player",
+            "score": 0.6
+          },
+          {
+            "yaw_rad": -0.51,
+            "pitch_rad": -0.11599999999999999,
+            "cls": "player",
+            "score": 0.62
+          },
+          {
+            "yaw_rad": -0.42,
+            "pitch_rad": -0.11199999999999999,
+            "cls": "player",
+            "score": 0.64
+          },
+          {
+            "yaw_rad": -0.32999999999999996,
+            "pitch_rad": -0.12,
+            "cls": "player",
+            "score": 0.6599999999999999
+          },
+          {
+            "yaw_rad": -0.24,
+            "pitch_rad": -0.11599999999999999,
+            "cls": "player",
+            "score": 0.6799999999999999
+          },
+          {
+            "yaw_rad": -0.15000000000000002,
+            "pitch_rad": -0.11199999999999999,
+            "cls": "player",
+            "score": 0.7
+          },
+          {
+            "yaw_rad": -0.05999999999999994,
+            "pitch_rad": -0.12,
+            "cls": "player",
+            "score": 0.72
+          },
+          {
+            "yaw_rad": 0.030000000000000027,
+            "pitch_rad": -0.11599999999999999,
+            "cls": "player",
+            "score": 0.74
+          },
+          {
+            "yaw_rad": 0.12,
+            "pitch_rad": -0.11199999999999999,
+            "cls": "player",
+            "score": 0.76
+          },
+          {
+            "yaw_rad": 0.20999999999999996,
+            "pitch_rad": -0.12,
+            "cls": "player",
+            "score": 0.78
+          },
+          {
+            "yaw_rad": 0.29999999999999993,
+            "pitch_rad": -0.11599999999999999,
+            "cls": "player",
+            "score": 0.8
+          },
+          {
+            "yaw_rad": 0.39,
+            "pitch_rad": -0.11199999999999999,
+            "cls": "player",
+            "score": 0.82
+          },
+          {
+            "yaw_rad": 0.4800000000000001,
+            "pitch_rad": -0.12,
+            "cls": "player",
+            "score": 0.84
+          },
+          {
+            "yaw_rad": 0.57,
+            "pitch_rad": -0.11599999999999999,
+            "cls": "player",
+            "score": 0.86
+          },
+          {
+            "yaw_rad": -1.2,
+            "pitch_rad": -0.1,
+            "cls": "goalkeeper",
+            "score": 0.9
+          },
+          {
+            "yaw_rad": 1.2,
+            "pitch_rad": -0.1,
+            "cls": "goalkeeper",
+            "score": 0.9
+          },
+          {
+            "yaw_rad": 0.05,
+            "pitch_rad": -0.11,
+            "cls": "referee",
+            "score": 0.8
+          }
+        ]
+      },
+      "expected": {
+        "evidence": {
+          "yaw_rad": 0.2578481012658228,
+          "pitch_rad": -0.11498734177215189,
+          "spread_rad": 0.3605821901545243,
+          "players": 14,
+          "bimodality": 0.0,
+          "confidence": 0.8,
+          "sigma_rad": 0.13124999999999998
+        }
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    }
+  ]
+}

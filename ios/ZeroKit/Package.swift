@@ -43,6 +43,9 @@ let package = Package(
         .testTarget(
             name: "RigCoreTests",
             dependencies: ["RigCore"],
+            // Golden/ lo deja `export_golden.py --sync` del servidor (REF-10) y lo
+            // verifica el arnés de IOS-03 contra golden-manifest.json.
+            resources: [.copy("Golden")],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .testTarget(

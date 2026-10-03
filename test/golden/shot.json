@@ -1,0 +1,5806 @@
+{
+  "schema": 1,
+  "module": "shot",
+  "conventions": {
+    "axes": "Ejes del soporte: X a la derecha, Y hacia abajo, Z hacia delante (rig.py).",
+    "rotation": "R = R_yaw · R_pitch · R_roll, de cámara a soporte; ortonormal (CameraPose.matrix), así que la inversa es la traspuesta.",
+    "angles": "Radianes. Yaw positivo gira la cámara a la derecha; pitch positivo, hacia arriba.",
+    "pixel_center": "El convenio de rig.py: el píxel i cubre [i, i+1) y su centro continuo está en i+0,5; CameraIntrinsics.scaled reescala pasando por ese centro.",
+    "homography": "Las homografías de vista van del programa a la cámara (view_homography).",
+    "scalars": "Float con el repr de Python: ida y vuelta exacta a Double en Swift.",
+    "tensors": "{dtype: f64|f32|u8|i32, shape, b64}, little-endian y orden C; en Swift, Data(base64Encoded:)."
+  },
+  "cases": [
+    {
+      "name": "gramatica_partido_sintetico",
+      "fn": "ShotGrammar.steps",
+      "inputs": {
+        "plan": {
+          "hfov_rad": {
+            "ATTACK": 0.7717653387961475,
+            "NORMAL": 1.2627854394999352,
+            "WIDE": 1.6992742776774763
+          },
+          "tight_rad": 0.6057697367499428,
+          "stretched_rad": 1.0247789206214755
+        },
+        "dt_s": 0.03333333333333333,
+        "steps": [
+          {
+            "evidence": null,
+            "mark_situation": false
+          },
+          {
+            "evidence": null,
+            "mark_situation": false
+          },
+          {
+            "evidence": null,
+            "mark_situation": false
+          },
+          {
+            "evidence": null,
+            "mark_situation": false
+          },
+          {
+            "evidence": null,
+            "mark_situation": false
+          },
+          {
+            "evidence": null,
+            "mark_situation": false
+          },
+          {
+            "evidence": null,
+            "mark_situation": false
+          },
+          {
+            "evidence": null,
+            "mark_situation": false
+          },
+          {
+            "evidence": null,
+            "mark_situation": false
+          },
+          {
+            "evidence": null,
+            "mark_situation": false
+          },
+          {
+            "evidence": null,
+            "mark_situation": false
+          },
+          {
+            "evidence": null,
+            "mark_situation": false
+          },
+          {
+            "evidence": null,
+            "mark_situation": false
+          },
+          {
+            "evidence": null,
+            "mark_situation": false
+          },
+          {
+            "evidence": null,
+            "mark_situation": false
+          },
+          {
+            "evidence": null,
+            "mark_situation": false
+          },
+          {
+            "evidence": null,
+            "mark_situation": false
+          },
+          {
+            "evidence": null,
+            "mark_situation": false
+          },
+          {
+            "evidence": null,
+            "mark_situation": false
+          },
+          {
+            "evidence": null,
+            "mark_situation": false
+          },
+          {
+            "evidence": null,
+            "mark_situation": false
+          },
+          {
+            "evidence": null,
+            "mark_situation": false
+          },
+          {
+            "evidence": null,
+            "mark_situation": false
+          },
+          {
+            "evidence": null,
+            "mark_situation": false
+          },
+          {
+            "evidence": null,
+            "mark_situation": false
+          },
+          {
+            "evidence": null,
+            "mark_situation": false
+          },
+          {
+            "evidence": null,
+            "mark_situation": false
+          },
+          {
+            "evidence": null,
+            "mark_situation": false
+          },
+          {
+            "evidence": null,
+            "mark_situation": false
+          },
+          {
+            "evidence": null,
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.3634618420499657,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.9
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 1.3322125968079181,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.8
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 1.3322125968079181,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.8
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 1.3322125968079181,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.8
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 1.3322125968079181,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.8
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 1.3322125968079181,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.8
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 1.3322125968079181,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.8
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 1.3322125968079181,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.8
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 1.3322125968079181,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.8
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 1.3322125968079181,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.8
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 1.3322125968079181,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.8
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 1.3322125968079181,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.8
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 1.3322125968079181,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.8
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 1.3322125968079181,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.8
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 1.3322125968079181,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.8
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 1.3322125968079181,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.8
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 1.3322125968079181,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.8
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 1.3322125968079181,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.8
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 1.3322125968079181,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.8
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 1.3322125968079181,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.8
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 1.3322125968079181,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.8
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 1.3322125968079181,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.8
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 1.3322125968079181,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.8
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 1.3322125968079181,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.8
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 1.3322125968079181,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.8
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 1.3322125968079181,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.8
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 1.3322125968079181,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.8
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 1.3322125968079181,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.8
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 1.3322125968079181,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.8
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 1.3322125968079181,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.8
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 1.3322125968079181,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.8
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": true
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          },
+          {
+            "evidence": {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.12,
+              "spread_rad": 0.8152743286857091,
+              "players": 10,
+              "bimodality": 0.1,
+              "confidence": 0.7
+            },
+            "mark_situation": false
+          }
+        ]
+      },
+      "expected": {
+        "shot": [
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "NORMAL",
+          "NORMAL",
+          "NORMAL",
+          "NORMAL",
+          "NORMAL",
+          "NORMAL",
+          "NORMAL",
+          "NORMAL",
+          "NORMAL",
+          "NORMAL",
+          "NORMAL",
+          "NORMAL",
+          "NORMAL",
+          "NORMAL",
+          "NORMAL"
+        ],
+        "reason": [
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "sin jugadores",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "juego concentrado",
+          "equipos estirados",
+          "equipos estirados",
+          "equipos estirados",
+          "equipos estirados",
+          "equipos estirados",
+          "equipos estirados",
+          "equipos estirados",
+          "equipos estirados",
+          "equipos estirados",
+          "equipos estirados",
+          "equipos estirados",
+          "equipos estirados",
+          "equipos estirados",
+          "equipos estirados",
+          "equipos estirados",
+          "equipos estirados",
+          "equipos estirados",
+          "equipos estirados",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "situación",
+          "por defecto",
+          "por defecto",
+          "por defecto",
+          "por defecto",
+          "por defecto",
+          "por defecto",
+          "por defecto",
+          "por defecto",
+          "por defecto",
+          "por defecto",
+          "por defecto",
+          "por defecto",
+          "por defecto",
+          "por defecto",
+          "por defecto"
+        ],
+        "hfov_rad": {
+          "dtype": "f64",
+          "shape": [
+            320
+          ],
+          "b64": "x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7PyUbSjlNsug/JRtKOU2y6D8lG0o5TbLoPyUbSjlNsug/JRtKOU2y6D8lG0o5TbLoPyUbSjlNsug/JRtKOU2y6D8lG0o5TbLoPyUbSjlNsug/JRtKOU2y6D8lG0o5TbLoPyUbSjlNsug/JRtKOU2y6D8lG0o5TbLoPyUbSjlNsug/JRtKOU2y6D8lG0o5TbLoPyUbSjlNsug/JRtKOU2y6D8lG0o5TbLoPyUbSjlNsug/JRtKOU2y6D8lG0o5TbLoPyUbSjlNsug/JRtKOU2y6D8lG0o5TbLoPyUbSjlNsug/JRtKOU2y6D8lG0o5TbLoPyUbSjlNsug/JRtKOU2y6D8lG0o5TbLoPyUbSjlNsug/JRtKOU2y6D8lG0o5TbLoPyUbSjlNsug/JRtKOU2y6D8lG0o5TbLoPyUbSjlNsug/JRtKOU2y6D8lG0o5TbLoPyUbSjlNsug/JRtKOU2y6D8lG0o5TbLoPyUbSjlNsug/JRtKOU2y6D8lG0o5TbLoPyUbSjlNsug/JRtKOU2y6D8lG0o5TbLoPyUbSjlNsug/JRtKOU2y6D8lG0o5TbLoPyUbSjlNsug/JRtKOU2y6D8lG0o5TbLoPyUbSjlNsug/JRtKOU2y6D8lG0o5TbLoPyUbSjlNsug/JRtKOU2y6D8lG0o5TbLoPyUbSjlNsug/JRtKOU2y6D8lG0o5TbLoPyUbSjlNsug/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P8fwmDk6MPs/x/CYOTow+z/H8Jg5OjD7P3xGSIFeNPQ/fEZIgV409D98RkiBXjT0P3xGSIFeNPQ/fEZIgV409D98RkiBXjT0P3xGSIFeNPQ/fEZIgV409D98RkiBXjT0P3xGSIFeNPQ/fEZIgV409D98RkiBXjT0P3xGSIFeNPQ/fEZIgV409D98RkiBXjT0Pw=="
+        },
+        "changed": {
+          "dtype": "u8",
+          "shape": [
+            320
+          ],
+          "b64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAA="
+        }
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "director_de_punta_a_punta",
+      "fn": "ProgramDirector.steps",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 241.13729603289417,
+              "fy": 241.13729603289417,
+              "cx": 320.0,
+              "cy": 180.0,
+              "width": 640,
+              "height": 360
+            },
+            "pose": {
+              "yaw_rad": -0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 3.141592653589793
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 241.13729603289417,
+              "fy": 241.13729603289417,
+              "cx": 320.0,
+              "cy": 180.0,
+              "width": 640,
+              "height": 360
+            },
+            "pose": {
+              "yaw_rad": 0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 0.05235987755982989
+            }
+          }
+        },
+        "canvas": {
+          "focal_px": 241.13729603289417,
+          "yaw_min_rad": -1.682747944878204,
+          "yaw_max_rad": 1.6729478558009814,
+          "pitch_min_rad": -0.5,
+          "pitch_max_rad": 0.1
+        },
+        "width": 160,
+        "height": 90,
+        "plan": {
+          "hfov_rad": {
+            "ATTACK": 0.7717653387961475,
+            "NORMAL": 1.2627854394999352,
+            "WIDE": 1.6992742776774763
+          },
+          "tight_rad": 0.6057697367499428,
+          "stretched_rad": 1.0247789206214755
+        },
+        "dt_s": 0.03333333333333333,
+        "detections_per_step": [
+          [
+            {
+              "yaw_rad": -0.3,
+              "pitch_rad": -0.11,
+              "cls": "player",
+              "score": 0.7
+            },
+            {
+              "yaw_rad": -0.25041675947737657,
+              "pitch_rad": -0.11732501171375412,
+              "cls": "player",
+              "score": 0.73
+            },
+            {
+              "yaw_rad": -0.3127770551013416,
+              "pitch_rad": -0.12856888753368947,
+              "cls": "player",
+              "score": 0.76
+            },
+            {
+              "yaw_rad": -0.3462907341163866,
+              "pitch_rad": -0.12725932304200138,
+              "cls": "player",
+              "score": 0.7899999999999999
+            },
+            {
+              "yaw_rad": -0.27529433244306956,
+              "pitch_rad": -0.11531483328699622,
+              "cls": "player",
+              "score": 0.82
+            },
+            {
+              "yaw_rad": -0.26007564436882546,
+              "pitch_rad": -0.11023412374271976,
+              "cls": "player",
+              "score": 0.85
+            },
+            {
+              "yaw_rad": -0.3349937343796771,
+              "pitch_rad": -0.11946044579437351,
+              "cls": "player",
+              "score": 0.8799999999999999
+            },
+            {
+              "yaw_rad": -0.3309068556118516,
+              "pitch_rad": -0.12947721602131113,
+              "cls": "player",
+              "score": 0.9099999999999999
+            }
+          ],
+          [],
+          [],
+          [],
+          [
+            {
+              "yaw_rad": -0.27999999999999997,
+              "pitch_rad": -0.11,
+              "cls": "player",
+              "score": 0.7
+            },
+            {
+              "yaw_rad": -0.23041675947737655,
+              "pitch_rad": -0.11732501171375412,
+              "cls": "player",
+              "score": 0.73
+            },
+            {
+              "yaw_rad": -0.29277705510134155,
+              "pitch_rad": -0.12856888753368947,
+              "cls": "player",
+              "score": 0.76
+            },
+            {
+              "yaw_rad": -0.3262907341163866,
+              "pitch_rad": -0.12725932304200138,
+              "cls": "player",
+              "score": 0.7899999999999999
+            },
+            {
+              "yaw_rad": -0.25529433244306954,
+              "pitch_rad": -0.11531483328699622,
+              "cls": "player",
+              "score": 0.82
+            },
+            {
+              "yaw_rad": -0.24007564436882545,
+              "pitch_rad": -0.11023412374271976,
+              "cls": "player",
+              "score": 0.85
+            },
+            {
+              "yaw_rad": -0.3149937343796771,
+              "pitch_rad": -0.11946044579437351,
+              "cls": "player",
+              "score": 0.8799999999999999
+            },
+            {
+              "yaw_rad": -0.3109068556118516,
+              "pitch_rad": -0.12947721602131113,
+              "cls": "player",
+              "score": 0.9099999999999999
+            }
+          ],
+          [],
+          [],
+          [],
+          [
+            {
+              "yaw_rad": -0.26,
+              "pitch_rad": -0.11,
+              "cls": "player",
+              "score": 0.7
+            },
+            {
+              "yaw_rad": -0.2104167594773766,
+              "pitch_rad": -0.11732501171375412,
+              "cls": "player",
+              "score": 0.73
+            },
+            {
+              "yaw_rad": -0.2727770551013416,
+              "pitch_rad": -0.12856888753368947,
+              "cls": "player",
+              "score": 0.76
+            },
+            {
+              "yaw_rad": -0.30629073411638663,
+              "pitch_rad": -0.12725932304200138,
+              "cls": "player",
+              "score": 0.7899999999999999
+            },
+            {
+              "yaw_rad": -0.2352943324430696,
+              "pitch_rad": -0.11531483328699622,
+              "cls": "player",
+              "score": 0.82
+            },
+            {
+              "yaw_rad": -0.22007564436882548,
+              "pitch_rad": -0.11023412374271976,
+              "cls": "player",
+              "score": 0.85
+            },
+            {
+              "yaw_rad": -0.29499373437967713,
+              "pitch_rad": -0.11946044579437351,
+              "cls": "player",
+              "score": 0.8799999999999999
+            },
+            {
+              "yaw_rad": -0.2909068556118517,
+              "pitch_rad": -0.12947721602131113,
+              "cls": "player",
+              "score": 0.9099999999999999
+            }
+          ],
+          [],
+          [],
+          [],
+          [
+            {
+              "yaw_rad": -0.24,
+              "pitch_rad": -0.11,
+              "cls": "player",
+              "score": 0.7
+            },
+            {
+              "yaw_rad": -0.19041675947737657,
+              "pitch_rad": -0.11732501171375412,
+              "cls": "player",
+              "score": 0.73
+            },
+            {
+              "yaw_rad": -0.2527770551013416,
+              "pitch_rad": -0.12856888753368947,
+              "cls": "player",
+              "score": 0.76
+            },
+            {
+              "yaw_rad": -0.2862907341163866,
+              "pitch_rad": -0.12725932304200138,
+              "cls": "player",
+              "score": 0.7899999999999999
+            },
+            {
+              "yaw_rad": -0.21529433244306959,
+              "pitch_rad": -0.11531483328699622,
+              "cls": "player",
+              "score": 0.82
+            },
+            {
+              "yaw_rad": -0.20007564436882547,
+              "pitch_rad": -0.11023412374271976,
+              "cls": "player",
+              "score": 0.85
+            },
+            {
+              "yaw_rad": -0.2749937343796771,
+              "pitch_rad": -0.11946044579437351,
+              "cls": "player",
+              "score": 0.8799999999999999
+            },
+            {
+              "yaw_rad": -0.2709068556118517,
+              "pitch_rad": -0.12947721602131113,
+              "cls": "player",
+              "score": 0.9099999999999999
+            }
+          ],
+          [],
+          [],
+          [],
+          [
+            {
+              "yaw_rad": -0.21999999999999997,
+              "pitch_rad": -0.11,
+              "cls": "player",
+              "score": 0.7
+            },
+            {
+              "yaw_rad": -0.17041675947737656,
+              "pitch_rad": -0.11732501171375412,
+              "cls": "player",
+              "score": 0.73
+            },
+            {
+              "yaw_rad": -0.23277705510134153,
+              "pitch_rad": -0.12856888753368947,
+              "cls": "player",
+              "score": 0.76
+            },
+            {
+              "yaw_rad": -0.2662907341163866,
+              "pitch_rad": -0.12725932304200138,
+              "cls": "player",
+              "score": 0.7899999999999999
+            },
+            {
+              "yaw_rad": -0.19529433244306957,
+              "pitch_rad": -0.11531483328699622,
+              "cls": "player",
+              "score": 0.82
+            },
+            {
+              "yaw_rad": -0.18007564436882545,
+              "pitch_rad": -0.11023412374271976,
+              "cls": "player",
+              "score": 0.85
+            },
+            {
+              "yaw_rad": -0.2549937343796771,
+              "pitch_rad": -0.11946044579437351,
+              "cls": "player",
+              "score": 0.8799999999999999
+            },
+            {
+              "yaw_rad": -0.25090685561185166,
+              "pitch_rad": -0.12947721602131113,
+              "cls": "player",
+              "score": 0.9099999999999999
+            }
+          ],
+          [],
+          [],
+          [],
+          [
+            {
+              "yaw_rad": -0.2,
+              "pitch_rad": -0.11,
+              "cls": "player",
+              "score": 0.7
+            },
+            {
+              "yaw_rad": -0.1504167594773766,
+              "pitch_rad": -0.11732501171375412,
+              "cls": "player",
+              "score": 0.73
+            },
+            {
+              "yaw_rad": -0.21277705510134157,
+              "pitch_rad": -0.12856888753368947,
+              "cls": "player",
+              "score": 0.76
+            },
+            {
+              "yaw_rad": -0.24629073411638663,
+              "pitch_rad": -0.12725932304200138,
+              "cls": "player",
+              "score": 0.7899999999999999
+            },
+            {
+              "yaw_rad": -0.1752943324430696,
+              "pitch_rad": -0.11531483328699622,
+              "cls": "player",
+              "score": 0.82
+            },
+            {
+              "yaw_rad": -0.1600756443688255,
+              "pitch_rad": -0.11023412374271976,
+              "cls": "player",
+              "score": 0.85
+            },
+            {
+              "yaw_rad": -0.23499373437967713,
+              "pitch_rad": -0.11946044579437351,
+              "cls": "player",
+              "score": 0.8799999999999999
+            },
+            {
+              "yaw_rad": -0.23090685561185167,
+              "pitch_rad": -0.12947721602131113,
+              "cls": "player",
+              "score": 0.9099999999999999
+            }
+          ],
+          [],
+          [],
+          [],
+          [
+            {
+              "yaw_rad": -0.18,
+              "pitch_rad": -0.11,
+              "cls": "player",
+              "score": 0.7
+            },
+            {
+              "yaw_rad": -0.13041675947737658,
+              "pitch_rad": -0.11732501171375412,
+              "cls": "player",
+              "score": 0.73
+            },
+            {
+              "yaw_rad": -0.19277705510134155,
+              "pitch_rad": -0.12856888753368947,
+              "cls": "player",
+              "score": 0.76
+            },
+            {
+              "yaw_rad": -0.22629073411638662,
+              "pitch_rad": -0.12725932304200138,
+              "cls": "player",
+              "score": 0.7899999999999999
+            },
+            {
+              "yaw_rad": -0.1552943324430696,
+              "pitch_rad": -0.11531483328699622,
+              "cls": "player",
+              "score": 0.82
+            },
+            {
+              "yaw_rad": -0.14007564436882547,
+              "pitch_rad": -0.11023412374271976,
+              "cls": "player",
+              "score": 0.85
+            },
+            {
+              "yaw_rad": -0.21499373437967711,
+              "pitch_rad": -0.11946044579437351,
+              "cls": "player",
+              "score": 0.8799999999999999
+            },
+            {
+              "yaw_rad": -0.21090685561185166,
+              "pitch_rad": -0.12947721602131113,
+              "cls": "player",
+              "score": 0.9099999999999999
+            }
+          ],
+          [],
+          [],
+          [],
+          [
+            {
+              "yaw_rad": -0.16,
+              "pitch_rad": -0.11,
+              "cls": "player",
+              "score": 0.7
+            },
+            {
+              "yaw_rad": -0.11041675947737657,
+              "pitch_rad": -0.11732501171375412,
+              "cls": "player",
+              "score": 0.73
+            },
+            {
+              "yaw_rad": -0.17277705510134156,
+              "pitch_rad": -0.12856888753368947,
+              "cls": "player",
+              "score": 0.76
+            },
+            {
+              "yaw_rad": -0.20629073411638663,
+              "pitch_rad": -0.12725932304200138,
+              "cls": "player",
+              "score": 0.7899999999999999
+            },
+            {
+              "yaw_rad": -0.1352943324430696,
+              "pitch_rad": -0.11531483328699622,
+              "cls": "player",
+              "score": 0.82
+            },
+            {
+              "yaw_rad": -0.12007564436882548,
+              "pitch_rad": -0.11023412374271976,
+              "cls": "player",
+              "score": 0.85
+            },
+            {
+              "yaw_rad": -0.19499373437967712,
+              "pitch_rad": -0.11946044579437351,
+              "cls": "player",
+              "score": 0.8799999999999999
+            },
+            {
+              "yaw_rad": -0.19090685561185167,
+              "pitch_rad": -0.12947721602131113,
+              "cls": "player",
+              "score": 0.9099999999999999
+            }
+          ],
+          [],
+          [],
+          [],
+          [
+            {
+              "yaw_rad": -0.13999999999999999,
+              "pitch_rad": -0.11,
+              "cls": "player",
+              "score": 0.7
+            },
+            {
+              "yaw_rad": -0.09041675947737655,
+              "pitch_rad": -0.11732501171375412,
+              "cls": "player",
+              "score": 0.73
+            },
+            {
+              "yaw_rad": -0.15277705510134154,
+              "pitch_rad": -0.12856888753368947,
+              "cls": "player",
+              "score": 0.76
+            },
+            {
+              "yaw_rad": -0.1862907341163866,
+              "pitch_rad": -0.12725932304200138,
+              "cls": "player",
+              "score": 0.7899999999999999
+            },
+            {
+              "yaw_rad": -0.11529433244306958,
+              "pitch_rad": -0.11531483328699622,
+              "cls": "player",
+              "score": 0.82
+            },
+            {
+              "yaw_rad": -0.10007564436882546,
+              "pitch_rad": -0.11023412374271976,
+              "cls": "player",
+              "score": 0.85
+            },
+            {
+              "yaw_rad": -0.1749937343796771,
+              "pitch_rad": -0.11946044579437351,
+              "cls": "player",
+              "score": 0.8799999999999999
+            },
+            {
+              "yaw_rad": -0.17090685561185165,
+              "pitch_rad": -0.12947721602131113,
+              "cls": "player",
+              "score": 0.9099999999999999
+            }
+          ],
+          [],
+          [],
+          [],
+          [
+            {
+              "yaw_rad": -0.12,
+              "pitch_rad": -0.11,
+              "cls": "player",
+              "score": 0.7
+            },
+            {
+              "yaw_rad": -0.07041675947737656,
+              "pitch_rad": -0.11732501171375412,
+              "cls": "player",
+              "score": 0.73
+            },
+            {
+              "yaw_rad": -0.13277705510134155,
+              "pitch_rad": -0.12856888753368947,
+              "cls": "player",
+              "score": 0.76
+            },
+            {
+              "yaw_rad": -0.16629073411638662,
+              "pitch_rad": -0.12725932304200138,
+              "cls": "player",
+              "score": 0.7899999999999999
+            },
+            {
+              "yaw_rad": -0.09529433244306959,
+              "pitch_rad": -0.11531483328699622,
+              "cls": "player",
+              "score": 0.82
+            },
+            {
+              "yaw_rad": -0.08007564436882547,
+              "pitch_rad": -0.11023412374271976,
+              "cls": "player",
+              "score": 0.85
+            },
+            {
+              "yaw_rad": -0.15499373437967712,
+              "pitch_rad": -0.11946044579437351,
+              "cls": "player",
+              "score": 0.8799999999999999
+            },
+            {
+              "yaw_rad": -0.15090685561185166,
+              "pitch_rad": -0.12947721602131113,
+              "cls": "player",
+              "score": 0.9099999999999999
+            }
+          ],
+          [],
+          [],
+          [],
+          [
+            {
+              "yaw_rad": -0.1,
+              "pitch_rad": -0.11,
+              "cls": "player",
+              "score": 0.7
+            },
+            {
+              "yaw_rad": -0.050416759477376574,
+              "pitch_rad": -0.11732501171375412,
+              "cls": "player",
+              "score": 0.73
+            },
+            {
+              "yaw_rad": -0.11277705510134156,
+              "pitch_rad": -0.12856888753368947,
+              "cls": "player",
+              "score": 0.76
+            },
+            {
+              "yaw_rad": -0.14629073411638663,
+              "pitch_rad": -0.12725932304200138,
+              "cls": "player",
+              "score": 0.7899999999999999
+            },
+            {
+              "yaw_rad": -0.0752943324430696,
+              "pitch_rad": -0.11531483328699622,
+              "cls": "player",
+              "score": 0.82
+            },
+            {
+              "yaw_rad": -0.06007564436882549,
+              "pitch_rad": -0.11023412374271976,
+              "cls": "player",
+              "score": 0.85
+            },
+            {
+              "yaw_rad": -0.13499373437967713,
+              "pitch_rad": -0.11946044579437351,
+              "cls": "player",
+              "score": 0.8799999999999999
+            },
+            {
+              "yaw_rad": -0.13090685561185167,
+              "pitch_rad": -0.12947721602131113,
+              "cls": "player",
+              "score": 0.9099999999999999
+            }
+          ],
+          [],
+          [],
+          [],
+          [
+            {
+              "yaw_rad": -0.08000000000000002,
+              "pitch_rad": -0.11,
+              "cls": "player",
+              "score": 0.7
+            },
+            {
+              "yaw_rad": -0.030416759477376584,
+              "pitch_rad": -0.11732501171375412,
+              "cls": "player",
+              "score": 0.73
+            },
+            {
+              "yaw_rad": -0.09277705510134157,
+              "pitch_rad": -0.12856888753368947,
+              "cls": "player",
+              "score": 0.76
+            },
+            {
+              "yaw_rad": -0.12629073411638664,
+              "pitch_rad": -0.12725932304200138,
+              "cls": "player",
+              "score": 0.7899999999999999
+            },
+            {
+              "yaw_rad": -0.05529433244306961,
+              "pitch_rad": -0.11531483328699622,
+              "cls": "player",
+              "score": 0.82
+            },
+            {
+              "yaw_rad": -0.0400756443688255,
+              "pitch_rad": -0.11023412374271976,
+              "cls": "player",
+              "score": 0.85
+            },
+            {
+              "yaw_rad": -0.11499373437967714,
+              "pitch_rad": -0.11946044579437351,
+              "cls": "player",
+              "score": 0.8799999999999999
+            },
+            {
+              "yaw_rad": -0.11090685561185168,
+              "pitch_rad": -0.12947721602131113,
+              "cls": "player",
+              "score": 0.9099999999999999
+            }
+          ],
+          [],
+          [],
+          [],
+          [
+            {
+              "yaw_rad": -0.06,
+              "pitch_rad": -0.11,
+              "cls": "player",
+              "score": 0.7
+            },
+            {
+              "yaw_rad": -0.010416759477376566,
+              "pitch_rad": -0.11732501171375412,
+              "cls": "player",
+              "score": 0.73
+            },
+            {
+              "yaw_rad": -0.07277705510134155,
+              "pitch_rad": -0.12856888753368947,
+              "cls": "player",
+              "score": 0.76
+            },
+            {
+              "yaw_rad": -0.10629073411638662,
+              "pitch_rad": -0.12725932304200138,
+              "cls": "player",
+              "score": 0.7899999999999999
+            },
+            {
+              "yaw_rad": -0.03529433244306959,
+              "pitch_rad": -0.11531483328699622,
+              "cls": "player",
+              "score": 0.82
+            },
+            {
+              "yaw_rad": -0.02007564436882548,
+              "pitch_rad": -0.11023412374271976,
+              "cls": "player",
+              "score": 0.85
+            },
+            {
+              "yaw_rad": -0.09499373437967712,
+              "pitch_rad": -0.11946044579437351,
+              "cls": "player",
+              "score": 0.8799999999999999
+            },
+            {
+              "yaw_rad": -0.09090685561185166,
+              "pitch_rad": -0.12947721602131113,
+              "cls": "player",
+              "score": 0.9099999999999999
+            }
+          ],
+          [],
+          [],
+          [],
+          [
+            {
+              "yaw_rad": -0.03999999999999998,
+              "pitch_rad": -0.11,
+              "cls": "player",
+              "score": 0.7
+            },
+            {
+              "yaw_rad": 0.009583240522623451,
+              "pitch_rad": -0.11732501171375412,
+              "cls": "player",
+              "score": 0.73
+            },
+            {
+              "yaw_rad": -0.05277705510134154,
+              "pitch_rad": -0.12856888753368947,
+              "cls": "player",
+              "score": 0.76
+            },
+            {
+              "yaw_rad": -0.0862907341163866,
+              "pitch_rad": -0.12725932304200138,
+              "cls": "player",
+              "score": 0.7899999999999999
+            },
+            {
+              "yaw_rad": -0.015294332443069571,
+              "pitch_rad": -0.11531483328699622,
+              "cls": "player",
+              "score": 0.82
+            },
+            {
+              "yaw_rad": -7.564436882546294e-05,
+              "pitch_rad": -0.11023412374271976,
+              "cls": "player",
+              "score": 0.85
+            },
+            {
+              "yaw_rad": -0.0749937343796771,
+              "pitch_rad": -0.11946044579437351,
+              "cls": "player",
+              "score": 0.8799999999999999
+            },
+            {
+              "yaw_rad": -0.07090685561185164,
+              "pitch_rad": -0.12947721602131113,
+              "cls": "player",
+              "score": 0.9099999999999999
+            }
+          ],
+          [],
+          [],
+          [],
+          [
+            {
+              "yaw_rad": -0.020000000000000018,
+              "pitch_rad": -0.11,
+              "cls": "player",
+              "score": 0.7
+            },
+            {
+              "yaw_rad": 0.029583240522623414,
+              "pitch_rad": -0.11732501171375412,
+              "cls": "player",
+              "score": 0.73
+            },
+            {
+              "yaw_rad": -0.03277705510134158,
+              "pitch_rad": -0.12856888753368947,
+              "cls": "player",
+              "score": 0.76
+            },
+            {
+              "yaw_rad": -0.06629073411638664,
+              "pitch_rad": -0.12725932304200138,
+              "cls": "player",
+              "score": 0.7899999999999999
+            },
+            {
+              "yaw_rad": 0.004705667556930391,
+              "pitch_rad": -0.11531483328699622,
+              "cls": "player",
+              "score": 0.82
+            },
+            {
+              "yaw_rad": 0.0199243556311745,
+              "pitch_rad": -0.11023412374271976,
+              "cls": "player",
+              "score": 0.85
+            },
+            {
+              "yaw_rad": -0.05499373437967713,
+              "pitch_rad": -0.11946044579437351,
+              "cls": "player",
+              "score": 0.8799999999999999
+            },
+            {
+              "yaw_rad": -0.05090685561185168,
+              "pitch_rad": -0.12947721602131113,
+              "cls": "player",
+              "score": 0.9099999999999999
+            }
+          ],
+          [],
+          [],
+          [],
+          [
+            {
+              "yaw_rad": 0.0,
+              "pitch_rad": -0.11,
+              "cls": "player",
+              "score": 0.7
+            },
+            {
+              "yaw_rad": 0.04958324052262343,
+              "pitch_rad": -0.11732501171375412,
+              "cls": "player",
+              "score": 0.73
+            },
+            {
+              "yaw_rad": -0.012777055101341563,
+              "pitch_rad": -0.12856888753368947,
+              "cls": "player",
+              "score": 0.76
+            },
+            {
+              "yaw_rad": -0.04629073411638662,
+              "pitch_rad": -0.12725932304200138,
+              "cls": "player",
+              "score": 0.7899999999999999
+            },
+            {
+              "yaw_rad": 0.02470566755693041,
+              "pitch_rad": -0.11531483328699622,
+              "cls": "player",
+              "score": 0.82
+            },
+            {
+              "yaw_rad": 0.03992435563117452,
+              "pitch_rad": -0.11023412374271976,
+              "cls": "player",
+              "score": 0.85
+            },
+            {
+              "yaw_rad": -0.034993734379677115,
+              "pitch_rad": -0.11946044579437351,
+              "cls": "player",
+              "score": 0.8799999999999999
+            },
+            {
+              "yaw_rad": -0.030906855611851664,
+              "pitch_rad": -0.12947721602131113,
+              "cls": "player",
+              "score": 0.9099999999999999
+            }
+          ],
+          [],
+          [],
+          [],
+          [
+            {
+              "yaw_rad": 0.020000000000000018,
+              "pitch_rad": -0.11,
+              "cls": "player",
+              "score": 0.7
+            },
+            {
+              "yaw_rad": 0.06958324052262345,
+              "pitch_rad": -0.11732501171375412,
+              "cls": "player",
+              "score": 0.73
+            },
+            {
+              "yaw_rad": 0.007222944898658455,
+              "pitch_rad": -0.12856888753368947,
+              "cls": "player",
+              "score": 0.76
+            },
+            {
+              "yaw_rad": -0.026290734116386605,
+              "pitch_rad": -0.12725932304200138,
+              "cls": "player",
+              "score": 0.7899999999999999
+            },
+            {
+              "yaw_rad": 0.04470566755693042,
+              "pitch_rad": -0.11531483328699622,
+              "cls": "player",
+              "score": 0.82
+            },
+            {
+              "yaw_rad": 0.059924355631174535,
+              "pitch_rad": -0.11023412374271976,
+              "cls": "player",
+              "score": 0.85
+            },
+            {
+              "yaw_rad": -0.014993734379677097,
+              "pitch_rad": -0.11946044579437351,
+              "cls": "player",
+              "score": 0.8799999999999999
+            },
+            {
+              "yaw_rad": -0.010906855611851646,
+              "pitch_rad": -0.12947721602131113,
+              "cls": "player",
+              "score": 0.9099999999999999
+            }
+          ],
+          [],
+          [],
+          [],
+          [
+            {
+              "yaw_rad": 0.03999999999999998,
+              "pitch_rad": -0.11,
+              "cls": "player",
+              "score": 0.7
+            },
+            {
+              "yaw_rad": 0.08958324052262341,
+              "pitch_rad": -0.11732501171375412,
+              "cls": "player",
+              "score": 0.73
+            },
+            {
+              "yaw_rad": 0.027222944898658417,
+              "pitch_rad": -0.12856888753368947,
+              "cls": "player",
+              "score": 0.76
+            },
+            {
+              "yaw_rad": -0.006290734116386643,
+              "pitch_rad": -0.12725932304200138,
+              "cls": "player",
+              "score": 0.7899999999999999
+            },
+            {
+              "yaw_rad": 0.06470566755693039,
+              "pitch_rad": -0.11531483328699622,
+              "cls": "player",
+              "score": 0.82
+            },
+            {
+              "yaw_rad": 0.0799243556311745,
+              "pitch_rad": -0.11023412374271976,
+              "cls": "player",
+              "score": 0.85
+            },
+            {
+              "yaw_rad": 0.005006265620322865,
+              "pitch_rad": -0.11946044579437351,
+              "cls": "player",
+              "score": 0.8799999999999999
+            },
+            {
+              "yaw_rad": 0.009093144388148316,
+              "pitch_rad": -0.12947721602131113,
+              "cls": "player",
+              "score": 0.9099999999999999
+            }
+          ],
+          [],
+          [],
+          [],
+          [
+            {
+              "yaw_rad": 0.06,
+              "pitch_rad": -0.11,
+              "cls": "player",
+              "score": 0.7
+            },
+            {
+              "yaw_rad": 0.10958324052262343,
+              "pitch_rad": -0.11732501171375412,
+              "cls": "player",
+              "score": 0.73
+            },
+            {
+              "yaw_rad": 0.047222944898658435,
+              "pitch_rad": -0.12856888753368947,
+              "cls": "player",
+              "score": 0.76
+            },
+            {
+              "yaw_rad": 0.013709265883613375,
+              "pitch_rad": -0.12725932304200138,
+              "cls": "player",
+              "score": 0.7899999999999999
+            },
+            {
+              "yaw_rad": 0.0847056675569304,
+              "pitch_rad": -0.11531483328699622,
+              "cls": "player",
+              "score": 0.82
+            },
+            {
+              "yaw_rad": 0.09992435563117452,
+              "pitch_rad": -0.11023412374271976,
+              "cls": "player",
+              "score": 0.85
+            },
+            {
+              "yaw_rad": 0.025006265620322883,
+              "pitch_rad": -0.11946044579437351,
+              "cls": "player",
+              "score": 0.8799999999999999
+            },
+            {
+              "yaw_rad": 0.029093144388148334,
+              "pitch_rad": -0.12947721602131113,
+              "cls": "player",
+              "score": 0.9099999999999999
+            }
+          ],
+          [],
+          [],
+          [],
+          [
+            {
+              "yaw_rad": 0.07999999999999996,
+              "pitch_rad": -0.11,
+              "cls": "player",
+              "score": 0.7
+            },
+            {
+              "yaw_rad": 0.12958324052262338,
+              "pitch_rad": -0.11732501171375412,
+              "cls": "player",
+              "score": 0.73
+            },
+            {
+              "yaw_rad": 0.0672229448986584,
+              "pitch_rad": -0.12856888753368947,
+              "cls": "player",
+              "score": 0.76
+            },
+            {
+              "yaw_rad": 0.03370926588361334,
+              "pitch_rad": -0.12725932304200138,
+              "cls": "player",
+              "score": 0.7899999999999999
+            },
+            {
+              "yaw_rad": 0.10470566755693037,
+              "pitch_rad": -0.11531483328699622,
+              "cls": "player",
+              "score": 0.82
+            },
+            {
+              "yaw_rad": 0.11992435563117448,
+              "pitch_rad": -0.11023412374271976,
+              "cls": "player",
+              "score": 0.85
+            },
+            {
+              "yaw_rad": 0.045006265620322845,
+              "pitch_rad": -0.11946044579437351,
+              "cls": "player",
+              "score": 0.8799999999999999
+            },
+            {
+              "yaw_rad": 0.049093144388148297,
+              "pitch_rad": -0.12947721602131113,
+              "cls": "player",
+              "score": 0.9099999999999999
+            }
+          ],
+          [],
+          [],
+          [],
+          [
+            {
+              "yaw_rad": 0.09999999999999998,
+              "pitch_rad": -0.11,
+              "cls": "player",
+              "score": 0.7
+            },
+            {
+              "yaw_rad": 0.1495832405226234,
+              "pitch_rad": -0.11732501171375412,
+              "cls": "player",
+              "score": 0.73
+            },
+            {
+              "yaw_rad": 0.08722294489865842,
+              "pitch_rad": -0.12856888753368947,
+              "cls": "player",
+              "score": 0.76
+            },
+            {
+              "yaw_rad": 0.053709265883613355,
+              "pitch_rad": -0.12725932304200138,
+              "cls": "player",
+              "score": 0.7899999999999999
+            },
+            {
+              "yaw_rad": 0.12470566755693038,
+              "pitch_rad": -0.11531483328699622,
+              "cls": "player",
+              "score": 0.82
+            },
+            {
+              "yaw_rad": 0.1399243556311745,
+              "pitch_rad": -0.11023412374271976,
+              "cls": "player",
+              "score": 0.85
+            },
+            {
+              "yaw_rad": 0.06500626562032286,
+              "pitch_rad": -0.11946044579437351,
+              "cls": "player",
+              "score": 0.8799999999999999
+            },
+            {
+              "yaw_rad": 0.06909314438814831,
+              "pitch_rad": -0.12947721602131113,
+              "cls": "player",
+              "score": 0.9099999999999999
+            }
+          ],
+          [],
+          [],
+          [],
+          [
+            {
+              "yaw_rad": 0.12,
+              "pitch_rad": -0.11,
+              "cls": "player",
+              "score": 0.7
+            },
+            {
+              "yaw_rad": 0.1695832405226234,
+              "pitch_rad": -0.11732501171375412,
+              "cls": "player",
+              "score": 0.73
+            },
+            {
+              "yaw_rad": 0.10722294489865844,
+              "pitch_rad": -0.12856888753368947,
+              "cls": "player",
+              "score": 0.76
+            },
+            {
+              "yaw_rad": 0.07370926588361337,
+              "pitch_rad": -0.12725932304200138,
+              "cls": "player",
+              "score": 0.7899999999999999
+            },
+            {
+              "yaw_rad": 0.1447056675569304,
+              "pitch_rad": -0.11531483328699622,
+              "cls": "player",
+              "score": 0.82
+            },
+            {
+              "yaw_rad": 0.15992435563117452,
+              "pitch_rad": -0.11023412374271976,
+              "cls": "player",
+              "score": 0.85
+            },
+            {
+              "yaw_rad": 0.08500626562032287,
+              "pitch_rad": -0.11946044579437351,
+              "cls": "player",
+              "score": 0.8799999999999999
+            },
+            {
+              "yaw_rad": 0.08909314438814833,
+              "pitch_rad": -0.12947721602131113,
+              "cls": "player",
+              "score": 0.9099999999999999
+            }
+          ],
+          [],
+          [],
+          [],
+          [
+            {
+              "yaw_rad": 0.13999999999999996,
+              "pitch_rad": -0.11,
+              "cls": "player",
+              "score": 0.7
+            },
+            {
+              "yaw_rad": 0.18958324052262338,
+              "pitch_rad": -0.11732501171375412,
+              "cls": "player",
+              "score": 0.73
+            },
+            {
+              "yaw_rad": 0.1272229448986584,
+              "pitch_rad": -0.12856888753368947,
+              "cls": "player",
+              "score": 0.76
+            },
+            {
+              "yaw_rad": 0.09370926588361334,
+              "pitch_rad": -0.12725932304200138,
+              "cls": "player",
+              "score": 0.7899999999999999
+            },
+            {
+              "yaw_rad": 0.16470566755693036,
+              "pitch_rad": -0.11531483328699622,
+              "cls": "player",
+              "score": 0.82
+            },
+            {
+              "yaw_rad": 0.17992435563117448,
+              "pitch_rad": -0.11023412374271976,
+              "cls": "player",
+              "score": 0.85
+            },
+            {
+              "yaw_rad": 0.10500626562032284,
+              "pitch_rad": -0.11946044579437351,
+              "cls": "player",
+              "score": 0.8799999999999999
+            },
+            {
+              "yaw_rad": 0.1090931443881483,
+              "pitch_rad": -0.12947721602131113,
+              "cls": "player",
+              "score": 0.9099999999999999
+            }
+          ],
+          [],
+          [],
+          [],
+          [
+            {
+              "yaw_rad": 0.16000000000000003,
+              "pitch_rad": -0.11,
+              "cls": "player",
+              "score": 0.7
+            },
+            {
+              "yaw_rad": 0.20958324052262345,
+              "pitch_rad": -0.11732501171375412,
+              "cls": "player",
+              "score": 0.73
+            },
+            {
+              "yaw_rad": 0.14722294489865848,
+              "pitch_rad": -0.12856888753368947,
+              "cls": "player",
+              "score": 0.76
+            },
+            {
+              "yaw_rad": 0.11370926588361341,
+              "pitch_rad": -0.12725932304200138,
+              "cls": "player",
+              "score": 0.7899999999999999
+            },
+            {
+              "yaw_rad": 0.18470566755693044,
+              "pitch_rad": -0.11531483328699622,
+              "cls": "player",
+              "score": 0.82
+            },
+            {
+              "yaw_rad": 0.19992435563117456,
+              "pitch_rad": -0.11023412374271976,
+              "cls": "player",
+              "score": 0.85
+            },
+            {
+              "yaw_rad": 0.1250062656203229,
+              "pitch_rad": -0.11946044579437351,
+              "cls": "player",
+              "score": 0.8799999999999999
+            },
+            {
+              "yaw_rad": 0.12909314438814837,
+              "pitch_rad": -0.12947721602131113,
+              "cls": "player",
+              "score": 0.9099999999999999
+            }
+          ],
+          [],
+          [],
+          [],
+          [
+            {
+              "yaw_rad": 0.18,
+              "pitch_rad": -0.11,
+              "cls": "player",
+              "score": 0.7
+            },
+            {
+              "yaw_rad": 0.2295832405226234,
+              "pitch_rad": -0.11732501171375412,
+              "cls": "player",
+              "score": 0.73
+            },
+            {
+              "yaw_rad": 0.16722294489865844,
+              "pitch_rad": -0.12856888753368947,
+              "cls": "player",
+              "score": 0.76
+            },
+            {
+              "yaw_rad": 0.13370926588361337,
+              "pitch_rad": -0.12725932304200138,
+              "cls": "player",
+              "score": 0.7899999999999999
+            },
+            {
+              "yaw_rad": 0.2047056675569304,
+              "pitch_rad": -0.11531483328699622,
+              "cls": "player",
+              "score": 0.82
+            },
+            {
+              "yaw_rad": 0.21992435563117452,
+              "pitch_rad": -0.11023412374271976,
+              "cls": "player",
+              "score": 0.85
+            },
+            {
+              "yaw_rad": 0.14500626562032287,
+              "pitch_rad": -0.11946044579437351,
+              "cls": "player",
+              "score": 0.8799999999999999
+            },
+            {
+              "yaw_rad": 0.14909314438814833,
+              "pitch_rad": -0.12947721602131113,
+              "cls": "player",
+              "score": 0.9099999999999999
+            }
+          ],
+          [],
+          [],
+          [],
+          [
+            {
+              "yaw_rad": 0.2,
+              "pitch_rad": -0.11,
+              "cls": "player",
+              "score": 0.7
+            },
+            {
+              "yaw_rad": 0.24958324052262343,
+              "pitch_rad": -0.11732501171375412,
+              "cls": "player",
+              "score": 0.73
+            },
+            {
+              "yaw_rad": 0.18722294489865846,
+              "pitch_rad": -0.12856888753368947,
+              "cls": "player",
+              "score": 0.76
+            },
+            {
+              "yaw_rad": 0.1537092658836134,
+              "pitch_rad": -0.12725932304200138,
+              "cls": "player",
+              "score": 0.7899999999999999
+            },
+            {
+              "yaw_rad": 0.22470566755693042,
+              "pitch_rad": -0.11531483328699622,
+              "cls": "player",
+              "score": 0.82
+            },
+            {
+              "yaw_rad": 0.23992435563117454,
+              "pitch_rad": -0.11023412374271976,
+              "cls": "player",
+              "score": 0.85
+            },
+            {
+              "yaw_rad": 0.1650062656203229,
+              "pitch_rad": -0.11946044579437351,
+              "cls": "player",
+              "score": 0.8799999999999999
+            },
+            {
+              "yaw_rad": 0.16909314438814835,
+              "pitch_rad": -0.12947721602131113,
+              "cls": "player",
+              "score": 0.9099999999999999
+            }
+          ],
+          [],
+          [],
+          [],
+          [
+            {
+              "yaw_rad": 0.22000000000000003,
+              "pitch_rad": -0.11,
+              "cls": "player",
+              "score": 0.7
+            },
+            {
+              "yaw_rad": 0.26958324052262345,
+              "pitch_rad": -0.11732501171375412,
+              "cls": "player",
+              "score": 0.73
+            },
+            {
+              "yaw_rad": 0.20722294489865847,
+              "pitch_rad": -0.12856888753368947,
+              "cls": "player",
+              "score": 0.76
+            },
+            {
+              "yaw_rad": 0.1737092658836134,
+              "pitch_rad": -0.12725932304200138,
+              "cls": "player",
+              "score": 0.7899999999999999
+            },
+            {
+              "yaw_rad": 0.24470566755693043,
+              "pitch_rad": -0.11531483328699622,
+              "cls": "player",
+              "score": 0.82
+            },
+            {
+              "yaw_rad": 0.25992435563117455,
+              "pitch_rad": -0.11023412374271976,
+              "cls": "player",
+              "score": 0.85
+            },
+            {
+              "yaw_rad": 0.1850062656203229,
+              "pitch_rad": -0.11946044579437351,
+              "cls": "player",
+              "score": 0.8799999999999999
+            },
+            {
+              "yaw_rad": 0.18909314438814837,
+              "pitch_rad": -0.12947721602131113,
+              "cls": "player",
+              "score": 0.9099999999999999
+            }
+          ],
+          [],
+          [],
+          [],
+          [
+            {
+              "yaw_rad": 0.24000000000000005,
+              "pitch_rad": -0.11,
+              "cls": "player",
+              "score": 0.7
+            },
+            {
+              "yaw_rad": 0.28958324052262346,
+              "pitch_rad": -0.11732501171375412,
+              "cls": "player",
+              "score": 0.73
+            },
+            {
+              "yaw_rad": 0.2272229448986585,
+              "pitch_rad": -0.12856888753368947,
+              "cls": "player",
+              "score": 0.76
+            },
+            {
+              "yaw_rad": 0.19370926588361342,
+              "pitch_rad": -0.12725932304200138,
+              "cls": "player",
+              "score": 0.7899999999999999
+            },
+            {
+              "yaw_rad": 0.2647056675569305,
+              "pitch_rad": -0.11531483328699622,
+              "cls": "player",
+              "score": 0.82
+            },
+            {
+              "yaw_rad": 0.27992435563117457,
+              "pitch_rad": -0.11023412374271976,
+              "cls": "player",
+              "score": 0.85
+            },
+            {
+              "yaw_rad": 0.20500626562032292,
+              "pitch_rad": -0.11946044579437351,
+              "cls": "player",
+              "score": 0.8799999999999999
+            },
+            {
+              "yaw_rad": 0.20909314438814838,
+              "pitch_rad": -0.12947721602131113,
+              "cls": "player",
+              "score": 0.9099999999999999
+            }
+          ],
+          [],
+          [],
+          [],
+          [
+            {
+              "yaw_rad": 0.25999999999999995,
+              "pitch_rad": -0.11,
+              "cls": "player",
+              "score": 0.7
+            },
+            {
+              "yaw_rad": 0.30958324052262337,
+              "pitch_rad": -0.11732501171375412,
+              "cls": "player",
+              "score": 0.73
+            },
+            {
+              "yaw_rad": 0.2472229448986584,
+              "pitch_rad": -0.12856888753368947,
+              "cls": "player",
+              "score": 0.76
+            },
+            {
+              "yaw_rad": 0.21370926588361333,
+              "pitch_rad": -0.12725932304200138,
+              "cls": "player",
+              "score": 0.7899999999999999
+            },
+            {
+              "yaw_rad": 0.2847056675569304,
+              "pitch_rad": -0.11531483328699622,
+              "cls": "player",
+              "score": 0.82
+            },
+            {
+              "yaw_rad": 0.2999243556311745,
+              "pitch_rad": -0.11023412374271976,
+              "cls": "player",
+              "score": 0.85
+            },
+            {
+              "yaw_rad": 0.22500626562032283,
+              "pitch_rad": -0.11946044579437351,
+              "cls": "player",
+              "score": 0.8799999999999999
+            },
+            {
+              "yaw_rad": 0.2290931443881483,
+              "pitch_rad": -0.12947721602131113,
+              "cls": "player",
+              "score": 0.9099999999999999
+            }
+          ],
+          [],
+          [],
+          [],
+          [
+            {
+              "yaw_rad": 0.27999999999999997,
+              "pitch_rad": -0.11,
+              "cls": "player",
+              "score": 0.7
+            },
+            {
+              "yaw_rad": 0.3295832405226234,
+              "pitch_rad": -0.11732501171375412,
+              "cls": "player",
+              "score": 0.73
+            },
+            {
+              "yaw_rad": 0.2672229448986584,
+              "pitch_rad": -0.12856888753368947,
+              "cls": "player",
+              "score": 0.76
+            },
+            {
+              "yaw_rad": 0.23370926588361335,
+              "pitch_rad": -0.12725932304200138,
+              "cls": "player",
+              "score": 0.7899999999999999
+            },
+            {
+              "yaw_rad": 0.3047056675569304,
+              "pitch_rad": -0.11531483328699622,
+              "cls": "player",
+              "score": 0.82
+            },
+            {
+              "yaw_rad": 0.3199243556311745,
+              "pitch_rad": -0.11023412374271976,
+              "cls": "player",
+              "score": 0.85
+            },
+            {
+              "yaw_rad": 0.24500626562032285,
+              "pitch_rad": -0.11946044579437351,
+              "cls": "player",
+              "score": 0.8799999999999999
+            },
+            {
+              "yaw_rad": 0.2490931443881483,
+              "pitch_rad": -0.12947721602131113,
+              "cls": "player",
+              "score": 0.9099999999999999
+            }
+          ],
+          [],
+          [],
+          []
+        ]
+      },
+      "expected": {
+        "yaw_rad": {
+          "dtype": "f64",
+          "shape": [
+            120
+          ],
+          "b64": "gCytsBESdL+ALK2wERJ0v4AsrbAREnS/gCytsBESdL+ALK2wERJ0v4AsrbAREnS/gCytsBESdL+ALK2wERJ0v7YEJ/3QjHa/c89mjgYFe78G0eQ+QIiAv4FNxya+KoS/QoGrcTb0iL8tecJULKKOvyEOquRRfpK/+JuPBFPqlb/MIRdFgdmZv28me3gwKp6/u9oxyxdgob+KDj8tAMKjv0vQAoPcOqa/LFIrHLrAqL+H4uq/aEurv9JLeGI41K2/HQabcjsfsL98hBC2NEWxv/itzntGXLK/JWlTYMVks7+NNMKrclO0v8P/pIENK7W/+R6w8gTutb8U7d+LgZ62v8ecWzPJMre/wo0x2Nuut7/R1mJzLxa4v/EkhSrCa7i/1Q4akDOxuL//WdX/jem4v94h2R1JF7m/mbSFfmU8ub9XFMYXg1q5v3XcZXfzcrm/zcmSisiGub+7sjGc4Ja5v+QMdRDwo7m/WzbMSomuub/6j7IWI7e5v0CUNdsdvrm/sW5+08fDub8rY657YMi5vx9nclgbzLm/PbN1OCLPub9JrvsIl9G5vwaOJVKV07m/I/+JazPVub+Nt6F2g9a5v2va/ymU17m/Pv47dnHYub8OSsYLJdm5v3Wxgce22bm/KTddThK7ub9eOPV9XoO5v5QAbsLRN7m/aXiHctPcuL8xUXk2dGq4v2OtI20c5re/xD8ibldUt79JtpzM8ri2v7Ga+eF0C7a/1WfDjMlQtb8rXvP7C420vzI96KSkw7O/7pJGpr7rsr8FqsJ/8wmyv03qPPMTIrG/ELIgKkU3sL+C7aa86oCuv3wCPNgNhKy/yStiPjF/qr9ISNTzRHiovzf0Zg7UXKa/d9AeL1o1pL/lpSN40wiivyBvuGLquZ+/tPzbLis+m78qmoo6Aa+Wv2zrz4MOGpK/VpNkqN4Ui79/as7aEbWBv0I4SevIanC/qBQSHsf1RD+knnK8yoZ1PzLTrCNQcoQ/+8NQdcs7jj9u85DlrwKUP6yEWXfI3Jg/wLxsKiHSnT8jB5HNWWmhP61x/vux6KM/8M3g/shhpj/akcuppeeoP8e+hOBRcqs/H66VAUz7rT8noVe6pz6wP3okovO2hbE/4OpAut3Osj/e37wN4Ba0P2lz+CsgW7U/T8EtNCultj/Wnyg/D/G3PyRONR6UO7k/8DAJqx+Cuj9lmfVtQs67P1jSErkNHL0/nDnkaUxovj9sw8E7Z7C/P99uLrj4fsA/IQuKdn8mwT85XU1/Ls3BP9JSola7ccI/"
+        },
+        "pitch_rad": {
+          "dtype": "f64",
+          "shape": [
+            120
+          ],
+          "b64": "mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/mpmZmZmZyb+amZmZmZnJv5qZmZmZmcm/"
+        },
+        "hfov_rad": {
+          "dtype": "f64",
+          "shape": [
+            120
+          ],
+          "b64": "S/QqudsW8D9L9Cq52xbwP0v0KrnbFvA/S/QqudsW8D9L9Cq52xbwP0v0KrnbFvA/S/QqudsW8D9L9Cq52xbwP0v0KrnbFvA/S/QqudsW8D9L9Cq52xbwP0v0KrnbFvA/S/QqudsW8D9L9Cq52xbwP0v0KrnbFvA/S/QqudsW8D9L9Cq52xbwP0v0KrnbFvA/S/QqudsW8D9L9Cq52xbwP0v0KrnbFvA/S/QqudsW8D9L9Cq52xbwP0v0KrnbFvA/S/QqudsW8D9L9Cq52xbwP0v0KrnbFvA/S/QqudsW8D9L9Cq52xbwP0v0KrnbFvA/S/QqudsW8D9L9Cq52xbwP0v0KrnbFvA/S/QqudsW8D9L9Cq52xbwP0v0KrnbFvA/S/QqudsW8D9L9Cq52xbwP0v0KrnbFvA/S/QqudsW8D9L9Cq52xbwP0v0KrnbFvA/S/QqudsW8D9L9Cq52xbwP0v0KrnbFvA/S/QqudsW8D9L9Cq52xbwP0v0KrnbFvA/S/QqudsW8D9L9Cq52xbwP0v0KrnbFvA/S/QqudsW8D9L9Cq52xbwP0v0KrnbFvA/S/QqudsW8D9L9Cq52xbwP0v0KrnbFvA/S/QqudsW8D9L9Cq52xbwPzbgRdPBFvA/+KChknYW8D+DN5XG5BXwPxqatVj5FPA/Fa6bJaMT8D88cjjY0hHwP93+jsd6D/A/NWuu1o4M8D+67cdWBAnwP6+wP+vRBPA/tK8x397/7z/rMj6+q/TvP8QpZHz+5+8/h34wCs3Z7z/fpIEYD8rvP6xNu/O9uO8/6I1+YdSl7z/jtr2ATpHvP5qXBawpe+8/rzLYXWRj7z8vL4jFLErvP1ghU7eyL+8/+qZfTiIU7z/SNpkspPfuP0m7jLZd2u4/TLqDS3G87j+ZJRh6/p3uPw1/dzEif+4/+b+I7/Zf7j90ZiXslEDuPx8tk0ESIe4/Rz5pEoMB7j80KAmt+eHtP39z0ayGwu0/MXstGTmj7T8oB6SCHoTtP+cpBB5DZe0/cgHO3bFG7T/YNfOJdCjtP2RlCdaTCu0/Gx0Hdhft7D8+gqIxBtDsPwhuZ/Zls+w/Im6Z6DuX7D9o4fRyjHvsP0pAYVVbYOw/I4mlsqtF7D+Swi4dgCvsPwGP96LaEew/POSe2Lz46z98H7vjJ+DrP8fgdYQcyOs/Fld8Hpuw6z/k8E7Bo5nrP625+i82g+s//AtG6FFt6z9jqFkp9lfrP1uz7vkhQ+s/TZYJLtQu6z8hQklsCxvrP3jb0TLGB+s/"
+        },
+        "shot": [
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "WIDE",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK",
+          "ATTACK"
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 0.0
+      }
+    }
+  ]
+}

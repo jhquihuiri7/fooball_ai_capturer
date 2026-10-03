@@ -1,0 +1,1573 @@
+{
+  "schema": 1,
+  "module": "rig",
+  "conventions": {
+    "axes": "Ejes del soporte: X a la derecha, Y hacia abajo, Z hacia delante (rig.py).",
+    "rotation": "R = R_yaw · R_pitch · R_roll, de cámara a soporte; ortonormal (CameraPose.matrix), así que la inversa es la traspuesta.",
+    "angles": "Radianes. Yaw positivo gira la cámara a la derecha; pitch positivo, hacia arriba.",
+    "pixel_center": "El convenio de rig.py: el píxel i cubre [i, i+1) y su centro continuo está en i+0,5; CameraIntrinsics.scaled reescala pasando por ese centro.",
+    "homography": "Las homografías de vista van del programa a la cámara (view_homography).",
+    "scalars": "Float con el repr de Python: ida y vuelta exacta a Double en Swift.",
+    "tensors": "{dtype: f64|f32|u8|i32, shape, b64}, little-endian y orden C; en Swift, Data(base64Encoded:)."
+  },
+  "cases": [
+    {
+      "name": "matrix_derecha_nominal",
+      "fn": "CameraPose.matrix",
+      "inputs": {
+        "yaw_rad": 0.6981317007977318,
+        "pitch_rad": -0.13962634015954636,
+        "roll_rad": 0.0
+      },
+      "expected": {
+        "matrix": {
+          "dtype": "f64",
+          "shape": [
+            3,
+            3
+          ],
+          "b64": "OVDPom+D6D+0da6vxOa2v/ZNcHN4XuQ/AAAAAAAAAAB6lDCpRrDvPxmejZZs0ME/HBY8UreR5L9dhhum+Uq7v4/a1yxdRug/"
+        }
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "from_matrix_derecha_nominal",
+      "fn": "CameraPose.from_matrix",
+      "inputs": {
+        "matrix": {
+          "dtype": "f64",
+          "shape": [
+            3,
+            3
+          ],
+          "b64": "OVDPom+D6D+0da6vxOa2v/ZNcHN4XuQ/AAAAAAAAAAB6lDCpRrDvPxmejZZs0ME/HBY8UreR5L9dhhum+Uq7v4/a1yxdRug/"
+        }
+      },
+      "expected": {
+        "yaw_rad": 0.6981317007977318,
+        "pitch_rad": -0.13962634015954636,
+        "roll_rad": 0.0
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "matrix_izquierda_roll3",
+      "fn": "CameraPose.matrix",
+      "inputs": {
+        "yaw_rad": -0.6981317007977318,
+        "pitch_rad": -0.13962634015954636,
+        "roll_rad": 0.05235987755982989
+      },
+      "expected": {
+        "matrix": {
+          "dtype": "f64",
+          "shape": [
+            3,
+            3
+          ],
+          "b64": "NfZwpDCh6D9hPs1ukjapP/ZNcHN4XuS/nUMqAgWJqj8yZqiOKKXvPxmejZZs0ME/zOkSdspc5D8p5tSHC+/Bv4/a1yxdRug/"
+        }
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "from_matrix_izquierda_roll3",
+      "fn": "CameraPose.from_matrix",
+      "inputs": {
+        "matrix": {
+          "dtype": "f64",
+          "shape": [
+            3,
+            3
+          ],
+          "b64": "NfZwpDCh6D9hPs1ukjapP/ZNcHN4XuS/nUMqAgWJqj8yZqiOKKXvPxmejZZs0ME/zOkSdspc5D8p5tSHC+/Bv4/a1yxdRug/"
+        }
+      },
+      "expected": {
+        "yaw_rad": -0.6981317007977318,
+        "pitch_rad": -0.13962634015954636,
+        "roll_rad": 0.05235987755982989
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "matrix_derecha_picada_roll-3",
+      "fn": "CameraPose.matrix",
+      "inputs": {
+        "yaw_rad": 0.6981317007977318,
+        "pitch_rad": -0.6108652381980153,
+        "roll_rad": -0.05235987755982989
+      },
+      "expected": {
+        "matrix": {
+          "dtype": "f64",
+          "shape": [
+            3,
+            3
+          ],
+          "b64": "XAEp1ucY6T8GqmzocP/Uv5qHMA9s2eA/dGCHmDPzpb+LBmELTC3qP3hJfPi8WuI/EfKyjh7O47+syJf3MDzev3XMcEqJFOQ/"
+        }
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "from_matrix_derecha_picada_roll-3",
+      "fn": "CameraPose.from_matrix",
+      "inputs": {
+        "matrix": {
+          "dtype": "f64",
+          "shape": [
+            3,
+            3
+          ],
+          "b64": "XAEp1ucY6T8GqmzocP/Uv5qHMA9s2eA/dGCHmDPzpb+LBmELTC3qP3hJfPi8WuI/EfKyjh7O47+syJf3MDzev3XMcEqJFOQ/"
+        }
+      },
+      "expected": {
+        "yaw_rad": 0.6981317007977318,
+        "pitch_rad": -0.6108652381980153,
+        "roll_rad": -0.0523598775598299
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "matrix_izquierda_invertida",
+      "fn": "CameraPose.matrix",
+      "inputs": {
+        "yaw_rad": -0.6981317007977318,
+        "pitch_rad": -0.13962634015954636,
+        "roll_rad": 3.141592653589793
+      },
+      "expected": {
+        "matrix": {
+          "dtype": "f64",
+          "shape": [
+            3,
+            3
+          ],
+          "b64": "OVDPom+D6L+7da6vxOa2v/ZNcHN4XuS/uH1YzC16oTx6lDCpRrDvvxmejZZs0ME/HBY8UreR5L9Xhhum+Uq7P4/a1yxdRug/"
+        }
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "from_matrix_izquierda_invertida",
+      "fn": "CameraPose.from_matrix",
+      "inputs": {
+        "matrix": {
+          "dtype": "f64",
+          "shape": [
+            3,
+            3
+          ],
+          "b64": "OVDPom+D6L+7da6vxOa2v/ZNcHN4XuS/uH1YzC16oTx6lDCpRrDvvxmejZZs0ME/HBY8UreR5L9Xhhum+Uq7P4/a1yxdRug/"
+        }
+      },
+      "expected": {
+        "yaw_rad": -0.6981317007977318,
+        "pitch_rad": -0.13962634015954636,
+        "roll_rad": 3.141592653589793
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "ultra_gran_angular_4k",
+      "fn": "CameraIntrinsics.from_hfov",
+      "inputs": {
+        "width": 3840,
+        "height": 2160,
+        "hfov_rad": 1.8500490071139892
+      },
+      "expected": {
+        "fx": 1446.823776197365,
+        "fy": 1446.823776197365,
+        "cx": 1920.0,
+        "cy": 1080.0,
+        "width": 3840,
+        "height": 2160
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "scaled_a_mitad",
+      "fn": "CameraIntrinsics.scaled",
+      "inputs": {
+        "intrinsics": {
+          "fx": 1446.823776197365,
+          "fy": 1446.823776197365,
+          "cx": 1920.0,
+          "cy": 1080.0,
+          "width": 3840,
+          "height": 2160
+        },
+        "factor": 0.5
+      },
+      "expected": {
+        "fx": 723.4118880986825,
+        "fy": 723.4118880986825,
+        "cx": 959.75,
+        "cy": 539.75,
+        "width": 1920,
+        "height": 1080
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "direction_of_left_centro",
+      "fn": "RigModel.direction_of",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 3.141592653589793
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 0.05235987755982989
+            }
+          }
+        },
+        "side": "left",
+        "x_px": 1919.5,
+        "y_px": 1079.5
+      },
+      "expected": {
+        "yaw_rad": -0.6977827030149424,
+        "pitch_rad": -0.13997191632140404
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "direction_of_left_esquina",
+      "fn": "RigModel.direction_of",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 3.141592653589793
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 0.05235987755982989
+            }
+          }
+        },
+        "side": "left",
+        "x_px": 0.0,
+        "y_px": 0.0
+      },
+      "expected": {
+        "yaw_rad": 0.2837840137263748,
+        "pitch_rad": -0.5031592504567182
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "direction_of_left_borde",
+      "fn": "RigModel.direction_of",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 3.141592653589793
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 0.05235987755982989
+            }
+          }
+        },
+        "side": "left",
+        "x_px": 3839.0,
+        "y_px": 2159.0
+      },
+      "expected": {
+        "yaw_rad": -1.5792097953987334,
+        "pitch_rad": 0.33541339729331043
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "direction_of_right_centro",
+      "fn": "RigModel.direction_of",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 3.141592653589793
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 0.05235987755982989
+            }
+          }
+        },
+        "side": "right",
+        "x_px": 1919.5,
+        "y_px": 1079.5
+      },
+      "expected": {
+        "yaw_rad": 0.6978014793314498,
+        "pitch_rad": -0.13926313520302994
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "direction_of_right_esquina",
+      "fn": "RigModel.direction_of",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 3.141592653589793
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 0.05235987755982989
+            }
+          }
+        },
+        "side": "right",
+        "x_px": 0.0,
+        "y_px": 0.0
+      },
+      "expected": {
+        "yaw_rad": -0.16347530134503097,
+        "pitch_rad": 0.3753442353192346
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "direction_of_right_borde",
+      "fn": "RigModel.direction_of",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 3.141592653589793
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 0.05235987755982989
+            }
+          }
+        },
+        "side": "right",
+        "x_px": 3839.0,
+        "y_px": 2159.0
+      },
+      "expected": {
+        "yaw_rad": 1.670255728025255,
+        "pitch_rad": -0.545943483448665
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "project_frente_left",
+      "fn": "RigModel.project",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 3.141592653589793
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 0.05235987755982989
+            }
+          }
+        },
+        "side": "left",
+        "direction": {
+          "yaw_rad": 0.0,
+          "pitch_rad": -0.13962634015954636
+        }
+      },
+      "expected": {
+        "pixel": [
+          724.8554068770077,
+          1019.4601105935203
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "project_frente_right",
+      "fn": "RigModel.project",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 3.141592653589793
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 0.05235987755982989
+            }
+          }
+        },
+        "side": "right",
+        "direction": {
+          "yaw_rad": 0.0,
+          "pitch_rad": -0.13962634015954636
+        }
+      },
+      "expected": {
+        "pixel": [
+          729.6617240080718,
+          1203.0059567217618
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "project_detras_left",
+      "fn": "RigModel.project",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 3.141592653589793
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 0.05235987755982989
+            }
+          }
+        },
+        "side": "left",
+        "direction": {
+          "yaw_rad": 2.443460952792061,
+          "pitch_rad": 0.0
+        }
+      },
+      "expected": {
+        "pixel": null
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "project_rays_left",
+      "fn": "RigModel.project_rays",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 3.141592653589793
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 0.05235987755982989
+            }
+          }
+        },
+        "side": "left",
+        "rays": {
+          "dtype": "f64",
+          "shape": [
+            5,
+            3
+          ],
+          "b64": "AAAAAAAAAADsUbgehevBPwAAAAAAAPA/zczMzMzM7L+amZmZmZm5PwAAAAAAAOg/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAAAAAAAAAAAAAAEwAAAAAAAAPA/AAAAAAAAAADsUbgehevRPwAAAAAAAABA"
+        }
+      },
+      "expected": {
+        "x_px": {
+          "dtype": "f64",
+          "shape": [
+            5
+          ],
+          "b64": "sjI+F+ulhkACHE4jJQehQNheADQARKZA4E7nhauKdcCyMj4X66WGQA=="
+        },
+        "y_px": {
+          "dtype": "f64",
+          "shape": [
+            5
+          ],
+          "b64": "0J875pnjj0AGlOeJrxOSQB+GXDEA7oxAyNs53PHgw0DQnzvmmeOPQA=="
+        },
+        "inside": {
+          "dtype": "u8",
+          "shape": [
+            5
+          ],
+          "b64": "AQEAAAE="
+        }
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "project_rays_right",
+      "fn": "RigModel.project_rays",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 3.141592653589793
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 0.05235987755982989
+            }
+          }
+        },
+        "side": "right",
+        "rays": {
+          "dtype": "f64",
+          "shape": [
+            5,
+            3
+          ],
+          "b64": "AAAAAAAAAADsUbgehevBPwAAAAAAAPA/zczMzMzM7L+amZmZmZm5PwAAAAAAAOg/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAAAAAAAAAAAAAAEwAAAAAAAAPA/AAAAAAAAAADsUbgehevRPwAAAAAAAABA"
+        }
+      },
+      "expected": {
+        "x_px": {
+          "dtype": "f64",
+          "shape": [
+            5
+          ],
+          "b64": "EEUDo/TLhkByWo9sWGAEwUVnkOyYUaZALD1uCK6NicAQRQOj9MuGQA=="
+        },
+        "y_px": {
+          "dtype": "f64",
+          "shape": [
+            5
+          ],
+          "b64": "TQ6F4xfIkkD59Q0kCtDXQG4dPtZ2hZJAttK0zuXOvsBNDoXjF8iSQA=="
+        },
+        "inside": {
+          "dtype": "u8",
+          "shape": [
+            5
+          ],
+          "b64": "AQAAAAE="
+        }
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "sees_frente_left",
+      "fn": "RigModel.sees",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 3.141592653589793
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 0.05235987755982989
+            }
+          }
+        },
+        "side": "left",
+        "direction": {
+          "yaw_rad": 0.0,
+          "pitch_rad": -0.13962634015954636
+        }
+      },
+      "expected": {
+        "sees": true
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "sees_lado_contrario",
+      "fn": "RigModel.sees",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 3.141592653589793
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 0.05235987755982989
+            }
+          }
+        },
+        "side": "left",
+        "direction": {
+          "yaw_rad": 1.0471975511965976,
+          "pitch_rad": 0.0
+        }
+      },
+      "expected": {
+        "sees": false
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "sees_detras",
+      "fn": "RigModel.sees",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 3.141592653589793
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 0.05235987755982989
+            }
+          }
+        },
+        "side": "right",
+        "direction": {
+          "yaw_rad": 2.443460952792061,
+          "pitch_rad": 0.0
+        }
+      },
+      "expected": {
+        "sees": false
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "overlap_centro",
+      "fn": "RigModel.in_overlap",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 3.141592653589793
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 0.05235987755982989
+            }
+          }
+        },
+        "direction": {
+          "yaw_rad": 0.0,
+          "pitch_rad": -0.13962634015954636
+        }
+      },
+      "expected": {
+        "in_overlap": true
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "overlap_solo_izquierda",
+      "fn": "RigModel.in_overlap",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 3.141592653589793
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 0.05235987755982989
+            }
+          }
+        },
+        "direction": {
+          "yaw_rad": -0.5235987755982988,
+          "pitch_rad": -0.13962634015954636
+        }
+      },
+      "expected": {
+        "in_overlap": false
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "overlap_cielo",
+      "fn": "RigModel.in_overlap",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 3.141592653589793
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 0.05235987755982989
+            }
+          }
+        },
+        "direction": {
+          "yaw_rad": 0.0,
+          "pitch_rad": 0.7853981633974483
+        }
+      },
+      "expected": {
+        "in_overlap": false
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "rig_json_ida_y_vuelta",
+      "fn": "RigModel.from_dict",
+      "inputs": {
+        "data": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 3.141592653589793
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 0.05235987755982989
+            }
+          }
+        }
+      },
+      "expected": {
+        "data": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 3.141592653589793
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 0.05235987755982989
+            }
+          }
+        }
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "angulo_cero",
+      "fn": "angular_distance_rad",
+      "inputs": {
+        "a": {
+          "yaw_rad": 0.1,
+          "pitch_rad": -0.05
+        },
+        "b": {
+          "yaw_rad": 0.1,
+          "pitch_rad": -0.05
+        }
+      },
+      "expected": {
+        "angle_rad": 0.0
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "angulo_pequeno",
+      "fn": "angular_distance_rad",
+      "inputs": {
+        "a": {
+          "yaw_rad": 0.1,
+          "pitch_rad": -0.05
+        },
+        "b": {
+          "yaw_rad": 0.104,
+          "pitch_rad": -0.047
+        }
+      },
+      "expected": {
+        "angle_rad": 0.004996236723165986
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "angulo_cruzando_el_frente",
+      "fn": "angular_distance_rad",
+      "inputs": {
+        "a": {
+          "yaw_rad": -0.3,
+          "pitch_rad": 0.0
+        },
+        "b": {
+          "yaw_rad": 0.3,
+          "pitch_rad": -0.1
+        }
+      },
+      "expected": {
+        "angle_rad": 0.6072638928493135
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "fuse_en_el_solape",
+      "fn": "RigModel.fuse",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 3.141592653589793
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 0.05235987755982989
+            }
+          }
+        },
+        "max_angle_rad": 0.02,
+        "observations": [
+          {
+            "side": "left",
+            "x_px": 589.5830620467882,
+            "y_px": 1085.1831334762683,
+            "score": 0.9,
+            "key": 1
+          },
+          {
+            "side": "right",
+            "x_px": 841.8665436490062,
+            "y_px": 1113.2548973767036,
+            "score": 0.8,
+            "key": 2
+          },
+          {
+            "side": "left",
+            "x_px": 1778.5716823750292,
+            "y_px": 1107.5679556766052,
+            "score": 0.7,
+            "key": 3
+          }
+        ]
+      },
+      "expected": {
+        "fused": [
+          {
+            "yaw_rad": 0.05200009982980528,
+            "pitch_rad": -0.09950019768949013,
+            "score": 0.9,
+            "sides": [
+              "left",
+              "right"
+            ],
+            "keys": [
+              1,
+              2
+            ],
+            "separation_rad": 0.004103914775995986
+          },
+          {
+            "yaw_rad": -0.6000000000000001,
+            "pitch_rad": -0.12000000000000006,
+            "score": 0.7,
+            "sides": [
+              "left"
+            ],
+            "keys": [
+              3
+            ],
+            "separation_rad": 0.0
+          }
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "fuse_mas_alla_del_tope",
+      "fn": "RigModel.fuse",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 3.141592653589793
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 0.05235987755982989
+            }
+          }
+        },
+        "max_angle_rad": 0.02,
+        "observations": [
+          {
+            "side": "left",
+            "x_px": 589.5830620467882,
+            "y_px": 1085.1831334762683,
+            "score": 0.9,
+            "key": 1
+          },
+          {
+            "side": "right",
+            "x_px": 898.8372991384803,
+            "y_px": 1108.7005336217837,
+            "score": 0.8,
+            "key": 2
+          }
+        ]
+      },
+      "expected": {
+        "fused": [
+          {
+            "yaw_rad": 0.04999999999999995,
+            "pitch_rad": -0.09999999999999999,
+            "score": 0.9,
+            "sides": [
+              "left"
+            ],
+            "keys": [
+              1
+            ],
+            "separation_rad": 0.0
+          },
+          {
+            "yaw_rad": 0.08000000000000011,
+            "pitch_rad": -0.09999999999999998,
+            "score": 0.8,
+            "sides": [
+              "right"
+            ],
+            "keys": [
+              2
+            ],
+            "separation_rad": 0.0
+          }
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "fuse_misma_camara_no_funde",
+      "fn": "RigModel.fuse",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 3.141592653589793
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 0.05235987755982989
+            }
+          }
+        },
+        "max_angle_rad": 0.02,
+        "observations": [
+          {
+            "side": "left",
+            "x_px": 589.5830620467882,
+            "y_px": 1085.1831334762683,
+            "score": 0.9,
+            "key": 1
+          },
+          {
+            "side": "left",
+            "x_px": 593.5830620467882,
+            "y_px": 1087.1831334762683,
+            "score": 0.85,
+            "key": 2
+          }
+        ]
+      },
+      "expected": {
+        "fused": [
+          {
+            "yaw_rad": 0.04999999999999995,
+            "pitch_rad": -0.09999999999999999,
+            "score": 0.9,
+            "sides": [
+              "left"
+            ],
+            "keys": [
+              1
+            ],
+            "separation_rad": 0.0
+          },
+          {
+            "yaw_rad": 0.04840201106636985,
+            "pitch_rad": -0.09912391966498561,
+            "score": 0.85,
+            "sides": [
+              "left"
+            ],
+            "keys": [
+              2
+            ],
+            "separation_rad": 0.0
+          }
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    }
+  ]
+}

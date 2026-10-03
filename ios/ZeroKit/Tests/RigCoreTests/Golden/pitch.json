@@ -1,0 +1,382 @@
+{
+  "schema": 1,
+  "module": "pitch",
+  "conventions": {
+    "axes": "Ejes del soporte: X a la derecha, Y hacia abajo, Z hacia delante (rig.py).",
+    "rotation": "R = R_yaw · R_pitch · R_roll, de cámara a soporte; ortonormal (CameraPose.matrix), así que la inversa es la traspuesta.",
+    "angles": "Radianes. Yaw positivo gira la cámara a la derecha; pitch positivo, hacia arriba.",
+    "pixel_center": "El convenio de rig.py: el píxel i cubre [i, i+1) y su centro continuo está en i+0,5; CameraIntrinsics.scaled reescala pasando por ese centro.",
+    "homography": "Las homografías de vista van del programa a la cámara (view_homography).",
+    "scalars": "Float con el repr de Python: ida y vuelta exacta a Double en Swift.",
+    "tensors": "{dtype: f64|f32|u8|i32, shape, b64}, little-endian y orden C; en Swift, Data(base64Encoded:)."
+  },
+  "cases": [
+    {
+      "name": "homografia_media_cancha",
+      "fn": "PitchModel.from_correspondences",
+      "inputs": {
+        "pitch_length_m": 105.0,
+        "pitch_width_m": 68.0,
+        "correspondences": [
+          {
+            "image_xy_px": [
+              1457.1362167501788,
+              1663.2948231697924
+            ],
+            "pitch_xy_m": [
+              0.0,
+              -34.0
+            ]
+          },
+          {
+            "image_xy_px": [
+              1433.2121602010573,
+              1011.1747415449016
+            ],
+            "pitch_xy_m": [
+              0.0,
+              34.0
+            ]
+          },
+          {
+            "image_xy_px": [
+              1437.7507640041574,
+              1134.887652708764
+            ],
+            "pitch_xy_m": [
+              0.0,
+              -9.15
+            ]
+          },
+          {
+            "image_xy_px": [
+              1434.9359919771866,
+              1058.1628146690784
+            ],
+            "pitch_xy_m": [
+              0.0,
+              9.15
+            ]
+          },
+          {
+            "image_xy_px": [
+              -3263.6598013928624,
+              1536.51593370099
+            ],
+            "pitch_xy_m": [
+              -36.0,
+              -20.16
+            ]
+          },
+          {
+            "image_xy_px": [
+              302.61294906564103,
+              1060.087347906036
+            ],
+            "pitch_xy_m": [
+              -36.0,
+              20.16
+            ]
+          },
+          {
+            "image_xy_px": [
+              -10405.388037276476,
+              1992.029654011592
+            ],
+            "pitch_xy_m": [
+              -52.5,
+              -20.16
+            ]
+          },
+          {
+            "image_xy_px": [
+              -401.3910476496608,
+              1077.0075999860028
+            ],
+            "pitch_xy_m": [
+              -52.5,
+              20.16
+            ]
+          }
+        ],
+        "queries_px": [
+          [
+            561.0206256234458,
+            1119.2043459084741
+          ],
+          [
+            1436.0546262752762,
+            1088.6544617808809
+          ]
+        ],
+        "queries_m": [
+          [
+            -30.0,
+            -10.0
+          ],
+          [
+            0.0,
+            9.15
+          ]
+        ]
+      },
+      "expected": {
+        "h": {
+          "dtype": "f64",
+          "shape": [
+            3,
+            3
+          ],
+          "b64": "euaBBGfrR0DfTMmfygZAQHDxbe83cJZAAqzkBaOBGkD+Dn3xAmU0QAoyRS2eApFAi9E0nYXXfT+1I6cTAvaWPwAAAAAAAPA/"
+        },
+        "reprojection_error_px": 3.779571634257488e-05,
+        "discarded_correspondences": 0,
+        "image_to_pitch": [
+          [
+            -20.000001121892918,
+            3.1881806324961752e-06
+          ],
+          [
+            6.072272904253497e-08,
+            1.919099672007495e-06
+          ]
+        ],
+        "pitch_to_image": [
+          [
+            -573.6656559794015,
+            1230.9882994473437
+          ],
+          [
+            1434.935991385219,
+            1058.162826653088
+          ]
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "rig_dos_camaras_de_acuerdo",
+      "fn": "RigPitchModel.from_correspondences",
+      "inputs": {
+        "pitch_length_m": 105.0,
+        "pitch_width_m": 68.0,
+        "left": [
+          {
+            "image_xy_px": [
+              1457.1362167501788,
+              1663.2948231697924
+            ],
+            "pitch_xy_m": [
+              0.0,
+              -34.0
+            ]
+          },
+          {
+            "image_xy_px": [
+              1433.2121602010573,
+              1011.1747415449016
+            ],
+            "pitch_xy_m": [
+              0.0,
+              34.0
+            ]
+          },
+          {
+            "image_xy_px": [
+              1437.7507640041574,
+              1134.887652708764
+            ],
+            "pitch_xy_m": [
+              0.0,
+              -9.15
+            ]
+          },
+          {
+            "image_xy_px": [
+              1434.9359919771866,
+              1058.1628146690784
+            ],
+            "pitch_xy_m": [
+              0.0,
+              9.15
+            ]
+          },
+          {
+            "image_xy_px": [
+              -3263.6598013928624,
+              1536.51593370099
+            ],
+            "pitch_xy_m": [
+              -36.0,
+              -20.16
+            ]
+          },
+          {
+            "image_xy_px": [
+              302.61294906564103,
+              1060.087347906036
+            ],
+            "pitch_xy_m": [
+              -36.0,
+              20.16
+            ]
+          },
+          {
+            "image_xy_px": [
+              -10405.388037276476,
+              1992.029654011592
+            ],
+            "pitch_xy_m": [
+              -52.5,
+              -20.16
+            ]
+          },
+          {
+            "image_xy_px": [
+              -401.3910476496608,
+              1077.0075999860028
+            ],
+            "pitch_xy_m": [
+              -52.5,
+              20.16
+            ]
+          }
+        ],
+        "right": [
+          {
+            "image_xy_px": [
+              2382.863783249821,
+              1663.2948231697924
+            ],
+            "pitch_xy_m": [
+              0.0,
+              -34.0
+            ]
+          },
+          {
+            "image_xy_px": [
+              2406.7878397989425,
+              1011.1747415449016
+            ],
+            "pitch_xy_m": [
+              0.0,
+              34.0
+            ]
+          },
+          {
+            "image_xy_px": [
+              2402.2492359958424,
+              1134.887652708764
+            ],
+            "pitch_xy_m": [
+              0.0,
+              -9.15
+            ]
+          },
+          {
+            "image_xy_px": [
+              2405.064008022813,
+              1058.1628146690784
+            ],
+            "pitch_xy_m": [
+              0.0,
+              9.15
+            ]
+          },
+          {
+            "image_xy_px": [
+              7103.659801392862,
+              1536.51593370099
+            ],
+            "pitch_xy_m": [
+              36.0,
+              -20.16
+            ]
+          },
+          {
+            "image_xy_px": [
+              3537.3870509343587,
+              1060.087347906036
+            ],
+            "pitch_xy_m": [
+              36.0,
+              20.16
+            ]
+          },
+          {
+            "image_xy_px": [
+              14245.388037276476,
+              1992.029654011592
+            ],
+            "pitch_xy_m": [
+              52.5,
+              -20.16
+            ]
+          },
+          {
+            "image_xy_px": [
+              4241.39104764966,
+              1077.0075999860028
+            ],
+            "pitch_xy_m": [
+              52.5,
+              20.16
+            ]
+          }
+        ],
+        "shared": [
+          {
+            "left_xy_px": [
+              1560.1186053998008,
+              1106.4241968349534
+            ],
+            "right_xy_px": [
+              2532.5703022629623,
+              1116.3618515874816
+            ]
+          },
+          {
+            "left_xy_px": [
+              1311.9266524900595,
+              1056.6565405260847
+            ],
+            "right_xy_px": [
+              2288.028938357618,
+              1049.9357355716613
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "left_h": {
+          "dtype": "f64",
+          "shape": [
+            3,
+            3
+          ],
+          "b64": "euaBBGfrR0DfTMmfygZAQHDxbe83cJZAAqzkBaOBGkD+Dn3xAmU0QAoyRS2eApFAi9E0nYXXfT+1I6cTAvaWPwAAAAAAAPA/"
+        },
+        "right_h": {
+          "dtype": "f64",
+          "shape": [
+            3,
+            3
+          ],
+          "b64": "Jz5JlMDcM0CZMZMieQZLQM1cZgXkx6JAUpXzW6OBGsDpfwLPAmU0QJuGDTCeApFAyUz3z4XXfb+0l0H3AfaWPwAAAAAAAPA/"
+        },
+        "cross_errors_m": [
+          2.9108519890823695e-06,
+          2.3604532515153294e-06
+        ],
+        "mean_cross_camera_error_m": 2.6356526202988494e-06
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    }
+  ]
+}

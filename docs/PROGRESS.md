@@ -12,6 +12,38 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-03 · IOS-03 — arnés de vectores dorados en XCTest · ✅
+
+El primer `--sync` real de REF-10 dejó los ocho ficheros del servidor en
+`Tests/RigCoreTests/Golden/` y `test/golden/` (commit a96b126a9 de football-ai), y el
+arnés los lee y los vigila.
+
+**Hecho**
+- `Tests/RigCoreTests/Support/Golden.swift`: el esquema v1 entero —documento, casos,
+  tolerancias y tensores f64/f32/u8/i32 en base64 little-endian—, la verificación del
+  manifiesto (versión, source_commit y sha256 de cada fichero, con CryptoKit) y la
+  comparación recursiva con tolerancia absoluta y relativa; los ángulos dan la vuelta
+  en ±π y las matrices se comparan elemento a elemento como tensores.
+- `Golden/` declarado como recurso del target en Package.swift (`Bundle.module`).
+- `tools/sync_golden.sh`: solo comprueba los dos manifiestos (los ficheros los deja el
+  `--sync` del servidor); sale con 0 y nombra lo que no cuadra.
+- GoldenLoaderTests (10 tests): el manifiesto real verifica; un sha alterado, un
+  fichero ausente y un schema 2 se rechazan nombrando al culpable; los siete documentos
+  reales parsean con más de 60 casos; un caso real pasa contra sí mismo; alterar `fx`
+  de `ultra_gran_angular_4k` falla nombrando el caso; los tensores decodifican exacto
+  (filas unitarias de una rotación a 1e-12); tolerancias y vuelta en ±π.
+
+**Aceptación**: `swift test` 22/22 en el Mac; `sync_golden.sh` da «8 ficheros al día»
+en los dos destinos; el sha alterado se rechaza.
+
+**Quedó fuera**
+- Evaluar los casos contra la réplica Swift: eso es cada tarjeta de réplica (IOS-30 en
+  adelante); el arnés solo carga, verifica y compara.
+
+**Siguiente**: IOS-04.
+
+---
+
 ## 2026-10-03 · IOS-02 — paquete Swift local ZeroKit y contrato de capas · ✅
 
 `ios/ZeroKit` con las tres capas nativas, referenciado una sola vez en Runner.xcodeproj

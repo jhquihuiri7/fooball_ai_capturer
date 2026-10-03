@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "files": {
+    "action.json": "bc7e32ca75c01b4dcf33e76d0a5ad726fba41d3ed3ed2992b914a7b43803548d",
+    "director.json": "a469e93f18928e1768d83b267cc6fa02b2e7ffe61161c0a1479ccca9e7bef74b",
+    "pitch.json": "4139fcd11c6ce07e903a3344b8a2c6f97b2a52e7aafe37eaf67e1a237f681979",
+    "reprojection.json": "719030238c817889a579edebe41d0801a673745f50de04a6ca1fcf62592bebb9",
+    "rig.json": "23d2d9e775f80783869d5018789f7f3762531604df0a8a89b36fba741fb9c234",
+    "shot.json": "c87c652406726835bbb8dec926238869ee3ee59b7affcb44c40e644c91e62c47",
+    "sync.json": "2ab69537569f540ec8de07efd6f53655dcede84b85b3628287af5d313c19f73c"
+  }
+}
