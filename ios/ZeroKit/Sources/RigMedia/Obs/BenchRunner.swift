@@ -70,13 +70,17 @@ public final class BenchRunner {
     public typealias Bench = (inout BenchReport, Progress?) throws -> Void
 
     /// El registro de bancos. `noop` prueba la tubería entera sin hacer nada;
-    /// `pipeline-noop` (IOS-09) mide el blit del anillo con fotogramas sintéticos.
+    /// `pipeline-noop` (IOS-09) mide el blit del anillo con fotogramas sintéticos;
+    /// `vt-concurrency` (SPK-03) carga cámara, HEVC, H.264 y decodificación a la vez.
     private static let benches: [String: Bench] = [
         "noop": { report, _ in
             report.counters["noop"] = 1
         },
         "pipeline-noop": { report, progress in
             try PipelineBench.run(report: &report, progress: progress)
+        },
+        "vt-concurrency": { report, progress in
+            try VtConcurrencyBench.run(report: &report, progress: progress)
         },
     ]
 

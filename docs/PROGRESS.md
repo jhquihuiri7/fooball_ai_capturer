@@ -12,6 +12,26 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-03 · SPK-03 — spike: concurrencia de VideoToolbox · 🚧 falta el informe en los iPhone
+
+**Hecho**
+- Banco `vt-concurrency` en BenchRunner (IOS-08): cámara 4K30 propia, HEVC 4K de
+  45 Mbit/s a archivo, 4K→1080p por VTPixelTransferSession (hardware, no kernels),
+  H.264 1080p por IOS-50 (6 Mbit/s master, 25 slave) y, en el master, la vuelta por
+  IOS-51 con SPS/PPS en banda. Registra lo de la tarjeta: err_12915 (en creaciones y
+  transferencias), fps_x100, did_drop, hevc_dropped, vt_errors, histogramas de
+  intervalo de captura y de escalado, térmica cada 5 min. Parámetros: profile,
+  duration_s (humo con duration_s=30).
+- VtConcurrencyBenchTests (3): parámetros, perfiles y valores de tarjeta.
+  Paquete 112/112, capas limpias, build ✓.
+
+**Pendiente para el ✅/decisión**: la pasada de 30 min en los DOS iPhone (master y
+slave). ÉXITO: sin −12915, p5 fps ≥29,5 (p95 de intervalo ≤33,9 ms) y 0 didDrop; si
+falla, repetir sin la HEVC 4K del maestro; si ni la mínima aguanta, replantear con el
+propietario.
+
+---
+
 ## 2026-10-03 · IOS-51 — decodificador H.264 a IOSurface para Metal · ✅
 
 **Hecho**
