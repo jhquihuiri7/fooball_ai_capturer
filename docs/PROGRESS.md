@@ -25,10 +25,19 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 - VtConcurrencyBenchTests (3): parámetros, perfiles y valores de tarjeta.
   Paquete 112/112, capas limpias, build ✓.
 
-**Pendiente para el ✅/decisión**: la pasada de 30 min en los DOS iPhone (master y
-slave). ÉXITO: sin −12915, p5 fps ≥29,5 (p95 de intervalo ≤33,9 ms) y 0 didDrop; si
-falla, repetir sin la HEVC 4K del maestro; si ni la mínima aguanta, replantear con el
-propietario.
+**Primera pasada (master CON HEVC, iPhone18,3, 2026-10-03, 30 min)**: NO pasa —
+49 307 fotogramas, fps medios 27,38 (criterio p5 ≥29,5), 4660 didDrop. Pero 0
+err_12915, 0 errores VT, 0 descartes del HEVC y térmica nominal las 8 muestras: es
+contención, no calor. Pista: solo 18 683/49 307 llegaron al H.264 — el pool del
+codificador se agotaba. Dos culpas propias del banco, corregidas para la repetición:
+la decodificación iba EN LÍNEA en el hilo de la cámara (ahora en su cola, como en la
+realidad) y el pool agotado se perdía en silencio (ahora contadores pool_starved,
+encoder_dropped y decoder_dropped). BENCH_PARAMS llega ya de Dart al informe.
+
+**Pendiente para el ✅/decisión**: repetir el master con el banco corregido; si sigue
+sin dar, la repetición sin la HEVC 4K (`BENCH_PARAMS={"hevc":"0"}`) y se aprueba así
+(la tarjeta lo prescribe: la escalera la soltará primero). Después la pasada slave en
+el otro iPhone. Si ni la mínima aguanta, replantear con el propietario.
 
 ---
 

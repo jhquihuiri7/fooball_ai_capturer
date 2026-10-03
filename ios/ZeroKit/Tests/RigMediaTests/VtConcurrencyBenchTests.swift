@@ -9,8 +9,14 @@ final class VtConcurrencyBenchTests: XCTestCase {
         let config = VtConcurrencyBench.config(from: [:])
         XCTAssertEqual(config.profile, .master)
         XCTAssertEqual(config.durationS, 1800)
+        XCTAssertTrue(config.hevc)
         XCTAssertEqual(config.h264BitrateBps, 6_000_000)
         XCTAssertEqual(VtConcurrencyBench.hevcBitrateBps, 45_000_000)
+    }
+
+    func testHevcCanBeTurnedOffForTheRetryTheCardPrescribes() {
+        XCTAssertFalse(VtConcurrencyBench.config(from: ["hevc": "0"]).hevc)
+        XCTAssertTrue(VtConcurrencyBench.config(from: ["hevc": "1"]).hevc)
     }
 
     func testTheSlaveProfileRaisesTheBitrate() {

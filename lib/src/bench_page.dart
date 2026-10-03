@@ -10,9 +10,12 @@ import 'package:football_ai_capture/src/theme/zero_colors.dart';
 import 'package:football_ai_capture/src/theme/zero_type.dart';
 
 class BenchPage extends StatefulWidget {
-  const BenchPage({required this.name, this.api, super.key});
+  const BenchPage({required this.name, this.paramsJson = '{}', this.api, super.key});
 
   final String name;
+
+  /// Los parámetros del banco, en JSON tal cual van al informe (BENCH_PARAMS).
+  final String paramsJson;
 
   /// Inyectable para los tests.
   final RigHostApi? api;
@@ -43,7 +46,7 @@ class _BenchPageState extends State<BenchPage> implements RigFlutterApi {
   Future<void> _run() async {
     final RigHostApi api = widget.api ?? RigHostApi();
     try {
-      final String path = await api.runBench(widget.name, '{}');
+      final String path = await api.runBench(widget.name, widget.paramsJson);
       if (mounted) {
         setState(() => _reportPath = path);
       }

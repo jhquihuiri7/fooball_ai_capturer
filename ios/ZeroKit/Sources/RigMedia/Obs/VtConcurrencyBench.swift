@@ -28,6 +28,9 @@ enum VtConcurrencyBench {
 
         var profile: Profile
         var durationS: Double
+        /// La HEVC 4K del maestro se puede apagar (`hevc=0`): es la repetición que la
+        /// tarjeta prescribe si la pasada completa no sostiene 30 fps.
+        var hevc: Bool
 
         /// Bitrate del H.264 1080p según el perfil, en bits por segundo (la tarjeta:
         /// 6 Mbit/s el maestro hacia el VPS, 25 el esclavo hacia el maestro).
@@ -42,7 +45,8 @@ enum VtConcurrencyBench {
     static func config(from params: [String: String]) -> Config {
         Config(
             profile: Config.Profile(rawValue: params["profile"] ?? "") ?? .master,
-            durationS: Double(params["duration_s"] ?? "") ?? 1800
+            durationS: Double(params["duration_s"] ?? "") ?? 1800,
+            hevc: params["hevc"] != "0"
         )
     }
 
@@ -89,6 +93,10 @@ enum VtConcurrencyBench {
         private let session = AVCaptureSession()
         private let output = AVCaptureVideoDataOutput()
         private let queue = DispatchQueue(label: "io.footballai.vt-concurrency")
+        /// La decodificación va en su propia cola, como en la realidad: las partes
+        /// llegan por el enlace, no en el hilo de la cámara. La primera pasada
+        /// (2026-10-03) la tenía en línea y eso también frenaba la captura.
+        private let decodeQueue = DispatchQueue(label: "io.footballai.vt-concurrency.decode")
 
         private var writer: AVAssetWriter?
         private var writerInput: AVAssetWriterInput?
@@ -109,6 +117,9 @@ enum VtConcurrencyBench {
         private var transferErrors = 0
         private var err12915 = 0
         private var creationErrors = 0
+        /// Fotogramas sin búfer 1080p: el pool del codificador agotado porque VT va
+        /// por detrás. La primera pasada los perdía en silencio.
+        private var poolStarved = 0
         private var firstPtsNs: Int64?
         private var lastPtsNs: Int64?
 
@@ -157,6 +168,7 @@ enum VtConcurrencyBench {
         func stop() {
             session.stopRunning()
             queue.sync {}  // lo que estaba en vuelo, terminado
+            decodeQueue.sync {}
             if let writer, writer.status == .writing {
                 writerInput?.markAsFinished()
                 let listo = DispatchSemaphore(value: 0)
@@ -178,6 +190,9 @@ enum VtConcurrencyBench {
             report.counters["creation_errors"] = creationErrors
             report.counters["vt_errors"] = transferErrors
                 + (encoder?.encodeFailures ?? 0) + (decoder?.decodeFailures ?? 0)
+            report.counters["pool_starved"] = poolStarved
+            report.counters["encoder_dropped"] = encoder?.queueCounts.dropped ?? 0
+            report.counters["decoder_dropped"] = decoder?.queueCounts.dropped ?? 0
             if let primero = firstPtsNs, let ultimo = lastPtsNs, ultimo > primero, frames > 1 {
                 let fps = Double(frames - 1) / (Double(ultimo - primero) / 1e9)
                 report.counters["fps_x100"] = Int(fps * 100)
@@ -213,6 +228,7 @@ enum VtConcurrencyBench {
                 decoder = VideoDecoder()
             }
 
+            guard config.hevc else { return }
             let writer = try? AVAssetWriter(url: hevcURL, fileType: .mov)
             let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
                 AVVideoCodecKey: AVVideoCodecType.hevc,
@@ -272,7 +288,10 @@ enum VtConcurrencyBench {
             guard let transfer, let encoder, let pool = encoder.pixelBufferPool else { return }
             var reducido: CVPixelBuffer?
             CVPixelBufferPoolCreatePixelBuffer(nil, pool, &reducido)
-            guard let reducido else { return }
+            guard let reducido else {
+                poolStarved += 1
+                return
+            }
             let antes = Date()
             let estado = VTPixelTransferSessionTransferImage(transfer, from: pixels, to: reducido)
             guard estado == noErr else {
@@ -287,16 +306,20 @@ enum VtConcurrencyBench {
             encoder.encode(reducido, ptsNs: ptsNs, rigMs: UInt64(max(0, ptsNs / 1_000_000)))
             while let frame = encoder.pop() {
                 encoded += 1
-                guard let decoder else { continue }
+                guard decoder != nil else { continue }
                 var data = frame.data
                 if frame.isKeyframe, let formato = frame.formatDescription {
                     var conSets = H264ParameterSets.avccNals(from: formato)
                     conSets.append(data)
                     data = conSets
                 }
-                decoder.decode(avcc: data, ptsNs: frame.ptsNs)
-                while decoder.pop() != nil {
-                    decoded += 1
+                let pts = frame.ptsNs
+                decodeQueue.async { [weak self] in
+                    guard let self, let decoder = self.decoder else { return }
+                    decoder.decode(avcc: data, ptsNs: pts)
+                    while decoder.pop() != nil {
+                        self.decoded += 1
+                    }
                 }
             }
         }

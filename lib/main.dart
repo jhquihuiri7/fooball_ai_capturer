@@ -35,7 +35,10 @@ const bool _linkOnly = bool.fromEnvironment('LINK_ONLY');
 
 /// IOS-08: `flutter run --dart-define=BENCH=<nombre>` abre el modo banco, que corre
 /// solo y deja su informe en Documents/bench/. Vacío en producción.
+/// BENCH_PARAMS lleva los parámetros del banco como JSON, tal cual al informe:
+/// `--dart-define=BENCH_PARAMS={"duration_s":30}`.
 const String _bench = String.fromEnvironment('BENCH');
+const String _benchParams = String.fromEnvironment('BENCH_PARAMS', defaultValue: '{}');
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -62,7 +65,7 @@ class CaptureApp extends StatelessWidget {
       // deslumbra a quien mira el móvil y ciega a quien mira el campo después.
       themeMode: ThemeMode.dark,
       home: _bench.isNotEmpty
-          ? BenchPage(name: _bench)
+          ? BenchPage(name: _bench, paramsJson: _benchParams)
           : _autoRole.isEmpty
           ? RolePage(api: api)
           : ZeroShell(
