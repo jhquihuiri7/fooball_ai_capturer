@@ -1,0 +1,312 @@
+{
+  "schema": 1,
+  "module": "match_clock",
+  "conventions": {
+    "axes": "Ejes del soporte: X a la derecha, Y hacia abajo, Z hacia delante (rig.py).",
+    "rotation": "R = R_yaw · R_pitch · R_roll, de cámara a soporte; ortonormal (CameraPose.matrix), así que la inversa es la traspuesta.",
+    "angles": "Radianes. Yaw positivo gira la cámara a la derecha; pitch positivo, hacia arriba.",
+    "pixel_center": "El convenio de rig.py: el píxel i cubre [i, i+1) y su centro continuo está en i+0,5; CameraIntrinsics.scaled reescala pasando por ese centro.",
+    "homography": "Las homografías de vista van del programa a la cámara (view_homography).",
+    "scalars": "Float con el repr de Python: ida y vuelta exacta a Double en Swift.",
+    "tensors": "{dtype: f64|f32|u8|i32, shape, b64}, little-endian y orden C; en Swift, Data(base64Encoded:)."
+  },
+  "cases": [
+    {
+      "name": "partido_con_botones",
+      "fn": "match_clock.script",
+      "inputs": {
+        "events": [
+          {
+            "op": "start"
+          },
+          {
+            "op": "wait",
+            "advance_s": 5
+          },
+          {
+            "op": "pause"
+          },
+          {
+            "op": "nudge",
+            "seconds": 60
+          },
+          {
+            "op": "start",
+            "advance_s": 2
+          },
+          {
+            "op": "wait",
+            "advance_s": 2.5
+          },
+          {
+            "op": "reset"
+          },
+          {
+            "op": "wait",
+            "advance_s": 3
+          },
+          {
+            "op": "pause"
+          }
+        ]
+      },
+      "expected": {
+        "trace": [
+          {
+            "elapsed_ns": 0,
+            "clock_ms": 0,
+            "running": true,
+            "restored": false
+          },
+          {
+            "elapsed_ns": 5000000000,
+            "clock_ms": 5000,
+            "running": true,
+            "restored": false
+          },
+          {
+            "elapsed_ns": 5000000000,
+            "clock_ms": 5000,
+            "running": false,
+            "restored": false
+          },
+          {
+            "elapsed_ns": 65000000000,
+            "clock_ms": 65000,
+            "running": false,
+            "restored": false
+          },
+          {
+            "elapsed_ns": 65000000000,
+            "clock_ms": 65000,
+            "running": true,
+            "restored": false
+          },
+          {
+            "elapsed_ns": 67500000000,
+            "clock_ms": 67500,
+            "running": true,
+            "restored": false
+          },
+          {
+            "elapsed_ns": 0,
+            "clock_ms": 0,
+            "running": true,
+            "restored": false
+          },
+          {
+            "elapsed_ns": 3000000000,
+            "clock_ms": 3000,
+            "running": true,
+            "restored": false
+          },
+          {
+            "elapsed_ns": 3000000000,
+            "clock_ms": 3000,
+            "running": false,
+            "restored": false
+          }
+        ]
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "nudge_nunca_negativo",
+      "fn": "match_clock.script",
+      "inputs": {
+        "events": [
+          {
+            "op": "nudge",
+            "seconds": -50
+          },
+          {
+            "op": "start"
+          },
+          {
+            "op": "wait",
+            "advance_s": 1
+          },
+          {
+            "op": "nudge",
+            "seconds": -3600
+          },
+          {
+            "op": "wait",
+            "advance_s": 2
+          }
+        ]
+      },
+      "expected": {
+        "trace": [
+          {
+            "elapsed_ns": 0,
+            "clock_ms": 0,
+            "running": false,
+            "restored": false
+          },
+          {
+            "elapsed_ns": 0,
+            "clock_ms": 0,
+            "running": true,
+            "restored": false
+          },
+          {
+            "elapsed_ns": 1000000000,
+            "clock_ms": 1000,
+            "running": true,
+            "restored": false
+          },
+          {
+            "elapsed_ns": 1000000000,
+            "clock_ms": 1000,
+            "running": true,
+            "restored": false
+          },
+          {
+            "elapsed_ns": 3000000000,
+            "clock_ms": 3000,
+            "running": true,
+            "restored": false
+          }
+        ]
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "promocion_simulada",
+      "fn": "match_clock.script",
+      "inputs": {
+        "events": [
+          {
+            "op": "start"
+          },
+          {
+            "op": "wait",
+            "advance_s": 600
+          },
+          {
+            "op": "restore",
+            "elapsed_ns": 600000000000,
+            "was_running": true
+          },
+          {
+            "op": "wait",
+            "advance_s": 30
+          },
+          {
+            "op": "start"
+          },
+          {
+            "op": "wait",
+            "advance_s": 5
+          }
+        ]
+      },
+      "expected": {
+        "trace": [
+          {
+            "elapsed_ns": 0,
+            "clock_ms": 0,
+            "running": true,
+            "restored": false
+          },
+          {
+            "elapsed_ns": 600000000000,
+            "clock_ms": 600000,
+            "running": true,
+            "restored": false
+          },
+          {
+            "elapsed_ns": 600000000000,
+            "clock_ms": 600000,
+            "running": false,
+            "restored": true
+          },
+          {
+            "elapsed_ns": 600000000000,
+            "clock_ms": 600000,
+            "running": false,
+            "restored": true
+          },
+          {
+            "elapsed_ns": 600000000000,
+            "clock_ms": 600000,
+            "running": true,
+            "restored": false
+          },
+          {
+            "elapsed_ns": 605000000000,
+            "clock_ms": 605000,
+            "running": true,
+            "restored": false
+          }
+        ]
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "restaurado_parado_no_marca",
+      "fn": "match_clock.script",
+      "inputs": {
+        "events": [
+          {
+            "op": "restore",
+            "elapsed_ns": 1234000000000,
+            "was_running": false
+          },
+          {
+            "op": "toggle"
+          },
+          {
+            "op": "wait",
+            "advance_s": 1.5
+          },
+          {
+            "op": "toggle"
+          }
+        ]
+      },
+      "expected": {
+        "trace": [
+          {
+            "elapsed_ns": 1234000000000,
+            "clock_ms": 1234000,
+            "running": false,
+            "restored": false
+          },
+          {
+            "elapsed_ns": 1234000000000,
+            "clock_ms": 1234000,
+            "running": true,
+            "restored": false
+          },
+          {
+            "elapsed_ns": 1235500000000,
+            "clock_ms": 1235500,
+            "running": true,
+            "restored": false
+          },
+          {
+            "elapsed_ns": 1235500000000,
+            "clock_ms": 1235500,
+            "running": false,
+            "restored": false
+          }
+        ]
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    }
+  ]
+}

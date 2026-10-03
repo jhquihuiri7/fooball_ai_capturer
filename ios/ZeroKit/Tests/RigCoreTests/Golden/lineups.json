@@ -1,0 +1,352 @@
+{
+  "schema": 1,
+  "module": "lineups",
+  "conventions": {
+    "axes": "Ejes del soporte: X a la derecha, Y hacia abajo, Z hacia delante (rig.py).",
+    "rotation": "R = R_yaw · R_pitch · R_roll, de cámara a soporte; ortonormal (CameraPose.matrix), así que la inversa es la traspuesta.",
+    "angles": "Radianes. Yaw positivo gira la cámara a la derecha; pitch positivo, hacia arriba.",
+    "pixel_center": "El convenio de rig.py: el píxel i cubre [i, i+1) y su centro continuo está en i+0,5; CameraIntrinsics.scaled reescala pasando por ese centro.",
+    "homography": "Las homografías de vista van del programa a la cámara (view_homography).",
+    "scalars": "Float con el repr de Python: ida y vuelta exacta a Double en Swift.",
+    "tensors": "{dtype: f64|f32|u8|i32, shape, b64}, little-endian y orden C; en Swift, Data(base64Encoded:)."
+  },
+  "cases": [
+    {
+      "name": "equipo_de_texto_4_4_2",
+      "fn": "lineup.build_team",
+      "inputs": {
+        "name": "Milan",
+        "formation": "4-4-2",
+        "roster": "1 Dida\n2 Cafu\n3 Maldini\n4 Gattuso\n13 Nesta\n21 Pirlo\n8 Seedorf\n22 Kaka\n10 Rui Costa\n7 Shevchenko\n11 Gilardino\n25 Abbiati\n27 Serginho\n"
+      },
+      "expected": {
+        "team": {
+          "name": "MILAN",
+          "formation": "4-4-2",
+          "coach": "",
+          "starters": [
+            {
+              "number": 1,
+              "name": "Dida"
+            },
+            {
+              "number": 2,
+              "name": "Cafu"
+            },
+            {
+              "number": 3,
+              "name": "Maldini"
+            },
+            {
+              "number": 4,
+              "name": "Gattuso"
+            },
+            {
+              "number": 13,
+              "name": "Nesta"
+            },
+            {
+              "number": 21,
+              "name": "Pirlo"
+            },
+            {
+              "number": 8,
+              "name": "Seedorf"
+            },
+            {
+              "number": 22,
+              "name": "Kaka"
+            },
+            {
+              "number": 10,
+              "name": "Rui Costa"
+            },
+            {
+              "number": 7,
+              "name": "Shevchenko"
+            },
+            {
+              "number": 11,
+              "name": "Gilardino"
+            }
+          ],
+          "substitutes": [
+            {
+              "number": 25,
+              "name": "Abbiati"
+            },
+            {
+              "number": 27,
+              "name": "Serginho"
+            }
+          ]
+        },
+        "lines": [
+          4,
+          4,
+          2
+        ]
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "equipo_de_csv_con_cabecera",
+      "fn": "lineup.build_team",
+      "inputs": {
+        "name": "Milan",
+        "formation": "4-4-2",
+        "roster": "Dorsal,Nombre,Posicion\n1,Dida,POR\n2,Cafu,DEF\n3,Maldini,DEF\n4,Gattuso,MED\n13,Nesta,DEF\n21,Pirlo,MED\n8,Seedorf,MED\n22,Kaka,MED\n10,Rui Costa,MED\n7,Shevchenko,DEL\n11,Gilardino,DEL\n",
+        "coach": "Ancelotti"
+      },
+      "expected": {
+        "team": {
+          "name": "MILAN",
+          "formation": "4-4-2",
+          "coach": "Ancelotti",
+          "starters": [
+            {
+              "number": 1,
+              "name": "Dida"
+            },
+            {
+              "number": 2,
+              "name": "Cafu"
+            },
+            {
+              "number": 3,
+              "name": "Maldini"
+            },
+            {
+              "number": 4,
+              "name": "Gattuso"
+            },
+            {
+              "number": 13,
+              "name": "Nesta"
+            },
+            {
+              "number": 21,
+              "name": "Pirlo"
+            },
+            {
+              "number": 8,
+              "name": "Seedorf"
+            },
+            {
+              "number": 22,
+              "name": "Kaka"
+            },
+            {
+              "number": 10,
+              "name": "Rui Costa"
+            },
+            {
+              "number": 7,
+              "name": "Shevchenko"
+            },
+            {
+              "number": 11,
+              "name": "Gilardino"
+            }
+          ],
+          "substitutes": []
+        },
+        "lines": [
+          4,
+          4,
+          2
+        ]
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "recolocacion_a_4_3_3",
+      "fn": "lineup.build_team",
+      "inputs": {
+        "name": "Milan",
+        "formation": "4-3-3",
+        "roster": "1 Dida\n2 Cafu\n3 Maldini\n4 Gattuso\n13 Nesta\n21 Pirlo\n8 Seedorf\n22 Kaka\n10 Rui Costa\n7 Shevchenko\n11 Gilardino\n25 Abbiati\n27 Serginho\n"
+      },
+      "expected": {
+        "team": {
+          "name": "MILAN",
+          "formation": "4-3-3",
+          "coach": "",
+          "starters": [
+            {
+              "number": 1,
+              "name": "Dida"
+            },
+            {
+              "number": 2,
+              "name": "Cafu"
+            },
+            {
+              "number": 3,
+              "name": "Maldini"
+            },
+            {
+              "number": 4,
+              "name": "Gattuso"
+            },
+            {
+              "number": 13,
+              "name": "Nesta"
+            },
+            {
+              "number": 21,
+              "name": "Pirlo"
+            },
+            {
+              "number": 8,
+              "name": "Seedorf"
+            },
+            {
+              "number": 22,
+              "name": "Kaka"
+            },
+            {
+              "number": 10,
+              "name": "Rui Costa"
+            },
+            {
+              "number": 7,
+              "name": "Shevchenko"
+            },
+            {
+              "number": 11,
+              "name": "Gilardino"
+            }
+          ],
+          "substitutes": [
+            {
+              "number": 25,
+              "name": "Abbiati"
+            },
+            {
+              "number": 27,
+              "name": "Serginho"
+            }
+          ]
+        },
+        "lines": [
+          4,
+          3,
+          3
+        ]
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "dorsal_repetido",
+      "fn": "lineup.build_team",
+      "inputs": {
+        "name": "Milan",
+        "formation": "4-4-2",
+        "roster": "1 Dida\n2 Cafu\n3 Maldini\n4 Gattuso\n13 Nesta\n21 Pirlo\n8 Seedorf\n22 Kaka\n10 Rui Costa\n7 Shevchenko\n11 Gilardino\n25 Abbiati\n27 Serginho\n\n2 Otro Cafu"
+      },
+      "expected": {
+        "error": "el dorsal 2 esta repetido"
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "faltan_titulares",
+      "fn": "lineup.build_team",
+      "inputs": {
+        "name": "Milan",
+        "formation": "4-4-2",
+        "roster": "1 Dida\n2 Cafu"
+      },
+      "expected": {
+        "error": "la formacion 4-4-2 pide 11 titulares y la lista trae 2"
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "on_air_solo_con_alineacion_y_sin_interruptor",
+      "fn": "lineup.on_air",
+      "inputs": {
+        "events": [
+          {
+            "set_on_air": "home"
+          },
+          {
+            "set": {
+              "side": "home",
+              "name": "Milan",
+              "formation": "4-4-2",
+              "roster": "1 Dida\n2 Cafu\n3 Maldini\n4 Gattuso\n13 Nesta\n21 Pirlo\n8 Seedorf\n22 Kaka\n10 Rui Costa\n7 Shevchenko\n11 Gilardino\n25 Abbiati\n27 Serginho\n"
+            }
+          },
+          {
+            "toggle": "home"
+          },
+          {
+            "toggle": "home"
+          },
+          {
+            "set": {
+              "side": "away",
+              "name": "Liverpool",
+              "formation": "4-3-3",
+              "roster": "Dorsal,Nombre,Posicion\n1,Dida,POR\n2,Cafu,DEF\n3,Maldini,DEF\n4,Gattuso,MED\n13,Nesta,DEF\n21,Pirlo,MED\n8,Seedorf,MED\n22,Kaka,MED\n10,Rui Costa,MED\n7,Shevchenko,DEL\n11,Gilardino,DEL\n"
+            }
+          },
+          {
+            "set_on_air": "away"
+          },
+          {
+            "set_on_air": "away"
+          },
+          {
+            "toggle": "home"
+          }
+        ]
+      },
+      "expected": {
+        "on_air_trace": [
+          null,
+          null,
+          "home",
+          null,
+          null,
+          "away",
+          "away",
+          "home"
+        ],
+        "summary": {
+          "home": {
+            "formation": "4-4-2",
+            "players": 13
+          },
+          "away": {
+            "formation": "4-3-3",
+            "players": 11
+          },
+          "on_air": "home",
+          "persistent": false
+        }
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    }
+  ]
+}

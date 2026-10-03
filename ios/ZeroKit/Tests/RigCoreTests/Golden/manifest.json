@@ -3,7 +3,11 @@
   "files": {
     "action.json": "bc7e32ca75c01b4dcf33e76d0a5ad726fba41d3ed3ed2992b914a7b43803548d",
     "color.json": "d63f477ea19d1be6bc24e990347600ff5138638b10e3aa702cd5335ba0653f8e",
+    "control_token.json": "1ba7c32816f630396d697fba56789576e77929a44d7e81ee9f1f14fa017b08d2",
     "director.json": "a469e93f18928e1768d83b267cc6fa02b2e7ffe61161c0a1479ccca9e7bef74b",
+    "lineups.json": "6c9b8c6a5d305590b59c4589306af48d9f8c9a4721dd47f303bbf9e483b7dc74",
+    "match.json": "eb5c46eea88696f5e7050ec9a08f880e9d6abc4f1d6decfe8c1c4440aaeb91f6",
+    "match_clock.json": "52608e4278498a5293b115a215d3b76c5e18cb2047a2da721cce5b7859ed7efc",
     "pitch.json": "4139fcd11c6ce07e903a3344b8a2c6f97b2a52e7aafe37eaf67e1a237f681979",
     "reprojection.json": "719030238c817889a579edebe41d0801a673745f50de04a6ca1fcf62592bebb9",
     "rig.json": "23d2d9e775f80783869d5018789f7f3762531604df0a8a89b36fba741fb9c234",

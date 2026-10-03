@@ -1,0 +1,205 @@
+{
+  "schema": 1,
+  "module": "control_token",
+  "conventions": {
+    "axes": "Ejes del soporte: X a la derecha, Y hacia abajo, Z hacia delante (rig.py).",
+    "rotation": "R = R_yaw · R_pitch · R_roll, de cámara a soporte; ortonormal (CameraPose.matrix), así que la inversa es la traspuesta.",
+    "angles": "Radianes. Yaw positivo gira la cámara a la derecha; pitch positivo, hacia arriba.",
+    "pixel_center": "El convenio de rig.py: el píxel i cubre [i, i+1) y su centro continuo está en i+0,5; CameraIntrinsics.scaled reescala pasando por ese centro.",
+    "homography": "Las homografías de vista van del programa a la cámara (view_homography).",
+    "scalars": "Float con el repr de Python: ida y vuelta exacta a Double en Swift.",
+    "tensors": "{dtype: f64|f32|u8|i32, shape, b64}, little-endian y orden C; en Swift, Data(base64Encoded:)."
+  },
+  "cases": [
+    {
+      "name": "issue_solo_match",
+      "fn": "control_token.issue",
+      "inputs": {
+        "secret": "dorados-del-mando-0123456789abcdef0123456789abcdef0123456789abcd",
+        "match_id": "m_20260703_2030_a1b2",
+        "scopes": [
+          "match"
+        ],
+        "expires_s": 1790010000
+      },
+      "expected": {
+        "token": "eyJtIjoibV8yMDI2MDcwM18yMDMwX2ExYjIiLCJzIjpbIm1hdGNoIl0sImUiOjE3OTAwMTAwMDB9.HEBVNjGdBEjZGv1m9c-w9OiDVQ_cht3OaTrLic-GoJ8"
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "issue_con_stream",
+      "fn": "control_token.issue",
+      "inputs": {
+        "secret": "dorados-del-mando-0123456789abcdef0123456789abcdef0123456789abcd",
+        "match_id": "m_20260703_2030_a1b2",
+        "scopes": [
+          "stream",
+          "match"
+        ],
+        "expires_s": 1790010000
+      },
+      "expected": {
+        "token": "eyJtIjoibV8yMDI2MDcwM18yMDMwX2ExYjIiLCJzIjpbIm1hdGNoIiwic3RyZWFtIl0sImUiOjE3OTAwMTAwMDB9.zsPfB7xMQ6PJz7Y3MgIjrpbcGuF_Vj_wAWRAevQns94"
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "verify_valido",
+      "fn": "control_token.verify",
+      "inputs": {
+        "secret": "dorados-del-mando-0123456789abcdef0123456789abcdef0123456789abcd",
+        "token": "eyJtIjoibV8yMDI2MDcwM18yMDMwX2ExYjIiLCJzIjpbIm1hdGNoIl0sImUiOjE3OTAwMTAwMDB9.HEBVNjGdBEjZGv1m9c-w9OiDVQ_cht3OaTrLic-GoJ8",
+        "match_id": "m_20260703_2030_a1b2",
+        "now_s": 1790000000
+      },
+      "expected": {
+        "match_id": "m_20260703_2030_a1b2",
+        "scopes": [
+          "match"
+        ],
+        "expires_s": 1790010000
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "verify_con_stream",
+      "fn": "control_token.verify",
+      "inputs": {
+        "secret": "dorados-del-mando-0123456789abcdef0123456789abcdef0123456789abcd",
+        "token": "eyJtIjoibV8yMDI2MDcwM18yMDMwX2ExYjIiLCJzIjpbIm1hdGNoIiwic3RyZWFtIl0sImUiOjE3OTAwMTAwMDB9.zsPfB7xMQ6PJz7Y3MgIjrpbcGuF_Vj_wAWRAevQns94",
+        "match_id": "m_20260703_2030_a1b2",
+        "now_s": 1790000000
+      },
+      "expected": {
+        "match_id": "m_20260703_2030_a1b2",
+        "scopes": [
+          "match",
+          "stream"
+        ],
+        "expires_s": 1790010000
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "verify_caducado",
+      "fn": "control_token.verify",
+      "inputs": {
+        "secret": "dorados-del-mando-0123456789abcdef0123456789abcdef0123456789abcd",
+        "token": "eyJtIjoibV8yMDI2MDcwM18yMDMwX2ExYjIiLCJzIjpbIm1hdGNoIl0sImUiOjE3OTAwMTAwMDB9.HEBVNjGdBEjZGv1m9c-w9OiDVQ_cht3OaTrLic-GoJ8",
+        "match_id": "m_20260703_2030_a1b2",
+        "now_s": 1790010000
+      },
+      "expected": {
+        "status": 401,
+        "error": "token caducado: escanea el QR Mando otra vez"
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "verify_de_otro_partido",
+      "fn": "control_token.verify",
+      "inputs": {
+        "secret": "dorados-del-mando-0123456789abcdef0123456789abcdef0123456789abcd",
+        "token": "eyJtIjoibV8yMDI2MDYwMV8xOTAwX2ZmZmYiLCJzIjpbIm1hdGNoIl0sImUiOjE3OTAwMTAwMDB9.PxdAu35vBA8-Fij_uo0Fz6XC-QLmgaDbiw9RhpUVwvE",
+        "match_id": "m_20260703_2030_a1b2",
+        "now_s": 1790000000
+      },
+      "expected": {
+        "status": 410,
+        "error": "esta transmision termino: escanea el QR nuevo"
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "verify_firma_rota",
+      "fn": "control_token.verify",
+      "inputs": {
+        "secret": "dorados-del-mando-0123456789abcdef0123456789abcdef0123456789abcd",
+        "token": "eyJtIjoibV8yMDI2MDcwM18yMDMwX2ExYjIiLCJzIjpbIm1hdGNoIl0sImUiOjE3OTAwMTAwMDB9.HEBVNjGdBEjZGv1m9c-w9OiDVQ_cht3OaTrLic-GoAA",
+        "match_id": "m_20260703_2030_a1b2",
+        "now_s": 1790000000
+      },
+      "expected": {
+        "status": 401,
+        "error": "token no valido: escanea el QR Mando"
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "verify_mal_formado_sin_punto",
+      "fn": "control_token.verify",
+      "inputs": {
+        "secret": "dorados-del-mando-0123456789abcdef0123456789abcdef0123456789abcd",
+        "token": "no-es-un-token",
+        "match_id": "m_20260703_2030_a1b2",
+        "now_s": 1790000000
+      },
+      "expected": {
+        "status": 401,
+        "error": "token mal formado: escanea el QR Mando"
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "verify_de_otra_version",
+      "fn": "control_token.verify",
+      "inputs": {
+        "secret": "dorados-del-mando-0123456789abcdef0123456789abcdef0123456789abcd",
+        "token": "eyJtIjoibV8yMDI2MDcwM18yMDMwX2ExYjIiLCJzIjpbImVzcGVqbyIsIm1hdGNoIl0sImUiOjE3OTAwMTAwMDB9.96XE6sIINAAar6Kl7VHKo7uE8kzB8yGGVtXosxMMEE8",
+        "match_id": "m_20260703_2030_a1b2",
+        "now_s": 1790000000
+      },
+      "expected": {
+        "status": 401,
+        "error": "token de otra version: escanea el QR Mando"
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "verify_de_otro_secreto",
+      "fn": "control_token.verify",
+      "inputs": {
+        "secret": "dorados-del-mando-0123456789abcdef0123456789abcdef0123456789abcd",
+        "token": "eyJtIjoibV8yMDI2MDcwM18yMDMwX2ExYjIiLCJzIjpbIm1hdGNoIl0sImUiOjE3OTAwMTAwMDB9.XS4sU0PzXaEuAXSG9S5IPYp5CXaEILngYgbY24hYpmQ",
+        "match_id": "m_20260703_2030_a1b2",
+        "now_s": 1790000000
+      },
+      "expected": {
+        "status": 401,
+        "error": "token no valido: escanea el QR Mando"
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    }
+  ]
+}

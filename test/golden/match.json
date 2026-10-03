@@ -1,0 +1,488 @@
+{
+  "schema": 1,
+  "module": "match",
+  "conventions": {
+    "axes": "Ejes del soporte: X a la derecha, Y hacia abajo, Z hacia delante (rig.py).",
+    "rotation": "R = R_yaw · R_pitch · R_roll, de cámara a soporte; ortonormal (CameraPose.matrix), así que la inversa es la traspuesta.",
+    "angles": "Radianes. Yaw positivo gira la cámara a la derecha; pitch positivo, hacia arriba.",
+    "pixel_center": "El convenio de rig.py: el píxel i cubre [i, i+1) y su centro continuo está en i+0,5; CameraIntrinsics.scaled reescala pasando por ese centro.",
+    "homography": "Las homografías de vista van del programa a la cámara (view_homography).",
+    "scalars": "Float con el repr de Python: ida y vuelta exacta a Double en Swift.",
+    "tensors": "{dtype: f64|f32|u8|i32, shape, b64}, little-endian y orden C; en Swift, Data(base64Encoded:)."
+  },
+  "cases": [
+    {
+      "name": "idempotencia_repite_caduca_y_desborda",
+      "fn": "idempotency.run",
+      "inputs": {
+        "size": 3,
+        "ttl_s": 30,
+        "events": [
+          {
+            "key": "a"
+          },
+          {
+            "key": "a",
+            "advance_s": 1
+          },
+          {
+            "key": "b"
+          },
+          {
+            "key": "a",
+            "advance_s": 31
+          },
+          {
+            "key": "c"
+          },
+          {
+            "key": "d"
+          },
+          {
+            "key": "e"
+          },
+          {
+            "key": "b"
+          },
+          {
+            "key": "con espacios"
+          }
+        ]
+      },
+      "expected": {
+        "trace": [
+          {
+            "key_valid": true,
+            "body": "orden-0"
+          },
+          {
+            "key_valid": true,
+            "body": "orden-0"
+          },
+          {
+            "key_valid": true,
+            "body": "orden-2"
+          },
+          {
+            "key_valid": true,
+            "body": "orden-3"
+          },
+          {
+            "key_valid": true,
+            "body": "orden-4"
+          },
+          {
+            "key_valid": true,
+            "body": "orden-5"
+          },
+          {
+            "key_valid": true,
+            "body": "orden-6"
+          },
+          {
+            "key_valid": true,
+            "body": "orden-7"
+          },
+          {
+            "key_valid": false,
+            "body": "orden-8"
+          }
+        ]
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "ordenes_marcador_y_409",
+      "fn": "live_panel.orders",
+      "inputs": {
+        "events": [
+          {
+            "order": "match/score",
+            "body": {
+              "home": 1,
+              "away": 0,
+              "expect": {
+                "home": 0,
+                "away": 0
+              }
+            }
+          },
+          {
+            "order": "match/goal",
+            "body": {
+              "team": "home",
+              "delta": 1,
+              "expect": 1
+            }
+          },
+          {
+            "order": "match/score",
+            "body": {
+              "home": 3,
+              "away": 0,
+              "expect": {
+                "home": 0,
+                "away": 0
+              }
+            }
+          },
+          {
+            "order": "match/goal",
+            "body": {
+              "team": "home",
+              "delta": -1,
+              "expect": 2
+            }
+          },
+          {
+            "order": "match/goal",
+            "body": {
+              "team": "away",
+              "delta": -1,
+              "expect": 0
+            }
+          }
+        ]
+      },
+      "expected": {
+        "trace": [
+          {
+            "ok": {
+              "home_goals": 1,
+              "away_goals": 0,
+              "clock_ms": 0,
+              "clock_running": false,
+              "clock_restored": false,
+              "lineup_on_air": null
+            }
+          },
+          {
+            "ok": {
+              "home_goals": 2,
+              "away_goals": 0,
+              "clock_ms": 0,
+              "clock_running": false,
+              "clock_restored": false,
+              "lineup_on_air": null
+            }
+          },
+          {
+            "status": 409,
+            "error": "el marcador es 2-0, no 0-0",
+            "current": {
+              "home_goals": 2,
+              "away_goals": 0,
+              "clock_ms": 0,
+              "clock_running": false,
+              "clock_restored": false,
+              "lineup_on_air": null
+            }
+          },
+          {
+            "ok": {
+              "home_goals": 1,
+              "away_goals": 0,
+              "clock_ms": 0,
+              "clock_running": false,
+              "clock_restored": false,
+              "lineup_on_air": null
+            }
+          },
+          {
+            "ok": {
+              "home_goals": 1,
+              "away_goals": 0,
+              "clock_ms": 0,
+              "clock_running": false,
+              "clock_restored": false,
+              "lineup_on_air": null
+            }
+          }
+        ]
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "ordenes_cronometro_idempotente_y_limites",
+      "fn": "live_panel.orders",
+      "inputs": {
+        "events": [
+          {
+            "order": "match/clock",
+            "body": {
+              "action": "start"
+            }
+          },
+          {
+            "order": "match/clock",
+            "body": {
+              "action": "start"
+            },
+            "advance_s": 5
+          },
+          {
+            "order": "match/clock",
+            "body": {
+              "action": "pause"
+            },
+            "advance_s": 5
+          },
+          {
+            "order": "match/clock",
+            "body": {
+              "action": "pause"
+            },
+            "advance_s": 3
+          },
+          {
+            "order": "match/clock",
+            "body": {
+              "action": "nudge",
+              "seconds": 60
+            }
+          },
+          {
+            "order": "match/clock",
+            "body": {
+              "action": "nudge",
+              "seconds": -3600
+            }
+          },
+          {
+            "order": "match/clock",
+            "body": {
+              "action": "nudge",
+              "seconds": 3601
+            }
+          },
+          {
+            "order": "match/clock",
+            "body": {
+              "action": "nudge",
+              "seconds": 0
+            }
+          },
+          {
+            "order": "match/clock",
+            "body": {
+              "action": "reset"
+            }
+          }
+        ]
+      },
+      "expected": {
+        "trace": [
+          {
+            "ok": {
+              "home_goals": 0,
+              "away_goals": 0,
+              "clock_ms": 0,
+              "clock_running": true,
+              "clock_restored": false,
+              "lineup_on_air": null
+            }
+          },
+          {
+            "ok": {
+              "home_goals": 0,
+              "away_goals": 0,
+              "clock_ms": 5000,
+              "clock_running": true,
+              "clock_restored": false,
+              "lineup_on_air": null
+            }
+          },
+          {
+            "ok": {
+              "home_goals": 0,
+              "away_goals": 0,
+              "clock_ms": 10000,
+              "clock_running": false,
+              "clock_restored": false,
+              "lineup_on_air": null
+            }
+          },
+          {
+            "ok": {
+              "home_goals": 0,
+              "away_goals": 0,
+              "clock_ms": 10000,
+              "clock_running": false,
+              "clock_restored": false,
+              "lineup_on_air": null
+            }
+          },
+          {
+            "ok": {
+              "home_goals": 0,
+              "away_goals": 0,
+              "clock_ms": 70000,
+              "clock_running": false,
+              "clock_restored": false,
+              "lineup_on_air": null
+            }
+          },
+          {
+            "ok": {
+              "home_goals": 0,
+              "away_goals": 0,
+              "clock_ms": 0,
+              "clock_running": false,
+              "clock_restored": false,
+              "lineup_on_air": null
+            }
+          },
+          {
+            "status": 400,
+            "error": "seconds tiene que ser un entero distinto de cero, hasta 3600",
+            "current": null
+          },
+          {
+            "status": 400,
+            "error": "seconds tiene que ser un entero distinto de cero, hasta 3600",
+            "current": null
+          },
+          {
+            "ok": {
+              "home_goals": 0,
+              "away_goals": 0,
+              "clock_ms": 0,
+              "clock_running": false,
+              "clock_restored": false,
+              "lineup_on_air": null
+            }
+          }
+        ]
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "orden_desconocida_es_404",
+      "fn": "live_panel.orders",
+      "inputs": {
+        "events": [
+          {
+            "order": "golazo",
+            "body": {}
+          }
+        ]
+      },
+      "expected": {
+        "trace": [
+          {
+            "status": 404,
+            "error": "orden desconocida: golazo",
+            "current": null
+          }
+        ]
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "registro_ida_y_vuelta",
+      "fn": "match_record.from_json",
+      "inputs": {
+        "data": {
+          "version": 1,
+          "match_id": "m_20260703_2030_a1b2",
+          "home": "MILAN",
+          "away": "LIVERPOOL",
+          "home_goals": 3,
+          "away_goals": 3,
+          "clock_ms": 5400000,
+          "clock_running": true
+        }
+      },
+      "expected": {
+        "record": {
+          "version": 1,
+          "match_id": "m_20260703_2030_a1b2",
+          "home": "MILAN",
+          "away": "LIVERPOOL",
+          "home_goals": 3,
+          "away_goals": 3,
+          "clock_ms": 5400000,
+          "clock_running": true
+        },
+        "clock_ns": 5400000000000
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "registro_de_otra_version",
+      "fn": "match_record.from_json",
+      "inputs": {
+        "data": {
+          "version": 2,
+          "match_id": "m_20260703_2030_a1b2",
+          "home": "MILAN",
+          "away": "LIVERPOOL",
+          "home_goals": 3,
+          "away_goals": 3,
+          "clock_ms": 5400000,
+          "clock_running": true
+        }
+      },
+      "expected": {
+        "error": "version 2, se esperaba 1"
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "registro_con_goles_rotos",
+      "fn": "match_record.from_json",
+      "inputs": {
+        "data": {
+          "version": 1,
+          "match_id": "m_20260703_2030_a1b2",
+          "home": "MILAN",
+          "away": "LIVERPOOL",
+          "home_goals": true,
+          "away_goals": 3,
+          "clock_ms": 5400000,
+          "clock_running": true
+        }
+      },
+      "expected": {
+        "error": "home_goals tiene que ser un entero no negativo"
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "match_id_con_la_hora_y_el_sufijo",
+      "fn": "match_record.new_match_id",
+      "inputs": {
+        "wall_epoch_s": 1790000000,
+        "suffix_hex": "a1b2"
+      },
+      "expected": {
+        "match_id": "m_20260921_1413_a1b2"
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    }
+  ]
+}
