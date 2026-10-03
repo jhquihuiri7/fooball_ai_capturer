@@ -12,7 +12,7 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
-## 2026-10-03 · SPK-03 — spike: concurrencia de VideoToolbox · 🚧 falta el informe en los iPhone
+## 2026-10-03 · SPK-03 — spike: concurrencia de VideoToolbox · ✅ aprobado SIN la HEVC 4K del maestro
 
 **Hecho**
 - Banco `vt-concurrency` en BenchRunner (IOS-08): cámara 4K30 propia, HEVC 4K de
@@ -34,10 +34,22 @@ la decodificación iba EN LÍNEA en el hilo de la cámara (ahora en su cola, com
 realidad) y el pool agotado se perdía en silencio (ahora contadores pool_starved,
 encoder_dropped y decoder_dropped). BENCH_PARAMS llega ya de Dart al informe.
 
-**Pendiente para el ✅/decisión**: repetir el master con el banco corregido; si sigue
-sin dar, la repetición sin la HEVC 4K (`BENCH_PARAMS={"hevc":"0"}`) y se aprueba así
-(la tarjeta lo prescribe: la escalera la soltará primero). Después la pasada slave en
-el otro iPhone. Si ni la mínima aguanta, replantear con el propietario.
+**Segunda pasada (master CON HEVC, banco corregido, 2026-10-03)**: sigue sin dar —
+24,0 fps y 10 328 didDrop con 0 err_12915, 0 pool_starved, 0 descartes de colas y
+térmica nominal→fair. El dato ya es limpio: **este iPhone no sostiene cámara 4K30 +
+HEVC 4K 45 Mbit/s + H.264 1080p + decodificación a la vez**; es contención del motor
+de vídeo, no del banco ni del calor.
+
+**Tercera pasada (master SIN HEVC, `BENCH_PARAMS={"hevc":"0"}`)**: ÉXITO — 30,00 fps,
+37 083 fotogramas, didDrop 3 (el arranque), 0 err_12915, 0 en todas las colas,
+térmica nominal las siete muestras, encoded = decoded = 37 082, escalado p99 5 ms.
+La regla de la tarjeta aplica: **el spike queda aprobado sin la HEVC 4K del maestro,
+y la escalera térmica (IOS-06) es quien la suelta primero en partido**.
+
+**Consecuencia para el propietario**: el hallazgo toca también al perfil slave (H.264
+25 Mbit/s + HEVC 4K): con la HEVC puesta no va a sostener 30 fps en este hardware. La
+pasada slave formal se hará con los dos móviles montados (junto a SPK-02, con los
+hubs), ya con esta expectativa.
 
 ---
 
