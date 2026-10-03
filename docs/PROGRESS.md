@@ -12,6 +12,33 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-03 · IOS-50 — codificador H.264 de baja latencia con SEI rigMs · ✅
+
+**Hecho**
+- `RigCore/Media/H264Sei.swift` (puro): SEI user_data_unregistered con UUID propio
+  («football-ai.rig0»), rigMs y viewId, DENTRO de la unidad de acceso (ADR 0022), con
+  la prevención de emulación del Anexo B —un rigMs pequeño la pisa siempre— y los
+  ayudantes AVCC (insert/find). 6 tests, incluido escape/unescape como inversos.
+- `RigMedia/Video/VideoEncoder.swift`: VTCompressionSession H.264 High en baja
+  latencia (EnableLowLatencyRateControl, RealTime, sin reordenar), GOP atado a
+  `PROGRAM_GOP_S` = 2 s (ADR 0021), AverageBitRate + DataRateLimits con margen 1,5×,
+  MaxAllowedFrameQP 45, IDR bajo demanda, bitrate en marcha, pool expuesto y salida
+  AVCC a una BoundedQueue (16, dropOldest). El pool se fija a NV12 Metal-compatible:
+  sin atributos, VT entrega su formato comprimido '&8v0', cuya memoria no es
+  stride×alto y una escritura por CPU se sale del búfer.
+- `VideoConstants.swift` con unidades y porqués (los márgenes, provisionales hasta el
+  banco en el iPhone).
+- Aceptación en macOS: 300 fotogramas 1080p a 6 Mbit/s codificados y decodificados,
+  **SEI recuperada en 300/300** y PSNR ≥38 dB; ≥5 IDR en 10 s; el IDR forzado sale
+  IDR con cambio de bitrate a mitad. Paquete 101/101, capas limpias, build ✓.
+
+**Fuera**: la latencia p99 ≤20 ms en el iPhone queda como objetivo medible cuando el
+banco de regresión (IOS-18) encadene los bancos de vídeo.
+
+**Siguiente**: IOS-51 (decodificador a IOSurface) o IOS-15 (volcado NV12).
+
+---
+
 ## 2026-10-03 · IOS-13 — reloj del soporte en nativo con casos compartidos · ✅
 
 **Hecho**
