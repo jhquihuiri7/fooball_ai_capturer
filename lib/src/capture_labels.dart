@@ -323,6 +323,24 @@ class CaptureReadout {
     ThermalState.critical => 'critical · el móvil va a cortar',
   };
 
+  /// La presión de la sesión de captura (IOS-06): avisa antes que la térmica.
+  String _pressureLabel(SystemPressure pressure) => switch (pressure) {
+    SystemPressure.nominal => 'nominal',
+    SystemPressure.fair => 'templada',
+    SystemPressure.serious => 'serious · suelta carga',
+    SystemPressure.critical => 'critical · al borde del corte',
+    SystemPressure.shutdown => 'shutdown · iOS corta la cámara',
+  };
+
+  /// El nivel de la escalera de degradación, legible (IOS-06).
+  String _ladderLabel(int level) => switch (level) {
+    0 => 'L0 · todo encendido',
+    1 => 'L1 · balón global fuera, jugadores a 5 Hz',
+    2 => 'L2 · IA apagada',
+    3 => 'L3 · programa a 720p',
+    _ => 'L4 · soltando la emisión',
+  };
+
   List<CaptureReading> get deviceReadings {
     final CaptureStatus? applied = _status;
     if (applied == null) {
@@ -338,6 +356,18 @@ class CaptureReadout {
         'Temperatura',
         _thermalLabel(applied.thermalState),
         tone: hot ? ZeroTone.bad : ZeroTone.ok,
+      ),
+      CaptureReading(
+        'Presión',
+        _pressureLabel(applied.pressure),
+        tone: applied.pressure.index >= SystemPressure.serious.index
+            ? ZeroTone.bad
+            : ZeroTone.ok,
+      ),
+      CaptureReading(
+        'Escalera',
+        _ladderLabel(applied.ladderLevel),
+        tone: applied.ladderLevel >= 2 ? ZeroTone.bad : ZeroTone.ok,
       ),
       CaptureReading(
         'Batería',

@@ -11,6 +11,8 @@ const int frame30 = 33333333;
 CaptureStatus fakeStatus({
   bool stabilizationDisabled = true,
   bool exposureLocked = true,
+  SystemPressure pressure = SystemPressure.nominal,
+  int ladderLevel = 0,
   StreamState streamState = StreamState.off,
   String streamDetail = '',
   int streamBitrateBps = 0,
@@ -19,6 +21,8 @@ CaptureStatus fakeStatus({
 }) {
   return CaptureStatus(
     running: true,
+    pressure: pressure,
+    ladderLevel: ladderLevel,
     width: 3840,
     height: 2160,
     actualFps: 30.0,

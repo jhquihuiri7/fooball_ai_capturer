@@ -12,6 +12,44 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-03 · IOS-06 — temperatura y presión con escalera de degradación · ✅
+
+El orden del propietario, en código: primero se suelta la IA, después la calidad del
+programa, después la emisión; la grabación local, la última.
+
+**Hecho**
+- `RigCore/Runtime/DegradationLadder.swift` (lógica pura, como el muelle del servidor):
+  ThermalLevel y PressureLevel espejo de ProcessInfo y AVCaptureDevice; el objetivo es
+  el peor de los dos sensores, y sin carga sube un escalón (a batería sola no hay
+  margen). Empeorar es inmediato; mejorar exige sostener `recoverS` y baja UN escalón
+  cada vez. `LadderActions` acumulativas: L1 jugadores a 5 Hz y balón global fuera; L2
+  IA apagada; L3 programa a 720p y ×0,6; L4 el esclavo para su parte y el maestro pide
+  la cesión (sin esclavo sano sigue como L3). La grabación local no la toca ningún
+  nivel.
+- `RigCore/Runtime/LadderConstants.swift`: recoverS=60 s, 7,5→5 Hz, 1080→720, ×0,6 —
+  todo PROVISIONAL hasta M19 (SPK-54/SPK-07), anotado en el propio fichero.
+- `RigMedia/Thermal/ThermalMonitor.swift`: thermalStateDidChangeNotification + KVO de
+  systemPressureState (solo iOS), convertidos a los niveles puros.
+- Contrato pigeon: enum `SystemPressure` y campos `pressure` y `ladderLevel` en
+  CaptureStatus; regenerado. CaptureEngine engancha el monitor al configurar la cámara
+  y avanza la escalera en cada foto de estado (1 Hz) con el reloj de host; cargando =
+  charging o full.
+- Etiquetas: filas «Presión» y «Escalera» en la tarjeta DISPOSITIVO, en rojo desde
+  serious / L2.
+
+**Aceptación**
+- La tabla de secuencias en DegradationLadderTests: subida inmediata, recaída que
+  reinicia el contador, bajada de un escalón por recoverS, sensores al peor, batería
+  +1, L4 por rol y la grabación intocable. `swift test` 50/50; `flutter analyze` 0;
+  `flutter test` 209; build de dispositivo ✅.
+- La prueba de Xcode (Device Conditions → Thermal State) queda para cuando la escalera
+  gobierne de verdad el pipeline (IOS-25/IOS-44/IOS-50 consumen las acciones): hoy la
+  IA que «se apaga primero» aún no existe en la app.
+
+**Siguiente**: IOS-07.
+
+---
+
 ## 2026-10-03 · IOS-05 — os_signpost, Logger, telemetría de 1 Hz y MetricKit · ✅
 
 Lo que el móvil dice de sí mismo, sin que nadie tenga que estar delante.

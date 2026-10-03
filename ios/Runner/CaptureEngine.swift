@@ -28,6 +28,12 @@ final class CaptureEngine: NSObject {
 
     private let publisher = StreamPublisher()
 
+    // IOS-06: los sensores y la escalera. Hoy observan y se enseñan en el estado; las
+    // acciones gobernarán el pipeline cuando IOS-25/IOS-44/IOS-50 las consuman.
+    private let thermalMonitor = ThermalMonitor()
+    private var ladder = DegradationLadder()
+    private var ladderSteppedAt = CMClockGetTime(CMClockGetHostTimeClock())
+
     private var writer: AVAssetWriter?
     private var writerInput: AVAssetWriterInput?
     private var writerStarted = false
@@ -124,6 +130,7 @@ final class CaptureEngine: NSObject {
         self.device = device
         self.settings = settings
         self.applied = applied
+        thermalMonitor.observe(device: device)
 
         // Exposición y balance: la cámara mide en automático un momento y después se
         // congela lo medido, trasladado a una obturación sin parpadeo. Fijar un ISO a
@@ -440,6 +447,8 @@ final class CaptureEngine: NSObject {
             focusLocked: applied?.focusLocked ?? false,
             intrinsicsAvailable: intrinsicsAvailable,
             thermalState: Self.thermalState(),
+            pressure: Self.pressure(thermalMonitor.pressure),
+            ladderLevel: Int64(stepLadder().rawValue),
             batteryLevel: Double(UIDevice.current.batteryLevel),
             freeDiskBytes: Self.freeDiskBytes(),
             droppedFrames: droppedFrames,
@@ -467,6 +476,32 @@ final class CaptureEngine: NSObject {
         switch state {
         case let .reconnecting(detail), let .failed(detail): return detail
         default: return ""
+        }
+    }
+
+    /// Avanza la escalera con el tiempo real transcurrido desde la última foto.
+    /// El estado se pide a 1 Hz desde Dart, así que este es su tic.
+    private func stepLadder() -> LadderLevel {
+        let ahora = CMClockGetTime(CMClockGetHostTimeClock())
+        let dt = max(0, CMTimeGetSeconds(CMTimeSubtract(ahora, ladderSteppedAt)))
+        ladderSteppedAt = ahora
+        let cargando = UIDevice.current.batteryState == .charging
+            || UIDevice.current.batteryState == .full
+        return ladder.step(
+            thermal: ThermalMonitor.level(from: ProcessInfo.processInfo.thermalState),
+            pressure: thermalMonitor.pressure,
+            charging: cargando,
+            dtS: dt
+        )
+    }
+
+    private static func pressure(_ level: PressureLevel) -> SystemPressure {
+        switch level {
+        case .nominal: return .nominal
+        case .fair: return .fair
+        case .serious: return .serious
+        case .critical: return .critical
+        case .shutdown: return .shutdown
         }
     }
 

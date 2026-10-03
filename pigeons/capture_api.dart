@@ -38,6 +38,11 @@ enum CameraRole {
 /// que iOS decida bajarlo por su cuenta matando la sesión de captura.
 enum ThermalState { nominal, fair, serious, critical }
 
+/// Presión del sistema de captura, copia de `AVCaptureDevice.SystemPressureState`
+/// (IOS-06). Avisa antes y con más detalle que la térmica: `shutdown` significa que
+/// iOS va a cortar la cámara.
+enum SystemPressure { nominal, fair, serious, critical, shutdown }
+
 /// Estado del enlace entre los dos móviles del soporte (TASK A3).
 /// Lo que el móvil izquierdo, que es el maestro, le manda al derecho por el enlace.
 ///
@@ -144,6 +149,8 @@ class CaptureStatus {
     required this.focusLocked,
     required this.intrinsicsAvailable,
     required this.thermalState,
+    required this.pressure,
+    required this.ladderLevel,
     required this.batteryLevel,
     required this.freeDiskBytes,
     required this.droppedFrames,
@@ -184,6 +191,15 @@ class CaptureStatus {
   final bool intrinsicsAvailable;
 
   final ThermalState thermalState;
+
+  /// La presión de la sesión de captura (IOS-06).
+  final SystemPressure pressure;
+
+  /// Nivel de la escalera de degradación: 0 es L0 (todo encendido). Hoy la escalera
+  /// observa y se enseña; gobernará el pipeline cuando IOS-25/IOS-44/IOS-50 consuman
+  /// sus acciones.
+  final int ladderLevel;
+
   final double batteryLevel;
   final int freeDiskBytes;
   final int droppedFrames;

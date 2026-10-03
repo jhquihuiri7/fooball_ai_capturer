@@ -127,6 +127,17 @@ enum ThermalState {
   critical;
 }
 
+/// Presión del sistema de captura, copia de `AVCaptureDevice.SystemPressureState`
+/// (IOS-06). Avisa antes y con más detalle que la térmica: `shutdown` significa que
+/// iOS va a cortar la cámara.
+enum SystemPressure {
+  nominal,
+  fair,
+  serious,
+  critical,
+  shutdown;
+}
+
 /// Estado del enlace entre los dos móviles del soporte (TASK A3).
 /// Lo que el móvil izquierdo, que es el maestro, le manda al derecho por el enlace.
 ///
@@ -280,6 +291,8 @@ class CaptureStatus {
     required this.focusLocked,
     required this.intrinsicsAvailable,
     required this.thermalState,
+    required this.pressure,
+    required this.ladderLevel,
     required this.batteryLevel,
     required this.freeDiskBytes,
     required this.droppedFrames,
@@ -324,6 +337,14 @@ class CaptureStatus {
   bool intrinsicsAvailable;
 
   ThermalState thermalState;
+
+  /// La presión de la sesión de captura (IOS-06).
+  SystemPressure pressure;
+
+  /// Nivel de la escalera de degradación: 0 es L0 (todo encendido). Hoy la escalera
+  /// observa y se enseña; gobernará el pipeline cuando IOS-25/IOS-44/IOS-50 consuman
+  /// sus acciones.
+  int ladderLevel;
 
   double batteryLevel;
 
@@ -371,6 +392,8 @@ class CaptureStatus {
       focusLocked,
       intrinsicsAvailable,
       thermalState,
+      pressure,
+      ladderLevel,
       batteryLevel,
       freeDiskBytes,
       droppedFrames,
@@ -403,16 +426,18 @@ class CaptureStatus {
       focusLocked: result[10]! as bool,
       intrinsicsAvailable: result[11]! as bool,
       thermalState: result[12]! as ThermalState,
-      batteryLevel: result[13]! as double,
-      freeDiskBytes: result[14]! as int,
-      droppedFrames: result[15]! as int,
-      timecodeFailures: result[16]! as int,
-      recordingFile: result[17]! as String,
-      recordingSegment: result[18]! as int,
-      streamState: result[19]! as StreamState,
-      streamDetail: result[20]! as String,
-      streamDroppedFrames: result[21]! as int,
-      streamBitrateBps: result[22]! as int,
+      pressure: result[13]! as SystemPressure,
+      ladderLevel: result[14]! as int,
+      batteryLevel: result[15]! as double,
+      freeDiskBytes: result[16]! as int,
+      droppedFrames: result[17]! as int,
+      timecodeFailures: result[18]! as int,
+      recordingFile: result[19]! as String,
+      recordingSegment: result[20]! as int,
+      streamState: result[21]! as StreamState,
+      streamDetail: result[22]! as String,
+      streamDroppedFrames: result[23]! as int,
+      streamBitrateBps: result[24]! as int,
     );
   }
 
@@ -425,7 +450,7 @@ class CaptureStatus {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(running, other.running) && _deepEquals(width, other.width) && _deepEquals(height, other.height) && _deepEquals(actualFps, other.actualFps) && _deepEquals(stabilizationDisabled, other.stabilizationDisabled) && _deepEquals(exposureLocked, other.exposureLocked) && _deepEquals(exposureSeconds, other.exposureSeconds) && _deepEquals(iso, other.iso) && _deepEquals(whiteBalanceLocked, other.whiteBalanceLocked) && _deepEquals(whiteBalanceKelvin, other.whiteBalanceKelvin) && _deepEquals(focusLocked, other.focusLocked) && _deepEquals(intrinsicsAvailable, other.intrinsicsAvailable) && _deepEquals(thermalState, other.thermalState) && _deepEquals(batteryLevel, other.batteryLevel) && _deepEquals(freeDiskBytes, other.freeDiskBytes) && _deepEquals(droppedFrames, other.droppedFrames) && _deepEquals(timecodeFailures, other.timecodeFailures) && _deepEquals(recordingFile, other.recordingFile) && _deepEquals(recordingSegment, other.recordingSegment) && _deepEquals(streamState, other.streamState) && _deepEquals(streamDetail, other.streamDetail) && _deepEquals(streamDroppedFrames, other.streamDroppedFrames) && _deepEquals(streamBitrateBps, other.streamBitrateBps);
+    return _deepEquals(running, other.running) && _deepEquals(width, other.width) && _deepEquals(height, other.height) && _deepEquals(actualFps, other.actualFps) && _deepEquals(stabilizationDisabled, other.stabilizationDisabled) && _deepEquals(exposureLocked, other.exposureLocked) && _deepEquals(exposureSeconds, other.exposureSeconds) && _deepEquals(iso, other.iso) && _deepEquals(whiteBalanceLocked, other.whiteBalanceLocked) && _deepEquals(whiteBalanceKelvin, other.whiteBalanceKelvin) && _deepEquals(focusLocked, other.focusLocked) && _deepEquals(intrinsicsAvailable, other.intrinsicsAvailable) && _deepEquals(thermalState, other.thermalState) && _deepEquals(pressure, other.pressure) && _deepEquals(ladderLevel, other.ladderLevel) && _deepEquals(batteryLevel, other.batteryLevel) && _deepEquals(freeDiskBytes, other.freeDiskBytes) && _deepEquals(droppedFrames, other.droppedFrames) && _deepEquals(timecodeFailures, other.timecodeFailures) && _deepEquals(recordingFile, other.recordingFile) && _deepEquals(recordingSegment, other.recordingSegment) && _deepEquals(streamState, other.streamState) && _deepEquals(streamDetail, other.streamDetail) && _deepEquals(streamDroppedFrames, other.streamDroppedFrames) && _deepEquals(streamBitrateBps, other.streamBitrateBps);
   }
 
   @override
@@ -434,7 +459,7 @@ class CaptureStatus {
 
   @override
   String toString() {
-    return 'CaptureStatus(running: $running, width: $width, height: $height, actualFps: $actualFps, stabilizationDisabled: $stabilizationDisabled, exposureLocked: $exposureLocked, exposureSeconds: $exposureSeconds, iso: $iso, whiteBalanceLocked: $whiteBalanceLocked, whiteBalanceKelvin: $whiteBalanceKelvin, focusLocked: $focusLocked, intrinsicsAvailable: $intrinsicsAvailable, thermalState: $thermalState, batteryLevel: $batteryLevel, freeDiskBytes: $freeDiskBytes, droppedFrames: $droppedFrames, timecodeFailures: $timecodeFailures, recordingFile: $recordingFile, recordingSegment: $recordingSegment, streamState: $streamState, streamDetail: $streamDetail, streamDroppedFrames: $streamDroppedFrames, streamBitrateBps: $streamBitrateBps)';
+    return 'CaptureStatus(running: $running, width: $width, height: $height, actualFps: $actualFps, stabilizationDisabled: $stabilizationDisabled, exposureLocked: $exposureLocked, exposureSeconds: $exposureSeconds, iso: $iso, whiteBalanceLocked: $whiteBalanceLocked, whiteBalanceKelvin: $whiteBalanceKelvin, focusLocked: $focusLocked, intrinsicsAvailable: $intrinsicsAvailable, thermalState: $thermalState, pressure: $pressure, ladderLevel: $ladderLevel, batteryLevel: $batteryLevel, freeDiskBytes: $freeDiskBytes, droppedFrames: $droppedFrames, timecodeFailures: $timecodeFailures, recordingFile: $recordingFile, recordingSegment: $recordingSegment, streamState: $streamState, streamDetail: $streamDetail, streamDroppedFrames: $streamDroppedFrames, streamBitrateBps: $streamBitrateBps)';
   }
 }
 
@@ -511,23 +536,26 @@ class _PigeonCodec extends StandardMessageCodec {
     }    else if (value is ThermalState) {
       buffer.putUint8(130);
       writeValue(buffer, value.index);
-    }    else if (value is RigCommand) {
+    }    else if (value is SystemPressure) {
       buffer.putUint8(131);
       writeValue(buffer, value.index);
-    }    else if (value is LinkState) {
+    }    else if (value is RigCommand) {
       buffer.putUint8(132);
       writeValue(buffer, value.index);
-    }    else if (value is StreamState) {
+    }    else if (value is LinkState) {
       buffer.putUint8(133);
       writeValue(buffer, value.index);
-    }    else if (value is CaptureSettings) {
+    }    else if (value is StreamState) {
       buffer.putUint8(134);
-      writeValue(buffer, value.encode());
-    }    else if (value is CaptureStatus) {
+      writeValue(buffer, value.index);
+    }    else if (value is CaptureSettings) {
       buffer.putUint8(135);
       writeValue(buffer, value.encode());
-    }    else if (value is ClockSample) {
+    }    else if (value is CaptureStatus) {
       buffer.putUint8(136);
+      writeValue(buffer, value.encode());
+    }    else if (value is ClockSample) {
+      buffer.putUint8(137);
       writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
@@ -545,18 +573,21 @@ class _PigeonCodec extends StandardMessageCodec {
         return value == null ? null : ThermalState.values[value];
       case 131:
         final value = readValue(buffer) as int?;
-        return value == null ? null : RigCommand.values[value];
+        return value == null ? null : SystemPressure.values[value];
       case 132:
         final value = readValue(buffer) as int?;
-        return value == null ? null : LinkState.values[value];
+        return value == null ? null : RigCommand.values[value];
       case 133:
         final value = readValue(buffer) as int?;
-        return value == null ? null : StreamState.values[value];
+        return value == null ? null : LinkState.values[value];
       case 134:
-        return CaptureSettings.decode(readValue(buffer)!);
+        final value = readValue(buffer) as int?;
+        return value == null ? null : StreamState.values[value];
       case 135:
-        return CaptureStatus.decode(readValue(buffer)!);
+        return CaptureSettings.decode(readValue(buffer)!);
       case 136:
+        return CaptureStatus.decode(readValue(buffer)!);
+      case 137:
         return ClockSample.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);

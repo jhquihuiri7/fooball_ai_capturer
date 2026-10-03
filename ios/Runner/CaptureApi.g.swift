@@ -208,6 +208,17 @@ enum ThermalState: Int, CaseIterable {
   case critical = 3
 }
 
+/// Presión del sistema de captura, copia de `AVCaptureDevice.SystemPressureState`
+/// (IOS-06). Avisa antes y con más detalle que la térmica: `shutdown` significa que
+/// iOS va a cortar la cámara.
+enum SystemPressure: Int, CaseIterable {
+  case nominal = 0
+  case fair = 1
+  case serious = 2
+  case critical = 3
+  case shutdown = 4
+}
+
 /// Estado del enlace entre los dos móviles del soporte (TASK A3).
 /// Lo que el móvil izquierdo, que es el maestro, le manda al derecho por el enlace.
 ///
@@ -360,6 +371,12 @@ struct CaptureStatus: Hashable, CustomStringConvertible {
   /// para dimensionar y no para cerrar una costura.
   var intrinsicsAvailable: Bool
   var thermalState: ThermalState
+  /// La presión de la sesión de captura (IOS-06).
+  var pressure: SystemPressure
+  /// Nivel de la escalera de degradación: 0 es L0 (todo encendido). Hoy la escalera
+  /// observa y se enseña; gobernará el pipeline cuando IOS-25/IOS-44/IOS-50 consuman
+  /// sus acciones.
+  var ladderLevel: Int64
   var batteryLevel: Double
   var freeDiskBytes: Int64
   var droppedFrames: Int64
@@ -398,16 +415,18 @@ struct CaptureStatus: Hashable, CustomStringConvertible {
     let focusLocked = pigeonVar_list[10] as! Bool
     let intrinsicsAvailable = pigeonVar_list[11] as! Bool
     let thermalState = pigeonVar_list[12] as! ThermalState
-    let batteryLevel = pigeonVar_list[13] as! Double
-    let freeDiskBytes = pigeonVar_list[14] as! Int64
-    let droppedFrames = pigeonVar_list[15] as! Int64
-    let timecodeFailures = pigeonVar_list[16] as! Int64
-    let recordingFile = pigeonVar_list[17] as! String
-    let recordingSegment = pigeonVar_list[18] as! Int64
-    let streamState = pigeonVar_list[19] as! StreamState
-    let streamDetail = pigeonVar_list[20] as! String
-    let streamDroppedFrames = pigeonVar_list[21] as! Int64
-    let streamBitrateBps = pigeonVar_list[22] as! Int64
+    let pressure = pigeonVar_list[13] as! SystemPressure
+    let ladderLevel = pigeonVar_list[14] as! Int64
+    let batteryLevel = pigeonVar_list[15] as! Double
+    let freeDiskBytes = pigeonVar_list[16] as! Int64
+    let droppedFrames = pigeonVar_list[17] as! Int64
+    let timecodeFailures = pigeonVar_list[18] as! Int64
+    let recordingFile = pigeonVar_list[19] as! String
+    let recordingSegment = pigeonVar_list[20] as! Int64
+    let streamState = pigeonVar_list[21] as! StreamState
+    let streamDetail = pigeonVar_list[22] as! String
+    let streamDroppedFrames = pigeonVar_list[23] as! Int64
+    let streamBitrateBps = pigeonVar_list[24] as! Int64
 
     return CaptureStatus(
       running: running,
@@ -423,6 +442,8 @@ struct CaptureStatus: Hashable, CustomStringConvertible {
       focusLocked: focusLocked,
       intrinsicsAvailable: intrinsicsAvailable,
       thermalState: thermalState,
+      pressure: pressure,
+      ladderLevel: ladderLevel,
       batteryLevel: batteryLevel,
       freeDiskBytes: freeDiskBytes,
       droppedFrames: droppedFrames,
@@ -450,6 +471,8 @@ struct CaptureStatus: Hashable, CustomStringConvertible {
       focusLocked,
       intrinsicsAvailable,
       thermalState,
+      pressure,
+      ladderLevel,
       batteryLevel,
       freeDiskBytes,
       droppedFrames,
@@ -466,7 +489,7 @@ struct CaptureStatus: Hashable, CustomStringConvertible {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return CaptureApiPigeonInternal.deepEquals(lhs.running, rhs.running) && CaptureApiPigeonInternal.deepEquals(lhs.width, rhs.width) && CaptureApiPigeonInternal.deepEquals(lhs.height, rhs.height) && CaptureApiPigeonInternal.deepEquals(lhs.actualFps, rhs.actualFps) && CaptureApiPigeonInternal.deepEquals(lhs.stabilizationDisabled, rhs.stabilizationDisabled) && CaptureApiPigeonInternal.deepEquals(lhs.exposureLocked, rhs.exposureLocked) && CaptureApiPigeonInternal.deepEquals(lhs.exposureSeconds, rhs.exposureSeconds) && CaptureApiPigeonInternal.deepEquals(lhs.iso, rhs.iso) && CaptureApiPigeonInternal.deepEquals(lhs.whiteBalanceLocked, rhs.whiteBalanceLocked) && CaptureApiPigeonInternal.deepEquals(lhs.whiteBalanceKelvin, rhs.whiteBalanceKelvin) && CaptureApiPigeonInternal.deepEquals(lhs.focusLocked, rhs.focusLocked) && CaptureApiPigeonInternal.deepEquals(lhs.intrinsicsAvailable, rhs.intrinsicsAvailable) && CaptureApiPigeonInternal.deepEquals(lhs.thermalState, rhs.thermalState) && CaptureApiPigeonInternal.deepEquals(lhs.batteryLevel, rhs.batteryLevel) && CaptureApiPigeonInternal.deepEquals(lhs.freeDiskBytes, rhs.freeDiskBytes) && CaptureApiPigeonInternal.deepEquals(lhs.droppedFrames, rhs.droppedFrames) && CaptureApiPigeonInternal.deepEquals(lhs.timecodeFailures, rhs.timecodeFailures) && CaptureApiPigeonInternal.deepEquals(lhs.recordingFile, rhs.recordingFile) && CaptureApiPigeonInternal.deepEquals(lhs.recordingSegment, rhs.recordingSegment) && CaptureApiPigeonInternal.deepEquals(lhs.streamState, rhs.streamState) && CaptureApiPigeonInternal.deepEquals(lhs.streamDetail, rhs.streamDetail) && CaptureApiPigeonInternal.deepEquals(lhs.streamDroppedFrames, rhs.streamDroppedFrames) && CaptureApiPigeonInternal.deepEquals(lhs.streamBitrateBps, rhs.streamBitrateBps)
+    return CaptureApiPigeonInternal.deepEquals(lhs.running, rhs.running) && CaptureApiPigeonInternal.deepEquals(lhs.width, rhs.width) && CaptureApiPigeonInternal.deepEquals(lhs.height, rhs.height) && CaptureApiPigeonInternal.deepEquals(lhs.actualFps, rhs.actualFps) && CaptureApiPigeonInternal.deepEquals(lhs.stabilizationDisabled, rhs.stabilizationDisabled) && CaptureApiPigeonInternal.deepEquals(lhs.exposureLocked, rhs.exposureLocked) && CaptureApiPigeonInternal.deepEquals(lhs.exposureSeconds, rhs.exposureSeconds) && CaptureApiPigeonInternal.deepEquals(lhs.iso, rhs.iso) && CaptureApiPigeonInternal.deepEquals(lhs.whiteBalanceLocked, rhs.whiteBalanceLocked) && CaptureApiPigeonInternal.deepEquals(lhs.whiteBalanceKelvin, rhs.whiteBalanceKelvin) && CaptureApiPigeonInternal.deepEquals(lhs.focusLocked, rhs.focusLocked) && CaptureApiPigeonInternal.deepEquals(lhs.intrinsicsAvailable, rhs.intrinsicsAvailable) && CaptureApiPigeonInternal.deepEquals(lhs.thermalState, rhs.thermalState) && CaptureApiPigeonInternal.deepEquals(lhs.pressure, rhs.pressure) && CaptureApiPigeonInternal.deepEquals(lhs.ladderLevel, rhs.ladderLevel) && CaptureApiPigeonInternal.deepEquals(lhs.batteryLevel, rhs.batteryLevel) && CaptureApiPigeonInternal.deepEquals(lhs.freeDiskBytes, rhs.freeDiskBytes) && CaptureApiPigeonInternal.deepEquals(lhs.droppedFrames, rhs.droppedFrames) && CaptureApiPigeonInternal.deepEquals(lhs.timecodeFailures, rhs.timecodeFailures) && CaptureApiPigeonInternal.deepEquals(lhs.recordingFile, rhs.recordingFile) && CaptureApiPigeonInternal.deepEquals(lhs.recordingSegment, rhs.recordingSegment) && CaptureApiPigeonInternal.deepEquals(lhs.streamState, rhs.streamState) && CaptureApiPigeonInternal.deepEquals(lhs.streamDetail, rhs.streamDetail) && CaptureApiPigeonInternal.deepEquals(lhs.streamDroppedFrames, rhs.streamDroppedFrames) && CaptureApiPigeonInternal.deepEquals(lhs.streamBitrateBps, rhs.streamBitrateBps)
   }
 
   func hash(into hasher: inout Hasher) {
@@ -484,6 +507,8 @@ struct CaptureStatus: Hashable, CustomStringConvertible {
     CaptureApiPigeonInternal.deepHash(value: focusLocked, hasher: &hasher)
     CaptureApiPigeonInternal.deepHash(value: intrinsicsAvailable, hasher: &hasher)
     CaptureApiPigeonInternal.deepHash(value: thermalState, hasher: &hasher)
+    CaptureApiPigeonInternal.deepHash(value: pressure, hasher: &hasher)
+    CaptureApiPigeonInternal.deepHash(value: ladderLevel, hasher: &hasher)
     CaptureApiPigeonInternal.deepHash(value: batteryLevel, hasher: &hasher)
     CaptureApiPigeonInternal.deepHash(value: freeDiskBytes, hasher: &hasher)
     CaptureApiPigeonInternal.deepHash(value: droppedFrames, hasher: &hasher)
@@ -497,7 +522,7 @@ struct CaptureStatus: Hashable, CustomStringConvertible {
   }
 
   public var description: String {
-    return "CaptureStatus(running: \(String(describing: running)), width: \(String(describing: width)), height: \(String(describing: height)), actualFps: \(String(describing: actualFps)), stabilizationDisabled: \(String(describing: stabilizationDisabled)), exposureLocked: \(String(describing: exposureLocked)), exposureSeconds: \(String(describing: exposureSeconds)), iso: \(String(describing: iso)), whiteBalanceLocked: \(String(describing: whiteBalanceLocked)), whiteBalanceKelvin: \(String(describing: whiteBalanceKelvin)), focusLocked: \(String(describing: focusLocked)), intrinsicsAvailable: \(String(describing: intrinsicsAvailable)), thermalState: \(String(describing: thermalState)), batteryLevel: \(String(describing: batteryLevel)), freeDiskBytes: \(String(describing: freeDiskBytes)), droppedFrames: \(String(describing: droppedFrames)), timecodeFailures: \(String(describing: timecodeFailures)), recordingFile: \(String(describing: recordingFile)), recordingSegment: \(String(describing: recordingSegment)), streamState: \(String(describing: streamState)), streamDetail: \(String(describing: streamDetail)), streamDroppedFrames: \(String(describing: streamDroppedFrames)), streamBitrateBps: \(String(describing: streamBitrateBps)))"
+    return "CaptureStatus(running: \(String(describing: running)), width: \(String(describing: width)), height: \(String(describing: height)), actualFps: \(String(describing: actualFps)), stabilizationDisabled: \(String(describing: stabilizationDisabled)), exposureLocked: \(String(describing: exposureLocked)), exposureSeconds: \(String(describing: exposureSeconds)), iso: \(String(describing: iso)), whiteBalanceLocked: \(String(describing: whiteBalanceLocked)), whiteBalanceKelvin: \(String(describing: whiteBalanceKelvin)), focusLocked: \(String(describing: focusLocked)), intrinsicsAvailable: \(String(describing: intrinsicsAvailable)), thermalState: \(String(describing: thermalState)), pressure: \(String(describing: pressure)), ladderLevel: \(String(describing: ladderLevel)), batteryLevel: \(String(describing: batteryLevel)), freeDiskBytes: \(String(describing: freeDiskBytes)), droppedFrames: \(String(describing: droppedFrames)), timecodeFailures: \(String(describing: timecodeFailures)), recordingFile: \(String(describing: recordingFile)), recordingSegment: \(String(describing: recordingSegment)), streamState: \(String(describing: streamState)), streamDetail: \(String(describing: streamDetail)), streamDroppedFrames: \(String(describing: streamDroppedFrames)), streamBitrateBps: \(String(describing: streamBitrateBps)))"
   }
 }
 
@@ -569,26 +594,32 @@ private class CaptureApiPigeonCodecReader: FlutterStandardReader {
     case 131:
       let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
       if let enumResultAsInt = enumResultAsInt {
-        return RigCommand(rawValue: enumResultAsInt)
+        return SystemPressure(rawValue: enumResultAsInt)
       }
       return nil
     case 132:
       let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
       if let enumResultAsInt = enumResultAsInt {
-        return LinkState(rawValue: enumResultAsInt)
+        return RigCommand(rawValue: enumResultAsInt)
       }
       return nil
     case 133:
       let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
       if let enumResultAsInt = enumResultAsInt {
-        return StreamState(rawValue: enumResultAsInt)
+        return LinkState(rawValue: enumResultAsInt)
       }
       return nil
     case 134:
-      return CaptureSettings.fromList(self.readValue() as! [Any?])
+      let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
+      if let enumResultAsInt = enumResultAsInt {
+        return StreamState(rawValue: enumResultAsInt)
+      }
+      return nil
     case 135:
-      return CaptureStatus.fromList(self.readValue() as! [Any?])
+      return CaptureSettings.fromList(self.readValue() as! [Any?])
     case 136:
+      return CaptureStatus.fromList(self.readValue() as! [Any?])
+    case 137:
       return ClockSample.fromList(self.readValue() as! [Any?])
     default:
       return super.readValue(ofType: type)
@@ -604,23 +635,26 @@ private class CaptureApiPigeonCodecWriter: FlutterStandardWriter {
     } else if let value = value as? ThermalState {
       super.writeByte(130)
       super.writeValue(value.rawValue)
-    } else if let value = value as? RigCommand {
+    } else if let value = value as? SystemPressure {
       super.writeByte(131)
       super.writeValue(value.rawValue)
-    } else if let value = value as? LinkState {
+    } else if let value = value as? RigCommand {
       super.writeByte(132)
       super.writeValue(value.rawValue)
-    } else if let value = value as? StreamState {
+    } else if let value = value as? LinkState {
       super.writeByte(133)
       super.writeValue(value.rawValue)
-    } else if let value = value as? CaptureSettings {
+    } else if let value = value as? StreamState {
       super.writeByte(134)
-      super.writeValue(value.toList())
-    } else if let value = value as? CaptureStatus {
+      super.writeValue(value.rawValue)
+    } else if let value = value as? CaptureSettings {
       super.writeByte(135)
       super.writeValue(value.toList())
-    } else if let value = value as? ClockSample {
+    } else if let value = value as? CaptureStatus {
       super.writeByte(136)
+      super.writeValue(value.toList())
+    } else if let value = value as? ClockSample {
+      super.writeByte(137)
       super.writeValue(value.toList())
     } else {
       super.writeValue(value)
