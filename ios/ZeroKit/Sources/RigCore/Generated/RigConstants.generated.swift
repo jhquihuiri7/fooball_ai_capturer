@@ -1,0 +1,431 @@
+// Generado por tools/export_rig_constants.py del repo football-ai. NO EDITAR A MANO.
+//
+// Fuente de verdad: libs/vision/constants.py. Las unidades y el porqué de cada
+// número viven en el comentario de cada constante, copiados de allí. Para
+// regenerarlo y sincronizarlo:
+//
+//     uv run python tools/export_rig_constants.py
+//     uv run python tools/export_golden.py --sync <ruta de la app>
+//
+// tests/unit/test_export_rig_constants.py falla si este fichero se queda atrás.
+
+import Foundation
+
+/// Las constantes de comportamiento de libs/vision, con los nombres de Python en
+/// camelCase. En RigCore no se escribe ninguna a mano: se usa esta enumeración.
+public enum RigConstants {
+    /// Nanosegundos (16 ms). Desfase máximo para dar dos frames por simultáneos.
+    ///
+    /// Es medio frame a 30 fps, que es exactamente el peor caso de dos sensores que corren
+    /// libres: sin genlock, sus instantes de exposición caen en cualquier punto del intervalo
+    /// y el desfase no se puede reducir por software. Lo que se puede es medirlo, y el ADR
+    /// 0012 (decisión 2) deja esa medida en el soporte.
+    ///
+    /// Qué significa físicamente, que es lo que decide si el umbral vale: a 16 ms, un balón a
+    /// 30 m/s recorre 50 cm y un jugador a 7 m/s recorre 12 cm. En la costura eso es
+    /// desdoblamiento visible para el balón y despreciable para el jugador. Subirlo empareja
+    /// más frames a costa de coser instantes cada vez más distintos; bajarlo deja huérfanos
+    /// frames que sí eran del mismo instante.
+    /// (Python: `RIG_PAIR_TOLERANCE_NS`.)
+    public static let rigPairToleranceNs: Int = 16000000
+
+    /// Frames que cada lado retiene esperando a su pareja.
+    ///
+    /// Es la respuesta a la pregunta «¿el otro frame viene de camino o ya no llega?», y se
+    /// responde con espacio en vez de con tiempo: mientras el hueco no se llene, se espera; en
+    /// cuanto se llena, el frame más antiguo sale solo y el programa sigue con una sola cámara
+    /// (ADR 0012, decisión 4).
+    ///
+    /// Tres frames son ~100 ms a 30 fps de latencia añadida en el peor caso, que cabe de sobra
+    /// en el presupuesto de la delay line de D2 (200 ms). Es además la cota de la cola, que
+    /// CLAUDE.md §2 exige acotada: al llenarse se descarta el frame más viejo, nunca se encola
+    /// más.
+    /// (Python: `RIG_PAIR_BUFFER_FRAMES`.)
+    public static let rigPairBufferFrames: Int = 3
+
+    /// Fracción [0,1] de parejas completas por debajo de la cual el soporte se considera
+    /// desincronizado.
+    ///
+    /// No hay una medida directa de «los relojes se han ido»: lo que se ve es que dejan de
+    /// salir parejas completas, porque el desfase supera `RIG_PAIR_TOLERANCE_NS` y cada frame
+    /// sale huérfano. Con los dos móviles sanos, lo normal es 1.0 salvo pérdidas de red
+    /// sueltas, así que 0.90 ya es señal de que algo va mal y no ruido.
+    /// (Python: `RIG_MIN_PAIR_COMPLETENESS`.)
+    public static let rigMinPairCompleteness: Double = 0.9
+
+    /// Hz. Diferencia máxima de cadencia admitida entre las dos cámaras.
+    ///
+    /// Tolera la pareja 29.97 / 30, que es la misma cadencia con distinta declaración, y
+    /// rechaza 25 / 30, que no lo es. Mezclar cadencias no produce un error visible: produce
+    /// un desfase que crece un frame cada pocos segundos, y eso hay que pararlo al construir
+    /// la fuente, no descubrirlo a mitad de partido.
+    /// (Python: `RIG_MAX_FPS_MISMATCH_HZ`.)
+    public static let rigMaxFpsMismatchHz: Double = 0.5
+
+    /// Radianes (~1.15°). Separación angular por debajo de la cual dos detecciones, una de
+    /// cada cámara, se consideran el mismo objeto (ADR 0012, decisión 3).
+    ///
+    /// El valor sale del paralaje, que es el error irreducible de este montaje. Con las lentes
+    /// a ~10 cm, un objeto a 5 m se ve desde las dos cámaras con 0.02 rad de diferencia; a 15 m
+    /// son 0.007 y a 40 m, 0.0025. Se dimensiona para el caso peor —la banda cercana, justo bajo
+    /// el soporte— porque ahí es donde el mismo jugador se vería como dos si el umbral fuera más
+    /// estrecho.
+    ///
+    /// Cuesta lo que cuesta: a 40 m, 0.02 rad son ~80 cm, así que dos jugadores muy juntos en el
+    /// solape pueden fundirse en uno. Es el compromiso correcto para lo que alimenta —el centro
+    /// de acción y el planificador de ROIs, que razonan sobre dónde está el juego— y sería el
+    /// umbral equivocado para contar jugadores.
+    /// (Python: `RIG_FUSE_MAX_ANGLE_RAD`.)
+    public static let rigFuseMaxAngleRad: Double = 0.02
+
+    /// Puntos ORB que se extraen por imagen.
+    ///
+    /// El solape entre las dos cámaras son ~20° de los ~106° de cada una: menos de una quinta
+    /// parte de la imagen. Con los 500 puntos por defecto de ORB, repartidos por toda la imagen,
+    /// al solape le tocarían unos 90, y tras el filtro de ratio y RANSAC no quedarían los
+    /// suficientes para fiarse del resultado.
+    /// (Python: `RIG_CALIB_MAX_FEATURES`.)
+    public static let rigCalibMaxFeatures: Int = 4000
+
+    /// Cociente máximo entre la distancia del mejor emparejamiento y la del segundo (prueba
+    /// de Lowe). El césped es una textura repetitiva: un punto de hierba se parece a cien, y sin
+    /// este filtro RANSAC recibe tantos emparejamientos falsos que deja de converger.
+    /// (Python: `RIG_CALIB_RATIO_TEST`.)
+    public static let rigCalibRatioTest: Double = 0.75
+
+    /// Píxeles. Error de reproyección máximo para que un emparejamiento cuente como inlier.
+    ///
+    /// Se expresa en píxeles y se convierte a radianes con la focal de cada cámara, porque la
+    /// precisión de ORB es de píxeles: el mismo umbral en radianes sería exigentísimo en 4K y
+    /// laxísimo en una vista previa. 3 px absorben el ruido de localización y el paralaje de los
+    /// objetos del fondo, que son los que dominan el solape.
+    /// (Python: `RIG_CALIB_RANSAC_THRESHOLD_PX`.)
+    public static let rigCalibRansacThresholdPx: Double = 3.0
+
+    /// Hipótesis que prueba RANSAC. Una rotación se resuelve con dos direcciones, así que con
+    /// la mitad de emparejamientos falsos cada hipótesis acierta con probabilidad 0.25, y 500
+    /// iteraciones fallan todas con probabilidad 0.75^500: nunca.
+    /// (Python: `RIG_CALIB_RANSAC_ITERATIONS`.)
+    public static let rigCalibRansacIterations: Int = 500
+
+    /// Semilla de RANSAC. Fija a propósito: la misma pareja de imágenes tiene que dar
+    /// siempre la misma calibración, o un test que pasa hoy falla mañana sin haber cambiado
+    /// nada.
+    /// (Python: `RIG_CALIB_RANSAC_SEED`.)
+    public static let rigCalibRansacSeed: Int = 0
+
+    /// Emparejamientos coherentes mínimos para dar una rotación por buena.
+    ///
+    /// Dos bastan matemáticamente. Treinta es lo que hace falta para que una rotación que
+    /// explica esos puntos por casualidad sea imposible en la práctica, y para que el residuo
+    /// medio sea una medida y no un accidente.
+    /// (Python: `RIG_CALIB_MIN_INLIERS`.)
+    public static let rigCalibMinInliers: Int = 30
+
+    /// Cuántas celdas del código cabrían a lo ancho del frame. Fija el tamaño de la celda
+    /// en proporción a la imagen —16 px en 4K, 8 en 1080p— para que el código se lea igual en
+    /// el original que en una copia reescalada. Solo se usan las 64 primeras.
+    /// (Python: `RIG_TIMECODE_CELLS_ACROSS`.)
+    public static let rigTimecodeCellsAcross: Int = 240
+
+    /// Píxeles. Lado mínimo de una celda. Por debajo, el submuestreo de color 4:2:0 y los
+    /// bloques del códec ya mezclan celdas vecinas.
+    /// (Python: `RIG_TIMECODE_MIN_CELL_PX`.)
+    public static let rigTimecodeMinCellPx: Int = 4
+
+    /// Los 8 primeros bits del código (10110010). Sirven para dos cosas: saber que el frame
+    /// lleva código —un cielo liso no se parece a este patrón— y calibrar el umbral entre
+    /// blanco y negro con los valores reales que dejó el códec, en vez de suponer 128.
+    /// (Python: `RIG_TIMECODE_PREAMBLE`.)
+    public static let rigTimecodePreamble: Int = 178
+
+    /// (Python: `RIG_TIMECODE_LUMA_ONE`.)
+    public static let rigTimecodeLumaOne: Int = 235
+
+    /// Luma de un bit a 1 y a 0. Son el blanco y el negro de rango limitado (BT.709), que es
+    /// lo que codifica el iPhone: fuera de ese rango el códec recorta y el contraste baja.
+    /// (Python: `RIG_TIMECODE_LUMA_ZERO`.)
+    public static let rigTimecodeLumaZero: Int = 16
+
+    /// Fracción central de cada celda que se promedia al leer. Los bordes de la celda son
+    /// donde el códec emborrona con la vecina; el centro conserva el valor.
+    /// (Python: `RIG_TIMECODE_SAMPLE_FRACTION`.)
+    public static let rigTimecodeSampleFraction: Double = 0.5
+
+    /// Ancho de banda de la densidad sobre el yaw, en radianes (10°).
+    ///
+    /// La §16.2 usa 8 m sobre el eje largo del campo. A los ~45 m que hay de media del soporte a
+    /// la jugada, 8 m se ven bajo 10°. Más estrecho y la densidad sigue a cada jugador suelto;
+    /// más ancho y dos grupos separados se funden en uno.
+    /// (Python: `ACTION_KDE_BANDWIDTH_RAD`.)
+    public static let actionKdeBandwidthRad: Double = 0.175
+
+    /// Paso de la rejilla donde se evalúa la densidad, en radianes (2°).
+    ///
+    /// Un quinto del ancho de banda: suficiente para no perderse un pico y lo bastante grueso
+    /// para que el barrido del lienzo entero sean un centenar de celdas. La moda no sale de la
+    /// rejilla —se refina con la media de los jugadores de alrededor—, así que este paso no
+    /// cuantiza la salida.
+    /// (Python: `ACTION_KDE_STEP_RAD`.)
+    public static let actionKdeStepRad: Double = 0.035
+
+    /// Separación mínima entre la moda principal y la segunda para contarlas como dos, en
+    /// radianes (20°). Por debajo son la misma cresta con dos cimas, no dos grupos.
+    /// (Python: `ACTION_MODE_SEPARATION_RAD`.)
+    public static let actionModeSeparationRad: Double = 0.35
+
+    /// Jugadores de campo que hacen falta para que haya algo que llamar «la acción».
+    ///
+    /// Con dos o menos, el centroide es la posición de un jugador y la dispersión no significa
+    /// nada. Es mejor no dar evidencia que dar una mala: el director se queda donde estaba.
+    /// (Python: `ACTION_MIN_PLAYERS`.)
+    public static let actionMinPlayers: Int = 3
+
+    /// Jugadores detectados a partir de los cuales la confianza ya no sube. Son los 22 de la
+    /// §16.2 menos los que en cualquier momento están tapados o fuera de cuadro.
+    /// (Python: `ACTION_FULL_SQUAD`.)
+    public static let actionFullSquad: Int = 14
+
+    /// Confianza de partida de la evidencia de jugadores, de §16.2.
+    /// (Python: `ACTION_CONFIDENCE_BASE`.)
+    public static let actionConfidenceBase: Double = 0.25
+
+    /// Cuánto suma tener el equipo entero detectado, de §16.2.
+    /// (Python: `ACTION_CONFIDENCE_PER_SQUAD`.)
+    public static let actionConfidencePerSquad: Double = 0.3
+
+    /// Cuánto suma que haya una sola moda clara, de §16.2.
+    /// (Python: `ACTION_CONFIDENCE_PER_UNIMODAL`.)
+    public static let actionConfidencePerUnimodal: Double = 0.25
+
+    /// Lo que aportaría el campo de convergencia de §16.2 paso 3, **y que este v0 no puede
+    /// aportar**: vota hacia dónde se mueve cada jugador, y sin tracker no hay velocidad.
+    ///
+    /// No se redistribuye entre los otros términos a propósito. La confianza de esta evidencia
+    /// tope en 0.80 mientras falte, y eso es exactamente lo que se quiere: cuando llegue el balón
+    /// (TASK V6), la fusión por precisión de §17.2 preferirá el balón por sí sola, sin que nadie
+    /// tenga que ajustar un peso a mano. El término vuelve con el tracker.
+    /// (Python: `ACTION_CONFIDENCE_CONVERGENCE`.)
+    public static let actionConfidenceConvergence: Double = 0.2
+
+    /// Confianza mínima con la que se divide para sacar la incertidumbre, de §16.2. Evita que
+    /// una evidencia malísima produzca una incertidumbre infinita en vez de solo muy grande.
+    /// (Python: `ACTION_CONFIDENCE_FLOOR`.)
+    public static let actionConfidenceFloor: Double = 0.15
+
+    /// Incertidumbre de la evidencia con confianza 1, en radianes (6°).
+    ///
+    /// La §16.2 la fija en 6 m; a la distancia típica a la jugada son unos 6°. Es lo que entra
+    /// como la incertidumbre de los jugadores en la fusión por precisión de §17.2
+    /// cuando exista el balón.
+    /// (Python: `ACTION_BASE_SIGMA_RAD`.)
+    public static let actionBaseSigmaRad: Double = 0.105
+
+    /// Frecuencia natural del paneo (§18.4 `pan_x.fn_base`).
+    /// (Python: `DIRECTOR_YAW_FN_BASE_HZ`.)
+    public static let directorYawFnBaseHz: Double = 0.45
+
+    /// Hz que se suman con urgencia 1 (§18.4 `pan_x.fn_urgent_gain`).
+    /// (Python: `DIRECTOR_YAW_URGENT_GAIN_HZ`.)
+    public static let directorYawUrgentGainHz: Double = 0.35
+
+    /// 23.4 °/s. Los 900 px/s de §18.4, que el propio blueprint anota como ~23 °/s.
+    /// (Python: `DIRECTOR_YAW_V_MAX_RAD_S`.)
+    public static let directorYawVMaxRadS: Double = 0.408
+
+    /// 46.9 °/s². Los 1800 px/s² de §18.4.
+    /// (Python: `DIRECTOR_YAW_A_MAX_RAD_S2`.)
+    public static let directorYawAMaxRadS2: Double = 0.819
+
+    /// 65 °/s. Los 2500 px/s de §18.4: lo deprisa que se le deja moverse al objetivo.
+    /// (Python: `DIRECTOR_YAW_SLEW_RAD_S`.)
+    public static let directorYawSlewRadS: Double = 1.134
+
+    /// Fracción del plano que engancha el paneo (§18.4 `pan_x.dead_out_frac`).
+    /// (Python: `DIRECTOR_YAW_DEAD_OUT_FRAC`.)
+    public static let directorYawDeadOutFrac: Double = 0.09
+
+    /// La que lo suelta (§18.4 `pan_x.dead_in_frac`). La mitad: esa diferencia es la
+    /// histéresis, y también el error residual con el que la cámara se queda quieta.
+    /// (Python: `DIRECTOR_YAW_DEAD_IN_FRAC`.)
+    public static let directorYawDeadInFrac: Double = 0.045
+
+    /// Dónde empieza a frenar contra el borde de lo que se ve (§18.4 `pan_x.wall_margin_frac`).
+    /// (Python: `DIRECTOR_YAW_WALL_MARGIN_FRAC`.)
+    public static let directorYawWallMarginFrac: Double = 0.05
+
+    /// §18.4 `pan_y.fn_base`. Más baja que la del yaw a propósito: una cámara que cabecea se
+    /// nota mucho más que una que panea, porque el horizonte es la referencia del espectador.
+    /// (Python: `DIRECTOR_PITCH_FN_BASE_HZ`.)
+    public static let directorPitchFnBaseHz: Double = 0.28
+
+    /// §18.4 `pan_y.fn_urgent_gain`.
+    /// (Python: `DIRECTOR_PITCH_URGENT_GAIN_HZ`.)
+    public static let directorPitchUrgentGainHz: Double = 0.15
+
+    /// 6.8 °/s. Los 260 px/s de §18.4.
+    /// (Python: `DIRECTOR_PITCH_V_MAX_RAD_S`.)
+    public static let directorPitchVMaxRadS: Double = 0.118
+
+    /// 18.2 °/s². Los 700 px/s² de §18.4.
+    /// (Python: `DIRECTOR_PITCH_A_MAX_RAD_S2`.)
+    public static let directorPitchAMaxRadS2: Double = 0.318
+
+    /// 23.4 °/s. Los 900 px/s de §18.4.
+    /// (Python: `DIRECTOR_PITCH_SLEW_RAD_S`.)
+    public static let directorPitchSlewRadS: Double = 0.408
+
+    /// §18.4 `pan_y.dead_out_frac`, sobre el campo de visión **vertical**. Bastante mayor que
+    /// la del yaw: el juego se mueve a lo largo del campo, no a lo alto.
+    /// (Python: `DIRECTOR_PITCH_DEAD_OUT_FRAC`.)
+    public static let directorPitchDeadOutFrac: Double = 0.15
+
+    /// §18.4 `pan_y.dead_in_frac`.
+    /// (Python: `DIRECTOR_PITCH_DEAD_IN_FRAC`.)
+    public static let directorPitchDeadInFrac: Double = 0.07
+
+    /// §18.4 no lo da para el eje vertical; se hereda del horizontal.
+    /// (Python: `DIRECTOR_PITCH_WALL_MARGIN_FRAC`.)
+    public static let directorPitchWallMarginFrac: Double = 0.05
+
+    /// §18.4 `zoom_w.fn_base`. La más baja de las tres: un zoom que respira es lo que más
+    /// delata a una cámara automática.
+    /// (Python: `DIRECTOR_HFOV_FN_BASE_HZ`.)
+    public static let directorHfovFnBaseHz: Double = 0.22
+
+    /// §18.4 no le da ganancia por urgencia al zoom, y es coherente: cuando hay prisa se panea
+    /// para no perder la jugada, no se cambia de plano.
+    /// (Python: `DIRECTOR_HFOV_URGENT_GAIN_HZ`.)
+    public static let directorHfovUrgentGainHz: Double = 0.0
+
+    /// 10.9 °/s de campo de visión. Los 520 px/s de ancho de recorte de §18.4, convertidos en
+    /// el plano NORMAL, que es donde se pasa la mayor parte del partido.
+    /// (Python: `DIRECTOR_HFOV_V_MAX_RAD_S`.)
+    public static let directorHfovVMaxRadS: Double = 0.19
+
+    /// 18.9 °/s². Los 900 px/s² de §18.4, con la misma conversión.
+    /// (Python: `DIRECTOR_HFOV_A_MAX_RAD_S2`.)
+    public static let directorHfovAMaxRadS2: Double = 0.33
+
+    /// 20 °/s. §18.4 no lo da: el objetivo del zoom no viene de un detector ruidoso sino de la
+    /// gramática de planos, que ya trae sus propios tiempos de permanencia (V5). Se pone por
+    /// encima de `v_max` para no limitar dos veces la misma cosa.
+    /// (Python: `DIRECTOR_HFOV_SLEW_RAD_S`.)
+    public static let directorHfovSlewRadS: Double = 0.349
+
+    /// **Sin zona muerta**, a diferencia de los otros dos ejes.
+    ///
+    /// Vale para los dos umbrales. El objetivo del zoom es una decisión deliberada de la gramática
+    /// de planos, no una estimación ruidosa que haya que filtrar: si hubiera zona muerta, el plano
+    /// se quedaría permanentemente a un trozo del que se pidió, y quien lo pidió no tendría forma
+    /// de saberlo. Lo que evita que el zoom vaya y venga es el dwell de §18.4, que es de V5.
+    /// (Python: `DIRECTOR_HFOV_DEAD_FRAC`.)
+    public static let directorHfovDeadFrac: Double = 0.0
+
+    /// Frena antes de llegar al plano más cerrado que la lente puede servir (V0a) y al más
+    /// abierto que las cámaras cubren. Chocar contra el tope del zoom se ve como un tirón.
+    /// (Python: `DIRECTOR_HFOV_WALL_MARGIN_FRAC`.)
+    public static let directorHfovWallMarginFrac: Double = 0.05
+
+    /// Amortiguamiento de los tres ejes (§18.4 lo fija a 1.0 en los tres).
+    ///
+    /// Es el crítico: la cámara llega al objetivo lo más rápido posible **sin pasarse**. Un
+    /// rebote, por pequeño que sea, el ojo lo lee como un error de quien opera.
+    /// (Python: `DIRECTOR_ZETA`.)
+    public static let directorZeta: Double = 1.0
+
+    /// Cuánto frena el muro blando, en múltiplos del amortiguamiento crítico del eje.
+    ///
+    /// Se aplica en el fondo del margen y se desvanece hacia su borde interior, así que un eje
+    /// que entre despacio casi no lo nota y uno que entre lanzado se para. Seis veces el crítico
+    /// suena mucho y no lo es: solo actúa dentro del último 5 % del recorrido y solo contra el
+    /// movimiento hacia fuera, que es exactamente donde se quiere que sea contundente.
+    /// (Python: `DIRECTOR_WALL_DAMPING`.)
+    public static let directorWallDamping: Double = 6.0
+
+    /// Paso **máximo** de la rejilla donde se muestrea la rampa de la costura, en píxeles.
+    ///
+    /// La costura es un plano que pasa por el centro óptico, así que en el plano del programa es
+    /// una recta y su rampa es una función suave. Muestrearla cada 16 px y estirar cuesta la
+    /// décima parte que hacerlo píxel a píxel y no se distingue: es un difuminado, y su perfil
+    /// exacto no lo mira nadie.
+    ///
+    /// Es un máximo y no un valor fijo porque el difuminado no siempre mide lo mismo: en una
+    /// salida pequeña, o con una costura estrecha, 16 px son más anchos que la propia rampa, y
+    /// entonces estirar la ensancha en vez de reproducirla. `ViewRenderer` aprieta el paso hasta
+    /// que caben cuatro muestras dentro del difuminado.
+    /// (Python: `PROGRAM_SEAM_GRID_PX`.)
+    public static let programSeamGridPx: Int = 16
+
+    /// Puntos por lado con los que se dibuja el borde del encuadre sobre el lienzo.
+    ///
+    /// El borde es recto en el plano del programa y curvo sobre el cilindro desenrollado. Con
+    /// cuatro esquinas saldría un rectángulo que miente justo en los planos abiertos, que son
+    /// donde más se curva; con nueve puntos por lado el error queda por debajo del píxel en el
+    /// monitor, que es donde se mira.
+    /// (Python: `VIEW_OUTLINE_SAMPLES`.)
+    public static let viewOutlineSamples: Int = 9
+
+    /// Distancia de la cámara a la jugada, en metros, por defecto.
+    ///
+    /// El soporte va en la banda a la altura del centro del campo (ADR 0012). Desde ahí, al centro
+    /// de la jugada media hay el medio ancho del campo más lo que el trípode esté retirado de la
+    /// línea: 34 + 6. Es lo que convierte los metros de §20.5 en grados de encuadre, y sale de
+    /// dónde acabe el trípode (M3 de `docs/MEDICIONES.md`).
+    /// (Python: `ACTION_DISTANCE_M`.)
+    public static let actionDistanceM: Double = 40.0
+
+    /// Dispersión de los jugadores por debajo de la cual se cierra a ATTACK (§20.5, regla 7).
+    /// Es juego concentrado: un ataque organizado en el área.
+    /// (Python: `SHOT_TIGHT_M`.)
+    public static let shotTightM: Double = 25.0
+
+    /// Dispersión por encima de la cual se abre a WIDE (§20.5, regla 5). Los equipos muy
+    /// estirados son una transición, y en una transición lo que se pierde es la jugada.
+    /// (Python: `SHOT_STRETCHED_M`.)
+    public static let shotStretchedM: Double = 45.0
+
+    /// Metros que tiene que contener el plano abierto. Un equipo completamente estirado.
+    ///
+    /// No es el campo entero: que la cámara **alcance** las dos esquinas es otro presupuesto, el
+    /// angular, y lo cubre la cobertura del soporte.
+    /// (Python: `SHOT_WIDE_M`.)
+    public static let shotWideM: Double = 70.0
+
+    /// Aire a los lados del grupo, en veces su dispersión. Un plano tan ancho como el grupo
+    /// deja a los de los extremos partidos por el borde: el margen es lo que separa un encuadre
+    /// de un recorte.
+    /// (Python: `SHOT_HEADROOM`.)
+    public static let shotHeadroom: Double = 1.3
+
+    /// Confianza mínima de la evidencia para cerrar a ATTACK (§20.5, regla 7).
+    ///
+    /// La regla original pide `conf_ball > 0.6`; sin balón todavía (V6), el sustituto es la
+    /// confianza de los jugadores. Cerrar es la decisión que más castiga equivocarse —lo que se
+    /// queda fuera de cuadro no se recupera—, así que no se cierra con una estimación dudosa.
+    /// (Python: `SHOT_TIGHT_CONFIDENCE`.)
+    public static let shotTightConfidence: Double = 0.6
+
+    /// Segundos mínimos en un plano antes de poder cambiar (§18.4 `zoom_w.dwell_min_s`).
+    ///
+    /// Es lo que impide que el zoom respire. Las reglas urgentes se lo saltan: perder la jugada
+    /// por esperar dos segundos es peor que un cambio de plano rápido.
+    /// (Python: `SHOT_DWELL_MIN_S`.)
+    public static let shotDwellMinS: Double = 2.0
+
+    /// Segundos que una condición tiene que sostenerse antes de entrar en su plano
+    /// (§18.4 `zoom_w.dwell_enter_s`). Un grupo que se junta medio segundo no es un ataque.
+    /// (Python: `SHOT_DWELL_ENTER_S`.)
+    public static let shotDwellEnterS: Double = 1.2
+
+    /// Lo mismo para abrir (§18.4 `zoom_w.dwell_exit_wide_s`). **Abrir es mucho más rápido que
+    /// cerrar**, y es la asimetría más importante de la gramática: quedarse corto de plano cuesta
+    /// la jugada, y quedarse ancho solo cuesta que se vea algo lejos.
+    /// (Python: `SHOT_DWELL_EXIT_WIDE_S`.)
+    public static let shotDwellExitWideS: Double = 0.4
+
+    /// Segundos de plano de situación tras un saque de centro o un gol (§20.5, regla 3).
+    /// Después de un gol lo que se quiere ver es la celebración y el campo, no el balón.
+    /// (Python: `SHOT_SITUATION_S`.)
+    public static let shotSituationS: Double = 4.0
+}
