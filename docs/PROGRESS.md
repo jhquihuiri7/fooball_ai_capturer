@@ -12,6 +12,29 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-03 · IOS-51 — decodificador H.264 a IOSurface para Metal · ✅
+
+**Hecho**
+- `RigCore/Media/NalUnits.swift` (puro): AVCC ↔ Annex B con códigos de arranque de 3
+  y 4 bytes, catálogo de tipos y recorrido que para ante una longitud corrupta.
+- `RigMedia/Video/VideoDecoder.swift`: VTDecompressionSession con el formato sacado
+  de los SPS/PPS EN BANDA (el emisor los pega a cada IDR: `H264ParameterSets`),
+  destino NV12 sobre IOSurface compatible con Metal, RealTime, cola de salida de 2
+  huecos (dropOldest) y SEI leída por fotograma. Tras un hueco (`reportGap()`, lo
+  llama el transporte), un error o antes del primer SPS: `onNeedsIDR` y todo lo que
+  no sea IDR se tira hasta reabrir.
+- Tests: NalUnitsTests (4) y VideoDecoderTests (2): la ida y vuelta con IOS-50
+  (30 fotogramas 720p, SEI 30/30, PSNR ≥38 en la muestra, IOSurface presente) y el
+  hueco inyectado que pide IDR, no deja salir nada sin referencia y se reabre con el
+  IDR. Paquete 109/109, capas limpias, build ✓.
+
+**Fuera**: el p99 ≤10 ms en el iPhone queda como objetivo para el banco de regresión
+(IOS-18), igual que la latencia del codificador.
+
+**Siguiente**: IOS-52 (transporte de las partes) espera IOS-11/16 de campo y SPK-02.
+
+---
+
 ## 2026-10-03 · IOS-15 — volcado NV12 crudo para el salto de dominio · 🚧 falta el partido de prueba
 
 **Hecho**

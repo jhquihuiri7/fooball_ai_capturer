@@ -36,4 +36,10 @@ public enum VideoConstants {
     /// atasca más que eso, lo correcto es tirar lo viejo y pedir IDR, no encolar
     /// latencia (CLAUDE.md §2 del servidor).
     public static let encodedQueueSlots = 16
+
+    /// Huecos de la cola de salida del decodificador (IOS-51).
+    ///
+    /// 2: el render quiere el fotograma más reciente; más huecos solo serían
+    /// latencia entre la cámara del otro móvil y el programa.
+    public static let decodedQueueSlots = 2
 }
