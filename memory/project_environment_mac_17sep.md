@@ -35,6 +35,9 @@ dart run pigeon --input pigeons/capture_api.dart    # regenerar el contrato (con
 ## Xcode
 
 - Xcode 26.6, iOS SDK 26.5, CocoaPods 1.16.2 (sin Podfile: no hay plugins todavía).
+- **Metal Toolchain 17F109 instalado el 3-oct-2026** (`xcodebuild -downloadComponent
+  MetalToolchain`): sin él, `flutter build ios` falla al compilar los `.metal` de
+  ZeroKit para dispositivo.
 - **Un Swift nuevo hay que registrarlo en el target Runner**; `flutter build` no lo hace.
   Con la gema `xcodeproj` que trae el CocoaPods de Homebrew (no fijar `GEM_PATH`):
 

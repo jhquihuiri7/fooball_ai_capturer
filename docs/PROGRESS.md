@@ -12,6 +12,42 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-03 · IOS-05 — os_signpost, Logger, telemetría de 1 Hz y MetricKit · ✅
+
+Lo que el móvil dice de sí mismo, sin que nadie tenga que estar delante.
+
+**Hecho**
+- `RigMedia/Obs/Signposts.swift`: OSSignposter en Points of Interest con las nueve
+  etapas (capture, blit, preprocess, infer, decode, render, encode, link, srt),
+  `measure {}` para bloques y eventos puntuales. El código nuevo usa `os.Logger`.
+- `RigCore/Runtime/LatencyHistogram.swift`: cubos fijos sin reservas (finos por debajo
+  de los 33 ms de un frame), p50/p90/p99 por el borde superior del cubo —pesimista por
+  un cubo, que para vigilar la escalera es lo que se quiere— y el último cubo recoge
+  los atípicos.
+- `RigCore/Runtime/TelemetrySnapshot.swift` (Codable): el contrato de REF-45 en
+  snake_case —rig_ms, fps, did_drop, descartes por cola, etapas con p50/p90/p99 y los
+  Hz reales, infer_ms_by_model, térmica y presión, nivel de la escalera, batería y
+  carga, memoria disponible, RTT y pérdidas del enlace, bitrate del programa— con
+  `jsonLine()` determinista (claves ordenadas).
+- `RigMedia/Obs/TelemetryWriter.swift`: una línea JSONL por segundo en
+  Documents/telemetry/, por cola acotada (8 fotos: la telemetría se tira, el vídeo
+  no); un solo hilo escribe (cola serie), y el modo sin auto-drenado deja los tests
+  sin carreras.
+- `RigMedia/Obs/MetricKitSubscriber.swift`: los payloads de MXMetricManager y los
+  diagnósticos a Documents/metrics/, solo iOS (`#if canImport(MetricKit) && os(iOS)`).
+
+**Aceptación, medida en el Mac**
+- `swift test`: 44/44. El p99 del histograma cae en el cubo correcto con datos
+  sintéticos (99×10 ms + 1×200 ms → p99 = 12, máx = 250); la codificación del snapshot
+  es estable carácter a carácter y hace ida y vuelta; el JSONL escribe una línea por
+  foto y, saturado, tira lo viejo y conserva lo nuevo con las cuentas exactas.
+- El intervalo por etapa en Instruments se comprueba en el iPhone cuando toque sesión
+  con Instruments; el signpost queda emitiendo desde ya.
+
+**Siguiente**: IOS-06 (la escalera de degradación), que consume este snapshot.
+
+---
+
 ## 2026-10-03 · IOS-04 — colas acotadas, pools IOSurface y anillo de fotogramas · ✅
 
 Los cimientos de memoria del pipeline: nada se reserva dentro del bucle de frames y
