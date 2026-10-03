@@ -60,6 +60,11 @@ final class CaptureEngine: NSObject {
     /// Desfase al tiempo del soporte, en nanosegundos. Lo fija Dart.
     private var clockOffsetNs: Int64 = 0
 
+    /// El reloj nativo del soporte (IOS-13), cuando el enlace corre sobre Network. Si
+    /// está, manda sobre `clockOffsetNs`: extrapola la deriva por fotograma. RigClock
+    /// lleva su propio cerrojo, así que se lee desde la cola de la cámara sin más.
+    var rigClock: RigClock?
+
     /// Últimos PTS entregados, en tiempo del soporte. Es lo que Dart resta contra los
     /// del otro móvil para medir la fase de exposición (TASK A4).
     private var recentPts: [Int64] = []
@@ -538,7 +543,12 @@ extension CaptureEngine: AVCaptureVideoDataOutputSampleBufferDelegate {
         from connection: AVCaptureConnection
     ) {
         let original = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-        let rigTime = CMTimeAdd(original, CMTime(value: clockOffsetNs, timescale: 1_000_000_000))
+        // IOS-13: con el enlace sobre Network el desfase sale del reloj nativo, por
+        // fotograma y extrapolando la deriva, sin pasar por Pigeon. Con el Multipeer
+        // de hoy sigue llegando de Dart por setClockOffsetNs.
+        let originalNs = CMTimeConvertScale(original, timescale: 1_000_000_000, method: .default).value
+        let offsetNs = rigClock?.offsetAt(ns: originalNs) ?? clockOffsetNs
+        let rigTime = CMTimeAdd(original, CMTime(value: offsetNs, timescale: 1_000_000_000))
 
         let rigNs = Int64(CMTimeGetSeconds(rigTime) * 1_000_000_000)
         recentPts.append(rigNs)

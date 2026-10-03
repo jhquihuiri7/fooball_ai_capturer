@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:football_ai_capture/src/constants.dart';
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
@@ -137,6 +140,75 @@ void main() {
 
     test('sin ninguna muestra el desfase es cero', () {
       expect(RigClock().offsetAtNs(123456), 0);
+    });
+  });
+
+  // Los casos compartidos con el puerto Swift (IOS-13). El fichero lo congela
+  // tools/gen_rig_clock_cases.dart desde esta misma implementación: aquí es un candado
+  // de regresión; la paridad del puerto la vigila RigClockTests.swift.
+  group('casos compartidos Dart/Swift', () {
+    final Map<String, Object?> doc = jsonDecode(
+      File('ios/ZeroKit/Tests/RigCoreTests/Fixtures/rig_clock_cases.json')
+          .readAsStringSync(),
+    ) as Map<String, Object?>;
+
+    test('solveClockSample reproduce los casos congelados', () {
+      final List<Object?> casos = doc['solve_cases']! as List<Object?>;
+      expect(casos, isNotEmpty);
+      for (final Object? raw in casos) {
+        final Map<String, Object?> caso = raw! as Map<String, Object?>;
+        final ClockSample sample = solveClockSample(
+          t1: caso['t1']! as int,
+          t2: caso['t2']! as int,
+          t3: caso['t3']! as int,
+          t4: caso['t4']! as int,
+        );
+        expect(sample.roundTripNs, caso['round_trip_ns'], reason: '${caso['name']}');
+        expect(sample.offsetNs, caso['offset_ns'], reason: '${caso['name']}');
+        expect(sample.localMonotonicNs, caso['local_monotonic_ns'],
+            reason: '${caso['name']}');
+      }
+    });
+
+    test('RigClock reproduce los casos congelados', () {
+      final List<Object?> casos = doc['clock_cases']! as List<Object?>;
+      expect(casos, isNotEmpty);
+      for (final Object? raw in casos) {
+        final Map<String, Object?> caso = raw! as Map<String, Object?>;
+        final String nombre = caso['name']! as String;
+        final RigClock clock = RigClock();
+        for (final Object? m in caso['samples']! as List<Object?>) {
+          final Map<String, Object?> muestra = m! as Map<String, Object?>;
+          clock.add(ClockSample(
+            roundTripNs: muestra['round_trip_ns']! as int,
+            offsetNs: muestra['offset_ns']! as int,
+            localMonotonicNs: muestra['local_monotonic_ns']! as int,
+          ));
+        }
+
+        final Object? esperado = caso['estimate'];
+        if (esperado == null) {
+          expect(clock.estimate, isNull, reason: nombre);
+        } else {
+          final Map<String, Object?> e = esperado as Map<String, Object?>;
+          final ClockSyncEstimate estimate = clock.estimate!;
+          expect(estimate.offsetNs, e['offset_ns'], reason: nombre);
+          expect(estimate.driftPpm, closeTo(e['drift_ppm']! as num, 1e-9),
+              reason: nombre);
+          expect(estimate.samples, e['samples'], reason: nombre);
+          expect(estimate.bestRoundTripNs, e['best_round_trip_ns'], reason: nombre);
+          expect(estimate.uncertaintyNs, e['uncertainty_ns'], reason: nombre);
+        }
+
+        for (final Object? q in caso['offset_at']! as List<Object?>) {
+          final Map<String, Object?> consulta = q! as Map<String, Object?>;
+          expect(
+            clock.offsetAtNs(consulta['at_ns']! as int),
+            consulta['offset_ns'],
+            reason: '$nombre en ${consulta['at_ns']}',
+          );
+        }
+      }
     });
   });
 }

@@ -1193,6 +1193,10 @@ protocol CaptureFlutterApiProtocol {
   /// de la pregunta y `t4` llegada de la respuesta (reloj de este móvil); `t2` llegada y
   /// `t3` salida en el maestro (su reloj). Dart despeja el desfase (`solveClockSample`).
   @MainActor func onClockStamps(t1Ns t1NsArg: Int64, t2Ns t2NsArg: Int64, t3Ns t3NsArg: Int64, t4Ns t4NsArg: Int64) async throws
+  /// La estimación del reloj nativo del soporte (IOS-13), cuando el enlace corre
+  /// sobre Network. El desfase ya se aplica por fotograma en nativo, sin pasar por
+  /// Pigeon: esto es para la pantalla y para salir de esperandoReloj.
+  @MainActor func onClockEstimate(offsetNs offsetNsArg: Int64, driftPpm driftPpmArg: Double, samples samplesArg: Int64, uncertaintyNs uncertaintyNsArg: Int64) async throws
   /// Llegó una orden del móvil izquierdo. Solo la recibe el derecho.
   @MainActor func onPeerCommand(command commandArg: RigCommand) async throws
 }
@@ -1318,6 +1322,29 @@ class CaptureFlutterApi: CaptureFlutterApiProtocol {
       let channelName: String = "dev.flutter.pigeon.football_ai_capture.CaptureFlutterApi.onClockStamps\(messageChannelSuffix)"
       let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
       channel.sendMessage([t1NsArg, t2NsArg, t3NsArg, t4NsArg] as [Any?]) { response in
+        guard let listResponse = response as? [Any?] else {
+          continuation.resume(throwing: createConnectionError(withChannelName: channelName))
+          return
+        }
+        if listResponse.count > 1 {
+          let code: String = listResponse[0] as! String
+          let message: String? = nilOrValue(listResponse[1])
+          let details: String? = nilOrValue(listResponse[2])
+          continuation.resume(throwing: PigeonError(code: code, message: message, details: details))
+        } else {
+          continuation.resume()
+        }
+      }
+    }
+  }
+  /// La estimación del reloj nativo del soporte (IOS-13), cuando el enlace corre
+  /// sobre Network. El desfase ya se aplica por fotograma en nativo, sin pasar por
+  /// Pigeon: esto es para la pantalla y para salir de esperandoReloj.
+  @MainActor func onClockEstimate(offsetNs offsetNsArg: Int64, driftPpm driftPpmArg: Double, samples samplesArg: Int64, uncertaintyNs uncertaintyNsArg: Int64) async throws {
+    return try await withCheckedThrowingContinuation { continuation in
+      let channelName: String = "dev.flutter.pigeon.football_ai_capture.CaptureFlutterApi.onClockEstimate\(messageChannelSuffix)"
+      let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
+      channel.sendMessage([offsetNsArg, driftPpmArg, samplesArg, uncertaintyNsArg] as [Any?]) { response in
         guard let listResponse = response as? [Any?] else {
           continuation.resume(throwing: createConnectionError(withChannelName: channelName))
           return

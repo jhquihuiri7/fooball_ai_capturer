@@ -44,6 +44,15 @@ final class RigLinkNW: PeerLinking {
 
     private let session: RigLinkSession
 
+    /// El reloj nativo de la sesión (IOS-13): CaptureEngine lo lee por fotograma.
+    var clock: RigClock { session.clock }
+
+    /// Cada estimación nueva del reloj, para la pantalla. Solo la emite el esclavo.
+    var onClockEstimate: ((RigClockEstimate) -> Void)? {
+        get { session.onClockEstimate }
+        set { session.onClockEstimate = newValue }
+    }
+
     /// El secreto del soporte, mientras no exista la provisión del Keychain (IOS-97).
     static func benchSecret() -> Data? {
         guard let valor = ProcessInfo.processInfo.environment["RIG_LINK_SECRET"],

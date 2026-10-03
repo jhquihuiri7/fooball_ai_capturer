@@ -327,6 +327,24 @@ void main() {
       expect(session.phase, SessionPhase.lista);
     });
 
+    test('el aviso del reloj nativo (IOS-13) también saca de esperandoReloj', () async {
+      final FakeCaptureApi api = FakeCaptureApi(phases: <int>[2 * nsPerMillisecond]);
+      final CaptureSession session =
+          CaptureSession(role: CameraRole.right, api: api, phaseSettle: Duration.zero);
+      await session.prepare();
+      expect(session.phase, SessionPhase.esperandoReloj);
+
+      // La cuenta vive en nativo: aquí solo llega la estimación ya hecha.
+      session.onClockEstimate(7 * nsPerMillisecond, 1.5, 12, nsPerMillisecond);
+      await pumpEventQueue();
+
+      // El desfase NO vuelve a bajar por Pigeon: lo aplica el nativo por fotograma.
+      expect(api.offsets, isEmpty);
+      expect(session.clockLabel, contains('7.0 ms ±1.0'));
+      expect(session.clockLabel, contains('1.5 ppm'));
+      expect(session.phase, SessionPhase.lista); // midió la fase y quedó lista
+    });
+
     test('si el maestro no contesta con sus PTS, se graba igual con la fase sin medir', () async {
       final FakeCaptureApi api = FakeCaptureApi()..masterPts = <int>[];
       final CaptureSession session =

@@ -392,6 +392,11 @@ abstract class CaptureFlutterApi {
   /// `t3` salida en el maestro (su reloj). Dart despeja el desfase (`solveClockSample`).
   void onClockStamps(int t1Ns, int t2Ns, int t3Ns, int t4Ns);
 
+  /// La estimación del reloj nativo del soporte (IOS-13), cuando el enlace corre
+  /// sobre Network. El desfase ya se aplica por fotograma en nativo, sin pasar por
+  /// Pigeon: esto es para la pantalla y para salir de esperandoReloj.
+  void onClockEstimate(int offsetNs, double driftPpm, int samples, int uncertaintyNs);
+
   /// Llegó una orden del móvil izquierdo. Solo la recibe el derecho.
   void onPeerCommand(RigCommand command);
 }

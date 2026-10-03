@@ -110,6 +110,11 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
   final CaptureHostApi _api;
   final RigClock _clock;
 
+  /// La última estimación del reloj nativo (IOS-13), si el enlace corre sobre
+  /// Network. Cuando está, manda sobre `_clock` en la etiqueta: la cuenta buena vive
+  /// en nativo y esta es su copia para la pantalla.
+  ClockSyncEstimate? _nativeClockEstimate;
+
   /// Quién sube la grabación para calibrar (ver [CalibrationUploaderFactory]).
   final CalibrationUploaderFactory uploader;
   StreamSubscription<ClockSample>? _clockSubscription;
@@ -451,7 +456,7 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
     if (isClockMaster && !standalone) {
       return 'maestro: este móvil marca la hora';
     }
-    final ClockSyncEstimate? estimate = _clock.estimate;
+    final ClockSyncEstimate? estimate = _nativeClockEstimate ?? _clock.estimate;
     if (estimate == null) {
       return 'sin reloj';
     }
@@ -731,6 +736,26 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
   @override
   void onClockStamps(int t1Ns, int t2Ns, int t3Ns, int t4Ns) {
     _onClockSample(solveClockSample(t1: t1Ns, t2: t2Ns, t3: t3Ns, t4: t4Ns));
+  }
+
+  /// La estimación del reloj nativo (IOS-13), con el enlace sobre Network. El desfase
+  /// ya va aplicado por fotograma en nativo, sin `setClockOffsetNs`: aquí solo mueve
+  /// la fase y lo que enseña la pantalla.
+  @override
+  void onClockEstimate(int offsetNs, double driftPpm, int samples, int uncertaintyNs) {
+    _nativeClockEstimate = ClockSyncEstimate(
+      offsetNs: offsetNs,
+      driftPpm: driftPpm,
+      samples: samples,
+      bestRoundTripNs: uncertaintyNs * 2,
+    );
+    if (phase == SessionPhase.esperandoReloj && !linkOnly) {
+      _set(SessionPhase.ajustandoFase);
+      if (autoSortPhase) {
+        unawaited(_sortPhaseAgainstMaster());
+      }
+    }
+    notifyListeners();
   }
 
   void _onClockSample(ClockSample sample) {

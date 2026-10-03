@@ -63,6 +63,13 @@ public final class RigLinkSession {
     public var onState: ((State) -> Void)?
     /// Los cuatro sellos de una pregunta de hora, en ns del reloj de host.
     public var onStamps: ((Int64, Int64, Int64, Int64) -> Void)?
+    /// Cada estimación nueva del reloj nativo (IOS-13). Solo la emite el esclavo, que
+    /// es quien pregunta; la cámara lee `clock` directamente, sin pasar por aquí.
+    public var onClockEstimate: ((RigClockEstimate) -> Void)?
+
+    /// El reloj del soporte, alimentado con cada clock_pong. Es seguro entre hilos: la
+    /// cámara le pregunta el desfase por fotograma mientras esta cola añade muestras.
+    public let clock = RigClock()
     public var onLook: ((CameraLook) -> Void)?
     public var onCommand: ((RigWireCommand) -> Void)?
     /// De dónde saca el maestro sus PTS y su color cuando el esclavo los pide.
@@ -334,6 +341,10 @@ public final class RigLinkSession {
                 return
             }
             onStamps?(t1, t2, t3, llegada)
+            clock.add(solveClockSample(t1: t1, t2: t2, t3: t3, t4: llegada))
+            if let estimate = clock.estimate {
+                onClockEstimate?(estimate)
+            }
         case .legacy:
             handleLegacy(frame.payload)
         default:

@@ -150,6 +150,7 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
         link?.stop()
         let link: PeerLinking
         if Self.useMultipeer {
+            engine.rigClock = nil
             link = RigLink(role: role)
         } else {
             guard let secreto = RigLinkNW.benchSecret() else {
@@ -159,7 +160,21 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
                     details: nil
                 )
             }
-            link = RigLinkNW(role: role, secret: secreto)
+            let nw = RigLinkNW(role: role, secret: secreto)
+            // IOS-13: la cámara lee el reloj nativo por fotograma, sin pasar por
+            // Pigeon; a Dart solo le llega la estimación, para la pantalla y la fase.
+            engine.rigClock = nw.clock
+            nw.onClockEstimate = { [weak self] estimate in
+                Task { @MainActor in
+                    try? await self?.flutter.onClockEstimate(
+                        offsetNs: estimate.offsetNs,
+                        driftPpm: estimate.driftPpm,
+                        samples: Int64(estimate.samples),
+                        uncertaintyNs: estimate.uncertaintyNs
+                    )
+                }
+            }
+            link = nw
         }
         // El maestro contesta con los PTS de su propia cámara, ya en tiempo del soporte.
         link.recentPts = { [weak self] in self?.engine.recentFramePtsNs() ?? [] }
@@ -199,6 +214,7 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
     func stopLink() throws {
         link?.stop()
         link = nil
+        engine.rigClock = nil
         engine.onLookLocked = nil
         engine.forgetMasterLook()
     }

@@ -12,6 +12,33 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-03 · IOS-13 — reloj del soporte en nativo con casos compartidos · ✅
+
+**Hecho**
+- `RigCore/Time/RigClock.swift`: puerto fiel de `lib/src/rig_clock.dart` (misma
+  aritmética entera, filtro por RTT ×3, 240 muestras, recta con ventana ≥60 s y tiempo
+  centrado), con cerrojo porque el enlace añade muestras desde su cola y la cámara
+  pregunta por fotograma. `solveClockSample` incluido.
+- Casos compartidos en `ios/ZeroKit/Tests/RigCoreTests/Fixtures/rig_clock_cases.json`
+  (fuera de Golden/, que lo controla el manifiesto): los genera
+  `flutter test tools/gen_rig_clock_cases.dart` desde la referencia Dart y los leen
+  `test/rig_clock_test.dart` (candado de regresión) y `RigClockTests.swift` (paridad
+  ±1 ns y ±1e-6 ppm). 7 casos de reloj y 4 de despeje, con truncado hacia cero,
+  filtro, deriva limpia y con ruido, y el tope de 240.
+- `RigLinkSession` alimenta su `RigClock` con cada clock_pong y emite
+  `onClockEstimate`; `CaptureEngine.rigClock` aplica el desfase por fotograma sin
+  pasar por Pigeon (con Multipeer sigue `setClockOffsetNs` desde Dart).
+- Dart recibe `onClockEstimate(offsetNs, driftPpm, samples, uncertaintyNs)` y
+  `CaptureSession` sale de esperandoReloj con él; la etiqueta del reloj prefiere la
+  estimación nativa. La tarjeta decía RigFlutterApi, pero va en `CaptureFlutterApi`:
+  RigFlutterApi lo monta la página de bancos y el aviso moriría al salir de ella.
+- Paquete 93/93, 215 tests Dart, analyze limpio, build de dispositivo ✓.
+
+**Siguiente**: IOS-15 (volcado NV12) y, con los hubs, la aceptación de campo de
+IOS-11/12/16.
+
+---
+
 ## 2026-10-03 · IOS-12 — RigLink sobre Network.framework · 🚧 falta el campo (hubs)
 
 **Hecho**

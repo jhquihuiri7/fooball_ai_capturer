@@ -46,8 +46,9 @@ let package = Package(
             name: "RigCoreTests",
             dependencies: ["RigCore"],
             // Golden/ lo deja `export_golden.py --sync` del servidor (REF-10) y lo
-            // verifica el arnés de IOS-03 contra golden-manifest.json.
-            resources: [.copy("Golden")],
+            // verifica el arnés de IOS-03 contra golden-manifest.json. Fixtures/ son
+            // los casos compartidos Dart/Swift (IOS-13), fuera del manifiesto adrede.
+            resources: [.copy("Golden"), .copy("Fixtures")],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .testTarget(
