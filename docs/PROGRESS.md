@@ -12,7 +12,44 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
-## 2026-10-03 · SPK-50 — arnés de banco de modelos en el iPhone (ModelBenchTests) · 🚧 falta la pasada en el iPhone
+## 2026-10-04 · SPK-51 — D-FINE-N en el ANE del A19 · ✅ medido (la decisión la firma REF-33)
+
+**La medida (iPhone18,3, 1000 predicciones tras calentar, CPU_AND_NE)**
+- **0 % del coste en el ANE** en las DOS formas: las 1754 ops del programa caen
+  fuera ENTERAS (MLComputePlan: ops_off_ane = ops_total). La atención deformable
+  (tensores de rango 5, los ~33 que el ane_lint de ML-10 ya marcó) expulsa el
+  programa del ANE y Core ML lo manda a GPU.
+- p50 (borde de cubo, pesimista): banda 1920×576 **150 ms**; retranqueo 1536×512
+  **100 ms**. A 7,5 Hz el ciclo entero dispone de ~133 ms: no cabe, y además
+  compite con Metal (la térmica pasó de nominal a serious en 269 s de banco).
+- compile 155/131 ms; load **3,5/3,9 s** (la especialización del primer arranque).
+- Dorado del Mac frente al iPhone: 0 violaciones (delta 0.0 exacto en logits y
+  boxes — tan exacto que conviene un contraejemplo; apuntado abajo).
+
+**Recomendación para REF-33**: ni 1920×576 ni 1536×512 salvan un 0 % de ANE —
+**se activa el plan B CNN del ADR 0020 (YOLOX-Tiny o CenterNet-MNv4)**. La
+decisión formal es de REF-33/propietario.
+
+**Pendiente menor**: verificar el delta 0.0 exacto del dorado D-FINE con un
+contraejemplo (una entrada perturbada debe dar delta > 0): si el lector casara
+mal los nombres, 0 violaciones saldría gratis.
+
+## 2026-10-04 · SPK-52 — ROI-lite en el ANE: mosaico y lote de ROIs · 🚧 falta la multifunción
+
+**La medida (mismas condiciones)**
+- **100,00 % del coste en el ANE** en las CUATRO formas (las 192 ops «fuera»
+  son const/reshape con coste 0 del MLComputePlan). ANE-limpio por diseño ✓.
+- Mosaico 10 m [1,3,896,1920]: **p50 12 ms** ✓ (objetivo ≤14). Mosaico 6 m
+  [1,3,1296,1920]: **16 ms** — se pasa del objetivo: dato para que REF-33 elija
+  la altura del mosaico (10 m sí cabe).
+- Lote de 2 ROIs: 256 → **1 ms**; 320 → 1-2 ms ✓✓ (objetivo ≤3 ms).
+- compile ≤51 ms; load ≤515 ms.
+
+**Qué queda**: el paquete multifunción (global/roi) con pesos deduplicados —
+pide implementar `functions` en el export (ML-09 lo dejó declarado y guardado
+tras un error claro) — y su medida (≤1,1× de peso; cambiar de función ≤1 ms).
+
+## 2026-10-03 · SPK-50 — arnés de banco de modelos en el iPhone (ModelBenchTests) · ✅
 
 **Hecho**
 - `Tests/RigMediaTests/Device/ModelBenchTests.swift` (en ZeroKit, sin target
@@ -36,9 +73,28 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 skip limpio de `ModelBenchTests` sin recursos. `swift build --build-tests` y
 `check_layers.sh` en verde.
 
-**Pendiente para el ✅**: la pasada de aceptación en el iPhone con el paquete de
-mac_smoke (≥95 % del coste en el ANE) vía `xcodebuild test
--only-testing:ModelBenchTests`; detrás vienen SPK-51 (D-FINE-N) y SPK-52.
+**La pasada en el iPhone (2026-10-04, iPhone18,3, iOS 26.6.1)**: 7 modelos en
+una tacada, informe en `bench/model-bench-1791127899.json`, bajado con
+`bench_pull.sh` ✓. Dos realidades medidas por el camino:
+- **«Tool-hosted testing is unavailable on device destinations»**: los tests de
+  un paquete SPM no corren en un iPhone físico sin app anfitriona. El carril del
+  dispositivo es el de IOS-08 (`BENCH=model-bench` por BenchRunner, recursos en
+  Documents/bench-resources); el XCTest queda para el Mac y el simulador, donde
+  `xcodebuild test -only-testing:ModelBenchTests` sí vale.
+- El primer informe murió al codificar: la CARGA del D-FINE pasó de 1 s, el cubo
+  de desborde del histograma percentila a INFINITO y JSON no codifica inf.
+  Arreglo: compile/load como contadores en ms exactos (son una medida, no una
+  distribución) y cubos con cola larga (hasta 60 s) para el predict.
+- La app muere si el teléfono se BLOQUEA a mitad de banco (iOS suspende al
+  bloquear): el banco pide Bloqueo automático en Nunca.
+- El % del ANE se informa bien donde hay con qué: ROI-lite da 100,00 % (es
+  ANE-limpio por diseño); el smoke de 8 canales da 0 % — canales no múltiplos
+  de 16, exactamente lo que marca el ane_lint de ML-10. El criterio «≥95 % con
+  el smoke» suponía un paquete que nunca podía dárselo; el arnés INFORMA, y las
+  cifras de aceptación de verdad son las de SPK-51/52.
+- El dorado de ML-12 se comprobó en el iPhone: demo delta 4.9e-4 < 5e-2, 0
+  violaciones. (El refactor del motor a Sources entró con el commit del sync de
+  REF-44, 6549ad4.)
 
 ## 2026-10-03 · SPK-03 — spike: concurrencia de VideoToolbox · ✅ aprobado SIN la HEVC 4K del maestro
 

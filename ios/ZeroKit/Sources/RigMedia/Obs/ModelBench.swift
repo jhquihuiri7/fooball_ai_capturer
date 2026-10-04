@@ -75,6 +75,12 @@ public enum ModelBench {
         subsystem: Signposts.subsystem, category: "model-bench"
     )
 
+    /// Los cubos del banco: los de IOS-05 más una cola larga. Un modelo que tarde
+    /// segundos se MIDE, no desborda: el cubo de desborde percentila a infinito y
+    /// JSON no codifica inf (fue el primer fallo real del banco en el iPhone).
+    static let benchBoundsMs: [Double] =
+        LatencyHistogram.defaultBoundsMs + [2000, 5000, 15000, 60000]
+
     /// El puente síncrono para BenchRunner: bloquea mientras el trabajo async
     /// (compileModel, MLComputePlan.load) corre en otro ejecutor.
     public static func run(
@@ -133,8 +139,10 @@ public enum ModelBench {
         let t1 = ContinuousClock.now
         let modelo = try MLModel(contentsOf: compilado, configuration: config)
         let t2 = ContinuousClock.now
-        report.stagesMs["\(spec.name)/compile"] = single(ms: ms(t0, t1))
-        report.stagesMs["\(spec.name)/load"] = single(ms: ms(t1, t2))
+        // En ms exactos y como contadores: son UNA medida, no una distribución, y
+        // el borde superior de un histograma de una sola muestra miente (o desborda).
+        report.counters["\(spec.name)/compile_ms"] = Int(ms(t0, t1).rounded())
+        report.counters["\(spec.name)/load_ms"] = Int(ms(t1, t2).rounded())
 
         // El plan de cómputo: unidad preferida y coste por op.
         let plan = try await MLComputePlan.load(contentsOf: compilado, configuration: config)
@@ -165,7 +173,7 @@ public enum ModelBench {
         for _ in 0..<warmup {
             _ = try model.prediction(from: input)
         }
-        var histograma = LatencyHistogram()
+        var histograma = LatencyHistogram(boundsMs: benchBoundsMs)
         for _ in 0..<predictions {
             let estado = signposter.beginInterval("predict")
             let antes = ContinuousClock.now
@@ -346,12 +354,6 @@ public enum ModelBench {
     }
 
     // MARK: utilidades
-
-    private static func single(ms valor: Double) -> BenchReport.StageSummary {
-        var h = LatencyHistogram()
-        h.record(ms: valor)
-        return BenchReport.StageSummary(histogram: h)
-    }
 
     private static func ms(_ a: ContinuousClock.Instant, _ b: ContinuousClock.Instant) -> Double {
         let d = b - a

@@ -1,0 +1,108 @@
+{
+  "counters" : {
+    "demo/ane_cost_pct_x100" : 0,
+    "demo/compile_ms" : 34,
+    "demo/golden_max_delta_x1e6" : 488,
+    "demo/golden_violations" : 0,
+    "demo/load_ms" : 24,
+    "demo/ops_off_ane" : 21,
+    "demo/ops_total" : 21,
+    "demo/predictions" : 1000,
+    "dfine-n-band/ane_cost_pct_x100" : 0,
+    "dfine-n-band/compile_ms" : 155,
+    "dfine-n-band/golden_max_delta_x1e6" : 0,
+    "dfine-n-band/golden_violations" : 0,
+    "dfine-n-band/load_ms" : 3472,
+    "dfine-n-band/ops_off_ane" : 1754,
+    "dfine-n-band/ops_total" : 1754,
+    "dfine-n-band/predictions" : 1000,
+    "dfine-n-setback/ane_cost_pct_x100" : 0,
+    "dfine-n-setback/compile_ms" : 131,
+    "dfine-n-setback/golden_max_delta_x1e6" : 0,
+    "dfine-n-setback/golden_violations" : 0,
+    "dfine-n-setback/load_ms" : 3864,
+    "dfine-n-setback/ops_off_ane" : 1754,
+    "dfine-n-setback/ops_total" : 1754,
+    "dfine-n-setback/predictions" : 1000,
+    "roilite-mosaico-10m/ane_cost_pct_x100" : 10000,
+    "roilite-mosaico-10m/compile_ms" : 43,
+    "roilite-mosaico-10m/load_ms" : 384,
+    "roilite-mosaico-10m/ops_off_ane" : 192,
+    "roilite-mosaico-10m/ops_total" : 258,
+    "roilite-mosaico-10m/predictions" : 1000,
+    "roilite-mosaico-6m/ane_cost_pct_x100" : 10000,
+    "roilite-mosaico-6m/compile_ms" : 51,
+    "roilite-mosaico-6m/load_ms" : 515,
+    "roilite-mosaico-6m/ops_off_ane" : 192,
+    "roilite-mosaico-6m/ops_total" : 258,
+    "roilite-mosaico-6m/predictions" : 1000,
+    "roilite-roi-256/ane_cost_pct_x100" : 10000,
+    "roilite-roi-256/compile_ms" : 51,
+    "roilite-roi-256/load_ms" : 244,
+    "roilite-roi-256/ops_off_ane" : 192,
+    "roilite-roi-256/ops_total" : 258,
+    "roilite-roi-256/predictions" : 1000,
+    "roilite-roi-320/ane_cost_pct_x100" : 10000,
+    "roilite-roi-320/compile_ms" : 46,
+    "roilite-roi-320/load_ms" : 343,
+    "roilite-roi-320/ops_off_ane" : 192,
+    "roilite-roi-320/ops_total" : 258,
+    "roilite-roi-320/predictions" : 1000
+  },
+  "device" : "iPhone18,3",
+  "duration_s" : 268.8959159851074,
+  "name" : "model-bench",
+  "params" : {
+    "models" : "demo,dfine-n-band,dfine-n-setback,roilite-mosaico-10m,roilite-mosaico-6m,roilite-roi-256,roilite-roi-320"
+  },
+  "stages_ms" : {
+    "demo/predict" : {
+      "p50_ms" : 0.5,
+      "p90_ms" : 0.5,
+      "p99_ms" : 0.5
+    },
+    "dfine-n-band/predict" : {
+      "p50_ms" : 150,
+      "p90_ms" : 150,
+      "p99_ms" : 150
+    },
+    "dfine-n-setback/predict" : {
+      "p50_ms" : 100,
+      "p90_ms" : 100,
+      "p99_ms" : 100
+    },
+    "roilite-mosaico-10m/predict" : {
+      "p50_ms" : 12,
+      "p90_ms" : 12,
+      "p99_ms" : 12
+    },
+    "roilite-mosaico-6m/predict" : {
+      "p50_ms" : 16,
+      "p90_ms" : 16,
+      "p99_ms" : 16
+    },
+    "roilite-roi-256/predict" : {
+      "p50_ms" : 1,
+      "p90_ms" : 1,
+      "p99_ms" : 1
+    },
+    "roilite-roi-320/predict" : {
+      "p50_ms" : 1,
+      "p90_ms" : 2,
+      "p99_ms" : 2
+    }
+  },
+  "started_epoch_s" : 1791127899,
+  "system_version" : "Version 26.6.1 (Build 23G83)",
+  "thermal" : [
+    "nominal",
+    "nominal",
+    "fair",
+    "serious",
+    "serious",
+    "serious",
+    "serious",
+    "serious",
+    "serious"
+  ]
+}
