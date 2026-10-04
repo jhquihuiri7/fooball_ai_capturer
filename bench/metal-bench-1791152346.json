@@ -1,0 +1,39 @@
+{
+  "counters" : {
+    "iterations" : 300
+  },
+  "device" : "iPhone17,1",
+  "duration_s" : 1.3552870750427246,
+  "name" : "metal-bench",
+  "params" : {
+    "iterations" : "300"
+  },
+  "stages_ms" : {
+    "gpu/compose" : {
+      "p50_ms" : 0.989416666584475,
+      "p90_ms" : 1.5297499999178399,
+      "p99_ms" : 2.70358333330023
+    },
+    "gpu/master_total" : {
+      "p50_ms" : 1.8338749999884385,
+      "p90_ms" : 2.786833333288996,
+      "p99_ms" : 4.45512500004952
+    },
+    "gpu/preprocess" : {
+      "p50_ms" : 0.8505416666366727,
+      "p90_ms" : 1.4653749999524734,
+      "p99_ms" : 3.990833333318733
+    },
+    "gpu/reproject" : {
+      "p50_ms" : 0.7052083333292103,
+      "p90_ms" : 1.309249999962958,
+      "p99_ms" : 2.073791666703073
+    }
+  },
+  "started_epoch_s" : 1791152346,
+  "system_version" : "Version 26.6.1 (Build 23G83)",
+  "thermal" : [
+    "nominal",
+    "nominal"
+  ]
+}

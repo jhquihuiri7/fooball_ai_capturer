@@ -48,7 +48,19 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 **Siguiente paso**: IOS-60 (estado del partido en Dart) o IOS-53 (MPEG-TS).
 
-## 2026-10-04 · IOS-21 — kernel Metal de preproceso NV12 → entrada del detector · 🚧
+## 2026-10-04 · IOS-21 — kernel Metal de preproceso NV12 → entrada del detector · ✅
+
+**Cierre (2026-10-04)**: metal-bench (RigMedia/Obs/MetalBench.swift), 300 pasadas tras 20 de calentado, tiempo
+de GPU por command buffer (gpuEnd − gpuStart), térmica nominal. iPhone 17 (iPhone18,3):
+reproyección 4K→1080p p50 0,33 / p90 0,39 / p99 2,13 ms; composición p50 0,38 /
+p90 0,44 / p99 2,10 ms; total del maestro (reproyección + composición) p50 0,70 /
+p90 0,85 / p99 2,66 ms; preproceso 4K→1920×576 p50 0,33 / p90 0,39 / p99 2,17 ms.
+iPhone 16 Pro: más o menos el doble (maestro p50 1,83 ms). Los p99 de ~2 ms son el
+arranque de la GPU tras cada espera: el banco serializa con waitUntilCompleted y la GPU
+baja de reloj entre pasadas; en el directo el trabajo es continuo.
+Objetivo ≤0,5 ms de GPU: p50 y p90 dentro; p99 por encima por el arranque de la GPU.
+
+### Lo que se entregó antes
 
 **Hecho**
 - `RigMedia/Metal/Kernels/Preprocess.metal`: compose_band_input en una pasada. Por
@@ -117,7 +129,19 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 **Siguiente paso**: lo que queda de Mac es poco; las IOS-20/21/22 necesitan el iPhone.
 
-## 2026-10-04 · IOS-40 — kernel Metal de la parte: reproyección por homografía · 🚧
+## 2026-10-04 · IOS-40 — kernel Metal de la parte: reproyección por homografía · ✅
+
+**Cierre (2026-10-04)**: metal-bench (RigMedia/Obs/MetalBench.swift), 300 pasadas tras 20 de calentado, tiempo
+de GPU por command buffer (gpuEnd − gpuStart), térmica nominal. iPhone 17 (iPhone18,3):
+reproyección 4K→1080p p50 0,33 / p90 0,39 / p99 2,13 ms; composición p50 0,38 /
+p90 0,44 / p99 2,10 ms; total del maestro (reproyección + composición) p50 0,70 /
+p90 0,85 / p99 2,66 ms; preproceso 4K→1920×576 p50 0,33 / p90 0,39 / p99 2,17 ms.
+iPhone 16 Pro: más o menos el doble (maestro p50 1,83 ms). Los p99 de ~2 ms son el
+arranque de la GPU tras cada espera: el banco serializa con waitUntilCompleted y la GPU
+baja de reloj entre pasadas; en el directo el trabajo es continuo.
+Objetivo ≤1,5 ms de GPU: p50 y p90 dentro; p99 2,1 ms por el arranque de la GPU.
+
+### Lo que se entregó antes
 
 **Hecho**
 - `RigMedia/Metal/Kernels/Reproject.metal` (reproject_part): render_view de un
