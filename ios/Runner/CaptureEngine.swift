@@ -89,6 +89,12 @@ final class CaptureEngine: NSObject {
 
     private(set) var droppedFrames: Int64 = 0
 
+    /// IOS-15: lo que dice la grabación de prueba con el volcado activo. Solo se usa
+    /// con NV12_DUMP_S puesto; se escribe en Documents/bench al parar.
+    private var dumpRunFrames: Int64 = 0
+    private var dumpRunDroppedAtStart: Int64 = 0
+    private var dumpRunStartNs: UInt64 = 0
+
     /// Frames en los que no se pudo pintar el código de tiempo. Tiene que ser cero: uno
     /// solo ya es un frame que el servidor no puede emparejar.
     private(set) var timecodeFailures: Int64 = 0
@@ -277,6 +283,13 @@ final class CaptureEngine: NSObject {
         // para que la última siga entera hasta que se decida grabar de nuevo: es la que
         // se sube al panel para calibrar.
         Self.removeRecordings(in: directory)
+        if nv12Dumper != nil {
+            queue.async { [self] in
+                dumpRunFrames = 0
+                dumpRunDroppedAtStart = droppedFrames
+                dumpRunStartNs = DispatchTime.now().uptimeNanoseconds
+            }
+        }
         return try openSegment()
     }
 
@@ -346,7 +359,36 @@ final class CaptureEngine: NSObject {
         recordingWanted = false
         queue.async { [weak self] in
             self?.closeWriter()
+            self?.writeDumpRunReport()
         }
+    }
+
+    /// IOS-15: el informe de la grabación de prueba con el volcado: fotogramas que
+    /// entraron al archivo, fps real, didDrop y descartes del escritor, fallos del
+    /// código de tiempo y volcados escritos. Solo en modo banco (NV12_DUMP_S).
+    private func writeDumpRunReport() {
+        guard let dumper = nv12Dumper, dumpRunStartNs > 0 else { return }
+        dumper.drain()
+        let duracion = Double(DispatchTime.now().uptimeNanoseconds - dumpRunStartNs) / 1e9
+        let informe: [String: Any] = [
+            "name": "nv12-dump-run",
+            "duration_s": duracion,
+            "frames_recorded": dumpRunFrames,
+            "fps": duracion > 0 ? Double(dumpRunFrames) / duracion : 0,
+            "dropped_frames": droppedFrames - dumpRunDroppedAtStart,
+            "timecode_failures": timecodeFailures,
+            "nv12_written": dumper.written,
+            "nv12_failures": dumper.failures,
+            "recording_file": recordingFile ?? "",
+        ]
+        guard let documentos = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first,
+              let datos = try? JSONSerialization.data(withJSONObject: informe, options: [.prettyPrinted, .sortedKeys])
+        else { return }
+        let carpeta = documentos.appendingPathComponent("bench", isDirectory: true)
+        try? FileManager.default.createDirectory(at: carpeta, withIntermediateDirectories: true)
+        let epoch = Int(Date().timeIntervalSince1970)
+        try? datos.write(to: carpeta.appendingPathComponent("nv12-dump-run-\(epoch).json"))
+        dumpRunStartNs = 0
     }
 
     static func segmentName(role: CameraRole, epochSeconds: Int, segment: Int) -> String {
@@ -622,8 +664,8 @@ extension CaptureEngine: AVCaptureVideoDataOutputSampleBufferDelegate {
             droppedFrames += 1
             return
         }
-        if let retimed = Self.retimed(sampleBuffer, to: rigTime) {
-            input.append(retimed)
+        if let retimed = Self.retimed(sampleBuffer, to: rigTime), input.append(retimed) {
+            dumpRunFrames += 1
         }
     }
 

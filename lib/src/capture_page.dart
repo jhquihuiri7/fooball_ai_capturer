@@ -44,6 +44,7 @@ class CapturePage extends StatefulWidget {
     this.standalone = false,
     this.serverHost = '',
     this.linkOnly = false,
+    this.autoRecordSeconds = 0,
     super.key,
   });
 
@@ -60,6 +61,10 @@ class CapturePage extends StatefulWidget {
 
   /// Solo el enlace entre móviles, sin cámara (ver `CaptureSession.linkOnly`).
   final bool linkOnly;
+
+  /// Grabación de prueba (IOS-15): si es >0, en cuanto la cámara está lista empieza a
+  /// grabar guardando el vídeo, y para sola pasados estos segundos. Modo banco.
+  final int autoRecordSeconds;
 
   @override
   State<CapturePage> createState() => _CapturePageState();
@@ -121,7 +126,28 @@ class _CapturePageState extends State<CapturePage> {
     super.dispose();
   }
 
+  /// Para que la grabación automática arranque una sola vez.
+  bool _autoRecordStarted = false;
+
+  void _maybeAutoRecord() {
+    if (widget.autoRecordSeconds <= 0 || _autoRecordStarted) {
+      return;
+    }
+    if (_session.phase != SessionPhase.lista || _session.recording) {
+      return;
+    }
+    _autoRecordStarted = true;
+    unawaited(() async {
+      await _session.toggleRecording(save: true);
+      await Future<void>.delayed(Duration(seconds: widget.autoRecordSeconds));
+      if (_session.recording) {
+        await _session.toggleRecording();
+      }
+    }());
+  }
+
   void _onChanged() {
+    _maybeAutoRecord();
     // Si la emisión paró, el vistazo ya no pinta nada: la vista previa vuelve sola.
     if (!_session.recording && _peeking) {
       _peekTimer?.cancel();

@@ -25,6 +25,7 @@ class ZeroShell extends StatefulWidget {
     this.standalone = false,
     this.serverHost = '',
     this.linkOnly = false,
+    this.autoRecordSeconds = 0,
     this.session,
     this.match,
     super.key,
@@ -40,6 +41,9 @@ class ZeroShell extends StatefulWidget {
 
   /// Solo el enlace entre móviles, sin cámara (ver `CaptureSession.linkOnly`).
   final bool linkOnly;
+
+  /// Grabación de prueba automática, en segundos (ver `CapturePage.autoRecordSeconds`).
+  final int autoRecordSeconds;
 
   /// Inyectables para los tests: sin esto habría que hablar con la cámara de verdad y
   /// con el almacenamiento del móvil.
@@ -87,6 +91,7 @@ class _ZeroShellState extends State<ZeroShell> {
             standalone: widget.standalone,
             serverHost: widget.serverHost,
             linkOnly: widget.linkOnly,
+            autoRecordSeconds: widget.autoRecordSeconds,
           ),
           MatchPage(match: _match, destinations: widget.serverHost.trim().isEmpty ? 0 : 1),
         ],

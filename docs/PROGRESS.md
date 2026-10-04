@@ -650,7 +650,19 @@ hubs), ya con esta expectativa.
 
 ---
 
-## 2026-10-03 · IOS-15 — volcado NV12 crudo para el salto de dominio · 🚧 falta el partido de prueba
+## 2026-10-03 · IOS-15 — volcado NV12 crudo para el salto de dominio · ✅
+
+**Cierre (2026-10-04)**: grabación de prueba de 180 s en el iPhone 17 con
+NV12_DUMP_S=10, lanzada sin tocar la pantalla (AUTO_ROLE=left, STANDALONE=true,
+AUTO_RECORD_S=180, nuevos en main.dart; la grabación arranca al quedar lista la cámara
+y para sola). Informe nativo (CaptureEngine, bench/nv12-dump-run-*.json): **0
+fotogramas perdidos**, **29,99 fps** (5398 en 180 s), 19 volcados sin fallos, 0 fallos
+del código de tiempo. Los volcados se leen con el formato de ML-18
+(`tools/nv12_check.py`): 4K `420v`, color BT.709 en la cabecera, uno cada 10 s exactos
+de rig_ms. El móvil estaba boca abajo (imagen oscura): para medir el salto de dominio
+de verdad, ML-58 los tomará en un partido.
+
+### Lo que se entregó antes
 
 **Hecho**
 - `RigMedia/Obs/Nv12Dumper.swift`: cada N segundos (60 por defecto) guarda el

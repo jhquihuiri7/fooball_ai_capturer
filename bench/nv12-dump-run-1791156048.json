@@ -1,0 +1,11 @@
+{
+  "dropped_frames" : 0,
+  "duration_s" : 180.01942591700001,
+  "fps" : 29.985652784432325,
+  "frames_recorded" : 5398,
+  "name" : "nv12-dump-run",
+  "nv12_failures" : 0,
+  "nv12_written" : 19,
+  "recording_file" : "\/var\/mobile\/Containers\/Data\/Application\/90910D7F-B5A2-4937-8495-69B3E2ED8CDB\/Documents\/left-1791155868.mov",
+  "timecode_failures" : 0
+}
