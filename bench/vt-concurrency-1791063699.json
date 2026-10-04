@@ -1,0 +1,45 @@
+{
+  "counters" : {
+    "creation_errors" : 0,
+    "decoded" : 37082,
+    "decoder_dropped" : 0,
+    "did_drop" : 3,
+    "encoded" : 37082,
+    "encoder_dropped" : 0,
+    "err_12915" : 0,
+    "fps_x100" : 3000,
+    "frames" : 37083,
+    "hevc_dropped" : 0,
+    "pool_starved" : 0,
+    "vt_errors" : 0
+  },
+  "device" : "iPhone18,3",
+  "duration_s" : 1944.3057940006256,
+  "name" : "vt-concurrency",
+  "params" : {
+    "hevc" : "0"
+  },
+  "stages_ms" : {
+    "escala_4k_1080" : {
+      "p50_ms" : 5,
+      "p90_ms" : 5,
+      "p99_ms" : 5
+    },
+    "intervalo_captura" : {
+      "p50_ms" : 50,
+      "p90_ms" : 50,
+      "p99_ms" : 50
+    }
+  },
+  "started_epoch_s" : 1791063699,
+  "system_version" : "Version 26.6.1 (Build 23G83)",
+  "thermal" : [
+    "nominal",
+    "nominal",
+    "nominal",
+    "nominal",
+    "nominal",
+    "nominal",
+    "nominal"
+  ]
+}
