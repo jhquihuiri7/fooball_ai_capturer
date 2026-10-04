@@ -1,0 +1,30 @@
+{
+  "counters" : {
+    "detection_cycles" : 8850,
+    "frames" : 36000
+  },
+  "device" : "iPhone18,3",
+  "duration_s" : 0.11505997180938721,
+  "name" : "director-bench",
+  "params" : {
+    "repetitions" : "10"
+  },
+  "stages_ms" : {
+    "director/frame" : {
+      "p50_ms" : 0.001167,
+      "p90_ms" : 0.008417,
+      "p99_ms" : 0.012666
+    },
+    "director/ingest" : {
+      "p50_ms" : 0.007041,
+      "p90_ms" : 0.009417,
+      "p99_ms" : 0.023042
+    }
+  },
+  "started_epoch_s" : 1791151156,
+  "system_version" : "Version 26.6.1 (Build 23G83)",
+  "thermal" : [
+    "nominal",
+    "nominal"
+  ]
+}
