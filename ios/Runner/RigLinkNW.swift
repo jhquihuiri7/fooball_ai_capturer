@@ -160,13 +160,21 @@ final class RigLinkNW: PeerLinking {
 //   RIG_LINK_SECRET     el secreto del soporte, base64 (el mismo en los dos)
 //   RIG_LINK_INTERFACE  ethernet (por defecto, el hub) | wifi (banco sin cables)
 //   RIG_LINK_BENCH_S    segundos que dura (por defecto 60)
+//   RIG_LINK_CUT_AT_S   segundo en que el izquierdo corta el enlace 1 s, como quien
+//                       desenchufa el cable (0 = no corta; por defecto 20)
 //
 // Mide lo que pide la aceptación: cuánto tarda en quedar autenticado desde el arranque
-// (en cualquier orden), el RTT de cada ping del reloj, las reconexiones y qué interfaz
-// lleva internet, y lo deja en Documents/bench como los demás bancos.
+// (en cualquier orden), cuánto tarda en volver tras el corte, el RTT de cada ping del
+// reloj, que las órdenes del maestro y los PTS lleguen (IOS-12) y qué interfaz lleva
+// internet, y lo deja en Documents/bench como los demás bancos.
 
 enum LinkBench {
     static let defaultDurationS = 60.0
+    static let defaultCutAtS = 20
+    /// Lo que dura el corte simulado.
+    static let cutLengthS = 1.0
+    /// Cada cuánto manda el maestro una orden y pide el esclavo los PTS.
+    static let probeEveryS = 2
 
     static func run(progress: BenchRunner.Progress?) throws -> URL {
         let entorno = ProcessInfo.processInfo.environment
@@ -178,6 +186,7 @@ enum LinkBench {
         }
         let interfaz = RigLinkNW.interfaceType(entorno["RIG_LINK_INTERFACE"])
         let duracion = entorno["RIG_LINK_BENCH_S"].flatMap(Double.init) ?? defaultDurationS
+        let corteEn = entorno["RIG_LINK_CUT_AT_S"].flatMap(Int.init) ?? defaultCutAtS
 
         let transporte: NWLinkTransport = lado == .left
             ? NWLinkTransport(
@@ -201,21 +210,44 @@ enum LinkBench {
         var incertidumbreNs: Int64 = 0
         var ruta = ""
         var par = ""
+        var conectado = false
+        var caidaNs: UInt64?
+        var vueltasMs: [Double] = []
+        var ordenesRecibidas = 0
+        var ordenesEnviadas = 0
+        var ptsPedidos = 0
+        var ptsRespondidos = 0
+        var ptsMs: [Double] = []
         let inicio = DispatchTime.now().uptimeNanoseconds
+        // El maestro contesta con unos PTS sintéticos: aquí no hay cámara.
+        sesion.recentPts = { [1_000_000, 34_333_333, 67_666_666] }
+        sesion.onCommand = { _ in
+            cerrojo.lock(); defer { cerrojo.unlock() }
+            ordenesRecibidas += 1
+        }
 
         sesion.onState = { estado in
             cerrojo.lock(); defer { cerrojo.unlock() }
             switch estado {
             case let .connected(peer):
+                let ahora = DispatchTime.now().uptimeNanoseconds
                 conexiones += 1
+                conectado = true
                 par = peer
                 if conectadoMs == nil {
-                    conectadoMs = Double(DispatchTime.now().uptimeNanoseconds - inicio) / 1e6
+                    conectadoMs = Double(ahora - inicio) / 1e6
+                }
+                if let caida = caidaNs {
+                    vueltasMs.append(Double(ahora - caida) / 1e6)
+                    caidaNs = nil
                 }
             case let .rejected(motivo):
                 rechazos.append(motivo)
+                conectado = false
             default:
-                break
+                // Se pierde la sesión: desde aquí cuenta lo que tarda en volver.
+                if conectado { caidaNs = DispatchTime.now().uptimeNanoseconds }
+                conectado = false
             }
         }
         sesion.onStamps = { t1, t2, t3, t4 in
@@ -236,6 +268,29 @@ enum LinkBench {
         let pasos = max(1, Int(duracion))
         for s in 0..<pasos {
             Thread.sleep(forTimeInterval: 1)
+            if lado == .left && corteEn > 0 && s + 1 == corteEn {
+                // El cable fuera: la sesión entera se cae y vuelve a levantarse.
+                sesion.stop()
+                Thread.sleep(forTimeInterval: cutLengthS)
+                cerrojo.lock(); caidaNs = caidaNs ?? DispatchTime.now().uptimeNanoseconds; cerrojo.unlock()
+                sesion.start()
+            }
+            if (s + 1) % probeEveryS == 0 {
+                if lado == .left {
+                    sesion.send(command: .stop)
+                    cerrojo.lock(); if conectado { ordenesEnviadas += 1 }; cerrojo.unlock()
+                } else {
+                    let t0 = DispatchTime.now().uptimeNanoseconds
+                    cerrojo.lock(); ptsPedidos += 1; cerrojo.unlock()
+                    sesion.masterRecentPts { pts in
+                        cerrojo.lock(); defer { cerrojo.unlock() }
+                        if !pts.isEmpty {
+                            ptsRespondidos += 1
+                            ptsMs.append(Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6)
+                        }
+                    }
+                }
+            }
             progress?(Double(s + 1) / Double(pasos), "enlace \(lado.rawValue): \(conexiones > 0 ? "conectado" : "buscando")")
         }
         let stats = transporte.stats
@@ -266,6 +321,12 @@ enum LinkBench {
                 "connections": conexiones,
                 "connect_ms": Int((conectadoMs ?? -1).rounded()),
                 "rtt_samples": rtts.count,
+                "reconnect_ms": vueltasMs.isEmpty ? -1 : Int(vueltasMs.max()!.rounded()),
+                "outages": vueltasMs.count,
+                "commands_sent": ordenesEnviadas,
+                "commands_received": ordenesRecibidas,
+                "pts_requests": ptsPedidos,
+                "pts_answered": ptsRespondidos,
                 "clock_estimates": estimaciones,
                 "clock_uncertainty_us": Int(incertidumbreNs / 1000),
                 "reconnects": stats.reconnects,
@@ -279,6 +340,12 @@ enum LinkBench {
         )
         if !rtts.isEmpty {
             informe.stagesMs["link/rtt"] = BenchReport.StageSummary(p50Ms: p(0.5), p90Ms: p(0.9), p99Ms: p(0.99))
+        }
+        if !ptsMs.isEmpty {
+            let o = ptsMs.sorted()
+            informe.stagesMs["link/pts_roundtrip"] = BenchReport.StageSummary(
+                p50Ms: o[o.count / 2], p90Ms: o[min(o.count - 1, o.count * 9 / 10)], p99Ms: o[o.count - 1]
+            )
         }
         let base = try FileManager.default
             .url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)

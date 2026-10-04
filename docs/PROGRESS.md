@@ -251,8 +251,19 @@ y iPhone 16 Pro (iPhone17,1) a la derecha, buscando; iOS 26.6.1; RIG_LINK_INTERF
 - `media_stalls_over_100ms` sale alto porque sin vídeo los medios son solo los pings
   del reloj, espaciados: no es un parón.
 
+**Segunda ronda** (link-bench con corte, órdenes y PTS; bench/link-bench-*-17911530*.json)
+- Corte simulado: a los 20 s el izquierdo baja la sesión 1 s (el cable fuera) y la
+  vuelve a levantar. Los dos vuelven a autenticar 3,1 s después del corte, que con el
+  segundo de corte son **~2,1 s de reconexión** desde que el enlace vuelve (<3 s).
+- Órdenes del maestro (IOS-12): 16 enviadas, **16 recibidas**.
+- PTS del maestro al esclavo: 22 pedidos, **16 respondidos** (los 6 restantes caen
+  antes de conectar y dentro del corte, y vencen a vacío como deben); ida y vuelta
+  p50 6 ms, p99 111 ms por Wi-Fi.
+- Reloj vivo: 8 estimaciones del esclavo, incertidumbre 2,3 ms; 0 tramas inválidas.
+
 **Falta para ✅**: lo mismo por Ethernet con los hubs (conectar <2 s en cualquier
-orden, reconectar <3 s al reenchufar, RTT p50 <2 ms).
+orden, reconectar <3 s al reenchufar de verdad, RTT p50 <2 ms). Por Wi-Fi ya pasa
+todo lo funcional; lo que el Wi-Fi no puede dar es la latencia.
 
 ## 2026-10-04 · IOS-37 — bucle del director (lógica pura) · ✅
 
