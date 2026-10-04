@@ -14,6 +14,113 @@ import Foundation
 /// Las constantes de comportamiento de libs/vision, con los nombres de Python en
 /// camelCase. En RigCore no se escribe ninguna a mano: se usa esta enumeración.
 public enum RigConstants {
+    /// Metros. Largo del campo, de línea de fondo a línea de fondo. Es el valor por
+    /// defecto de §11.1, no una constante física: una cancha real mide lo que mide y su
+    /// medida entra por `venues/<id>.yaml` (TASK 5.2). Está aquí para que el modelo pueda
+    /// construirse sin fichero mientras ese formato no exista.
+    /// (Python: `PITCH_LENGTH_M`.)
+    public static let pitchLengthM: Double = 105.0
+
+    /// Metros. Ancho del campo, de banda a banda. Mismo criterio que el largo.
+    /// (Python: `PITCH_WIDTH_M`.)
+    public static let pitchWidthM: Double = 68.0
+
+    /// Número mínimo de puntos campo↔imagen para calibrar (§11.1).
+    ///
+    /// Una homografía tiene 8 grados de libertad, así que 4 correspondencias bastan para
+    /// resolverla. El blueprint pide 6 justamente porque 4 no dejan margen: con el número
+    /// exacto de ecuaciones el ajuste pasa por todos los puntos y el error de reproyección
+    /// sale 0 aunque uno esté mal clicado. Con puntos de sobra, un punto mal marcado sube
+    /// el error y se nota.
+    /// (Python: `PITCH_MIN_CORRESPONDENCES`.)
+    public static let pitchMinCorrespondences: Int = 6
+
+    /// Píxeles. Distancia máxima a la que RANSAC considera que un punto es inlier.
+    ///
+    /// Es tolerancia de marcado humano, no de precisión del modelo: quien clica la esquina
+    /// del área en un frame 4K falla por unos píxeles. Por debajo de ~2 px empezaría a
+    /// descartar puntos buenos.
+    /// (Python: `PITCH_RANSAC_REPROJ_THRESHOLD_PX`.)
+    public static let pitchRansacReprojThresholdPx: Double = 3.0
+
+    /// Píxeles. Error medio de reproyección por encima del cual la calibración se
+    /// rechaza (AC de TASK 5.1).
+    ///
+    /// Ojo con qué mide: aquí se aplica sobre los inliers con los que se ajustó la homografía,
+    /// y ese error siempre es optimista comparado con el de puntos de validación independientes,
+    /// que es contra los que §11.1 fija el criterio de verdad.
+    ///
+    /// Y ojo con cuándo salta: como `PITCH_RANSAC_REPROJ_THRESHOLD_PX` ya acota el error de cada
+    /// inlier a 3 px, casi cualquier calibración lo bastante mala como para superar 2 px de media
+    /// pierde antes tantos puntos que la rechaza el mínimo de inliers. Medido: con ocho puntos
+    /// desplazados en círculo, a 2.0 px de radio la calibración pasa con 0.83 px de error y a
+    /// 2.5 px ya la tumba el recuento de inliers. Este umbral es entonces un último filtro para
+    /// el caso de puntos sistemáticamente imprecisos pero coherentes entre sí —un frame movido,
+    /// alguien clicando a ojo—, no la comprobación principal.
+    /// (Python: `PITCH_MAX_MEAN_REPROJECTION_ERROR_PX`.)
+    public static let pitchMaxMeanReprojectionErrorPx: Double = 2.0
+
+    /// Adimensional. Cociente entre el segundo y el primer valor singular de los puntos
+    /// centrados por debajo del cual se consideran alineados.
+    ///
+    /// Una homografía necesita puntos que abarquen un área. Si todos caen sobre una recta
+    /// —por ejemplo, marcando solo la línea de medio campo— el sistema es degenerado y
+    /// `findHomography` devuelve una matriz sin sentido en vez de fallar. Este cociente lo
+    /// detecta antes de llamarla: vale 0 para puntos exactamente alineados y 1 para una
+    /// nube isótropa.
+    /// (Python: `PITCH_COLLINEARITY_RATIO`.)
+    public static let pitchCollinearityRatio: Double = 0.001
+
+    /// Adimensional. Determinante mínimo, en valor absoluto, de una homografía normalizada
+    /// para darla por invertible.
+    ///
+    /// `H_inv` es la mitad del contrato de §11.1, así que una `H` que no se pueda invertir no es
+    /// un modelo válido ni aunque reproyecte bien en un sentido.
+    ///
+    /// El valor está medido, no elegido a ojo. Cuatro emplazamientos del rango de §9 —cámara
+    /// entre 10 y 20 m de altura y entre 40 y 70 m de retranqueo, focal de 2600 px sobre 4K— dan
+    /// determinantes normalizados entre 3.3e-08 y 9.0e-08, mientras que una matriz de rango 2 da
+    /// exactamente 0. Un umbral de 1e-8 dejaba un margen de 3×, que no es margen: este deja
+    /// cuatro órdenes de magnitud por cada lado.
+    /// (Python: `PITCH_MIN_HOMOGRAPHY_DET`.)
+    public static let pitchMinHomographyDet: Double = 1e-12
+
+    /// Metros. Desacuerdo medio máximo entre las dos cámaras del soporte al proyectar al
+    /// campo los mismos puntos del suelo (ADR 0012, TASK B4).
+    ///
+    /// Con dos cámaras hay dos homografías, y las dos tienen que llevar un mismo punto del
+    /// césped al mismo sitio. Si no lo hacen, un jugador que cruza la costura salta de
+    /// posición, y el tracker lo ve como dos personas.
+    ///
+    /// El valor sale de la geometría de un soporte bajo, que es lo que el ADR 0012 acepta. La
+    /// profundidad que cubre un píxel vertical crece con el cuadrado de la distancia: a una
+    /// altura h y distancia d son d²/(h·f) metros por píxel. Con h = 2,7 m y f ≈ 1450 px, en el
+    /// círculo central (d ≈ 38 m) eso son 0,37 m/px; un error de calibración de 1–2 px, que es
+    /// lo normal clicando a mano, ya da 0,4–0,7 m. Un metro deja pasar eso y rechaza lo que ya
+    /// no es imprecisión sino un punto mal emparejado.
+    /// (Python: `PITCH_MAX_CROSS_CAMERA_ERROR_M`.)
+    public static let pitchMaxCrossCameraErrorM: Double = 1.0
+
+    /// Adimensional. Tercera coordenada homogénea mínima para dar por buena una proyección.
+    ///
+    /// Un punto cuya `w` sale 0 está sobre la línea del horizonte: la homografía lo manda al
+    /// infinito y no hay píxel que le corresponda. Ocurre de verdad al pedir la posición de un
+    /// punto del campo muy por detrás de la línea de fondo, así que se comprueba en vez de
+    /// dejar que salga un `inf` silencioso.
+    /// (Python: `PITCH_MIN_PROJECTIVE_W`.)
+    public static let pitchMinProjectiveW: Double = 1e-09
+
+    /// Metros. Margen alrededor de las líneas que sigue contando como área jugable al
+    /// filtrar detecciones por los pies (`is_inside_playable` de §11.1).
+    ///
+    /// Un portero que saca, un lateral y un saque de esquina pisan fuera de las líneas sin
+    /// dejar de ser parte del juego. Tres metros los cubren y dejan fuera los banquillos y
+    /// el público, que es lo que el filtro existe para quitar (§14.2). El gating del balón
+    /// usa el suyo propio, más ancho (§13.2), porque un balón en juego se aleja más de las
+    /// líneas que un jugador.
+    /// (Python: `PITCH_PLAYABLE_MARGIN_M`.)
+    public static let pitchPlayableMarginM: Double = 3.0
+
     /// Grados. Alabeo máximo creíble de una cámara del soporte tras calibrar. Un soporte bien
     /// montado se queda en unos pocos; los 180 de una cámara sin enderezar son otra cosa, y 45
     /// separa las dos sin dudas.

@@ -81,4 +81,38 @@ public struct Mat3: Equatable, Sendable {
             values[6] * v.x + values[7] * v.y + values[8] * v.z
         )
     }
+
+    /// Norma de Frobenius, como `np.linalg.norm` sin argumentos sobre una 3×3.
+    public var frobeniusNorm: Double {
+        values.reduce(0) { $0 + $1 * $1 }.squareRoot()
+    }
+
+    /// Determinante por cofactores de la primera fila.
+    public var determinant: Double {
+        values[0] * (values[4] * values[8] - values[5] * values[7])
+            - values[1] * (values[3] * values[8] - values[5] * values[6])
+            + values[2] * (values[3] * values[7] - values[4] * values[6])
+    }
+
+    /// La inversa por la adjugada. Quien quiera un umbral de invertibilidad con
+    /// sentido lo comprueba antes sobre la matriz NORMALIZADA (PitchModel lo hace):
+    /// aquí solo se rechaza el determinante exactamente cero.
+    public func inverted() throws -> Mat3 {
+        let det = determinant
+        guard det != 0 else {
+            throw RigError.message("la matriz es singular: no tiene inversa")
+        }
+        let adjugate = [
+            values[4] * values[8] - values[5] * values[7],
+            values[2] * values[7] - values[1] * values[8],
+            values[1] * values[5] - values[2] * values[4],
+            values[5] * values[6] - values[3] * values[8],
+            values[0] * values[8] - values[2] * values[6],
+            values[2] * values[3] - values[0] * values[5],
+            values[3] * values[7] - values[4] * values[6],
+            values[1] * values[6] - values[0] * values[7],
+            values[0] * values[4] - values[1] * values[3],
+        ]
+        return Mat3(rows: adjugate.map { $0 / det })
+    }
 }
