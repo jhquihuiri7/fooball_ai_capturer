@@ -5,10 +5,10 @@
 // de una lente), así que su croma ya viene submuestreada. Dos comprobaciones:
 // - la MATEMÁTICA: compose_reference, portada aquí, aplicada a la entrada tal como el
 //   kernel la ve (decodificada del NV12), tiene que dar los mismos planos a ±1;
-// - el PSNR ≥45 dB frente al dorado de REF que pide la tarjeta NO se puede medir con
-//   estos casos: sus entradas son colores al azar píxel a píxel, croma que el 4:2:0
-//   no lleva (ninguna sobrevive al NV12 a 45 dB). Hace falta un dorado con entrada
-//   representable en NV12; hasta entonces manda la comparación de la matemática.
+// - el PSNR ≥45 dB frente al dorado de REF que pide la tarjeta, en los casos
+//   `programa_nv12_*`: su entrada es representable en NV12 (color constante por
+//   bloque 2×2). Los demás casos son colores al azar píxel a píxel, croma que el
+//   4:2:0 no lleva, y ahí solo cuenta la matemática.
 
 import CoreVideo
 import Foundation
@@ -21,7 +21,7 @@ final class ComposeProgramTests: XCTestCase {
     func testLosProgramasDoradosConGraficoYAnuncio() throws {
         let contexto = try XCTUnwrap(MetalContext())
         let kernel = try ComposeProgramKernel(context: contexto)
-        var corridos = 0
+        var (corridos, medidos) = (0, 0)
         for caso in try Self.casos() where caso.fn == "compose.nv12" {
             corridos += 1
             let e = caso.inputs
@@ -48,8 +48,16 @@ final class ComposeProgramTests: XCTestCase {
                 let peor = zip(actual, esperado).map { abs(Int($0) - Int($1)) }.max() ?? 0
                 XCTAssertLessThanOrEqual(peor, 1, "\(caso.nombre): plano \(nombre)")
             }
+
+            if caso.nombre.hasPrefix("programa_nv12") {
+                medidos += 1
+                let d = caso.expected
+                let psnr = psnrDb(y + u + v, d.bytes["y"]! + d.bytes["u"]! + d.bytes["v"]!)
+                XCTAssertGreaterThanOrEqual(psnr, 45, "\(caso.nombre): PSNR \(psnr) dB")
+            }
         }
         XCTAssertGreaterThanOrEqual(corridos, 9)
+        XCTAssertGreaterThanOrEqual(medidos, 2, "los programas representables en NV12")
     }
 
     /// compose_reference de tools/golden/evaluate_compose.py, en Double.

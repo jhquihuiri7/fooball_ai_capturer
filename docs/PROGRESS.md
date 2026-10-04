@@ -101,7 +101,15 @@ Objetivo ≤0,5 ms de GPU: p50 y p90 dentro; p99 por encima por el arranque de l
 
 **Siguiente paso**: IOS-21 (kernel Metal NV12 → tensor del detector).
 
-## 2026-10-04 · IOS-41 — composición del programa en el maestro · 🚧
+## 2026-10-04 · IOS-41 — composición del programa en el maestro · ✅
+
+**Cierre (2026-10-04)**: football-ai añade a compose.json dos programas representables
+en NV12 (color constante por bloque 2×2, sin primarios saturados), uno con gráfico y
+otro con gráfico y anuncio; el kernel los compone a **≥45 dB** de PSNR frente al dorado
+(ComposeProgramTests). GPU del maestro en el iPhone 17 (metal-bench): reproyección +
+composición p50 0,70 / p90 0,85 / p99 2,66 ms, dentro del objetivo de 3 ms.
+
+### Lo que se entregó antes
 
 **Hecho**
 - `RigMedia/Metal/Kernels/ComposeProgram.metal` (compose_program): en una pasada,
