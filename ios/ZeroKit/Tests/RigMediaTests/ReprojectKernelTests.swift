@@ -41,17 +41,17 @@ final class ReprojectKernelTests: XCTestCase {
         let kernel = try ReprojectKernel(context: contexto)
         let (ancho, alto) = (64, 32)
         let blanco = [UInt8](repeating: 255, count: ancho * alto * 3)
-        let fuente = try Self.nv12(bgr: blanco, ancho: ancho, alto: alto)
-        let destino = try Self.nv12(bgr: [UInt8](repeating: 0, count: ancho * alto * 3), ancho: ancho, alto: alto)
+        let fuente = try nv12(bgr: blanco, ancho: ancho, alto: alto)
+        let destino = try nv12(bgr: [UInt8](repeating: 0, count: ancho * alto * 3), ancho: ancho, alto: alto)
         // Identidad: el programa es la cámara tal cual, con la franja de abajo tapada.
-        try Self.ejecutar(contexto) {
+        try ejecutar(contexto) {
             try kernel.encode(
                 source: fuente, homography: .identity,
                 blind: BlindRect(x0: 0, y0: 24, x1: 64, y1: 32),
                 destination: destino, commandBuffer: $0
             )
         }
-        let bgr = Self.bgr(nv12: destino)
+        let bgr = bgr(nv12: destino)
         let margen = RigConstants.panoramaBlindMarginPx
         XCTAssertGreaterThan(bgr[(10 * ancho + 30) * 3], 250, "fuera de la franja se ve")
         for y in (24 - margen)..<alto {
@@ -65,15 +65,15 @@ final class ReprojectKernelTests: XCTestCase {
         let (ancho, alto) = (32, 16)
         // Un naranja de equipo, BGR, con la ganancia en el orden BGR de la referencia.
         let color: [UInt8] = [36, 106, 242]
-        let fuente = try Self.nv12(bgr: Array((0..<(ancho * alto)).map { _ in color }.joined()), ancho: ancho, alto: alto)
-        let destino = try Self.nv12(bgr: [UInt8](repeating: 0, count: ancho * alto * 3), ancho: ancho, alto: alto)
-        try Self.ejecutar(contexto) {
+        let fuente = try nv12(bgr: Array((0..<(ancho * alto)).map { _ in color }.joined()), ancho: ancho, alto: alto)
+        let destino = try nv12(bgr: [UInt8](repeating: 0, count: ancho * alto * 3), ancho: ancho, alto: alto)
+        try ejecutar(contexto) {
             try kernel.encode(
                 source: fuente, homography: .identity, gains: (b: 1.2, g: 1.0, r: 0.9),
                 destination: destino, commandBuffer: $0
             )
         }
-        let bgr = Self.bgr(nv12: destino)
+        let bgr = bgr(nv12: destino)
         let centro = (8 * ancho + 16) * 3
         let esperado = [36 * 1.2, 106.0, 242 * 0.9]
         for c in 0..<3 {
@@ -85,16 +85,16 @@ final class ReprojectKernelTests: XCTestCase {
         let contexto = try XCTUnwrap(MetalContext())
         let kernel = try ReprojectKernel(context: contexto)
         let (ancho, alto) = (32, 16)
-        let fuente = try Self.nv12(bgr: [UInt8](repeating: 200, count: ancho * alto * 3), ancho: ancho, alto: alto)
-        let destino = try Self.nv12(bgr: [UInt8](repeating: 0, count: ancho * alto * 3), ancho: ancho, alto: alto)
+        let fuente = try nv12(bgr: [UInt8](repeating: 200, count: ancho * alto * 3), ancho: ancho, alto: alto)
+        let destino = try nv12(bgr: [UInt8](repeating: 0, count: ancho * alto * 3), ancho: ancho, alto: alto)
         // w = −1 en todo el programa: nada cae delante de la cámara.
-        try Self.ejecutar(contexto) {
+        try ejecutar(contexto) {
             try kernel.encode(
                 source: fuente, homography: Mat3(rows: [1, 0, 0, 0, 1, 0, 0, 0, -1]),
                 destination: destino, commandBuffer: $0
             )
         }
-        XCTAssertTrue(Self.bgr(nv12: destino).allSatisfy { $0 < 4 })
+        XCTAssertTrue(bgr(nv12: destino).allSatisfy { $0 < 4 })
     }
 
     // MARK: - El programa de un caso
@@ -177,81 +177,6 @@ final class ReprojectKernelTests: XCTestCase {
             return mse == 0 ? .infinity : 10 * log10(255 * 255 / mse)
         }
         return (db(sv, nv), nr > 0 ? db(sr, nr) : nil)
-    }
-
-    // MARK: - NV12 BT.709 de rango limitado en la CPU
-
-    private static let kr = 0.2126, kb = 0.0722
-
-    private static func nv12(bgr: [UInt8], ancho: Int, alto: Int) throws -> CVPixelBuffer {
-        let pool = try XCTUnwrap(PixelBufferPool(
-            width: ancho, height: alto,
-            pixelFormat: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange, capacity: 1
-        ))
-        let buffer = try XCTUnwrap(pool.take())
-        CVPixelBufferLockBaseAddress(buffer, [])
-        defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
-        let lumaPtr = CVPixelBufferGetBaseAddressOfPlane(buffer, 0)!.assumingMemoryBound(to: UInt8.self)
-        let lumaStride = CVPixelBufferGetBytesPerRowOfPlane(buffer, 0)
-        let cromaPtr = CVPixelBufferGetBaseAddressOfPlane(buffer, 1)!.assumingMemoryBound(to: UInt8.self)
-        let cromaStride = CVPixelBufferGetBytesPerRowOfPlane(buffer, 1)
-        func rgb(_ x: Int, _ y: Int) -> (Double, Double, Double) {
-            let i = (y * ancho + x) * 3
-            return (Double(bgr[i + 2]) / 255, Double(bgr[i + 1]) / 255, Double(bgr[i]) / 255)
-        }
-        for y in 0..<alto {
-            for x in 0..<ancho {
-                let (r, g, b) = rgb(x, y)
-                let yn = kr * r + (1 - kr - kb) * g + kb * b
-                lumaPtr[y * lumaStride + x] = UInt8((16 + 219 * yn).rounded())
-            }
-        }
-        for cy in 0..<(alto / 2) {
-            for cx in 0..<(ancho / 2) {
-                var (r, g, b) = (0.0, 0.0, 0.0)
-                for (dx, dy) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
-                    let p = rgb(cx * 2 + dx, cy * 2 + dy)
-                    r += p.0 / 4; g += p.1 / 4; b += p.2 / 4
-                }
-                let yn = kr * r + (1 - kr - kb) * g + kb * b
-                cromaPtr[cy * cromaStride + cx * 2] = UInt8((128 + 224 * (b - yn) / (2 * (1 - kb))).rounded())
-                cromaPtr[cy * cromaStride + cx * 2 + 1] = UInt8((128 + 224 * (r - yn) / (2 * (1 - kr))).rounded())
-            }
-        }
-        return buffer
-    }
-
-    private static func bgr(nv12 buffer: CVPixelBuffer) -> [UInt8] {
-        CVPixelBufferLockBaseAddress(buffer, .readOnly)
-        defer { CVPixelBufferUnlockBaseAddress(buffer, .readOnly) }
-        let ancho = CVPixelBufferGetWidth(buffer), alto = CVPixelBufferGetHeight(buffer)
-        let lumaPtr = CVPixelBufferGetBaseAddressOfPlane(buffer, 0)!.assumingMemoryBound(to: UInt8.self)
-        let lumaStride = CVPixelBufferGetBytesPerRowOfPlane(buffer, 0)
-        let cromaPtr = CVPixelBufferGetBaseAddressOfPlane(buffer, 1)!.assumingMemoryBound(to: UInt8.self)
-        let cromaStride = CVPixelBufferGetBytesPerRowOfPlane(buffer, 1)
-        var salida = [UInt8](repeating: 0, count: ancho * alto * 3)
-        func sat(_ v: Double) -> UInt8 { UInt8(min(max((v * 255).rounded(), 0), 255)) }
-        for y in 0..<alto {
-            for x in 0..<ancho {
-                let yn = (Double(lumaPtr[y * lumaStride + x]) - 16) / 219
-                let cb = (Double(cromaPtr[(y / 2) * cromaStride + (x / 2) * 2]) - 128) / 224
-                let cr = (Double(cromaPtr[(y / 2) * cromaStride + (x / 2) * 2 + 1]) - 128) / 224
-                let r = yn + 2 * (1 - kr) * cr
-                let b = yn + 2 * (1 - kb) * cb
-                let g = (yn - kr * r - kb * b) / (1 - kr - kb)
-                let i = (y * ancho + x) * 3
-                salida[i] = sat(b); salida[i + 1] = sat(g); salida[i + 2] = sat(r)
-            }
-        }
-        return salida
-    }
-
-    private static func ejecutar(_ contexto: MetalContext, _ cuerpo: (MTLCommandBuffer) throws -> Void) throws {
-        let cb = try XCTUnwrap(contexto.queue.makeCommandBuffer())
-        try cuerpo(cb)
-        cb.commit()
-        cb.waitUntilCompleted()
-        XCTAssertNil(cb.error)
     }
 
     // MARK: - Los dorados de reprojection.json

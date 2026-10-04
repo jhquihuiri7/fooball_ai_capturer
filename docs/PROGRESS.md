@@ -12,6 +12,34 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-04 · IOS-41 — composición del programa en el maestro · 🚧
+
+**Hecho**
+- `RigMedia/Metal/Kernels/ComposeProgram.metal` (compose_program): en una pasada,
+  la parte propia y la del esclavo con el peso de la costura recalculado por píxel
+  desde la vista, el gráfico RGBA SIN premultiplicar (alpha_composite), el anuncio
+  premultiplicado con su alfa inversa en la franja (StripBlender) y NV12 BT.709 de
+  rango limitado con los coeficientes exactos de compose_reference. Caminos de una
+  lente: solo la parte propia o solo la del esclavo, más el gráfico.
+- `ComposeProgramKernel.swift` y `UploadTexture` (el gráfico y el anuncio se suben
+  solo cuando cambia su generación).
+- OverlayRaster (IOS-45) pasa a entregar RGBA sin premultiplicar
+  (`rawStraightRgba`), que es el contrato de la composición.
+- Los helpers de cada .metal van en su espacio de nombres: sin metallib, todas las
+  fuentes se compilan juntas.
+- ComposeProgramTests (5): compose_reference sobre la entrada tal como el kernel la
+  ve da los mismos Y/U/V a ±1 en los 9 casos dorados y en los 3 de la franja; la
+  costura; una lente con el gráfico; la subida por generación.
+
+**Falta para ✅**
+- El PSNR ≥45 dB frente a los dorados de REF no se puede medir: las entradas de
+  compose.json son colores al azar píxel a píxel y ninguna sobrevive al NV12 de
+  entrada a 45 dB. Hace falta que REF añada casos con entrada representable en
+  4:2:0 (o en NV12 directamente). La matemática ya casa a ±1.
+- Los ≤3 ms de GPU del maestro por fotograma, en el iPhone.
+
+**Siguiente paso**: lo que queda de Mac es poco; las IOS-20/21/22 necesitan el iPhone.
+
 ## 2026-10-04 · IOS-40 — kernel Metal de la parte: reproyección por homografía · 🚧
 
 **Hecho**
@@ -82,7 +110,7 @@ Mientras tanto, el test vigila ≤6 %, que es lo que ya cuesta la tipografía.
   chaflán, tortuga, EN VIVO, indicador de cámara, franja con claim, ranuras con
   montaña/olas/sol y la marca). Medidas y paleta de OverlaySpec (REF-32).
 - `lib/src/graphics/overlay_raster.dart`: PictureRecorder → ui.Image →
-  toByteData(rawRgba, alfa premultiplicado), solo cuando cambia el estado; con el
+  toByteData(rawStraightRgba, alfa sin premultiplicar; IOS-41 lo corrigió), solo cuando cambia el estado; con el
   reloj en marcha, un raster por segundo.
 - test/graphics/scoreboard_painter_test.dart (9): dorados de imagen de 4 estados
   (inicio, directo, final_largo y con_anuncios sin ranuras), la geometría de la

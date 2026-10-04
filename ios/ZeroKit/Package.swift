@@ -37,6 +37,7 @@ let package = Package(
             resources: [
                 .process("Metal/Shaders.metal"),
                 .process("Metal/Kernels/Reproject.metal"),
+                .process("Metal/Kernels/ComposeProgram.metal"),
             ],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),

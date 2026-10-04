@@ -14,8 +14,10 @@ import 'lineup_card_painter.dart';
 import 'scoreboard_painter.dart';
 import 'slate_painter.dart';
 
-/// Una capa rasterizada: RGBA de 8 bits por canal, fila a fila, alfa PREMULTIPLICADO
-/// (`ui.ImageByteFormat.rawRgba`), que es lo que el blend de Metal espera.
+/// Una capa rasterizada: RGBA de 8 bits por canal, fila a fila, alfa SIN
+/// premultiplicar (`ui.ImageByteFormat.rawStraightRgba`): es el contrato de la
+/// composición (compose_reference de REF-18, como `Image.alpha_composite`), y lo que
+/// el kernel ComposeProgram de IOS-41 espera.
 class OverlayFrame {
   const OverlayFrame({
     required this.rgba,
@@ -66,10 +68,10 @@ class OverlayRaster {
   }
 }
 
-/// Los bytes RGBA premultiplicados de una imagen, que se libera al terminar.
+/// Los bytes RGBA sin premultiplicar de una imagen, que se libera al terminar.
 Future<Uint8List> _rgbaOf(ui.Image imagen) async {
   try {
-    final ByteData? bytes = await imagen.toByteData(format: ui.ImageByteFormat.rawRgba);
+    final ByteData? bytes = await imagen.toByteData(format: ui.ImageByteFormat.rawStraightRgba);
     if (bytes == null) {
       throw StateError('el motor no devolvió los bytes del gráfico');
     }
