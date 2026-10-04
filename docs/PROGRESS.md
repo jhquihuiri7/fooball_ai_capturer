@@ -12,6 +12,27 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-04 · IOS-32 — fusión angular y emparejado por rigMs · ✅
+
+**Hecho**
+- `Detection/Fusion.swift`: Observation/FusedObservation y `RigModel.fuse` —
+  voraz por score con ORDEN ESTABLE (list.sort de Python es estable y Swift
+  no: desempate por orden de inserción, o los dorados no cuadran), `<=` en el
+  más próximo (a igual ángulo gana el último, como Python), punto medio por
+  VECTORES unitarios y salida descendente. Los 3 casos `RigModel.fuse` del
+  dorado pasan y el runner de rig.json ya no salta NADA (34 casos).
+- `Detection/DetectionPairer.swift`: el FramePairer aplicado a metadatos,
+  genérico en la carga — misma semántica congelada por sync.json: tolerancia,
+  hueco acotado con descarte de lo más viejo SIN encolar, el antiguo que ya no
+  puede emparejar sale huérfano, force para el cierre, y PairingStats con
+  completeness/meanAbsSkew/synchronized (RIG_MIN_PAIR_COMPLETENESS generado).
+- `DetectionPairerTests` REPRODUCE las 3 secuencias doradas de FramePairer.run
+  (resultados Y estadísticas idénticos); FusionTests cubre lo que el dorado no
+  nombra: misma cámara no funde, claves y score del mejor, orden de salida.
+- `RigPlayerDetection` (la caja de la cámara que mejor la vio) queda para
+  IOS-23: es donde nace PlayerDetection en Swift, y definirla sin caja sería
+  inventarse el tipo dos veces.
+
 ## 2026-10-04 · IOS-31 — vista rectilínea y homografía programa→cámara · ✅
 
 **Hecho**

@@ -26,8 +26,8 @@ final class RigModelTests: XCTestCase {
                 XCTFail(fallo)
             }
         }
-        XCTAssertEqual(saltados, ["RigModel.fuse"], "la fusión llega con IOS-32; nada más se salta")
-        XCTAssertGreaterThanOrEqual(corridos, 30, "el dorado del rig trae más casos que esto")
+        XCTAssertEqual(saltados, [], "desde IOS-32 el dorado del rig se replica ENTERO")
+        XCTAssertGreaterThanOrEqual(corridos, 33, "el dorado del rig trae más casos que esto")
     }
 
     func testCargaUnSoporteRealDelPod() throws {
@@ -136,7 +136,32 @@ final class RigModelTests: XCTestCase {
             return .object(["data": GoldenValue.from(json: rig.toDictionary())])
 
         case "RigModel.fuse":
-            return nil  // IOS-32
+            guard case let .array(crudas)? = try? inputs.field("observations") else {
+                throw GoldenError.message("observations no es una lista")
+            }
+            let observaciones = try crudas.map { cruda in
+                Observation(
+                    side: CameraSide(rawValue: try cruda.string("side"))!,
+                    xPx: try cruda.number("x_px"),
+                    yPx: try cruda.number("y_px"),
+                    score: try cruda.number("score"),
+                    key: Int(try cruda.number("key"))
+                )
+            }
+            let fundidas = try rig(from: inputs)
+                .fuse(observaciones, maxAngleRad: inputs.number("max_angle_rad"))
+            return .object([
+                "fused": .array(fundidas.map { item in
+                    .object([
+                        "yaw_rad": .number(item.direction.yawRad),
+                        "pitch_rad": .number(item.direction.pitchRad),
+                        "score": .number(item.score),
+                        "sides": .array(item.sides.map { .string($0.rawValue) }),
+                        "keys": .array(item.keys.map { .number(Double($0)) }),
+                        "separation_rad": .number(item.separationRad),
+                    ])
+                }),
+            ])
 
         default:
             throw GoldenError.message("fn sin réplica: \(fn)")
