@@ -34,7 +34,7 @@ decisión formal es de REF-33/propietario.
 contraejemplo (una entrada perturbada debe dar delta > 0): si el lector casara
 mal los nombres, 0 violaciones saldría gratis.
 
-## 2026-10-04 · SPK-52 — ROI-lite en el ANE: mosaico y lote de ROIs · 🚧 falta la multifunción
+## 2026-10-04 · SPK-52 — ROI-lite en el ANE: mosaico, lote de ROIs y multifunción · ✅
 
 **La medida (mismas condiciones)**
 - **100,00 % del coste en el ANE** en las CUATRO formas (las 192 ops «fuera»
@@ -45,9 +45,20 @@ mal los nombres, 0 violaciones saldría gratis.
 - Lote de 2 ROIs: 256 → **1 ms**; 320 → 1-2 ms ✓✓ (objetivo ≤3 ms).
 - compile ≤51 ms; load ≤515 ms.
 
-**Qué queda**: el paquete multifunción (global/roi) con pesos deduplicados —
-pide implementar `functions` en el export (ML-09 lo dejó declarado y guardado
-tras un error claro) — y su medida (≤1,1× de peso; cambiar de función ≤1 ms).
+**La multifunción (2026-10-04, segunda pasada, térmica nominal entera)**
+- Exportada con `tools/export_multifunction.py` del repo de entrenamiento
+  (global 896×1920 / roi 2×256×256, pesos deduplicados): **1,036× el peso de un
+  export suelto** ✓ (≤1,1×). Informe en `bench/model-bench-1791128969.json`.
+- **100 % del ANE en las dos funciones**. global p50 **8 ms** (mejor aún que el
+  suelto de la primera pasada: aquella corrió con térmica serious tras la GPU
+  del D-FINE); roi p50 **0,5 ms**.
+- **Cambiar de función no cuesta nada medible**: 200 predicciones alternadas
+  global/roi dan p90 = 8 ms = el p50 del propio global (p99 12, un cubo de
+  cola) ✓ objetivo ≤1 ms de sobrecoste. El arnés gana `function` en bench.json
+  (MLModelConfiguration.functionName) y el paso de cambio alternado.
+
+**Los cinco criterios de la tarjeta, medidos y en verde.** La altura del
+mosaico (10 m sí cabe, 6 m da 16 ms) la decide REF-33 con estas cifras.
 
 ## 2026-10-03 · SPK-50 — arnés de banco de modelos en el iPhone (ModelBenchTests) · ✅
 

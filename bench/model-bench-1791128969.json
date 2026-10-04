@@ -1,0 +1,48 @@
+{
+  "counters" : {
+    "roilite-multi-global/ane_cost_pct_x100" : 10000,
+    "roilite-multi-global/compile_ms" : 56,
+    "roilite-multi-global/load_ms" : 394,
+    "roilite-multi-global/ops_off_ane" : 450,
+    "roilite-multi-global/ops_total" : 516,
+    "roilite-multi-global/predictions" : 1000,
+    "roilite-multi-roi/ane_cost_pct_x100" : 10000,
+    "roilite-multi-roi/compile_ms" : 51,
+    "roilite-multi-roi/load_ms" : 219,
+    "roilite-multi-roi/ops_off_ane" : 450,
+    "roilite-multi-roi/ops_total" : 516,
+    "roilite-multi-roi/predictions" : 1000,
+    "roilite-multi/switch_predictions" : 200
+  },
+  "device" : "iPhone18,3",
+  "duration_s" : 12.409391045570374,
+  "name" : "model-bench",
+  "params" : {
+    "models" : "roilite-multi-global,roilite-multi-roi"
+  },
+  "stages_ms" : {
+    "roilite-multi-global/predict" : {
+      "p50_ms" : 8,
+      "p90_ms" : 8,
+      "p99_ms" : 8
+    },
+    "roilite-multi-roi/predict" : {
+      "p50_ms" : 0.5,
+      "p90_ms" : 0.5,
+      "p99_ms" : 1
+    },
+    "roilite-multi/switch" : {
+      "p50_ms" : 1,
+      "p90_ms" : 8,
+      "p99_ms" : 12
+    }
+  },
+  "started_epoch_s" : 1791128969,
+  "system_version" : "Version 26.6.1 (Build 23G83)",
+  "thermal" : [
+    "nominal",
+    "nominal",
+    "nominal",
+    "nominal"
+  ]
+}

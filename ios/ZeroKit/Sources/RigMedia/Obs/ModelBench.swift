@@ -32,9 +32,11 @@ public struct BenchModelSpec: Decodable {
     public var computeUnits: String = "cpu_and_ne"
     /// El directorio del bundle dorado de ML-12, si hay.
     public var golden: String?
+    /// La función del paquete multifunción (SPK-52); nil para un paquete normal.
+    public var function: String?
 
     enum CodingKeys: String, CodingKey {
-        case name, package, predictions, warmup, golden
+        case name, package, predictions, warmup, golden, function
         case computeUnits = "compute_units"
     }
 
@@ -46,6 +48,7 @@ public struct BenchModelSpec: Decodable {
         warmup = try c.decodeIfPresent(Int.self, forKey: .warmup) ?? 50
         computeUnits = try c.decodeIfPresent(String.self, forKey: .computeUnits) ?? "cpu_and_ne"
         golden = try c.decodeIfPresent(String.self, forKey: .golden)
+        function = try c.decodeIfPresent(String.self, forKey: .function)
     }
 }
 
@@ -116,22 +119,63 @@ public enum ModelBench {
         var informe = report
         informe.params["models"] = spec.models.map(\.name).joined(separator: ",")
 
+        var compilados: [String: URL] = [:]  // por nombre de entrada, para el cambio
         for (indice, modelo) in spec.models.enumerated() {
             progress?(Double(indice) / Double(max(1, spec.models.count)), modelo.name)
-            try await bench(modelo, resources: resources, report: &informe)
+            compilados[modelo.name] = try await bench(modelo, resources: resources, report: &informe)
             informe.thermal.append(thermalWord())
         }
+        try benchFunctionSwitch(spec.models, compiled: compilados, report: &informe)
         return informe
+    }
+
+    /// El coste de CAMBIAR de función de un multifunción (SPK-52): predicciones
+    /// alternadas entre las entradas que comparten paquete y declaran función.
+    /// El sobrecoste se lee comparando `<paquete>/switch` con el p50 de cada una.
+    private static func benchFunctionSwitch(
+        _ models: [BenchModelSpec], compiled: [String: URL], report: inout BenchReport
+    ) throws {
+        let grupos = Dictionary(grouping: models.filter { $0.function != nil }, by: \.package)
+        for (paquete, specs) in grupos where specs.count >= 2 {
+            var cargados: [(MLModel, MLFeatureProvider)] = []
+            for spec in specs {
+                guard let url = compiled[spec.name] else { continue }
+                let config = MLModelConfiguration()
+                config.computeUnits =
+                    spec.computeUnits == "cpu_only" ? .cpuOnly : .cpuAndNeuralEngine
+                config.functionName = spec.function
+                let modelo = try MLModel(contentsOf: url, configuration: config)
+                cargados.append((modelo, try seededInputs(for: modelo)))
+            }
+            guard cargados.count >= 2 else { continue }
+            for (modelo, entrada) in cargados {  // calienta las dos funciones
+                for _ in 0..<10 { _ = try modelo.prediction(from: entrada) }
+            }
+            var histograma = LatencyHistogram(boundsMs: benchBoundsMs)
+            for i in 0..<switchPredictions {
+                let (modelo, entrada) = cargados[i % cargados.count]
+                let antes = ContinuousClock.now
+                _ = try modelo.prediction(from: entrada)
+                histograma.record(ms: ms(antes, ContinuousClock.now))
+            }
+            let nombre = paquete.replacingOccurrences(of: ".mlpackage", with: "")
+            report.stagesMs["\(nombre)/switch"] = BenchReport.StageSummary(histogram: histograma)
+            report.counters["\(nombre)/switch_predictions"] = switchPredictions
+        }
     }
 
     // MARK: por modelo
 
+    /// El número de predicciones alternadas del paso de cambio de función.
+    static let switchPredictions = 200
+
     private static func bench(
         _ spec: BenchModelSpec, resources: URL, report: inout BenchReport
-    ) async throws {
+    ) async throws -> URL {
         let paquete = resources.appendingPathComponent(spec.package)
         let config = MLModelConfiguration()
         config.computeUnits = spec.computeUnits == "cpu_only" ? .cpuOnly : .cpuAndNeuralEngine
+        config.functionName = spec.function
 
         // Compilación y carga por separado: son parte del arranque de la app.
         let t0 = ContinuousClock.now
@@ -165,6 +209,7 @@ public enum ModelBench {
             report.counters["\(spec.name)/golden_max_delta_x1e6"] = Int((peor * 1e6).rounded())
             report.counters["\(spec.name)/golden_violations"] = violaciones
         }
+        return compilado
     }
 
     private static func predictLoop(
