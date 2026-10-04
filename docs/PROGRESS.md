@@ -12,6 +12,36 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-04 · IOS-45 — el marcador en Dart rasterizado a RGBA · ✅
+
+**Hecho**
+- `lib/src/graphics/scoreboard_painter.dart`: ScoreboardState (valor, decide el
+  re-raster), ScoreboardLayout (la medición de `_measure_layout`, con el `round()`
+  bancario de Python y las cajas de boxes.json) y ScoreboardPainter (marcador con
+  chaflán, tortuga, EN VIVO, indicador de cámara, franja con claim, ranuras con
+  montaña/olas/sol y la marca). Medidas y paleta de OverlaySpec (REF-32).
+- `lib/src/graphics/overlay_raster.dart`: PictureRecorder → ui.Image →
+  toByteData(rawRgba, alfa premultiplicado), solo cuando cambia el estado; con el
+  reloj en marcha, un raster por segundo.
+- test/graphics/scoreboard_painter_test.dart (9): dorados de imagen de 4 estados
+  (inicio, directo, final_largo y con_anuncios sin ranuras), la geometría de la
+  maqueta y el ritmo del raster.
+
+**Decisiones**
+- Tipografía Zero: Archivo 700 donde la maqueta usaba Arial Narrow Bold, IBM Plex
+  Sans 400 donde usaba Arial Narrow. Archivo no es condensada: en «directo» el
+  marcador se estira a 833 px (704 en la maqueta), por el mismo camino que la
+  maqueta usa con nombres largos. Si se quiere el ancho de 704, hace falta una
+  condensada en assets/fonts.
+- Los dorados se generaron en macOS, no en Windows como decía la tarjeta: el
+  rasterizado de texto depende de la plataforma, y se regeneran con
+  `flutter test --update-goldens` en la máquina de referencia que se elija.
+
+**Pendiente**: medir el raster en el iPhone (objetivo ≤8 ms) cuando IOS-47 lo
+monte en la app.
+
+**Siguiente paso**: IOS-46 (alineación y SIN SEÑAL).
+
 ## 2026-10-04 · IOS-37 — bucle del director (lógica pura) · 🚧
 
 **Hecho**
