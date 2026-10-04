@@ -12,6 +12,23 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-04 · IOS-34 — muelle de 3 ejes y límites de la cámara virtual · ✅
+
+**Hecho**
+- `Direction/AxisSpring.swift`: AxisParams (validados; yaw/pitch/hfov desde las
+  constantes generadas), AxisState, zona muerta con histéresis, muro blando que
+  solo frena hacia fuera e `integrateAxis` en el orden de §18.3.
+- `Direction/VirtualCamera.swift`: la cobertura de CylindricalCanvas.fit (sin
+  remapeo) con variante de UNA lente para el modo degradado,
+  `tightestServableHfovRad`, CameraLimits.fromCanvas con el rango que colapsa al
+  centro, y VirtualCameraEngine.step: zoom primero, luego yaw y pitch.
+- AxisSpringTests + VirtualCameraEngineTests (9): las 3 secuencias doradas de 300
+  pasos y los 300 pasos del motor (con objetivos ausentes) a 1e-9, mismos
+  engaged/settled; fit, from_canvas y el tope de la lente; rechazos.
+- PANORAMA_FIT_* exportadas desde football-ai.
+
+**Siguiente paso**: IOS-35 (gramática de planos) → IOS-37.
+
 ## 2026-10-04 · IOS-33 — punto de acción desde los jugadores (action.py) · ✅
 
 **Hecho**

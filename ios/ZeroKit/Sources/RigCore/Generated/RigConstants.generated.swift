@@ -191,6 +191,24 @@ public enum RigConstants {
     /// (Python: `RIG_FUSE_MAX_ANGLE_RAD`.)
     public static let rigFuseMaxAngleRad: Double = 0.02
 
+    /// Puntos que se muestrean por cada borde de cada imagen para encontrar la extensión del
+    /// lienzo. Los bordes de una cámara inclinada no son rectas en coordenadas cilíndricas, así
+    /// que mirar solo las cuatro esquinas recortaría las panzas de los bordes superior e
+    /// inferior.
+    ///
+    /// Impar a propósito: en una cámara sin alabeo, el extremo de esa panza cae justo en el
+    /// centro del borde, y con un número par de muestras ese punto no se mira nunca.
+    /// (Python: `PANORAMA_FIT_EDGE_SAMPLES`.)
+    public static let panoramaFitEdgeSamples: Int = 65
+
+    /// Píxeles de margen que se añaden al lienzo por cada lado.
+    ///
+    /// Con alabeo, el extremo de un borde ya no está en su centro y cae entre dos muestras. El
+    /// error es de centésimas de píxel, pero basta para que la primera fila de la imagen quede
+    /// fuera del lienzo. Un píxel de margen lo absorbe sin que nadie lo note.
+    /// (Python: `PANORAMA_FIT_MARGIN_PX`.)
+    public static let panoramaFitMarginPx: Double = 1.0
+
     /// Puntos ORB que se extraen por imagen.
     ///
     /// El solape entre las dos cámaras son ~20° de los ~106° de cada una: menos de una quinta
