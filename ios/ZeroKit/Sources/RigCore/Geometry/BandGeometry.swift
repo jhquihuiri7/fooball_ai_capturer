@@ -168,8 +168,12 @@ extension BandGeometry {
 
     /// Inversa de `toDictionary`. Además de lo que valida la referencia, comprueba que
     /// la franja cabe en la entrada del detector del móvil (ADR 0020): con una
-    /// entrada de otro tamaño, el modelo compilado no la aceptaría.
-    public static func fromDictionary(_ data: [String: Any]) throws -> BandGeometry {
+    /// entrada de otro tamaño, el modelo compilado no la aceptaría. Los dorados
+    /// sintéticos de REF-14 usan una entrada pequeña y la leen con `checkDetectorInput`
+    /// a `false`.
+    public static func fromDictionary(
+        _ data: [String: Any], checkDetectorInput: Bool = true
+    ) throws -> BandGeometry {
         guard let version = data["version"] as? Int, version == fileVersion else {
             throw RigError.message(
                 "version de band.json no soportada: \(String(describing: data["version"])) "
@@ -223,7 +227,9 @@ extension BandGeometry {
             inputHeight: tamano[1],
             farSplitRow: far
         )
-        try banda.checkFitsDetector()
+        if checkDetectorInput {
+            try banda.checkFitsDetector()
+        }
         return banda
     }
 

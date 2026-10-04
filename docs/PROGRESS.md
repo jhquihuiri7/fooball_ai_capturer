@@ -12,6 +12,28 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-04 · IOS-21 — kernel Metal de preproceso NV12 → entrada del detector · 🚧
+
+**Hecho**
+- `RigMedia/Metal/Kernels/Preprocess.metal`: compose_band_input en una pasada. Por
+  píxel de la entrada, su región de band.json, el recorte redondeado como la
+  referencia y la media por ÁREA (INTER_AREA: caja 2×2 a ×0,5, la escala que toque
+  en el mosaico), con cada píxel de fuente pasado antes a BGR redondeado con los
+  coeficientes de convert.py. El móvil cabeza abajo lee su crudo girado 180°.
+  Escribe 32BGRA sin normalizar (la escala 1/255 va en el modelo, ML-35).
+  Dos lectores con el mismo núcleo: NV12 (producción) y BGRA (el dorado de REF-14).
+- `RigMedia/ML/DetectorInputBuilder.swift`: pool BGRA precalentado y
+  `addCompletedHandler`; sin hueco en el pool, el fotograma de IA se descarta y se
+  cuenta (`dropped`), nunca se encola.
+- BandGeometry.fromDictionary acepta `checkDetectorInput: false` para los dorados
+  sintéticos de REF-14 (entrada de 192×64).
+- PreprocessKernelTests (3): el lienzo dorado de REF-14 a ≤1 nivel en sus 3 casos;
+  la ruta NV12 contra la cuenta de Python (con y sin giro) a ≤1; el descarte.
+
+**Falta para ✅**: los ≤0,5 ms de GPU por fotograma en el iPhone 17.
+
+**Siguiente paso**: IOS-22.
+
 ## 2026-10-04 · IOS-20 — geometría de la franja jugable (InputRegion) · ✅
 
 **Hecho**
