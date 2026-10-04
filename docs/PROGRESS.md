@@ -650,6 +650,24 @@ hubs), ya con esta expectativa.
 
 ---
 
+## 2026-10-04 · IOS-42 — sincronía de vistas y partes sin desgarros · ✅
+
+**Hecho**
+- `RigCore/Direction/ViewSync.swift`, lógica pura (ADR 0023 §5): ViewHistory (el
+  anillo acotado del maestro; cada mensaje `view` lleva las VIEW_HISTORY=3 últimas),
+  SlaveViewResolver (la vista del fotograma a ≤½ fotograma, o extrapolada lineal de
+  las dos últimas y marcada; acepta desorden y duplicados), PartInfo (la parte lleva
+  la vista que usó de verdad) y ProgramSync (compone el instante T SIEMPRE en el tic
+  T + PART_MAX_WAIT_MS: con la parte, las dos mitades con su vista y el fotograma del
+  maestro más cercano al de la parte; sin ella, una lente y contada).
+- LinkConstants gana `viewHistory` y `partMaxWaitMs` (los del ADR); ViewCommand y
+  ResolvedView, init públicos.
+- ViewSyncTests (4): dos minutos simulados con 10 % de vistas y 5 % de partes perdidas,
+  jitter 0–80 ms y reordenado: **0 fotogramas con vistas distintas**, las caídas a una
+  lente son exactamente las pérdidas inyectadas, retardo 100 ms ±1 fotograma; la
+  extrapolación sigue la trayectoria; el maestro no compone antes de su tic; el
+  mensaje view lleva las tres últimas.
+
 ## 2026-10-03 · IOS-15 — volcado NV12 crudo para el salto de dominio · ✅
 
 **Cierre (2026-10-04)**: grabación de prueba de 180 s en el iPhone 17 con

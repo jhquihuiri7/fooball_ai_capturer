@@ -17,4 +17,14 @@ public enum LinkConstants {
     /// no por tiempo, como el FramePairer del servidor: con 4 en vuelo, la quinta
     /// expulsa a la más vieja, que se cuenta como incompleta.
     public static let reassemblyFrames = 4
+
+    /// Vistas que lleva cada mensaje `view` (ADR 0023 §5, IOS-42): las 3 últimas, para
+    /// que un datagrama perdido no obligue al esclavo a extrapolar.
+    public static let viewHistory = 3
+
+    /// Milisegundos que el maestro espera la parte del esclavo antes de componer el
+    /// instante T (objetivo de SPK-04). Compone SIEMPRE en T + esto, llegue o no: el
+    /// retardo del programa queda fijo, y una parte que no llegó a tiempo hace que ese
+    /// fotograma salga de una lente.
+    public static let partMaxWaitMs: Int64 = 100
 }

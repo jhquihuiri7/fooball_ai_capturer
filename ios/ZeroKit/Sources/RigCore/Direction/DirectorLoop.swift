@@ -35,6 +35,21 @@ public struct ViewCommand: Equatable, Sendable {
     public let seamYawRad: Double
     public let featherRad: Double
     public let gains: ColorGains
+
+    public init(
+        targetRigMs: Int64, viewId: UInt32, yawRad: Double, pitchRad: Double, hfovRad: Double,
+        sides: [CameraSide], seamYawRad: Double, featherRad: Double, gains: ColorGains
+    ) {
+        self.targetRigMs = targetRigMs
+        self.viewId = viewId
+        self.yawRad = yawRad
+        self.pitchRad = pitchRad
+        self.hfovRad = hfovRad
+        self.sides = sides
+        self.seamYawRad = seamYawRad
+        self.featherRad = featherRad
+        self.gains = gains
+    }
 }
 
 /// Lo que el operador decide sobre la cámara.
