@@ -1,0 +1,12 @@
+{"app_version": "0.9.0", "band_sha": "3434343434343434343434343434343434343434343434343434343434343434", "clock_domain": "a3f9c2d8e1b74560", "match_id": "demo-2026-10-03", "models": [{"name": "dfine-n-band", "sha256": "abababababababababababababababababababababababababababababababab", "version": "0.1.0"}], "pitch_sha": null, "rig_id": "rig-01", "rig_sha": "1212121212121212121212121212121212121212121212121212121212121212", "schema": "match-log-v1"}
+{"boxes": [{"box": [100.0, 220.0, 140.0, 320.0], "cls": "player", "feet_deg": [-12.5, -6.25], "feet_m": [18.5, 32.0], "score": 0.91}, {"box": [900.0, 210.0, 936.0, 302.0], "cls": "player", "feet_deg": null, "feet_m": null, "score": 0.84}], "model": "dfine-n-band", "rig_ms": 1000, "side": "left", "type": "det"}
+{"players": [{"m": [18.5, 32.0], "pitch_deg": -6.25, "score": 0.91, "sides": ["left", "right"], "yaw_deg": -12.5}], "rig_ms": 1000, "type": "fused"}
+{"box": [1510.0, 400.0, 1522.0, 412.0], "deg": [21.25, -8.5], "m": [62.0, 28.5], "rig_ms": 1133, "score": 0.77, "side": "right", "type": "ball"}
+{"box": null, "deg": null, "m": null, "rig_ms": 1266, "score": null, "side": null, "type": "ball"}
+{"hfov_deg": 34.0, "pitch_deg": -7.0, "rig_ms": 1266, "shot": "medium", "type": "view", "yaw_deg": 4.5}
+{"by": null, "confidence": null, "kind": "goal", "rig_ms": 61000, "source": "operator", "type": "mark"}
+{"by": "game_state@1", "confidence": 0.85, "kind": "kickoff", "rig_ms": 61050, "source": "rules", "type": "mark"}
+{"away": 0, "home": 1, "rig_ms": 61100, "type": "score"}
+{"base_s": 0.0, "rig_ms": 61100, "running": true, "started_rig_ms": 1000, "type": "clock"}
+{"confidence": 0.92, "duration_ms": 640, "kind": "whistle", "rig_ms": 60400, "type": "audio"}
+{"id": "clip-0001", "kind": "goal", "rig_ms": 61200, "t0_rig_ms": 53000, "t1_rig_ms": 68000, "type": "clip"}
