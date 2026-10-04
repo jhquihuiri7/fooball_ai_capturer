@@ -12,6 +12,22 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-04 · IOS-53 — multiplexor MPEG-TS propio (H.264 con SEI y AAC en ADTS) · ✅
+
+**Hecho**
+- `RigCore/Media/TsMuxer.swift`, puro y determinista: PAT y PMT (0x1B y 0x0F) con
+  CRC32 de MPEG-2, PES (vídeo sin longitud, audio con ella), PCR en el PID de vídeo
+  en el primer paquete de cada fotograma, contadores de continuidad, relleno por el
+  campo de adaptación, AUD en cada fotograma y SPS/PPS + tablas delante de cada IDR.
+  El SEI entra con la unidad de acceso en AVCC, dentro de su PES (ADR 0022).
+- `RigCore/Media/Adts.swift`: la cabecera ADTS de 7 B.
+- `tools/ts_validate.sh`: ffprobe sin errores, PTS monótonos y A/V < 20 ms.
+- TsMuxerTests (6): CRC de la PAT conocida (2AB104B2, la de ffmpeg), PAT/PMT
+  escritas, paquetes y contadores, ADTS, bytes dorados de una entrada pequeña y
+  10 s de H.264 + AAC de ffmpeg muxados que ffprobe lee sin errores (A/V 0 ms).
+
+**Siguiente paso**: tareas con los dos iPhone (Alexander ya tiene dos).
+
 ## 2026-10-04 · IOS-72 — intrínsecas por fotograma y vigilancia de la calibración · ✅
 
 **Hecho**
