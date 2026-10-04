@@ -12,6 +12,24 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-04 · IOS-33 — punto de acción desde los jugadores (action.py) · ✅
+
+**Hecho**
+- `Direction/Action.swift`: PlayerEvidence (con sigmaRad), ActionEstimator con
+  búferes de trabajo reservados al crear (jugadores por parámetro, rejilla para
+  el yaw entero) y reutilizados sin asignar en el bucle; yawDensity replica
+  np.arange tal cual lo rellena numpy (delta = (start+step)−start), argmax con
+  el primero a igualdad, bimodalidad por otra moda separada y la confianza con
+  tope 0.80 sin convergencia.
+- `Detection/PlayerClass.swift` (player/goalkeeper/referee) y el protocolo
+  `ActionSighting` (dirección, clase, score): RigPlayerDetection de IOS-23 lo
+  cumplirá sin que la acción sepa qué es una caja.
+- ActionTests: los 5 casos de action.json a 1e-9 (incluido el nil de pocos
+  jugadores), sin evidencia con solo árbitros/porteros/score 0, y que reutilizar
+  los búferes no arrastra estado entre ciclos.
+
+**Siguiente paso**: IOS-34 (muelle de 3 ejes y límites) → IOS-35 → IOS-37.
+
 ## 2026-10-04 · IOS-36 — homografía del campo (PitchModel) en el móvil · ✅
 
 **Hecho**
