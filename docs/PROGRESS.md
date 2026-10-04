@@ -250,7 +250,12 @@ monte en la app.
 
 **Siguiente paso**: IOS-46 (alineación y SIN SEÑAL).
 
-## 2026-10-04 · IOS-11/16/12 — el enlace entre dos iPhone reales, banco por Wi-Fi · 🚧
+## 2026-10-04 · IOS-11/16/12 — el enlace entre dos iPhone reales, banco por Wi-Fi · ✅ por Wi-Fi
+
+**Decisión del propietario (2026-10-04)**: por ahora se sigue solo por Wi-Fi. Las tres
+quedan aceptadas con las medidas de abajo; la pasada por Ethernet (conectar <2 s,
+reconectar <3 s al reenchufar, RTT p50 <2 ms) queda pendiente para cuando haya hubs, y
+la hará SPK-02.
 
 Primera vez con los dos móviles: iPhone 17 (iPhone18,3) a la izquierda, escuchando,
 y iPhone 16 Pro (iPhone17,1) a la derecha, buscando; iOS 26.6.1; RIG_LINK_INTERFACE=wifi
