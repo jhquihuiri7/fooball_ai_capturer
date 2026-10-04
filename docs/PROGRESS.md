@@ -12,6 +12,22 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-04 · IOS-35 — gramática de planos (shot.py) · ✅
+
+**Hecho**
+- `Direction/ShotGrammar.swift`: ShotSize, angularWidthRad, ShotPlan (validado;
+  `at` recorta cada plano a lo que la lente sirve), ShotDecision y ShotGrammar
+  con permanencia, insistencia, asimetría (abrir antes que cerrar), reglas
+  urgentes y markSituation.
+- ShotGrammarTests (4): la secuencia dorada de 320 ciclos da los mismos planos,
+  razones, hfov y cambios; recorte por la lente; abrir más rápido que cerrar;
+  sin jugadores abre sin esperar la permanencia.
+
+**Fuera**: el caso ProgramDirector.steps de shot.json es el director entero y
+llega con IOS-37.
+
+**Siguiente paso**: IOS-37 (bucle del director).
+
 ## 2026-10-04 · IOS-34 — muelle de 3 ejes y límites de la cámara virtual · ✅
 
 **Hecho**
