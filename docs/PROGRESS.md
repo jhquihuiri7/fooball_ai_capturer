@@ -12,6 +12,37 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-04 · IOS-46 — tarjeta de alineación y SIN SEÑAL en Dart · 🚧
+
+**Hecho**
+- `lib/src/graphics/lineup_card_painter.dart`: build_lineup_card y slot_positions
+  portados (degradado fila a fila, lista con píldoras y dorsal, suplentes en
+  renglones, campo en perspectiva con rayas recortadas al césped, camisetas,
+  cabecera con escudo y DT). Formas sin antialiasing, como ImageDraw.
+- `lib/src/graphics/slate_painter.dart`: la tarjeta SIN SEÑAL de live_panel.py.
+- `CardRaster` (overlay_raster.dart): rasteriza bajo demanda y guarda la última
+  alineación de cada lado y la tarjeta SIN SEÑAL.
+- Todas las medidas, colores, textos y la silueta de la camiseta llegan generados
+  en OverlaySpec: football-ai exporta ahora la geometría completa de la alineación
+  y la tarjeta SIN SEÑAL, y `--sync` copia sus renders a test/graphics/reference.
+- El texto deja de forzar `height: 1.0`: así el centrado coincide con los anclajes
+  `mm`/`lt` de PIL (afecta también a los dorados del marcador de IOS-45).
+- Tests (9): slotPositions contra Python, dorados propios (local, visitante sin
+  suplentes ni DT, SIN SEÑAL), comparación con los PNG de Python, render ≤50 ms
+  en el Mac y el raster bajo demanda.
+
+**Falta para ✅: el ≤3 % frente al PNG de Python.** Sale 5,5 % de píxeles distintos,
+y es todo texto: la referencia usa Arial Narrow y la app, Archivo. Pintada en
+Python con Archivo Bold, la misma tarjeta da 3,4 % (umbral 24) y 2,6 % (umbral 64),
+lo que queda son bordes de glifo que FreeType y Skia suavizan distinto. Decide el
+propietario, y es la misma decisión del ancho del marcador de IOS-45:
+- una condensada de emisión en la app, con licencia que permita empaquetarla, o
+- la referencia de Python pintada con la fuente de la app (habría que añadir
+  Archivo con su licencia OFL al repo football-ai).
+Mientras tanto, el test vigila ≤6 %, que es lo que ya cuesta la tipografía.
+
+**Siguiente paso**: IOS-40 → IOS-41 (Mac); las IOS-20/21/22 esperan al iPhone.
+
 ## 2026-10-04 · IOS-45 — el marcador en Dart rasterizado a RGBA · ✅
 
 **Hecho**

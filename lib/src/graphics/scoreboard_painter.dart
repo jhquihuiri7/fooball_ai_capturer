@@ -18,6 +18,7 @@ import 'package:flutter/rendering.dart';
 
 import '../generated/overlay_spec.g.dart';
 import '../theme/zero_type.dart';
+import 'py_round.dart';
 
 /// Lo que el marcador enseña. Valor puro: dos estados iguales pintan lo mismo, y
 /// es lo que decide si hay que volver a rasterizar.
@@ -90,15 +91,6 @@ const Set<String> _regularFonts = <String>{'sub', 'ai'};
 
 Color _palette(String nombre) => Color(OverlaySpec.colorsArgb[nombre]!);
 
-/// `round()` de Python: a mitad, al par. 4,5 px son 4, no 5.
-int _roundHalfEven(double v) {
-  final double suelo = v.floorToDouble();
-  final double resto = v - suelo;
-  if (resto > 0.5) return suelo.toInt() + 1;
-  if (resto < 0.5) return suelo.toInt();
-  return suelo.toInt().isEven ? suelo.toInt() : suelo.toInt() + 1;
-}
-
 /// La geometría del gráfico, medida una vez sobre el tamaño de salida.
 class ScoreboardLayout {
   ScoreboardLayout._(this.width, this.height, this.state, this.sponsorSlots, this.s);
@@ -130,7 +122,7 @@ class ScoreboardLayout {
   final Map<String, double> _v = <String, double>{};
   final List<(double, double)> _slotXs = <(double, double)>[];
 
-  int px(double v) => _roundHalfEven(v * s);
+  int px(double v) => pyRound(v * s);
 
   TextStyle font(String nombre) => _fonts[nombre]!;
 
@@ -154,7 +146,6 @@ class ScoreboardLayout {
         fontFamily: regular ? ZeroType.sans : ZeroType.display,
         fontWeight: regular ? FontWeight.w400 : FontWeight.w700,
         fontSize: px(e.value.toDouble()).toDouble(),
-        height: 1.0,
       );
     }
     final Map<String, int> sb = OverlaySpec.scoreboard;
@@ -352,7 +343,7 @@ class ScoreboardPainter extends CustomPainter {
 
     final double crestW = l.v('crest_w');
     _line(c, Offset(bx + crestW, by), Offset(bx + crestW, by + bh), _palette('edge'), hairline);
-    _paintTurtle(c, bx + crestW / 2, by + bh / 2, l.px(26).toDouble(), l);
+    paintTurtle(c, bx + crestW / 2, by + bh / 2, l.px(26).toDouble());
 
     final double bodyX = l.v('body_x'), bodyW = l.v('body_w'), compH = l.v('comp_h');
     final double clockW = l.v('clock_w'), rowY = l.v('row_y');
@@ -369,35 +360,6 @@ class ScoreboardPainter extends CustomPainter {
     _text(c, l, state.scoreText, 'score', _palette('white'), Offset(l.v('score_x'), rowY));
     _text(c, l, state.away, 'team', _palette('white'), Offset(l.v('away_text_x'), rowY));
     c.drawRect(l.boxes['away_bar']!, _fill(_palette('away')));
-  }
-
-  /// La tortuga de Galápagos, emblema de la liga.
-  static void _paintTurtle(Canvas c, double cx, double cy, double r, ScoreboardLayout l) {
-    Rect oval(double x0, double y0, double x1, double y1) => Rect.fromLTRB(x0, y0, x1, y1);
-    for (final (double dx, double dy) in const <(double, double)>[
-      (-0.62, -0.18),
-      (0.62, -0.18),
-      (-0.52, 0.42),
-      (0.52, 0.42),
-    ]) {
-      c.drawOval(
-        oval(cx + (dx - 0.22) * r, cy + (dy - 0.14) * r, cx + (dx + 0.22) * r, cy + (dy + 0.14) * r),
-        _fill(_shellLight),
-      );
-    }
-    c.drawOval(oval(cx - 0.28 * r, cy - 1.15 * r, cx + 0.28 * r, cy - 0.6 * r), _fill(_shellLight));
-    c.drawOval(oval(cx - r, cy - 0.8 * r, cx + r, cy + 0.8 * r), _fill(_palette('leaf')));
-    c.drawOval(oval(cx - 0.45 * r, cy - 0.36 * r, cx + 0.45 * r, cy + 0.36 * r), _fill(_shellDark));
-    // Nervaduras: sin ellas el caparazón se lee como un óvalo verde.
-    final double w = math.max(1, (r * 0.07).truncate()).toDouble();
-    for (final int ang in const <int>[-60, -20, 20, 60]) {
-      final double rad = ang * math.pi / 180;
-      final double cs = math.cos(rad), sn = math.sin(rad);
-      _line(c, Offset(cx + cs * 0.42 * r, cy + sn * 0.34 * r),
-          Offset(cx + cs * 0.95 * r, cy + sn * 0.76 * r), _shellDark, w);
-      _line(c, Offset(cx - cs * 0.42 * r, cy - sn * 0.34 * r),
-          Offset(cx - cs * 0.95 * r, cy - sn * 0.76 * r), _shellDark, w);
-    }
   }
 
   void _paintLive(Canvas c, ScoreboardLayout l) {
@@ -495,6 +457,35 @@ class ScoreboardPainter extends CustomPainter {
               Offset(x + r + math.cos(a) * r, cy + math.sin(a) * r), colour, width);
         }
     }
+  }
+}
+
+/// La tortuga de Galápagos, emblema de la liga.
+void paintTurtle(Canvas c, double cx, double cy, double r) {
+  Rect oval(double x0, double y0, double x1, double y1) => Rect.fromLTRB(x0, y0, x1, y1);
+  for (final (double dx, double dy) in const <(double, double)>[
+    (-0.62, -0.18),
+    (0.62, -0.18),
+    (-0.52, 0.42),
+    (0.52, 0.42),
+  ]) {
+    c.drawOval(
+      oval(cx + (dx - 0.22) * r, cy + (dy - 0.14) * r, cx + (dx + 0.22) * r, cy + (dy + 0.14) * r),
+      ScoreboardPainter._fill(_shellLight),
+    );
+  }
+  c.drawOval(oval(cx - 0.28 * r, cy - 1.15 * r, cx + 0.28 * r, cy - 0.6 * r), ScoreboardPainter._fill(_shellLight));
+  c.drawOval(oval(cx - r, cy - 0.8 * r, cx + r, cy + 0.8 * r), ScoreboardPainter._fill(_palette('leaf')));
+  c.drawOval(oval(cx - 0.45 * r, cy - 0.36 * r, cx + 0.45 * r, cy + 0.36 * r), ScoreboardPainter._fill(_shellDark));
+  // Nervaduras: sin ellas el caparazón se lee como un óvalo verde.
+  final double w = math.max(1, (r * 0.07).truncate()).toDouble();
+  for (final int ang in const <int>[-60, -20, 20, 60]) {
+    final double rad = ang * math.pi / 180;
+    final double cs = math.cos(rad), sn = math.sin(rad);
+    ScoreboardPainter._line(c, Offset(cx + cs * 0.42 * r, cy + sn * 0.34 * r),
+        Offset(cx + cs * 0.95 * r, cy + sn * 0.76 * r), _shellDark, w);
+    ScoreboardPainter._line(c, Offset(cx - cs * 0.42 * r, cy - sn * 0.34 * r),
+        Offset(cx - cs * 0.95 * r, cy - sn * 0.76 * r), _shellDark, w);
   }
 }
 
