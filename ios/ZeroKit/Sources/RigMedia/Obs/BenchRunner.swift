@@ -174,7 +174,7 @@ public final class BenchRunner {
         return destino
     }
 
-    static func machine() -> String {
+    public static func machine() -> String {
         var sys = utsname()
         uname(&sys)
         return withUnsafeBytes(of: &sys.machine) { raw in

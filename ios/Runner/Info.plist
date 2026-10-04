@@ -36,6 +36,7 @@
 		<string>_footballai-rig._udp</string>
 		<string>_footballai-srt._tcp</string>
 		<string>_footballai-lan._tcp</string>
+		<string>_footballai-media._udp</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>Graba el partido con la camara ultra gran angular.</string>

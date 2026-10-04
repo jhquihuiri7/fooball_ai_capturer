@@ -12,7 +12,9 @@
 
 import CoreMedia
 import Foundation
+import Network
 import RigCore
+import RigMedia
 import RigNet
 import UIKit
 
@@ -53,6 +55,14 @@ final class RigLinkNW: PeerLinking {
         set { session.onClockEstimate = newValue }
     }
 
+    /// La interfaz del enlace: Ethernet por el hub (ADR 0023) salvo RIG_LINK_INTERFACE=wifi,
+    /// el banco sin cables.
+    static func interfaceType(_ valor: String? = ProcessInfo.processInfo.environment["RIG_LINK_INTERFACE"])
+        -> NWInterface.InterfaceType
+    {
+        valor == "wifi" ? .wifi : .wiredEthernet
+    }
+
     /// El secreto del soporte, mientras no exista la provisión del Keychain (IOS-97).
     static func benchSecret() -> Data? {
         guard let valor = ProcessInfo.processInfo.environment["RIG_LINK_SECRET"],
@@ -73,9 +83,9 @@ final class RigLinkNW: PeerLinking {
             transport = NWLinkTransport(mode: .advertise(
                 name: UIDevice.current.name,
                 txt: ["side": "left", "fp": LinkAuth.fingerprint(secret: secret)]
-            ))
+            ), interfaceType: Self.interfaceType())
         } else {
-            transport = NWLinkTransport(mode: .browse)
+            transport = NWLinkTransport(mode: .browse, interfaceType: Self.interfaceType())
         }
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
         session = RigLinkSession(
@@ -134,5 +144,150 @@ final class RigLinkNW: PeerLinking {
         await withCheckedContinuation { continuation in
             session.masterRecentPts { continuation.resume(returning: $0) }
         }
+    }
+}
+
+// MARK: - El banco del enlace
+
+// El banco del enlace entre los dos móviles (IOS-11/16/12, aceptación de campo).
+//
+// Vive en el Runner y no en ZeroKit porque junta RigNet (el enlace) con el informe de
+// RigMedia, y el contrato de capas no deja que RigMedia importe RigNet. Se lanza en
+// cada móvil con `--dart-define=BENCH=link-bench` y estas variables de entorno, que
+// `devicectl … process launch --environment-variables` inyecta:
+//
+//   RIG_LINK_SIDE       left | right (escucha el izquierdo, conecta el derecho)
+//   RIG_LINK_SECRET     el secreto del soporte, base64 (el mismo en los dos)
+//   RIG_LINK_INTERFACE  ethernet (por defecto, el hub) | wifi (banco sin cables)
+//   RIG_LINK_BENCH_S    segundos que dura (por defecto 60)
+//
+// Mide lo que pide la aceptación: cuánto tarda en quedar autenticado desde el arranque
+// (en cualquier orden), el RTT de cada ping del reloj, las reconexiones y qué interfaz
+// lleva internet, y lo deja en Documents/bench como los demás bancos.
+
+enum LinkBench {
+    static let defaultDurationS = 60.0
+
+    static func run(progress: BenchRunner.Progress?) throws -> URL {
+        let entorno = ProcessInfo.processInfo.environment
+        guard let lado = entorno["RIG_LINK_SIDE"].flatMap(RigLinkSession.Side.init(rawValue:)) else {
+            throw BenchError.unknownBench("link-bench: falta RIG_LINK_SIDE=left|right")
+        }
+        guard let secreto = RigLinkNW.benchSecret() else {
+            throw BenchError.unknownBench("link-bench: falta RIG_LINK_SECRET (base64)")
+        }
+        let interfaz = RigLinkNW.interfaceType(entorno["RIG_LINK_INTERFACE"])
+        let duracion = entorno["RIG_LINK_BENCH_S"].flatMap(Double.init) ?? defaultDurationS
+
+        let transporte: NWLinkTransport = lado == .left
+            ? NWLinkTransport(
+                mode: .advertise(name: UIDevice.current.name,
+                                 txt: ["side": "left", "fp": LinkAuth.fingerprint(secret: secreto)]),
+                interfaceType: interfaz)
+            : NWLinkTransport(mode: .browse, interfaceType: interfaz)
+        let sesion = RigLinkSession(
+            transport: transporte, secret: secreto, side: lado,
+            deviceId: UIDevice.current.name,
+            appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
+        )
+        sesion.hostNowNs = { RigLink.hostNowNs() }
+
+        let cerrojo = NSLock()
+        var conectadoMs: Double?
+        var conexiones = 0
+        var rechazos: [String] = []
+        var rtts: [Double] = []
+        var estimaciones = 0
+        var incertidumbreNs: Int64 = 0
+        var ruta = ""
+        var par = ""
+        let inicio = DispatchTime.now().uptimeNanoseconds
+
+        sesion.onState = { estado in
+            cerrojo.lock(); defer { cerrojo.unlock() }
+            switch estado {
+            case let .connected(peer):
+                conexiones += 1
+                par = peer
+                if conectadoMs == nil {
+                    conectadoMs = Double(DispatchTime.now().uptimeNanoseconds - inicio) / 1e6
+                }
+            case let .rejected(motivo):
+                rechazos.append(motivo)
+            default:
+                break
+            }
+        }
+        sesion.onStamps = { t1, t2, t3, t4 in
+            cerrojo.lock(); defer { cerrojo.unlock() }
+            rtts.append(Double((t4 - t1) - (t3 - t2)) / 1e6)
+        }
+        sesion.onClockEstimate = { e in
+            cerrojo.lock(); defer { cerrojo.unlock() }
+            estimaciones += 1
+            incertidumbreNs = e.uncertaintyNs
+        }
+        transporte.onPath = { interfaz in
+            cerrojo.lock(); defer { cerrojo.unlock() }
+            ruta = interfaz
+        }
+
+        sesion.start()
+        let pasos = max(1, Int(duracion))
+        for s in 0..<pasos {
+            Thread.sleep(forTimeInterval: 1)
+            progress?(Double(s + 1) / Double(pasos), "enlace \(lado.rawValue): \(conexiones > 0 ? "conectado" : "buscando")")
+        }
+        let stats = transporte.stats
+        sesion.stop()
+
+        cerrojo.lock(); defer { cerrojo.unlock() }
+        let orden = rtts.sorted()
+        func p(_ q: Double) -> Double {
+            orden.isEmpty ? 0 : orden[min(orden.count - 1, Int(q * Double(orden.count)))]
+        }
+        var informe = BenchReport(
+            name: "link-bench",
+            device: BenchRunner.machine(),
+            systemVersion: ProcessInfo.processInfo.operatingSystemVersionString,
+            startedEpochS: Int64(Date().timeIntervalSince1970),
+            durationS: duracion,
+            params: [
+                "side": lado.rawValue,
+                "interface": entorno["RIG_LINK_INTERFACE"] ?? "ethernet",
+                "peer": par,
+                "internet_path": ruta,
+                "rejections": rechazos.joined(separator: " | "),
+            ],
+            thermal: [],
+            stagesMs: [:],
+            counters: [
+                "connected": conexiones > 0 ? 1 : 0,
+                "connections": conexiones,
+                "connect_ms": Int((conectadoMs ?? -1).rounded()),
+                "rtt_samples": rtts.count,
+                "clock_estimates": estimaciones,
+                "clock_uncertainty_us": Int(incertidumbreNs / 1000),
+                "reconnects": stats.reconnects,
+                "frames_sent": stats.framesSent,
+                "frames_received": stats.framesReceived,
+                "invalid_frames": stats.invalidFrames,
+                "media_frames_received": stats.mediaFramesReceived,
+                "media_loss_gaps": stats.mediaLossGaps,
+                "media_stalls_over_100ms": stats.mediaStallsOver100Ms,
+            ]
+        )
+        if !rtts.isEmpty {
+            informe.stagesMs["link/rtt"] = BenchReport.StageSummary(p50Ms: p(0.5), p90Ms: p(0.9), p99Ms: p(0.99))
+        }
+        let base = try FileManager.default
+            .url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+            .appendingPathComponent("bench", isDirectory: true)
+        try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+        let destino = base.appendingPathComponent("link-bench-\(lado.rawValue)-\(informe.startedEpochS).json")
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .prettyPrinted, .withoutEscapingSlashes]
+        try encoder.encode(informe).write(to: destino, options: .atomic)
+        return destino
     }
 }

@@ -19,7 +19,16 @@ final class RigHostApiImpl: NSObject, RigHostApi {
     func runBench(name: String, paramsJson: String) async throws -> String {
         let flutter = self.flutter
         let informe = try await Task.detached(priority: .userInitiated) {
-            try BenchRunner.run(name: name, paramsJson: paramsJson) { fraction, detail in
+            let progreso: BenchRunner.Progress = { fraction, detail in
+                Task { @MainActor in
+                    try? await flutter.onBenchProgress(name: name, fraction: fraction, detail: detail)
+                }
+            }
+            // El banco del enlace vive en el Runner: junta RigNet con el informe.
+            if name == "link-bench" {
+                return try LinkBench.run(progress: progreso)
+            }
+            return try BenchRunner.run(name: name, paramsJson: paramsJson) { fraction, detail in
                 Task { @MainActor in
                     try? await flutter.onBenchProgress(name: name, fraction: fraction, detail: detail)
                 }

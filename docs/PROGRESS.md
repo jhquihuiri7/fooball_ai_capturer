@@ -208,6 +208,42 @@ monte en la app.
 
 **Siguiente paso**: IOS-46 (alineación y SIN SEÑAL).
 
+## 2026-10-04 · IOS-11/16/12 — el enlace entre dos iPhone reales, banco por Wi-Fi · 🚧
+
+Primera vez con los dos móviles: iPhone 17 (iPhone18,3) a la izquierda, escuchando,
+y iPhone 16 Pro (iPhone17,1) a la derecha, buscando; iOS 26.6.1; RIG_LINK_INTERFACE=wifi
+(el modo banco que prevé IOS-11). Sin hubs todavía: el ✅ sigue pidiendo Ethernet.
+
+**Hecho**
+- `link-bench` (Runner/RigLinkNW.swift, `LinkBench`): RigLinkSession + NWLinkTransport
+  reales con lado, secreto e interfaz por variables de entorno (`devicectl … launch
+  --environment-variables`), y un informe en Documents/bench como los demás bancos.
+  RigHostApiImpl lo engancha; `BenchRunner.machine()` pasa a público.
+- `RIG_LINK_INTERFACE=wifi` también para la app (RigLinkNW).
+- **Fallo encontrado y corregido**: Info.plist no declaraba `_footballai-media._udp`
+  (el canal de medios de IOS-16) en NSBonjourServices, e iOS bloquea el
+  descubrimiento de lo que no se declara.
+- El iPhone 16 Pro, registrado en el perfil del equipo (xcodebuild
+  -allowProvisioningDeviceRegistration).
+
+**Medido** (informes en bench/link-bench-*.json)
+- Derecho primero, izquierdo 5 s después: el izquierdo autentica a los 2,24 s de
+  arrancar su sesión; el derecho, en cuanto aparece el anuncio.
+- Izquierdo primero: el derecho autentica a los **130 ms**.
+- Hello y auth: 0 tramas inválidas; con secretos distintos los dos rechazan
+  («secreto distinto: empareja de nuevo») y ninguno conecta.
+- Reloj por medios UDP: 12–13 estimaciones en 45 s, incertidumbre 2,2 ms; 0 huecos
+  de medios.
+- RTT del reloj por Wi-Fi: p50 9–48 ms, p90 ~170–186 ms, p99 ~210 ms. Es el ahorro
+  de energía de la radio Wi-Fi (los pings van cada 5 s tras la ráfaga); el objetivo
+  de <2 ms es para Ethernet.
+- La ruta a internet la lleva `en0` (Wi-Fi) en los dos, y el informe lo dice.
+- `media_stalls_over_100ms` sale alto porque sin vídeo los medios son solo los pings
+  del reloj, espaciados: no es un parón.
+
+**Falta para ✅**: lo mismo por Ethernet con los hubs (conectar <2 s en cualquier
+orden, reconectar <3 s al reenchufar, RTT p50 <2 ms).
+
 ## 2026-10-04 · IOS-37 — bucle del director (lógica pura) · ✅
 
 **Cierre (2026-10-04)**: las dos cosas que faltaban.
