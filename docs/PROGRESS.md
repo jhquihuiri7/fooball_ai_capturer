@@ -12,6 +12,26 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-04 · IOS-72 — intrínsecas por fotograma y vigilancia de la calibración · ✅
+
+**Hecho**
+- `RigCore/Direction/SeamWatch.swift`: mediana de `separationRad` de las parejas
+  del solape en una ventana preasignada; por encima de
+  RIG_SEAM_WATCH_MAX_MEDIAN_RAD sugiere recalibrar. No cambia nada solo.
+- `RigMedia/Capture/IntrinsicsReader.swift` + `RigCore/Geometry/IntrinsicsDrift`:
+  la matriz que el iPhone entrega por fotograma (FrameMeta.intrinsics) frente a la
+  de rig.json reescalada al búfer: Δfocal relativo y Δcentro en píxeles nativos,
+  con los umbrales RIG_INTRINSICS_MAX_*. Cierra la M2.
+- TelemetrySnapshot gana `intrinsics` y `seam_median_rad`, opcionales (campos
+  pasantes de la telemetría v1: sin dato no aparecen).
+- Los umbrales los decidí yo, con su razonamiento en libs/vision/constants.py y una
+  anotación en el ADR 0012; ninguna medición los fija todavía.
+- Tests (9): con la pose derecha movida 0,5° el aviso sale en ≤60 s (sale en ~2 s);
+  sin mover no sale y hay mediana; ventana y parejas; deriva de focal y de centro;
+  la telemetría.
+
+**Siguiente paso**: IOS-60 (estado del partido en Dart) o IOS-53 (MPEG-TS).
+
 ## 2026-10-04 · IOS-21 — kernel Metal de preproceso NV12 → entrada del detector · 🚧
 
 **Hecho**

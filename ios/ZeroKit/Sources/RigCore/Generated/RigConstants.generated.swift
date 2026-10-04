@@ -191,6 +191,45 @@ public enum RigConstants {
     /// (Python: `RIG_FUSE_MAX_ANGLE_RAD`.)
     public static let rigFuseMaxAngleRad: Double = 0.02
 
+    /// Radianes (~0,34°). Mediana de `separation_rad` de las detecciones fundidas del solape
+    /// por encima de la cual se sugiere recalibrar el soporte (IOS-72).
+    ///
+    /// Con la calibración bien, la separación es paralaje más ruido: con las lentes a ~10 cm,
+    /// 0,0025 rad a 40 m y 0,007 a 15 m, y la mayoría de los jugadores del solape están lejos,
+    /// así que la mediana se queda por debajo de 0,003. Una pose movida suma su error a TODAS
+    /// las parejas: 0,5° son 0,0087 rad, y la mediana pasa del umbral aunque los cercanos se
+    /// desordenen. Por encima de `RIG_FUSE_MAX_ANGLE_RAD` las parejas dejan de fundirse y la
+    /// mediana ya no lo ve: para eso está el estabilizador (`STABILIZER_MAX_SWAY_RAD`).
+    /// (Python: `RIG_SEAM_WATCH_MAX_MEDIAN_RAD`.)
+    public static let rigSeamWatchMaxMedianRad: Double = 0.006
+
+    /// Separaciones que la vigilancia de la costura guarda para la mediana: unos 30 s del
+    /// solape a 7,5 Hz con un puñado de parejas por ciclo. Más corta, un córner con todos los
+    /// jugadores bajo el soporte (paralaje alto) daría un aviso falso.
+    /// (Python: `RIG_SEAM_WATCH_WINDOW`.)
+    public static let rigSeamWatchWindow: Int = 256
+
+    /// Separaciones mínimas antes de opinar: con menos, la mediana es de unos pocos
+    /// jugadores y no del soporte.
+    /// (Python: `RIG_SEAM_WATCH_MIN_SAMPLES`.)
+    public static let rigSeamWatchMinSamples: Int = 64
+
+    /// Fracción. Diferencia relativa de focal entre la matriz intrínseca que el iPhone
+    /// entrega por fotograma y la de rig.json por encima de la cual se avisa (IOS-72, M2).
+    ///
+    /// Un 1 % de focal es un 1 % de campo de visión: medio grado en el borde de la lente
+    /// ultra gran angular, que en la costura ya se ve. Con el recorte activo bien fijado
+    /// (estabilización apagada) la focal no se mueve; si se mueve, alguien cambió el modo de
+    /// la cámara o el sistema cambió el recorte sin avisar.
+    /// (Python: `RIG_INTRINSICS_MAX_FOCAL_REL`.)
+    public static let rigIntrinsicsMaxFocalRel: Double = 0.01
+
+    /// Píxeles nativos. Desplazamiento del centro óptico por fotograma frente a rig.json por
+    /// encima del cual se avisa (IOS-72). Ocho píxeles en 4K son ~0,1° con la focal de la
+    /// ultra gran angular: más que eso no es ruido del adjunto, es otro recorte.
+    /// (Python: `RIG_INTRINSICS_MAX_CENTER_PX`.)
+    public static let rigIntrinsicsMaxCenterPx: Double = 8.0
+
     /// Píxeles que se ensancha una zona ciega de una cámara. `cv2.remap` interpola entre
     /// vecinos, así que un píxel pegado al borde de la zona todavía arrastra algo de ella.
     /// (Python: `PANORAMA_BLIND_MARGIN_PX`.)

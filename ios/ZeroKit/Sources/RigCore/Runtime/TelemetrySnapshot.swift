@@ -59,6 +59,11 @@ public struct TelemetrySnapshot: Codable, Equatable, Sendable {
     public var linkRttMs: Double?
     public var linkLossPercent: Double?
     public var programBitrateBps: Int?
+    /// Las intrínsecas de este fotograma frente a rig.json (IOS-72, M2). Campo
+    /// pasante de la telemetría v1: quien no lo conozca lo ignora.
+    public var intrinsics: IntrinsicsDrift?
+    /// La mediana de la separación de la costura (SeamWatch, IOS-72).
+    public var seamMedianRad: Double?
 
     public init(
         rigMs: Int64,
@@ -75,7 +80,9 @@ public struct TelemetrySnapshot: Codable, Equatable, Sendable {
         availableMemoryBytes: Int64,
         linkRttMs: Double? = nil,
         linkLossPercent: Double? = nil,
-        programBitrateBps: Int? = nil
+        programBitrateBps: Int? = nil,
+        intrinsics: IntrinsicsDrift? = nil,
+        seamMedianRad: Double? = nil
     ) {
         self.rigMs = rigMs
         self.fps = fps
@@ -92,6 +99,8 @@ public struct TelemetrySnapshot: Codable, Equatable, Sendable {
         self.linkRttMs = linkRttMs
         self.linkLossPercent = linkLossPercent
         self.programBitrateBps = programBitrateBps
+        self.intrinsics = intrinsics
+        self.seamMedianRad = seamMedianRad
     }
 
     enum CodingKeys: String, CodingKey {
@@ -110,6 +119,8 @@ public struct TelemetrySnapshot: Codable, Equatable, Sendable {
         case linkRttMs = "link_rtt_ms"
         case linkLossPercent = "link_loss_percent"
         case programBitrateBps = "program_bitrate_bps"
+        case intrinsics
+        case seamMedianRad = "seam_median_rad"
     }
 
     /// Una línea JSONL determinista: claves ordenadas, sin flotantes exponenciales.
