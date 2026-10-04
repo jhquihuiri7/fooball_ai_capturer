@@ -33,6 +33,14 @@ public struct BenchReport: Codable, Equatable {
             p99Ms = histogram.p99Ms
         }
 
+        /// Percentiles ya calculados, para los bancos que miden por debajo del ms y
+        /// guardan las muestras en crudo (director-bench).
+        public init(p50Ms: Double, p90Ms: Double, p99Ms: Double) {
+            self.p50Ms = p50Ms
+            self.p90Ms = p90Ms
+            self.p99Ms = p99Ms
+        }
+
         enum CodingKeys: String, CodingKey {
             case p50Ms = "p50_ms"
             case p90Ms = "p90_ms"
@@ -97,7 +105,8 @@ public final class BenchRunner {
     /// `pipeline-noop` (IOS-09) mide el blit del anillo con fotogramas sintéticos;
     /// `vt-concurrency` (SPK-03) carga cámara, HEVC, H.264 y decodificación a la vez;
     /// `model-bench` (SPK-50) mide .mlpackage con sus recursos en
-    /// Documents/bench-resources (se suben con `devicectl device copy to`).
+    /// Documents/bench-resources (se suben con `devicectl device copy to`);
+    /// `director-bench` (IOS-37) mide el bucle del director por fotograma.
     private static let benches: [String: Bench] = [
         "noop": { report, _ in
             report.counters["noop"] = 1
@@ -107,6 +116,9 @@ public final class BenchRunner {
         },
         "vt-concurrency": { report, progress in
             try VtConcurrencyBench.run(report: &report, progress: progress)
+        },
+        "director-bench": { report, progress in
+            try DirectorBench.run(report: &report, progress: progress)
         },
         "model-bench": { report, progress in
             let documentos = try FileManager.default.url(

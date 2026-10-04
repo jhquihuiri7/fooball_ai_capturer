@@ -208,7 +208,21 @@ monte en la app.
 
 **Siguiente paso**: IOS-46 (alineación y SIN SEÑAL).
 
-## 2026-10-04 · IOS-37 — bucle del director (lógica pura) · 🚧
+## 2026-10-04 · IOS-37 — bucle del director (lógica pura) · ✅
+
+**Cierre (2026-10-04)**: las dos cosas que faltaban.
+- Repetición de dos minutos: football-ai añade a shot.json el caso
+  `director_dos_minutos_de_partido` (3600 fotogramas, detecciones a 7,5 Hz por
+  fases: grupo, transición, bimodal, porteros y árbitro, parón del detector de 2 s,
+  ataque en un extremo). DirectorLoopTests lo repite y da las mismas vistas que
+  tools/program_director.py a ±1e-6 rad, fotograma a fotograma, y el mismo plano.
+- Coste en el iPhone 17 (iPhone18,3, iOS 26.6.1, release, térmica nominal), banco
+  `director-bench` (RigMedia/Obs/DirectorBench.swift), 36 000 fotogramas:
+  p50 0,0012 ms, p90 0,0084 ms, p99 0,0127 ms por fotograma; la ingesta del ciclo
+  de detección (fusión de las dos cámaras + acción) p50 0,007 ms, p99 0,023 ms.
+  Objetivo <0,2 ms: cumplido con más de 15× de margen.
+
+### Lo que se entregó antes
 
 **Hecho**
 - `Direction/DirectorLoop.swift`: `ingest` por ciclo de detección (fusión de las
