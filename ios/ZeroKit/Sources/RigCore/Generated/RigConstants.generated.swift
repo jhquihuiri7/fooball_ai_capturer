@@ -191,6 +191,11 @@ public enum RigConstants {
     /// (Python: `RIG_FUSE_MAX_ANGLE_RAD`.)
     public static let rigFuseMaxAngleRad: Double = 0.02
 
+    /// Píxeles que se ensancha una zona ciega de una cámara. `cv2.remap` interpola entre
+    /// vecinos, así que un píxel pegado al borde de la zona todavía arrastra algo de ella.
+    /// (Python: `PANORAMA_BLIND_MARGIN_PX`.)
+    public static let panoramaBlindMarginPx: Int = 2
+
     /// Radianes (~2°). Ancho de la franja en la que las dos cámaras se mezclan en la costura.
     ///
     /// Es un compromiso entre dos defectos que no se pueden eliminar a la vez. Una franja ancha

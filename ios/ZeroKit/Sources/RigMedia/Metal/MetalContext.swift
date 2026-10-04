@@ -33,10 +33,13 @@ public final class MetalContext {
         self.textureCache = textureCache
 
         // Los .metal del paquete compilan a default.metallib dentro de Bundle.module.
-        // Con `swift test` por CLI ese fichero no siempre está: se cae a compilar la
-        // fuente mínima, que deja la biblioteca utilizable aunque vacía de kernels.
+        // `swift test` por CLI no lo compila: copia las fuentes, y entonces se compilan
+        // aquí, juntas, para que los kernels de verdad existan también en los tests.
         if let url = Bundle.module.url(forResource: "default", withExtension: "metallib"),
            let library = try? device.makeLibrary(URL: url) {
+            self.library = library
+        } else if let fuentes = Self.bundledSources(),
+                  let library = try? device.makeLibrary(source: fuentes, options: nil) {
             self.library = library
         } else if let library = try? device.makeLibrary(source: Self.fallbackSource, options: nil) {
             self.library = library
@@ -66,6 +69,14 @@ public final class MetalContext {
         )
         guard estado == kCVReturnSuccess, let texture else { return nil }
         return CVMetalTextureGetTexture(texture)
+    }
+
+    /// Las fuentes .metal copiadas al bundle, en un solo texto. `nil` si no hay.
+    private static func bundledSources() -> String? {
+        let urls = (Bundle.module.urls(forResourcesWithExtension: "metal", subdirectory: nil) ?? [])
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        let textos = urls.compactMap { try? String(contentsOf: $0, encoding: .utf8) }
+        return textos.isEmpty ? nil : textos.joined(separator: "\n")
     }
 
     /// Lo mínimo que compila: mantiene viva la ruta `makeLibrary(source:)` hasta que

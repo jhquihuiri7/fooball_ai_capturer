@@ -34,7 +34,10 @@ let package = Package(
             name: "RigMedia",
             dependencies: ["RigCore"],
             // Los .metal compilan a default.metallib dentro de Bundle.module.
-            resources: [.process("Metal/Shaders.metal")],
+            resources: [
+                .process("Metal/Shaders.metal"),
+                .process("Metal/Kernels/Reproject.metal"),
+            ],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .target(
@@ -53,7 +56,7 @@ let package = Package(
         ),
         .testTarget(
             name: "RigMediaTests",
-            dependencies: ["RigMedia"],
+            dependencies: ["RigMedia", "RigCore"],
             // BenchResources/ lo rellena quien lanza el banco de modelos (SPK-50):
             // bench.json, los .mlpackage y los bundles dorados de ML-12. En git solo
             // vive su README; sin bench.json el banco se salta solo.

@@ -12,6 +12,36 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-04 · IOS-40 — kernel Metal de la parte: reproyección por homografía · 🚧
+
+**Hecho**
+- `RigMedia/Metal/Kernels/Reproject.metal` (reproject_part): render_view de un
+  lado sobre NV12 BT.709 de rango limitado. H·(x,y,1) con w ≤ 0 = no visible,
+  zona ciega del código de tiempo ensanchada PANORAMA_BLIND_MARGIN_PX (mask_blind),
+  bilineal en RGB toma a toma con lo de fuera a negro (el INTER_LINEAR con
+  BORDER_CONSTANT de la referencia; en NV12 el negro no es cero), ganancia por
+  canal en el orden BGR de la referencia y NV12 de salida por bloques 2×2.
+- `ReprojectKernel.swift`: codifica el kernel entre CVPixelBuffer con IOSurface
+  (la cámara y el pool del codificador), sin copias.
+- MetalContext compila en tiempo de ejecución las fuentes .metal del bundle
+  cuando no hay default.metallib: `swift test` por CLI no lo genera, y sin esto
+  los kernels no existían en los tests.
+- ReprojectKernelTests (4, macOS): los programas dorados de ViewRenderer.render
+  (con costura mezclada en la CPU como la ruta GPU de la referencia), la franja
+  tapada, w ≤ 0 y el color con ganancia en un parche uniforme.
+
+**Decisión**: el PSNR se mide en LUMA. Los fotogramas dorados (tablero
+magenta/verde de 8 px y un degradado saturado con bordes duros) no sobreviven al
+4:2:0: solo la ida y vuelta BGR→NV12→BGR del fotograma ya da 33,6 dB. En luma el
+kernel da 55,9 dB (costura con ganancia) y 46,5 dB (w ≤ 0), por encima de 45; el
+color se valida aparte. Si REF quiere el criterio en BGR, necesita dorados con
+contenido que el NV12 pueda representar.
+
+**Falta para ✅**: los ≤1,5 ms de GPU por fotograma 1080p en el iPhone (la tarjeta
+es Mac + iPhone).
+
+**Siguiente paso**: IOS-41 (composición del programa en el maestro).
+
 ## 2026-10-04 · IOS-46 — tarjeta de alineación y SIN SEÑAL en Dart · 🚧
 
 **Hecho**
