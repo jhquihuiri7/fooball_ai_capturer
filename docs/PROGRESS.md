@@ -12,6 +12,28 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-04 · IOS-36 — homografía del campo (PitchModel) en el móvil · ✅
+
+**Hecho**
+- `Geometry/PitchModel.swift`: PitchModel (validación de invertibilidad sobre la
+  H normalizada, guarda del horizonte con PITCH_MIN_PROJECTIVE_W, códec de
+  pitch.json v1 que rechaza otra versión) y RigPitchModel (dos lados, misma
+  cancha o error, puntos compartidos con su error cruzado recalculado).
+- Filtro de pies `isInsidePlayable`: pie a metros contra el rectángulo del campo
+  con PITCH_PLAYABLE_MARGIN_M (3 m, §11.1), que sustituye a la máscara de mapa de
+  bits. La familia PITCH_ entera llega generada en RigConstants.
+- `Mat3` gana determinante, norma de Frobenius e inversa por adjugada.
+- PitchModelTests (8): metros y píxeles dorados a 1e-9 aplicando la `h` dorada,
+  errores cruzados del soporte, códec ida y vuelta, rechazos, y el filtro contra
+  la máscara rasterizada (miles de pies, la frontera de cuantización < 5%).
+
+**Fuera**: el ajuste (RANSAC) se queda en Python, en el VPS, por diseño. No hay
+dorado de PlayerDetector con pitch_mask: la equivalencia se prueba contra la
+máscara rasterizada desde la misma homografía; cuando IOS-23 porte el detector,
+su dorado podrá llevar la máscara.
+
+**Siguiente paso**: IOS-33 → IOS-34 → IOS-35 → IOS-37.
+
 ## 2026-10-04 · IOS-32 — fusión angular y emparejado por rigMs · ✅
 
 **Hecho**
