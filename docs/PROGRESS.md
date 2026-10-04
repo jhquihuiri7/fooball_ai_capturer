@@ -12,6 +12,30 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-04 · IOS-30 — álgebra y geometría del soporte (rig.py) · ✅
+
+**Hecho**
+- `RigCore/Geometry/`: `Mat3.swift` (3×3 y Vec3 en Double, SIN simd: mismas
+  fórmulas y mismo orden de operaciones que numpy), `RigGeometry.swift`
+  (CameraSide, CameraIntrinsics con `scaled` del medio píxel y redondeo
+  banker's como Python, `fromHfov`, CameraPose `matrix = R_yaw·R_pitch·R_roll`
+  y `fromMatrix`, RigDirection.toUnit, `angularDistanceRad`), `RigModel.swift`
+  (directionOf, project, projectRays, sees, inOverlap, rotation, withPose y el
+  códec de rig.json v1 — otra versión se RECHAZA) y `CameraMount.swift` (la F
+  del giro de 180°, involutiva, con el punto y la matriz dando lo mismo).
+- `RigModelTests`: un runner por `fn` recalcula los 31 casos del dorado
+  rig.json con `Golden.mismatch` — TODOS dentro de tolerancia a la primera.
+  `RigModel.fuse` se salta A PROPÓSITO (IOS-32) y el meta-test exige que lo
+  saltado sea exactamente eso. `Fixtures/soporte-pod.json` (la calibración
+  nominal del pod: 4K, ±40°, roll π en la izquierda) carga y responde; cuando
+  haya un soporte.json de partido real, se sustituye el fixture.
+- `GoldenAccess.swift`: accesores de GoldenValue reutilizables por IOS-31+.
+- El meta-test del manifiesto aprende que la muestra del N0 es JSONL (línea a
+  línea), no un documento de casos: el sync de EV-02 lo había roto.
+
+**Siguiente paso**: IOS-31 (reprojection) → IOS-32 (la fusión quita su salto)
+→ IOS-36 → IOS-33/34/35 → IOS-37, la cadena entera del director en RigCore.
+
 ## 2026-10-04 · SPK-51 — D-FINE-N en el ANE del A19 · ✅ medido (la decisión la firma REF-33)
 
 **La medida (iPhone18,3, 1000 predicciones tras calentar, CPU_AND_NE)**

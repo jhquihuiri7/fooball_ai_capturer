@@ -51,6 +51,17 @@ final class GoldenLoaderTests: XCTestCase {
         let manifiesto = try Golden.loadManifest()
         var casos = 0
         for nombre in manifiesto.files.keys.sorted() where nombre != "manifest.json" {
+            // La muestra del N0 (EV-02) es JSONL, no un documento de casos: cada
+            // línea tiene que ser un objeto JSON, y la primera, la cabecera.
+            if nombre.hasSuffix(".jsonl") {
+                let url = try Golden.directory().appendingPathComponent(nombre)
+                let texto = try String(contentsOf: url, encoding: .utf8)
+                for linea in texto.split(separator: "\n") {
+                    let objeto = try JSONSerialization.jsonObject(with: Data(linea.utf8))
+                    XCTAssertTrue(objeto is [String: Any], "\(nombre): línea que no es objeto")
+                }
+                continue
+            }
             let documento = try Golden.loadDocument(named: nombre)
             XCTAssertEqual(documento.schema, 1, nombre)
             XCTAssertEqual("\(documento.module).json", nombre)
