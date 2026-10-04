@@ -28,6 +28,9 @@ public final class RigLinkSession {
         case authenticating
         case connected(peer: String)
         case rejected(String)
+        /// Dos maestros de partidos distintos (ADR 0023 §7): sin partes ni órdenes, y las
+        /// dos pantallas piden elegir.
+        case conflict
         case off
     }
 
@@ -41,6 +44,8 @@ public final class RigLinkSession {
         var deviceId: String
         var appVersion: String
         var nonce: String  // 16 B en base64url
+        /// «Este móvil dirige» (IOS-80). Opcional: un hello sin él es el de antes.
+        var prefersMaster: Bool?
 
         enum CodingKeys: String, CodingKey {
             case linkVersion = "link_version"
@@ -49,6 +54,7 @@ public final class RigLinkSession {
             case deviceId = "device_id"
             case appVersion = "app_version"
             case nonce
+            case prefersMaster = "prefers_master"
         }
     }
 
@@ -77,6 +83,21 @@ public final class RigLinkSession {
     public var currentLook: (() -> CameraLook?)?
     /// El reloj de host, inyectable para los tests.
     public var hostNowNs: () -> Int64 = { 0 }
+
+    /// Lo que este móvil dice de sí en el hello (IOS-80). Se fija antes de `start`; por
+    /// defecto, lo de antes de los roles: el izquierdo dirige.
+    public var claimedRole: RigRole
+    public var term = 0
+    public var matchId: String?
+    public var prefersMaster: Bool
+
+    /// El rol que salió de la negociación al conectar, con su term y partido. Hasta
+    /// entonces, el reclamado.
+    public private(set) var rigRole: RigRole
+    public var isMaster: Bool { rigRole == .master }
+
+    /// Cada negociación resuelta: rol, term y partido con los que sigue este móvil.
+    public var onRole: ((RigRole, Int, String?) -> Void)?
 
     public private(set) var state: State = .off {
         didSet { if oldValue != state { onState?(state) } }
@@ -118,6 +139,9 @@ public final class RigLinkSession {
         self.deviceId = deviceId
         self.appVersion = appVersion
         self.queue = queue
+        claimedRole = side == .left ? .master : .slave
+        prefersMaster = side == .left
+        rigRole = side == .left ? .master : .slave
         transport.onFrame = { [weak self] frame, channel in
             self?.queue.async { self?.handle(frame: frame, on: channel) }
         }
@@ -174,12 +198,13 @@ public final class RigLinkSession {
         let hello = Hello(
             linkVersion: Self.linkVersion,
             side: side.rawValue,
-            role: side == .left ? "master" : "slave",
-            term: 0,
-            matchId: nil,
+            role: claimedRole.rawValue,
+            term: term,
+            matchId: matchId,
             deviceId: deviceId,
             appVersion: appVersion,
-            nonce: myNonce.base64EncodedString()
+            nonce: myNonce.base64EncodedString(),
+            prefersMaster: prefersMaster
         )
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
@@ -219,8 +244,32 @@ public final class RigLinkSession {
         let key = LinkAuth.sessionKey(secret: secret, nonceLeft: nonceIzq, nonceRight: nonceDer)
         sessionKey = CryptoSessionKey(key: key)
         sessionId = LinkAuth.sessionId(key: key)
+        let suyo = RoleClaim(
+            side: hello.side == "left" ? .left : .right,
+            role: RigRole(rawValue: hello.role) ?? .slave,
+            term: hello.term,
+            matchId: hello.matchId,
+            prefersMaster: hello.prefersMaster ?? (hello.side == "left")
+        )
+        let mio = RoleClaim(
+            side: side == .left ? .left : .right, role: claimedRole, term: term,
+            matchId: matchId, prefersMaster: prefersMaster
+        )
+        switch RoleNegotiation.negotiate(mine: mio, theirs: suyo) {
+        case .conflict:
+            log.error("enlace en conflicto: dos maestros de partidos distintos")
+            state = .conflict
+            return
+        case let .resolved(rol, nuevoTerm, partido, error):
+            if let error { log.error("\(error)") }
+            rigRole = rol
+            term = nuevoTerm
+            matchId = partido
+            onRole?(rol, nuevoTerm, partido)
+        }
         state = .connected(peer: hello.deviceId)
-        if side == .right {
+        // El maestro del reloj es el maestro del soporte: pregunta el esclavo.
+        if !isMaster {
             startPinging()
         }
     }
@@ -287,14 +336,14 @@ public final class RigLinkSession {
     /// uno al otro se quedarían en un bucle.
     public func send(command: RigWireCommand) {
         queue.async { [self] in
-            guard side == .left, case .connected = state else { return }
+            guard isMaster, case .connected = state else { return }
             sendLegacy(.command(seq: nextControlSeq(), command: command))
         }
     }
 
     public func publish(look: CameraLook) {
         queue.async { [self] in
-            guard side == .left, case .connected = state else { return }
+            guard isMaster, case .connected = state else { return }
             sendLegacy(.look(seq: nextControlSeq(), look: look))
         }
     }
@@ -322,7 +371,7 @@ public final class RigLinkSession {
         }
         switch frame.type {
         case .clockPing:
-            guard side == .left else { return }
+            guard isMaster else { return }
             var reader = BigEndianReader(data: frame.payload)
             guard let t1 = reader.read(Int64.self) else { return }
             var payload = Data()
@@ -332,7 +381,7 @@ public final class RigLinkSession {
             seqMedia &+= 1
             send(type: .clockPong, payload: payload, seq: seqMedia, channel: .media)
         case .clockPong:
-            guard side == .right else { return }
+            guard !isMaster else { return }
             var reader = BigEndianReader(data: frame.payload)
             guard let t1 = reader.read(Int64.self),
                   let t2 = reader.read(Int64.self),
@@ -356,20 +405,20 @@ public final class RigLinkSession {
         guard let mensaje = RigMessage.decode(payload) else { return }
         switch mensaje {
         case let .ptsRequest(seq):
-            guard side == .left else { return }
+            guard isMaster else { return }
             sendLegacy(.ptsReply(seq: seq, pts: recentPts?() ?? []))
         case let .ptsReply(_, pts):
             let pendientes = pendingPts
             pendingPts.removeAll()
             pendientes.forEach { $0.completion(pts) }
         case let .lookRequest(seq):
-            guard side == .left, let look = currentLook?() else { return }
+            guard isMaster, let look = currentLook?() else { return }
             sendLegacy(.look(seq: seq, look: look))
         case let .look(_, look):
-            guard side == .right else { return }
+            guard !isMaster else { return }
             onLook?(look)
         case let .command(_, command):
-            guard side == .right else { return }
+            guard !isMaster else { return }
             onCommand?(command)
         case .ping, .pong:
             break  // el reloj va por clock_ping/clock_pong, no por legacy

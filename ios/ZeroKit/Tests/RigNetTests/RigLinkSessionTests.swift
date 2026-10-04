@@ -101,6 +101,62 @@ final class RigLinkSessionTests: XCTestCase {
         return false
     }
 
+    // MARK: - Roles (IOS-80)
+
+    func testConElDerechoDeMaestroTodoFunciona() {
+        let (left, right, cableLeft, cableRight) = makePair()
+        left.claimedRole = .slave
+        left.prefersMaster = false
+        left.matchId = "m1"
+        left.term = 2
+        right.claimedRole = .master
+        right.prefersMaster = true
+        right.matchId = "m1"
+        right.term = 2
+        let lock = NSLock()
+        nonisolated(unsafe) var ordenes: [RigWireCommand] = []
+        left.onCommand = { c in lock.lock(); ordenes.append(c); lock.unlock() }
+        left.start()
+        right.start()
+        waitUntil { self.isConnected(left) && self.isConnected(right) }
+        XCTAssertTrue(right.isMaster)
+        XCTAssertFalse(left.isMaster)
+        // El esclavo (el izquierdo) pregunta la hora; el maestro (el derecho) contesta.
+        waitUntil { !cableLeft.sentFrames(of: .clockPing).isEmpty && !cableRight.sentFrames(of: .clockPong).isEmpty }
+        XCTAssertTrue(cableRight.sentFrames(of: .clockPing).isEmpty)
+        // Las órdenes van del derecho al izquierdo.
+        right.send(command: .record)
+        left.send(command: .stop)  // el esclavo no manda
+        waitUntil { lock.lock(); defer { lock.unlock() }; return ordenes == [.record] }
+    }
+
+    func testDosMaestrosDelMismoTermSeResuelvenSinQuedarseConDos() {
+        let (left, right, _, _) = makePair()
+        for s in [left, right] {
+            s.claimedRole = .master
+            s.matchId = "m1"
+            s.term = 3
+        }
+        left.start()
+        right.start()
+        waitUntil { self.isConnected(left) && self.isConnected(right) }
+        XCTAssertNotEqual(left.isMaster, right.isMaster)
+        XCTAssertTrue(left.isMaster, "con el mismo term, manda el izquierdo")
+    }
+
+    func testDosMaestrosDePartidosDistintosQuedanEnConflicto() {
+        let (left, right, _, _) = makePair()
+        left.claimedRole = .master
+        left.matchId = "m1"
+        left.term = 1
+        right.claimedRole = .master
+        right.matchId = "m2"
+        right.term = 4
+        left.start()
+        right.start()
+        waitUntil { left.state == .conflict && right.state == .conflict }
+    }
+
     // MARK: - Apretón
 
     func testTheSameSecretConnectsBothSides() {
