@@ -201,6 +201,164 @@
         "abs": 1.0,
         "rel": 0.0
       }
+    },
+    {
+      "name": "franja_a_10_m_de_retranqueo",
+      "fn": "band_from_pitch",
+      "inputs": {
+        "homography": {
+          "dtype": "f64",
+          "shape": [
+            3,
+            3
+          ],
+          "b64": "oMv8i0ublkDtqllr486dQJOIZEf7wfRAAAAAAAAAAADQ3T603W2MQKUZUbA6WudAAAAAAAAAAAAwlE4/ncvvPwPnFTs/JEZA"
+        },
+        "intrinsics": {
+          "fx": 1446.823776197365,
+          "fy": 1446.823776197365,
+          "cx": 1920.0,
+          "cy": 1080.0,
+          "width": 3840,
+          "height": 2160
+        },
+        "side": "left",
+        "rows_px": [
+          0.0,
+          900.0,
+          1200.0,
+          1500.0,
+          2159.0
+        ]
+      },
+      "expected": {
+        "band": {
+          "version": 1,
+          "side": "left",
+          "rows": [
+            970,
+            1770
+          ],
+          "input_size": [
+            1920,
+            576
+          ],
+          "far_split_row": null,
+          "regions": [
+            {
+              "dst": [
+                0,
+                0,
+                1920,
+                400
+              ],
+              "src": [
+                0.0,
+                970.0,
+                3840.0,
+                800.0
+              ]
+            }
+          ]
+        },
+        "scale_at_row": {
+          "dtype": "f64",
+          "shape": [
+            5
+          ],
+          "b64": "AAAAAAAAAEAAAAAAAAAAQAAAAAAAAABAAAAAAAAAAEAAAAAAAAAAQA=="
+        }
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "franja_a_6_m_de_retranqueo",
+      "fn": "band_from_pitch",
+      "inputs": {
+        "homography": {
+          "dtype": "f64",
+          "shape": [
+            3,
+            3
+          ],
+          "b64": "oMv8i0ublkC84hawscSdQO2GRspa5fJAAAAAAAAAAADEkHEvoeGLQMpXjyMGQuVAAAAAAAAAAADa8aCIvcDvP4UpOk/YJ0RA"
+        },
+        "intrinsics": {
+          "fx": 1446.823776197365,
+          "fy": 1446.823776197365,
+          "cx": 1920.0,
+          "cy": 1080.0,
+          "width": 3840,
+          "height": 2160
+        },
+        "side": "right",
+        "rows_px": [
+          0.0,
+          900.0,
+          1200.0,
+          1500.0,
+          2159.0
+        ]
+      },
+      "expected": {
+        "band": {
+          "version": 1,
+          "side": "right",
+          "rows": [
+            956,
+            2160
+          ],
+          "input_size": [
+            1920,
+            576
+          ],
+          "far_split_row": 1105,
+          "regions": [
+            {
+              "dst": [
+                0,
+                0,
+                1920,
+                74
+              ],
+              "src": [
+                0.0,
+                956.0,
+                3840.0,
+                148.0
+              ]
+            },
+            {
+              "dst": [
+                0,
+                74,
+                1825,
+                502
+              ],
+              "src": [
+                0.0,
+                1104.0,
+                3839.0438247011953,
+                1056
+              ]
+            }
+          ]
+        },
+        "scale_at_row": {
+          "dtype": "f64",
+          "shape": [
+            5
+          ],
+          "b64": "AAAAAAAAAEAAAAAAAAAAQKTtlbck1ABApO2VtyTUAECk7ZW3JNQAQA=="
+        }
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
     }
   ]
 }

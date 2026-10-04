@@ -12,6 +12,25 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-04 · IOS-20 — geometría de la franja jugable (InputRegion) · ✅
+
+**Hecho**
+- `RigCore/Geometry/BandGeometry.swift`: InputRegion (sin deformar, sx = sy a 1e-9
+  relativo; toNative/toInput/containsInput), InputLayout (regionIndex: la primera
+  que contiene el punto o la más cercana, como `min` de Python), BandGeometry con
+  scaleAtRow, `toRaw` con el giro de 180° del móvil cabeza abajo, y el códec de
+  band.json v1 que además comprueba que la entrada es la del detector (1920×576) y
+  que ninguna región se sale.
+- band.json va en píxeles ENDEREZADOS, como rig.json y pitch.json (la calibración
+  trabaja sobre la imagen enderezada): el crudo del móvil invertido pasa por
+  CameraMount.
+- football-ai añade a band.json los casos `band_from_pitch` a 6 m (mosaico) y a
+  10 m (una región a ×0,5) de retranqueo, con la cámara nominal de test_band.py.
+- BandGeometryTests (5): la ida y vuelta de InputLayout.map, las franjas a 6 y
+  10 m (códec y escala por fila), la ida y vuelta con el giro y los rechazos.
+
+**Siguiente paso**: IOS-21 (kernel Metal NV12 → tensor del detector).
+
 ## 2026-10-04 · IOS-41 — composición del programa en el maestro · 🚧
 
 **Hecho**

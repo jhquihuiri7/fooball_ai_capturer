@@ -88,6 +88,15 @@ extension GoldenValue {
         return .tensor(GoldenTensor(dtype: "f64", shape: shape, data: data))
     }
 
+    static func tensor(i32 valores: [Int32], shape: [Int]) -> GoldenValue {
+        var data = Data(capacity: valores.count * 4)
+        for valor in valores {
+            var le = valor.littleEndian
+            withUnsafeBytes(of: &le) { data.append(contentsOf: $0) }
+        }
+        return .tensor(GoldenTensor(dtype: "i32", shape: shape, data: data))
+    }
+
     static func tensor(u8 valores: [UInt8], shape: [Int]) -> GoldenValue {
         .tensor(GoldenTensor(dtype: "u8", shape: shape, data: Data(valores)))
     }
