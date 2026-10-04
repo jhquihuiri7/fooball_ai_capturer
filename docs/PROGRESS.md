@@ -12,6 +12,23 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-04 · IOS-31 — vista rectilínea y homografía programa→cámara · ✅
+
+**Hecho**
+- `RectilinearView.swift`: focalPx, vfov derivado, pose sin roll, withHfov,
+  lookingAt, directionAt con el medio píxel, contains(margin) y las
+  validaciones con el mismo texto que Python.
+- `ViewHomography.swift`: `viewHomography` = K_cam · R_camᵀ · R_vista ·
+  K_vista⁻¹ con el convenio del medio píxel; `viewHomographyToRaw` la compone
+  con la F de la montura para el búfer crudo del móvil invertido; `sidesFor`
+  con las cuatro esquinas (casi siempre UNA cámara: donde no hay costura no
+  hay fantasma).
+- Tests: los dorados de reprojection.json recalculados (se saltan solo
+  ViewRenderer.render —es IOS-40, Metal— y view_outline —del panel—, y el
+  meta-test lo exige); la aceptación de las 20 vistas: H·(x,y,1) coincide con
+  project(directionAt(x,y)) en una rejilla entera por lado (>400 puntos,
+  1e-6); la homografía cruda pasa por la montura exacta. Verde a la primera.
+
 ## 2026-10-04 · IOS-30 — álgebra y geometría del soporte (rig.py) · ✅
 
 **Hecho**
