@@ -106,7 +106,8 @@ public final class BenchRunner {
     /// `vt-concurrency` (SPK-03) carga cámara, HEVC, H.264 y decodificación a la vez;
     /// `model-bench` (SPK-50) mide .mlpackage con sus recursos en
     /// Documents/bench-resources (se suben con `devicectl device copy to`);
-    /// `director-bench` (IOS-37) mide el bucle del director por fotograma.
+    /// `director-bench` (IOS-37) mide el bucle del director por fotograma y
+    /// `metal-bench` (IOS-40/41/21), el tiempo de GPU de los kernels.
     private static let benches: [String: Bench] = [
         "noop": { report, _ in
             report.counters["noop"] = 1
@@ -116,6 +117,9 @@ public final class BenchRunner {
         },
         "vt-concurrency": { report, progress in
             try VtConcurrencyBench.run(report: &report, progress: progress)
+        },
+        "metal-bench": { report, progress in
+            try MetalBench.run(report: &report, progress: progress)
         },
         "director-bench": { report, progress in
             try DirectorBench.run(report: &report, progress: progress)

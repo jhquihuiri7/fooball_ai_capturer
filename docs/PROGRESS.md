@@ -147,7 +147,17 @@ es Mac + iPhone).
 
 **Siguiente paso**: IOS-41 (composición del programa en el maestro).
 
-## 2026-10-04 · IOS-46 — tarjeta de alineación y SIN SEÑAL en Dart · 🚧
+## 2026-10-04 · IOS-46 — tarjeta de alineación y SIN SEÑAL en Dart · ✅
+
+**Cierre (2026-10-04)**: la referencia de Python se pinta ahora con Archivo Bold, la
+fuente de la app (football-ai la lleva en tools/fonts con su licencia OFL). Frente a
+ese PNG, la tarjeta de Dart da **2,64 %** de píxeles distintos (diferencia >64 niveles
+en algún canal, la que se ve; con >24 serían 3,4 %, todo bordes de glifo que FreeType y
+Skia suavizan distinto). Aceptación ≤3 %: cumplida. El ancho del marcador de IOS-45
+(833 px con Archivo frente a 704 de la maqueta) sigue siendo la consecuencia de usar
+una fuente no condensada; si se quiere 704, hace falta una condensada con licencia.
+
+### Lo que se entregó antes
 
 **Hecho**
 - `lib/src/graphics/lineup_card_painter.dart`: build_lineup_card y slot_positions

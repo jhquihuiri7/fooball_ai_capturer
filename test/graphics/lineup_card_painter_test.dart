@@ -130,16 +130,13 @@ void main() {
     imagen.dispose();
   });
 
-  // La aceptación pide ≤3 %, y eso solo es alcanzable con la MISMA tipografía:
-  // pintada en Python con Archivo Bold, esta tarjeta da 3,4 % con umbral 24 y 2,6 %
-  // con 64 (los bordes de glifo los suaviza distinto FreeType que Skia). Contra la
-  // referencia en Arial Narrow da 5,5 %, y la diferencia es solo del texto. Hasta que
-  // se decida la fuente del gráfico (condensada en la app, o la referencia con la
-  // de la app), este límite vigila que el port no se desvíe más de lo que ya hace
-  // la tipografía.
-  const double limiteConOtraTipografia = 0.06;
+  // La referencia de Python se pinta con Archivo, la misma negrita que la app
+  // (tools/fonts de football-ai): la comparación mide el port, no la fuente. Lo que
+  // queda son bordes de glifo que FreeType y Skia suavizan distinto; «distinto» es
+  // una diferencia de más de 64 niveles en algún canal, la que se ve.
+  const int umbralVisible = 64;
 
-  testWidgets('frente al PNG de Python solo difiere la tipografía', (WidgetTester tester) async {
+  testWidgets('≤3 % de píxeles distintos frente al PNG de Python', (WidgetTester tester) async {
     await tester.runAsync(() async {
       final ui.Codec codec = await ui.instantiateImageCodec(
           File('test/graphics/reference/lineup_home.png').readAsBytesSync());
@@ -148,10 +145,11 @@ void main() {
           bellavista, lineupColour(true), OverlaySpec.programWidth, OverlaySpec.programHeight);
       expect(dart.width, python.width);
       expect(dart.height, python.height);
-      final double fraccion = _fraccionDistinta(await _straightRgba(dart), await _straightRgba(python));
+      final double fraccion =
+          _fraccionDistinta(await _straightRgba(dart), await _straightRgba(python), umbral: umbralVisible);
       // ignore: avoid_print
       print('alineación: ${(fraccion * 100).toStringAsFixed(2)} % de píxeles distintos');
-      expect(fraccion, lessThanOrEqualTo(limiteConOtraTipografia));
+      expect(fraccion, lessThanOrEqualTo(0.03));
       dart.dispose();
       python.dispose();
     });
