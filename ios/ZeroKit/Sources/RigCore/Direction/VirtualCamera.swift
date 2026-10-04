@@ -191,7 +191,10 @@ public struct CameraLimits: Equatable, Sendable {
 
 /// Lleva la cámara virtual desde donde está hasta donde el director quiere (§18).
 public final class VirtualCameraEngine {
-    public let limits: CameraLimits
+    /// Cambia al pasar a una lente y al volver (ADR 0023 §6). Una posición que se
+    /// queda fuera de los límites nuevos la recorta el siguiente paso, con la velocidad
+    /// a cero: es un salto, y es el que corresponde a perder media panorámica.
+    public var limits: CameraLimits
     public private(set) var view: RectilinearView
     public private(set) var yaw: AxisState
     public private(set) var pitch: AxisState

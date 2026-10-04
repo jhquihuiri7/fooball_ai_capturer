@@ -191,6 +191,20 @@ public enum RigConstants {
     /// (Python: `RIG_FUSE_MAX_ANGLE_RAD`.)
     public static let rigFuseMaxAngleRad: Double = 0.02
 
+    /// Radianes (~2°). Ancho de la franja en la que las dos cámaras se mezclan en la costura.
+    ///
+    /// Es un compromiso entre dos defectos que no se pueden eliminar a la vez. Una franja ancha
+    /// disimula la diferencia de brillo entre los dos sensores, pero todo lo que se mueve dentro
+    /// de ella sale **dos veces**: el paralaje y el desfase de exposición (hasta 50 cm de balón)
+    /// se ven como doble imagen semitransparente. Una franja estrecha deja la doble imagen en
+    /// pocos píxeles, a cambio de que un salto de brillo se note como línea.
+    ///
+    /// Con la exposición bloqueada e igual en los dos móviles (ADR 0012), el salto de brillo es
+    /// pequeño y lo que hay que minimizar es el fantasma. 2° son ~50 px con la focal de la ultra
+    /// gran angular sobre 4K (~1450 px/rad).
+    /// (Python: `PANORAMA_FEATHER_RAD`.)
+    public static let panoramaFeatherRad: Double = 0.035
+
     /// Puntos que se muestrean por cada borde de cada imagen para encontrar la extensión del
     /// lienzo. Los bordes de una cámara inclinada no son rectas en coordenadas cilíndricas, así
     /// que mirar solo las cuatro esquinas recortaría las panzas de los bordes superior e

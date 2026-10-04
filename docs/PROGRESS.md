@@ -12,6 +12,35 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-04 · IOS-37 — bucle del director (lógica pura) · 🚧
+
+**Hecho**
+- `Direction/DirectorLoop.swift`: `ingest` por ciclo de detección (fusión de las
+  dos cámaras y acción) y `tick(targetRigMs:)` a la rejilla del programa, con dt de
+  los rigMs y los huecos integrados en pasos de rejilla; sale `ViewCommand`
+  {targetRigMs, viewId, yaw, pitch, hfov, sides, seamYaw, featherRad, gains}.
+  Modos: auto, vista manual, abierta fija, IA apagada de la escalera (vuelve al
+  abierto al ritmo normal del muelle), markSituation y una lente (límites
+  recalculados con la cobertura de un lado y `sides` a ese lado). Los límites se
+  calculan como ProgramDirector, con su `upscaling`.
+- `Detection/RigDetection.swift`: PlayerDetection, RigPlayerDetection (cumple
+  ActionSighting) y `RigModel.fusePlayers` por los pies, con la caja de quien
+  mejor la vio (a igualdad, la izquierda, como `max` de Python). Adelantado de
+  IOS-23 porque la fusión del bucle lo necesita; IOS-23 lo reutiliza.
+- PANORAMA_FEATHER_RAD exportada desde football-ai; VirtualCameraEngine.limits
+  pasa a ser mutable para el cambio a una lente.
+- DirectorLoopTests (9): ProgramDirector.steps de shot.json (120 pasos) a 1e-9
+  con los mismos planos; tick por rigMs igual a la referencia; huecos; contrato
+  del ViewCommand; IA apagada, manual, una lente, gol y la fusión de cajas.
+
+**Falta para ✅**
+- La repetición de ≥2 min de partido contra tools/program_director.py: REF todavía
+  no produce ese registro de detecciones.
+- El coste por fotograma en el iPhone (<0,2 ms objetivo): se mide con IOS-73,
+  cuando el bucle corra en la app.
+
+**Siguiente paso**: IOS-20 → IOS-21 → IOS-22 (necesitan el iPhone).
+
 ## 2026-10-04 · IOS-35 — gramática de planos (shot.py) · ✅
 
 **Hecho**
