@@ -15,7 +15,7 @@ import Foundation
 public enum OverlaySpec {
     public static let programWidth = 1920
     public static let programHeight = 1080
-    public static let programFps = 25
+    public static let programFps = 30
     public static let refWidth = 1920
     public static let stripHeight = 108
     public static let margin = 48
@@ -103,7 +103,8 @@ public enum OverlaySpec {
 
     /// Los anuncios: cadencia y fundidos (ad_strip.py).
     public static let ad: [String: Int] = [
-        "fps": 25,
+        "fps": 30,
+        "fps_pod": 25,
         "beat_s": 10,
         "entry_frames": 10,
         "exit_frames": 10,

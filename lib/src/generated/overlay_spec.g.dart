@@ -13,7 +13,7 @@
 abstract final class OverlaySpec {
   static const int programWidth = 1920;
   static const int programHeight = 1080;
-  static const double programFps = 25.0;
+  static const double programFps = 30.0;
   static const double refWidth = 1920.0;
   static const int stripHeight = 108;
   static const int margin = 48;
@@ -85,7 +85,8 @@ abstract final class OverlaySpec {
 
   /// Los anuncios: cadencia y fundidos (ad_strip.py).
   static const Map<String, int> ad = {
-    'fps': 25,
+    'fps': 30,
+    'fps_pod': 25,
     'beat_s': 10,
     'entry_frames': 10,
     'exit_frames': 10,
