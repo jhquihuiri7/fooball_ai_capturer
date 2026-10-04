@@ -46,3 +46,7 @@ app.*.map.json
 
 # Ajustes locales de VS Code (ruta del SDK de esta máquina)
 .vscode/
+
+# Los recursos del banco de modelos (SPK-50): pesan y caducan con cada export.
+ios/ZeroKit/Tests/RigMediaTests/BenchResources/*
+!ios/ZeroKit/Tests/RigMediaTests/BenchResources/README.md

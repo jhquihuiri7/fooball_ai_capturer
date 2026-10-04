@@ -54,6 +54,30 @@ public struct BenchReport: Codable, Equatable {
     public var stagesMs: [String: StageSummary]
     public var counters: [String: Int]
 
+    /// Público adrede: ModelBenchTests (SPK-50) construye el informe desde el target
+    /// de tests, y el memberwise de serie es interno.
+    public init(
+        name: String,
+        device: String,
+        systemVersion: String,
+        startedEpochS: Int64,
+        durationS: Double,
+        params: [String: String],
+        thermal: [String],
+        stagesMs: [String: StageSummary],
+        counters: [String: Int]
+    ) {
+        self.name = name
+        self.device = device
+        self.systemVersion = systemVersion
+        self.startedEpochS = startedEpochS
+        self.durationS = durationS
+        self.params = params
+        self.thermal = thermal
+        self.stagesMs = stagesMs
+        self.counters = counters
+    }
+
     enum CodingKeys: String, CodingKey {
         case name, device, params, thermal, counters
         case systemVersion = "system_version"

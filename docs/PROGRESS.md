@@ -12,6 +12,34 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-03 · SPK-50 — arnés de banco de modelos en el iPhone (ModelBenchTests) · 🚧 falta la pasada en el iPhone
+
+**Hecho**
+- `Tests/RigMediaTests/Device/ModelBenchTests.swift` (en ZeroKit, sin target
+  nuevo): lee `BenchResources/bench.json` (modelos, computeUnits, predicciones)
+  y por cada modelo compila el .mlpackage (tiempos de compile y load por
+  separado), lee el MLComputePlan (ops totales, ops fuera del ANE y % del coste
+  en el ANE), mide p50/p90/p99 tras calentar con os_signpost (el bucle de
+  predicción es SÍNCRONO a propósito: en contexto async Swift resuelve
+  `prediction` a su sobrecarga async y el await ensucia la medida) y comprueba
+  el bundle dorado de ML-12 contra la ruta coreml_fp16 con su tolerancia.
+- El informe sigue el esquema de BenchRunner (IOS-08): Documents/bench del
+  runner + XCTAttachment + volcado al log entre MODELBENCH-REPORT-BEGIN/END.
+  `BenchReport` gana un init público (el memberwise era interno).
+- `Device/GoldenBundle.swift`: el lector del bundle de ML-12 (manifest, .bin
+  little-endian f4/f2/u1/i4, sufijos _NNN por muestra, tolerancia OBLIGATORIA).
+- `BenchResources/` como recurso del target (solo el README en git); sin
+  `bench.json` el banco se salta solo (Mac/CI en verde). `bench_pull.sh` acepta
+  un BUNDLE opcional: el runner de XCTest escribe en su propio contenedor.
+
+**Tests**: `GoldenBundleTests` (3, con datos sintéticos, corren en el Mac) y el
+skip limpio de `ModelBenchTests` sin recursos. `swift build --build-tests` y
+`check_layers.sh` en verde.
+
+**Pendiente para el ✅**: la pasada de aceptación en el iPhone con el paquete de
+mac_smoke (≥95 % del coste en el ANE) vía `xcodebuild test
+-only-testing:ModelBenchTests`; detrás vienen SPK-51 (D-FINE-N) y SPK-52.
+
 ## 2026-10-03 · SPK-03 — spike: concurrencia de VideoToolbox · ✅ aprobado SIN la HEVC 4K del maestro
 
 **Hecho**

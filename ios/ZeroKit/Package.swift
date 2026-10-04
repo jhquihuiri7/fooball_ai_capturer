@@ -54,6 +54,10 @@ let package = Package(
         .testTarget(
             name: "RigMediaTests",
             dependencies: ["RigMedia"],
+            // BenchResources/ lo rellena quien lanza el banco de modelos (SPK-50):
+            // bench.json, los .mlpackage y los bundles dorados de ML-12. En git solo
+            // vive su README; sin bench.json el banco se salta solo.
+            resources: [.copy("BenchResources")],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .testTarget(

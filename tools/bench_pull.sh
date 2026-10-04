@@ -1,17 +1,20 @@
 #!/usr/bin/env bash
 # Baja los informes de banco del iPhone (IOS-08).
 #
-#   tools/bench_pull.sh [UDID]
+#   tools/bench_pull.sh [UDID] [BUNDLE]
 #
 # Copia Documents/bench/ de la app al directorio bench/ del repo, por WiFi o cable.
 # El UDID por defecto es el iPhone de Alexander (memory/project_environment_mac_17sep).
-# Si da CoreDeviceError 4000, el iPhone está bloqueado o fuera de la red.
+# BUNDLE por defecto es la app; el runner de XCTest (SPK-50) escribe en SU propio
+# contenedor, asi que para bajar un model-bench se pasa el bundle del runner
+# (se ve con `devicectl device info apps`). Si da CoreDeviceError 4000, el iPhone
+# esta bloqueado o fuera de la red.
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 DEVICE="${1:-00008150-001619460278401C}"
-BUNDLE="com.logicielapplab.zero"
+BUNDLE="${2:-com.logicielapplab.zero}"
 DEST="bench"
 mkdir -p "$DEST"
 
