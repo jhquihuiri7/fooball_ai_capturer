@@ -650,6 +650,25 @@ hubs), ya con esta expectativa.
 
 ---
 
+## 2026-10-04 · IOS-60 — estado del partido con autoridad en el maestro (Dart) · ✅
+
+**Hecho**
+- `lib/src/server/match_record.dart`: el JSON v1 de tools/match_record.py (los mismos
+  `clock_ms`/`clock_running`) más `started_rig_ms` y `clock_domain` del ADR 0023;
+  lectura entera o nada, escritura atómica (temporal + renombrado).
+- `lib/src/server/match_engine.dart`: las órdenes de ORDERS de live_panel —gol con
+  expect/409 (y el partido de verdad en el error), marcador, cronómetro
+  start/pause/reset/nudge ≤3600 s, clips/mark (404 sin búfer) y stream start/stop
+  (409 sin túnel, ADR 0022)— con boot/rev, guardado en cada cambio y cada 10 s en
+  marcha, y el DTO que lee PanelMatch. El cronómetro solo lee una fuente monótona
+  (MatchTimeSource: el reloj del soporte o un Stopwatch); en el mismo `clock_domain`
+  sigue en marcha tras reiniciar, en otro vuelve parado con `clock_restored`.
+- Las alineaciones del DTO (formation, players, lineup_on_air) llegan con IOS-61; los
+  `scopes`, con la API del mando (IOS-62).
+- Tests (19): las órdenes de live_panel (409, 400, idempotencia, límites del nudge),
+  reinicio en el mismo dominio y en otro, PanelMatch.fromJson, el fichero, y que el
+  motor no use DateTime.now.
+
 ## 2026-10-04 · IOS-42 — sincronía de vistas y partes sin desgarros · ✅
 
 **Hecho**

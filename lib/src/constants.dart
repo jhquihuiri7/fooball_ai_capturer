@@ -182,3 +182,29 @@ const Duration mandoSilenceRefresh = Duration(seconds: 1);
 /// IOS-07: cuánto se enseña la vista previa al tocar la tarjeta mientras se emite.
 /// Lo justo para encuadrar o comprobar algo; después vuelve a apagarse sola.
 const Duration previewPeekDuration = Duration(seconds: 30);
+
+// --------------------------------------------------------------------------- //
+// El partido con autoridad en el maestro (IOS-60, ADR 0017/0023)
+// --------------------------------------------------------------------------- //
+
+/// Versión del fichero del partido (`MATCH_RECORD_VERSION` de `tools/match_record.py`).
+const int matchRecordVersion = 1;
+
+/// Entre dos guardados del cronómetro mientras corre (`CLOCK_SAVE_INTERVAL_S`): es lo
+/// que puede perder un reinicio, y diez segundos se corrigen con el ±1 min.
+const Duration matchClockSaveInterval = Duration(seconds: 10);
+
+/// Lo más que una orden mueve el cronómetro de una vez (`CLOCK_NUDGE_MAX_S`): más de
+/// una hora no es corregir un reloj de partido, es una errata.
+const int matchClockNudgeMaxS = 3600;
+
+/// Goles que suma o quita una orden de gol (`GOAL_STEP`).
+const int matchGoalStep = 1;
+
+/// Las formaciones que ofrece el editor (`FORMATIONS` de `tools/lineup.py`).
+const List<String> matchFormations = <String>[
+  '4-4-2', '4-3-3', '4-2-3-1', '4-1-4-1', '3-5-2', '3-4-3', '5-3-2', '5-4-1',
+];
+
+/// Ámbito del token que deja tocar el partido (`SCOPE_MATCH`).
+const String panelScopeMatch = 'match';
