@@ -1,0 +1,55 @@
+{
+  "counters" : {
+    "clock_estimates" : 7,
+    "clock_uncertainty_us" : 2101,
+    "commands_received" : 3,
+    "commands_sent" : 0,
+    "connect_ms" : 7456,
+    "connected" : 1,
+    "connections" : 1,
+    "frames_received" : 19,
+    "frames_sent" : 16,
+    "invalid_frames" : 0,
+    "media_frames_received" : 10,
+    "media_loss_gaps" : 0,
+    "media_stalls_over_100ms" : 9,
+    "outages" : 0,
+    "pts_answered" : 4,
+    "pts_requests" : 7,
+    "reconnect_ms" : -1,
+    "reconnects" : 0,
+    "rtt_samples" : 10,
+    "t_auth_ms" : 7456,
+    "t_connecting_ms" : 1,
+    "t_hello_ms" : 7444,
+    "t_listening_ms" : -1,
+    "t_tcp_ms" : 7444
+  },
+  "device" : "iPhone17,1",
+  "duration_s" : 15,
+  "name" : "link-bench",
+  "params" : {
+    "interface" : "wifi",
+    "internet_path" : "en0",
+    "peer" : "iPhone",
+    "rejections" : "",
+    "side" : "right"
+  },
+  "stages_ms" : {
+    "link/pts_roundtrip" : {
+      "p50_ms" : 43.965042,
+      "p90_ms" : 102.918458,
+      "p99_ms" : 102.918458
+    },
+    "link/rtt" : {
+      "p50_ms" : 6.409792,
+      "p90_ms" : 73.415167,
+      "p99_ms" : 73.415167
+    }
+  },
+  "started_epoch_s" : 1791153751,
+  "system_version" : "Version 26.6.1 (Build 23G83)",
+  "thermal" : [
+
+  ]
+}

@@ -293,6 +293,17 @@ y iPhone 16 Pro (iPhone17,1) a la derecha, buscando; iOS 26.6.1; RIG_LINK_INTERF
   p50 6 ms, p99 111 ms por Wi-Fi.
 - Reloj vivo: 8 estimaciones del esclavo, incertidumbre 2,3 ms; 0 tramas inválidas.
 
+**Tercera ronda: de dónde salen los ~2 s del orden «derecho primero»** (el banco
+desglosa la conexión: listener listo, TCP arriba, hello y auth). Seis repeticiones:
+el izquierdo escucha a 1 ms, el TCP llega a 1,97–2,14 s y hello+auth cuestan
+**~8 ms**. Los ~2 s son lo que tarda el anuncio Bonjour en publicarse (mDNS sondea el
+nombre antes de anunciarlo) y en llegar por multicast Wi-Fi; no es código nuestro. Por
+Ethernet se mide con los hubs.
+- De paso, `NWLinkTransport` deja de hacer caso a una conexión ya sustituida: antes, al
+  cambiar de conexión, el `.cancelled` de la vieja llamaba a `dropConnection` y podía
+  tumbar la nueva. Y un anuncio que aparece manda sobre una conexión a medias a un
+  anuncio viejo de la caché de Bonjour. RigNetTests 18/18.
+
 **Falta para ✅**: lo mismo por Ethernet con los hubs (conectar <2 s en cualquier
 orden, reconectar <3 s al reenchufar de verdad, RTT p50 <2 ms). Por Wi-Fi ya pasa
 todo lo funcional; lo que el Wi-Fi no puede dar es la latencia.

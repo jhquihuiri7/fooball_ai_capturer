@@ -219,6 +219,26 @@ enum LinkBench {
         var ptsRespondidos = 0
         var ptsMs: [Double] = []
         let inicio = DispatchTime.now().uptimeNanoseconds
+        // El desglose de la conexión: transporte escuchando/conectando, TCP arriba
+        // (la sesión pasa a autenticar) y auth hecho. Se encadena al de la sesión.
+        var hitos: [String: Double] = [:]
+        func hito(_ nombre: String) {
+            if hitos[nombre] == nil {
+                hitos[nombre] = Double(DispatchTime.now().uptimeNanoseconds - inicio) / 1e6
+            }
+        }
+        let deLaSesion = transporte.onState
+        transporte.onState = { estado in
+            cerrojo.lock()
+            switch estado {
+            case .listening: hito("t_listening_ms")
+            case .connecting: hito("t_connecting_ms")
+            case .connected: hito("t_tcp_ms")
+            default: break
+            }
+            cerrojo.unlock()
+            deLaSesion?(estado)
+        }
         // El maestro contesta con unos PTS sintéticos: aquí no hay cámara.
         sesion.recentPts = { [1_000_000, 34_333_333, 67_666_666] }
         sesion.onCommand = { _ in
@@ -229,8 +249,11 @@ enum LinkBench {
         sesion.onState = { estado in
             cerrojo.lock(); defer { cerrojo.unlock() }
             switch estado {
+            case .authenticating:
+                hito("t_hello_ms")
             case let .connected(peer):
                 let ahora = DispatchTime.now().uptimeNanoseconds
+                hito("t_auth_ms")
                 conexiones += 1
                 conectado = true
                 par = peer
@@ -323,6 +346,11 @@ enum LinkBench {
                 "rtt_samples": rtts.count,
                 "reconnect_ms": vueltasMs.isEmpty ? -1 : Int(vueltasMs.max()!.rounded()),
                 "outages": vueltasMs.count,
+                "t_listening_ms": Int(hitos["t_listening_ms"] ?? -1),
+                "t_connecting_ms": Int(hitos["t_connecting_ms"] ?? -1),
+                "t_tcp_ms": Int(hitos["t_tcp_ms"] ?? -1),
+                "t_hello_ms": Int(hitos["t_hello_ms"] ?? -1),
+                "t_auth_ms": Int(hitos["t_auth_ms"] ?? -1),
                 "commands_sent": ordenesEnviadas,
                 "commands_received": ordenesRecibidas,
                 "pts_requests": ptsPedidos,

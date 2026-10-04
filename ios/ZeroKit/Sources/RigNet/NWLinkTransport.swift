@@ -213,9 +213,22 @@ public final class NWLinkTransport: LinkTransport {
             for: .bonjourWithTXTRecord(type: Self.serviceType, domain: nil),
             using: parameters()
         )
-        browser.browseResultsChangedHandler = { [weak self] results, _ in
-            guard let self, self.connection == nil, let primero = results.first else { return }
-            self.openConnection(to: primero.endpoint)
+        browser.browseResultsChangedHandler = { [weak self] results, cambios in
+            guard let self, self.state != .connected else { return }
+            // Un anuncio que acaba de aparecer manda sobre la conexión a medias: al
+            // arrancar, la caché de Bonjour trae el anuncio del izquierdo de antes, ya
+            // muerto, y esperar a que esa conexión falle (con su espera creciente)
+            // costaba hasta 2 s de más cuando el izquierdo de verdad aparecía.
+            let nuevo = cambios.compactMap { cambio -> NWEndpoint? in
+                if case let .added(resultado) = cambio { return resultado.endpoint }
+                return nil
+            }.last
+            if let nuevo {
+                self.connection?.cancel()
+                self.openConnection(to: nuevo)
+            } else if self.connection == nil, let primero = results.first {
+                self.openConnection(to: primero.endpoint)
+            }
         }
         browser.stateUpdateHandler = { [weak self] estado in
             if case let .failed(error) = estado {
@@ -237,8 +250,10 @@ public final class NWLinkTransport: LinkTransport {
     private func adopt(connection nueva: NWConnection) {
         connection = nueva
         buffer.removeAll(keepingCapacity: true)
-        nueva.stateUpdateHandler = { [weak self] estado in
-            guard let self else { return }
+        nueva.stateUpdateHandler = { [weak self, weak nueva] estado in
+            // Lo que diga una conexión ya sustituida no cuenta: si no, cancelarla al
+            // cambiar a otra dispararía una reconexión de la que nadie quiere saber.
+            guard let self, let nueva, nueva === self.connection else { return }
             switch estado {
             case .ready:
                 self.reconnectAttempt = 0
