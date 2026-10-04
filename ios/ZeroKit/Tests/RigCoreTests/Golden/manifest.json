@@ -2,8 +2,10 @@
   "schema": 1,
   "files": {
     "action.json": "bc7e32ca75c01b4dcf33e76d0a5ad726fba41d3ed3ed2992b914a7b43803548d",
+    "ad_strip.json": "312648972cf788bcf374cc223b71f3e706b1528d9555fc5305d4f89039813d55",
     "band.json": "bffdb046c2d083959cc70dbdee48c991412ab5e4d6a4fbe3ff247de373385d45",
     "color.json": "d63f477ea19d1be6bc24e990347600ff5138638b10e3aa702cd5335ba0653f8e",
+    "compose.json": "de4128512a34b591542da240a0973576f6c98f5eba1f988a69ae07fa9d181c51",
     "control_token.json": "a09a199ff67062158cc69a252529b4c633061b06eb27d6103a8f3456948dd809",
     "director.json": "a469e93f18928e1768d83b267cc6fa02b2e7ffe61161c0a1479ccca9e7bef74b",
     "lineups.json": "6c9b8c6a5d305590b59c4589306af48d9f8c9a4721dd47f303bbf9e483b7dc74",
