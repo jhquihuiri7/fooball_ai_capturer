@@ -8,31 +8,31 @@
 
 import Foundation
 
-struct GoldenItem: Decodable {
-    let name: String
-    let file: String
-    let dtype: String
-    let shape: [Int]
-    let layout: String
+public struct GoldenItem: Decodable {
+    public let name: String
+    public let file: String
+    public let dtype: String
+    public let shape: [Int]
+    public let layout: String
 
     /// "image_000" -> ("image", 0). Sin sufijo numérico no hay muestra.
-    var baseAndSample: (base: String, sample: Int)? {
+    public var baseAndSample: (base: String, sample: Int)? {
         guard let corte = name.lastIndex(of: "_"),
               let muestra = Int(name[name.index(after: corte)...])
         else { return nil }
         return (String(name[..<corte]), muestra)
     }
 
-    var count: Int { shape.reduce(1, *) }
+    public var count: Int { shape.reduce(1, *) }
 }
 
-struct GoldenManifest: Decodable {
-    let version: Int
-    let model: String
-    let modelVersion: String
-    let inputs: [GoldenItem]
-    let outputs: [String: [GoldenItem]]
-    let tolerances: [String: [String: Double]]
+public struct GoldenManifest: Decodable {
+    public let version: Int
+    public let model: String
+    public let modelVersion: String
+    public let inputs: [GoldenItem]
+    public let outputs: [String: [GoldenItem]]
+    public let tolerances: [String: [String: Double]]
 
     enum CodingKeys: String, CodingKey {
         case version, model, inputs, outputs, tolerances
@@ -40,13 +40,13 @@ struct GoldenManifest: Decodable {
     }
 }
 
-enum GoldenBundleError: Error, CustomStringConvertible {
+public enum GoldenBundleError: Error, CustomStringConvertible {
     case badVersion(Int)
     case badSize(name: String, expected: Int, got: Int)
     case unknownDtype(String)
     case missingTolerance(output: String, route: String)
 
-    var description: String {
+    public var description: String {
         switch self {
         case let .badVersion(v): return "manifest version \(v): este lector lee la 1"
         case let .badSize(name, esperado, visto):
@@ -58,11 +58,11 @@ enum GoldenBundleError: Error, CustomStringConvertible {
     }
 }
 
-struct GoldenBundle {
-    let dir: URL
-    let manifest: GoldenManifest
+public struct GoldenBundle {
+    public let dir: URL
+    public let manifest: GoldenManifest
 
-    init(dir: URL) throws {
+    public init(dir: URL) throws {
         self.dir = dir
         let datos = try Data(contentsOf: dir.appendingPathComponent("manifest.json"))
         manifest = try JSONDecoder().decode(GoldenManifest.self, from: datos)
@@ -71,7 +71,7 @@ struct GoldenBundle {
         }
     }
 
-    func data(_ item: GoldenItem) throws -> Data {
+    public func data(_ item: GoldenItem) throws -> Data {
         let crudo = try Data(contentsOf: dir.appendingPathComponent(item.file))
         let esperado = item.count * bytesPerElement(item.dtype)
         guard crudo.count == esperado else {
@@ -81,7 +81,7 @@ struct GoldenBundle {
     }
 
     /// Cualquier dtype del formato, a Float. Little-endian en orden C, como el manifest.
-    func floats(_ item: GoldenItem) throws -> [Float] {
+    public func floats(_ item: GoldenItem) throws -> [Float] {
         let datos = try data(item)
         switch item.dtype {
         case "<f4":
@@ -98,26 +98,26 @@ struct GoldenBundle {
     }
 
     /// Las muestras del bundle, por los sufijos _NNN de sus entradas.
-    var sampleIndices: [Int] {
+    public var sampleIndices: [Int] {
         Array(Set(manifest.inputs.compactMap { $0.baseAndSample?.sample })).sorted()
     }
 
-    func input(base: String, sample: Int) -> GoldenItem? {
+    public func input(base: String, sample: Int) -> GoldenItem? {
         manifest.inputs.first { $0.baseAndSample ?? ("", -1) == (base, sample) }
     }
 
-    func inputBases(sample: Int) -> [String] {
+    public func inputBases(sample: Int) -> [String] {
         manifest.inputs.compactMap { item in
             guard let par = item.baseAndSample, par.sample == sample else { return nil }
             return par.base
         }.sorted()
     }
 
-    func output(route: String, base: String, sample: Int) -> GoldenItem? {
+    public func output(route: String, base: String, sample: Int) -> GoldenItem? {
         manifest.outputs[route]?.first { $0.baseAndSample ?? ("", -1) == (base, sample) }
     }
 
-    func outputBases(route: String, sample: Int) -> [String] {
+    public func outputBases(route: String, sample: Int) -> [String] {
         (manifest.outputs[route] ?? []).compactMap { item in
             guard let par = item.baseAndSample, par.sample == sample else { return nil }
             return par.base
@@ -125,7 +125,7 @@ struct GoldenBundle {
     }
 
     /// La tolerancia es OBLIGATORIA: que falte es un bundle roto, no un «sin límite».
-    func tolerance(outputName: String, route: String) throws -> Double {
+    public func tolerance(outputName: String, route: String) throws -> Double {
         guard let valor = tolerances(outputName)[route] else {
             throw GoldenBundleError.missingTolerance(output: outputName, route: route)
         }

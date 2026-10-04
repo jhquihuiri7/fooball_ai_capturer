@@ -1,0 +1,384 @@
+// El banco de modelos (SPK-50): MLComputePlan, latencias y el dorado de ML-12.
+//
+// El motor es común a los dos carriles:
+// - en el iPhone corre por BenchRunner (`BENCH=model-bench`, IOS-08), leyendo los
+//   recursos de Documents/bench-resources del contenedor de la app — en un
+//   dispositivo físico no hay «tool-hosted testing» para los tests de un paquete
+//   SPM, así que el carril de la app ES el del banco;
+// - en el Mac y el simulador lo envuelve ModelBenchTests con los recursos del
+//   bundle de tests.
+//
+// Por cada modelo de bench.json: compila el .mlpackage (compile y load medidos por
+// separado), lee del MLComputePlan la unidad y el coste por op (% del coste en el
+// ANE y ops fuera), mide p50/p90/p99 de las predicciones tras calentar (con
+// os_signpost, y el bucle SÍNCRONO: un await ensuciaría la medida) y comprueba el
+// bundle dorado de ML-12 contra la ruta coreml_fp16 con su tolerancia.
+
+import CoreML
+import CoreVideo
+import Foundation
+import os
+import RigCore
+
+// MARK: - bench.json
+
+public struct BenchModelSpec: Decodable {
+    public let name: String
+    /// El directorio .mlpackage dentro de los recursos del banco.
+    public let package: String
+    public var predictions: Int = 1000
+    public var warmup: Int = 50
+    /// "cpu_and_ne" (el contrato del ADR 0020) o "cpu_only" para comparar.
+    public var computeUnits: String = "cpu_and_ne"
+    /// El directorio del bundle dorado de ML-12, si hay.
+    public var golden: String?
+
+    enum CodingKeys: String, CodingKey {
+        case name, package, predictions, warmup, golden
+        case computeUnits = "compute_units"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        name = try c.decode(String.self, forKey: .name)
+        package = try c.decode(String.self, forKey: .package)
+        predictions = try c.decodeIfPresent(Int.self, forKey: .predictions) ?? 1000
+        warmup = try c.decodeIfPresent(Int.self, forKey: .warmup) ?? 50
+        computeUnits = try c.decodeIfPresent(String.self, forKey: .computeUnits) ?? "cpu_and_ne"
+        golden = try c.decodeIfPresent(String.self, forKey: .golden)
+    }
+}
+
+public struct BenchSpec: Decodable {
+    public let models: [BenchModelSpec]
+}
+
+public enum ModelBenchError: Error, CustomStringConvertible {
+    case missingResources(String)
+    case goldenViolated(model: String, output: String, delta: Double, atol: Double)
+    case pixelBuffer(Int)
+
+    public var description: String {
+        switch self {
+        case let .missingResources(ruta): return "sin recursos del banco en \(ruta)"
+        case let .goldenViolated(modelo, salida, delta, atol):
+            return "\(modelo)/\(salida): delta \(delta) > atol \(atol) contra el dorado"
+        case let .pixelBuffer(codigo): return "CVPixelBufferCreate: \(codigo)"
+        }
+    }
+}
+
+// MARK: - El motor
+
+public enum ModelBench {
+    private static let signposter = OSSignposter(
+        subsystem: Signposts.subsystem, category: "model-bench"
+    )
+
+    /// El puente síncrono para BenchRunner: bloquea mientras el trabajo async
+    /// (compileModel, MLComputePlan.load) corre en otro ejecutor.
+    public static func run(
+        resources: URL, report: inout BenchReport, progress: BenchRunner.Progress?
+    ) throws {
+        let base = report
+        var resultado: Result<BenchReport, Error> = .failure(
+            ModelBenchError.missingResources(resources.path)
+        )
+        let sem = DispatchSemaphore(value: 0)
+        Task.detached {
+            do {
+                resultado = .success(
+                    try await runAsync(resources: resources, report: base, progress: progress)
+                )
+            } catch {
+                resultado = .failure(error)
+            }
+            sem.signal()
+        }
+        sem.wait()
+        report = try resultado.get()
+    }
+
+    public static func runAsync(
+        resources: URL, report: BenchReport, progress: BenchRunner.Progress?
+    ) async throws -> BenchReport {
+        let specURL = resources.appendingPathComponent("bench.json")
+        guard let datos = try? Data(contentsOf: specURL) else {
+            throw ModelBenchError.missingResources(specURL.path)
+        }
+        let spec = try JSONDecoder().decode(BenchSpec.self, from: datos)
+        var informe = report
+        informe.params["models"] = spec.models.map(\.name).joined(separator: ",")
+
+        for (indice, modelo) in spec.models.enumerated() {
+            progress?(Double(indice) / Double(max(1, spec.models.count)), modelo.name)
+            try await bench(modelo, resources: resources, report: &informe)
+            informe.thermal.append(thermalWord())
+        }
+        return informe
+    }
+
+    // MARK: por modelo
+
+    private static func bench(
+        _ spec: BenchModelSpec, resources: URL, report: inout BenchReport
+    ) async throws {
+        let paquete = resources.appendingPathComponent(spec.package)
+        let config = MLModelConfiguration()
+        config.computeUnits = spec.computeUnits == "cpu_only" ? .cpuOnly : .cpuAndNeuralEngine
+
+        // Compilación y carga por separado: son parte del arranque de la app.
+        let t0 = ContinuousClock.now
+        let compilado = try await MLModel.compileModel(at: paquete)
+        let t1 = ContinuousClock.now
+        let modelo = try MLModel(contentsOf: compilado, configuration: config)
+        let t2 = ContinuousClock.now
+        report.stagesMs["\(spec.name)/compile"] = single(ms: ms(t0, t1))
+        report.stagesMs["\(spec.name)/load"] = single(ms: ms(t1, t2))
+
+        // El plan de cómputo: unidad preferida y coste por op.
+        let plan = try await MLComputePlan.load(contentsOf: compilado, configuration: config)
+        let (total, fuera, costePct) = anePlan(plan)
+        report.counters["\(spec.name)/ops_total"] = total
+        report.counters["\(spec.name)/ops_off_ane"] = fuera
+        report.counters["\(spec.name)/ane_cost_pct_x100"] = Int((costePct * 100).rounded())
+
+        // Latencias, en síncrono.
+        let entrada = try seededInputs(for: modelo)
+        let histograma = try predictLoop(
+            modelo, input: entrada, warmup: spec.warmup, predictions: spec.predictions
+        )
+        report.stagesMs["\(spec.name)/predict"] = BenchReport.StageSummary(histogram: histograma)
+        report.counters["\(spec.name)/predictions"] = spec.predictions
+
+        if let dorado = spec.golden {
+            let bundle = try GoldenBundle(dir: resources.appendingPathComponent(dorado))
+            let (peor, violaciones) = try checkGolden(bundle, model: modelo)
+            report.counters["\(spec.name)/golden_max_delta_x1e6"] = Int((peor * 1e6).rounded())
+            report.counters["\(spec.name)/golden_violations"] = violaciones
+        }
+    }
+
+    private static func predictLoop(
+        _ model: MLModel, input: MLFeatureProvider, warmup: Int, predictions: Int
+    ) throws -> LatencyHistogram {
+        for _ in 0..<warmup {
+            _ = try model.prediction(from: input)
+        }
+        var histograma = LatencyHistogram()
+        for _ in 0..<predictions {
+            let estado = signposter.beginInterval("predict")
+            let antes = ContinuousClock.now
+            _ = try model.prediction(from: input)
+            histograma.record(ms: ms(antes, ContinuousClock.now))
+            signposter.endInterval("predict", estado)
+        }
+        return histograma
+    }
+
+    // MARK: MLComputePlan
+
+    private static func anePlan(_ plan: MLComputePlan) -> (total: Int, offAne: Int, anePct: Double) {
+        guard case let .program(programa) = plan.modelStructure else { return (0, 0, 0) }
+        var total = 0
+        var fuera = 0
+        var costeTotal = 0.0
+        var costeAne = 0.0
+        for funcion in programa.functions.values {
+            for operacion in funcion.block.operations {
+                total += 1
+                let coste = plan.estimatedCost(of: operacion)?.weight ?? 0
+                costeTotal += coste
+                var enAne = false
+                if let uso = plan.deviceUsage(for: operacion),
+                   case .neuralEngine = uso.preferred {
+                    enAne = true
+                }
+                if enAne {
+                    costeAne += coste
+                } else {
+                    fuera += 1
+                }
+            }
+        }
+        return (total, fuera, costeTotal > 0 ? costeAne / costeTotal * 100 : 0)
+    }
+
+    // MARK: entradas
+
+    /// Entradas con semilla fija: imagen BGRA de ruido o MLMultiArray de ruido.
+    static func seededInputs(for model: MLModel) throws -> MLFeatureProvider {
+        var rng = SplitMix64(seed: 0)
+        var features: [String: MLFeatureValue] = [:]
+        for (nombre, descripcion) in model.modelDescription.inputDescriptionsByName {
+            if let imagen = descripcion.imageConstraint {
+                features[nombre] = MLFeatureValue(
+                    pixelBuffer: try noisePixelBuffer(
+                        width: imagen.pixelsWide, height: imagen.pixelsHigh, rng: &rng
+                    )
+                )
+            } else if let arreglo = descripcion.multiArrayConstraint {
+                let multi = try MLMultiArray(shape: arreglo.shape, dataType: .float32)
+                for i in 0..<multi.count {
+                    multi[i] = NSNumber(value: Float(rng.next() % 1000) / 1000.0)
+                }
+                features[nombre] = MLFeatureValue(multiArray: multi)
+            }
+        }
+        return try MLDictionaryFeatureProvider(dictionary: features)
+    }
+
+    private static func noisePixelBuffer(
+        width: Int, height: Int, rng: inout SplitMix64
+    ) throws -> CVPixelBuffer {
+        var buffer: CVPixelBuffer?
+        let attrs = [kCVPixelBufferIOSurfacePropertiesKey: [:]] as CFDictionary
+        let codigo = CVPixelBufferCreate(
+            nil, width, height, kCVPixelFormatType_32BGRA, attrs, &buffer
+        )
+        guard let listo = buffer else {
+            throw ModelBenchError.pixelBuffer(Int(codigo))
+        }
+        CVPixelBufferLockBaseAddress(listo, [])
+        defer { CVPixelBufferUnlockBaseAddress(listo, []) }
+        let base = CVPixelBufferGetBaseAddress(listo)!
+        let porFila = CVPixelBufferGetBytesPerRow(listo)
+        for fila in 0..<height {
+            let destino = base.advanced(by: fila * porFila).assumingMemoryBound(to: UInt8.self)
+            for byte in 0..<(width * 4) {
+                destino[byte] = UInt8(truncatingIfNeeded: rng.next())
+            }
+        }
+        return listo
+    }
+
+    /// BGRA8 del bundle (H, W, 4) a CVPixelBuffer, respetando bytesPerRow.
+    private static func pixelBuffer(bgra datos: Data, shape: [Int]) throws -> CVPixelBuffer {
+        let alto = shape[0]
+        let ancho = shape[1]
+        var buffer: CVPixelBuffer?
+        let attrs = [kCVPixelBufferIOSurfacePropertiesKey: [:]] as CFDictionary
+        let codigo = CVPixelBufferCreate(
+            nil, ancho, alto, kCVPixelFormatType_32BGRA, attrs, &buffer
+        )
+        guard let listo = buffer else {
+            throw ModelBenchError.pixelBuffer(Int(codigo))
+        }
+        CVPixelBufferLockBaseAddress(listo, [])
+        defer { CVPixelBufferUnlockBaseAddress(listo, []) }
+        let base = CVPixelBufferGetBaseAddress(listo)!
+        let porFila = CVPixelBufferGetBytesPerRow(listo)
+        datos.withUnsafeBytes { (crudo: UnsafeRawBufferPointer) in
+            for fila in 0..<alto {
+                memcpy(
+                    base.advanced(by: fila * porFila),
+                    crudo.baseAddress!.advanced(by: fila * ancho * 4),
+                    ancho * 4
+                )
+            }
+        }
+        return listo
+    }
+
+    // MARK: el dorado de ML-12
+
+    /// Predice las muestras del bundle y compara contra la ruta coreml_fp16 con su
+    /// tolerancia. Devuelve el peor delta y cuántas salidas se pasaron.
+    static func checkGolden(
+        _ bundle: GoldenBundle, model: MLModel
+    ) throws -> (worst: Double, violations: Int) {
+        var peor = 0.0
+        var violaciones = 0
+        for muestra in bundle.sampleIndices {
+            var features: [String: MLFeatureValue] = [:]
+            for base in bundle.inputBases(sample: muestra) {
+                guard let item = bundle.input(base: base, sample: muestra) else { continue }
+                if item.layout == "BGRA8" {
+                    features[base] = MLFeatureValue(
+                        pixelBuffer: try pixelBuffer(bgra: try bundle.data(item), shape: item.shape)
+                    )
+                } else {
+                    let multi = try MLMultiArray(
+                        shape: item.shape.map { NSNumber(value: $0) }, dataType: .float32
+                    )
+                    for (i, valor) in (try bundle.floats(item)).enumerated() {
+                        multi[i] = NSNumber(value: valor)
+                    }
+                    features[base] = MLFeatureValue(multiArray: multi)
+                }
+            }
+            let salida = try model.prediction(
+                from: try MLDictionaryFeatureProvider(dictionary: features)
+            )
+            for base in bundle.outputBases(route: "coreml_fp16", sample: muestra) {
+                guard let item = bundle.output(route: "coreml_fp16", base: base, sample: muestra),
+                      let valor = salida.featureValue(for: base)?.multiArrayValue
+                else {
+                    violaciones += 1
+                    continue
+                }
+                let esperado = try bundle.floats(item)
+                let tolerancia = try bundle.tolerance(outputName: item.name, route: "coreml_fp16")
+                let delta = maxDelta(valor, esperado)
+                if delta > tolerancia {
+                    violaciones += 1
+                }
+                peor = max(peor, delta)
+            }
+        }
+        return (peor, violaciones)
+    }
+
+    private static func maxDelta(_ visto: MLMultiArray, _ esperado: [Float]) -> Double {
+        var delta = 0.0
+        if visto.dataType == .float32 {
+            visto.withUnsafeBufferPointer(ofType: Float.self) { puntero in
+                for i in 0..<min(puntero.count, esperado.count) {
+                    delta = max(delta, Double(abs(puntero[i] - esperado[i])))
+                }
+            }
+        } else {
+            for i in 0..<min(visto.count, esperado.count) {
+                delta = max(delta, abs(visto[i].doubleValue - Double(esperado[i])))
+            }
+        }
+        return delta
+    }
+
+    // MARK: utilidades
+
+    private static func single(ms valor: Double) -> BenchReport.StageSummary {
+        var h = LatencyHistogram()
+        h.record(ms: valor)
+        return BenchReport.StageSummary(histogram: h)
+    }
+
+    private static func ms(_ a: ContinuousClock.Instant, _ b: ContinuousClock.Instant) -> Double {
+        let d = b - a
+        return Double(d.components.seconds) * 1000
+            + Double(d.components.attoseconds) / 1e15
+    }
+
+    private static func thermalWord() -> String {
+        switch ProcessInfo.processInfo.thermalState {
+        case .nominal: return "nominal"
+        case .fair: return "fair"
+        case .serious: return "serious"
+        case .critical: return "critical"
+        @unknown default: return "critical"
+        }
+    }
+}
+
+/// Un RNG mínimo y determinista: las entradas del banco son siempre las mismas.
+struct SplitMix64 {
+    private var estado: UInt64
+    init(seed: UInt64) { estado = seed }
+    mutating func next() -> UInt64 {
+        estado &+= 0x9E37_79B9_7F4A_7C15
+        var z = estado
+        z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
+        z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
+        return z ^ (z >> 31)
+    }
+}

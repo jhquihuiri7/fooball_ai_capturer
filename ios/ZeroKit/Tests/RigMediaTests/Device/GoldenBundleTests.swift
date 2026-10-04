@@ -1,6 +1,7 @@
 // El lector del bundle dorado, contra datos sintéticos (SPK-50). Corre en el Mac.
 
 import Foundation
+import RigMedia
 import XCTest
 
 final class GoldenBundleTests: XCTestCase {

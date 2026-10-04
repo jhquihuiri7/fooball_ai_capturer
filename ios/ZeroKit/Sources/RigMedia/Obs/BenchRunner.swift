@@ -95,7 +95,9 @@ public final class BenchRunner {
 
     /// El registro de bancos. `noop` prueba la tubería entera sin hacer nada;
     /// `pipeline-noop` (IOS-09) mide el blit del anillo con fotogramas sintéticos;
-    /// `vt-concurrency` (SPK-03) carga cámara, HEVC, H.264 y decodificación a la vez.
+    /// `vt-concurrency` (SPK-03) carga cámara, HEVC, H.264 y decodificación a la vez;
+    /// `model-bench` (SPK-50) mide .mlpackage con sus recursos en
+    /// Documents/bench-resources (se suben con `devicectl device copy to`).
     private static let benches: [String: Bench] = [
         "noop": { report, _ in
             report.counters["noop"] = 1
@@ -105,6 +107,16 @@ public final class BenchRunner {
         },
         "vt-concurrency": { report, progress in
             try VtConcurrencyBench.run(report: &report, progress: progress)
+        },
+        "model-bench": { report, progress in
+            let documentos = try FileManager.default.url(
+                for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true
+            )
+            try ModelBench.run(
+                resources: documentos.appendingPathComponent("bench-resources"),
+                report: &report,
+                progress: progress
+            )
         },
     ]
 
