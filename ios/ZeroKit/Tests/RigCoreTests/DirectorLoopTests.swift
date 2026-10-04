@@ -13,15 +13,19 @@ final class DirectorLoopTests: XCTestCase {
     func testElDirectorDePuntaAPunta() throws {
         let documento = try Golden.loadDocument(named: "shot.json")
         var corridas = 0
+        var nombres: Set<String> = []
         for caso in documento.cases where caso.fn == "ProgramDirector.steps" {
             corridas += 1
+            nombres.insert(caso.name)
             if let fallo = Golden.mismatch(
                 actual: try Self.replica(caso.inputs), expected: caso.expected, tol: caso.tol, path: caso.name
             ) {
                 XCTFail(fallo)
             }
         }
-        XCTAssertGreaterThanOrEqual(corridas, 1)
+        XCTAssertGreaterThanOrEqual(corridas, 2)
+        // La aceptación de IOS-37: ≥2 min de partido, fotograma a fotograma, a ±1e-6 rad.
+        XCTAssertTrue(nombres.contains("director_dos_minutos_de_partido"))
     }
 
     // MARK: - El reloj de rigMs
