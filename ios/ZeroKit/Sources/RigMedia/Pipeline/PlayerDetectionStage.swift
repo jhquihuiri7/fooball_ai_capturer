@@ -130,28 +130,53 @@ public final class CoreMLPlayerDetector: PlayerDetecting {
     private let decoder: PlayerDecoder
     private let layout: InputLayout
     private let inputName: String
-    private let logitsName: String
-    private let boxesName: String
+    /// Las salidas que lee el decodificador, por su papel: logits y cajas (detr, nms) o
+    /// heatmap, offset y size (heatmap, el plan B CenterNet del ADR 0020).
+    private let outputNames: [String: String]
 
     public init(builder: DetectorInputBuilder, runner: CoreMLRunner, layout: InputLayout) throws {
         let e = runner.entry
-        guard let logits = e.output(meaning: "logits"),
-              let boxes = e.output(meaning: "boxes_cxcywh_norm") ?? e.output(meaning: "boxes_xyxy_input_px")
-        else {
-            throw ModelManifest.ManifestError.invalid("\(e.name): faltan las salidas de logits y cajas")
+        let papeles = e.postprocess == "heatmap"
+            ? ["heatmap", "offset", "size"]
+            : ["logits", e.output(meaning: "boxes_cxcywh_norm") != nil ? "boxes_cxcywh_norm" : "boxes_xyxy_input_px"]
+        var nombres: [String: String] = [:]
+        for papel in papeles {
+            guard let salida = e.output(meaning: papel) else {
+                throw ModelManifest.ManifestError.invalid("\(e.name): falta la salida `\(papel)` (\(e.postprocess))")
+            }
+            nombres[papel] = salida.name
         }
         self.builder = builder
         self.runner = runner
         self.layout = layout
         inputName = e.input.name
-        logitsName = logits.name
-        boxesName = boxes.name
+        outputNames = nombres
         decoder = try PlayerDecoder(
             classNames: e.classes,
             postprocess: PlayerDecoder.Postprocessing(rawValue: e.postprocess) ?? .detr,
             boxFormat: PlayerDecoder.BoxFormat(rawValue: e.boxFormat) ?? .cxcywhNorm,
-            nmsIou: e.postprocess == "nms" ? DetectionSpec.nmsIouThreshold : nil
+            nmsIou: e.postprocess == "nms" ? DetectionSpec.nmsIouThreshold : nil,
+            heatmapStride: e.heatmapStride
         )
+    }
+
+    /// Las cajas de una salida, con el decodificador que toque.
+    func decode(_ arrays: [String: MLMultiArray]) throws -> [PlayerDetection] {
+        func salida(_ papel: String) throws -> MLMultiArray {
+            guard let nombre = outputNames[papel], let a = arrays[nombre] else {
+                throw ModelManifest.ManifestError.invalid("el modelo no devolvió `\(papel)`")
+            }
+            return a
+        }
+        if decoder.postprocess == .heatmap {
+            return try decoder.decodeHeatmap(
+                heatmap: Self.planes(try salida("heatmap")), offset: Self.planes(try salida("offset")),
+                size: Self.planes(try salida("size")), layout: layout
+            )
+        }
+        let cajas = outputNames["boxes_cxcywh_norm"] ?? outputNames["boxes_xyxy_input_px"] ?? ""
+        guard let b = arrays[cajas] else { throw ModelManifest.ManifestError.invalid("el modelo no devolvió cajas") }
+        return try decoder.decode(logits: Self.rows(try salida("logits")), boxes: Self.rows(b), layout: layout)
     }
 
     public func detect(
@@ -169,15 +194,7 @@ public final class CoreMLPlayerDetector: PlayerDetecting {
                     )
                     runner.submit(proveedor, lane: .players) { [self] resultado in
                         completion(resultado.flatMap { salida in
-                            Result {
-                                guard let l = salida.arrays[logitsName], let b = salida.arrays[boxesName] else {
-                                    throw ModelManifest.ManifestError.invalid("el modelo no devolvió logits y cajas")
-                                }
-                                let dets = try decoder.decode(
-                                    logits: Self.rows(l), boxes: Self.rows(b), layout: layout
-                                )
-                                return (dets, salida.inferMs)
-                            }
+                            Result { (try decode(salida.arrays), salida.inferMs) }
                         })
                     }
                 } catch {
@@ -187,6 +204,27 @@ public final class CoreMLPlayerDetector: PlayerDetecting {
         } catch {
             completion(.failure(error))
         }
+    }
+
+    /// [1, C, H, W] → C planos de H filas de W Float (fp16 o fp32). TODO de rendimiento:
+    /// reserva un plano anidado por inferencia; con el heatmap de 3x144x480 conviene pasar
+    /// a búferes planos preasignados (CLAUDE.md §2) cuando entre el modelo de verdad.
+    static func planes(_ a: MLMultiArray) -> [[[Float]]] {
+        let forma = a.shape.map(\.intValue)
+        guard forma.count >= 3 else { return [] }
+        let (c, h, w) = (forma[forma.count - 3], forma[forma.count - 2], forma[forma.count - 1])
+        var salida = [[[Float]]](repeating: [[Float]](repeating: [Float](repeating: 0, count: w), count: h), count: c)
+        let total = c * h * w
+        if a.dataType == .float16 {
+            let p = a.dataPointer.bindMemory(to: Float16.self, capacity: total)
+            for k in 0..<c { for y in 0..<h { for x in 0..<w { salida[k][y][x] = Float(p[(k * h + y) * w + x]) } } }
+        } else if a.dataType == .float32 {
+            let p = a.dataPointer.bindMemory(to: Float.self, capacity: total)
+            for k in 0..<c { for y in 0..<h { for x in 0..<w { salida[k][y][x] = p[(k * h + y) * w + x] } } }
+        } else {
+            for k in 0..<c { for y in 0..<h { for x in 0..<w { salida[k][y][x] = a[(k * h + y) * w + x].floatValue } } }
+        }
+        return salida
     }
 
     /// [1, Q, K] → Q filas de K Float (fp16 o fp32).

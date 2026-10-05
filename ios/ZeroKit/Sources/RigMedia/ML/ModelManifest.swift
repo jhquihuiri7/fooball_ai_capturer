@@ -39,6 +39,9 @@ public struct ModelManifest: Equatable, Sendable {
         public let classes: [String]
         public let postprocess: String
         public let boxFormat: String
+        /// El paso del heatmap respecto a la entrada, con `postprocess: heatmap` (el plan B
+        /// CenterNet del ADR 0020); nil con detr y nms.
+        public let heatmapStride: Int?
 
         public func output(meaning: String) -> Tensor? { outputs.first { $0.meaning == meaning } }
     }
@@ -123,11 +126,17 @@ public struct ModelManifest: Equatable, Sendable {
         guard sha.count == 64, sha.allSatisfy(\.isHexDigit) else {
             throw ManifestError.invalid("\(n): `sha256` no es un SHA-256 en hexadecimal")
         }
+        let postprocess = (m["postprocess"] as? String) ?? "detr"
+        let paso = m["heatmap_stride"] as? Int
+        if (postprocess == "heatmap") != (paso != nil) || (paso ?? 1) <= 0 {
+            throw ManifestError.invalid("\(n): `heatmap_stride` (entero positivo) va con `postprocess: heatmap` y solo con él")
+        }
         return Entry(
             name: n, version: try texto("version"), file: try texto("file"), sha256: sha.lowercased(),
             minIos: minIos, input: input, outputs: outputs, classes: clases,
-            postprocess: (m["postprocess"] as? String) ?? "detr",
-            boxFormat: (m["box_format"] as? String) ?? "cxcywh_norm"
+            postprocess: postprocess,
+            boxFormat: (m["box_format"] as? String) ?? "cxcywh_norm",
+            heatmapStride: paso
         )
     }
 }

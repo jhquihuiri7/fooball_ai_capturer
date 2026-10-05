@@ -51,6 +51,41 @@ final class CoreMLRunnerTests: XCTestCase {
         XCTAssertThrowsError(try ModelManifest.parse(["version": 2, "models": [:]]))
     }
 
+    func testElPlanBHeatmapLlevaSuPasoEnElManifiesto() throws {
+        func entrada(_ extra: [String: Any]) throws -> ModelManifest.Entry {
+            var m: [String: Any] = [
+                "version": "0.0.1", "file": "c.mlpackage", "sha256": String(repeating: "b", count: 64),
+                "min_ios": 18, "classes": ["goalkeeper", "player", "referee"],
+                "input": ["name": "image", "shape": [1, 3, 576, 1920], "color": "RGB"],
+                "outputs": [
+                    ["name": "heatmap", "shape": [1, 3, 144, 480], "meaning": "heatmap"],
+                    ["name": "offset", "shape": [1, 2, 144, 480], "meaning": "offset"],
+                    ["name": "size", "shape": [1, 2, 144, 480], "meaning": "size"],
+                ],
+            ]
+            m.merge(extra) { $1 }
+            return try ModelManifest.parse(["version": 1, "models": ["c": m]]).models["c"]!
+        }
+        let e = try entrada(["postprocess": "heatmap", "box_format": "heatmap_stride", "heatmap_stride": 4])
+        XCTAssertEqual(e.heatmapStride, 4)
+        XCTAssertThrowsError(try entrada(["postprocess": "heatmap", "box_format": "heatmap_stride"]))
+        XCTAssertThrowsError(try entrada(["postprocess": "heatmap", "heatmap_stride": 0]))
+        XCTAssertThrowsError(try entrada(["heatmap_stride": 4]), "sin heatmap no hay paso")
+        XCTAssertNil(try manifiesto().heatmapStride)
+    }
+
+    func testLosPlanosDeUnaSalidaDeCuatroEjes() throws {
+        for tipo in [MLMultiArrayDataType.float32, .float16] {
+            let a = try MLMultiArray(shape: [1, 2, 3, 4], dataType: tipo)
+            for i in 0..<24 { a[i] = NSNumber(value: Float(i) / 2) }
+            let p = CoreMLPlayerDetector.planes(a)
+            XCTAssertEqual(p.count, 2)
+            XCTAssertEqual(p[0].count, 3)
+            XCTAssertEqual(p[1][2][3], 11.5, "\(tipo)")
+            XCTAssertEqual(p[0][1][0], 2.0, "\(tipo)")
+        }
+    }
+
     func testPrediceEnSusBuferesYLosCarrilesRespetanLaPrioridad() async throws {
         let r = try await CoreMLRunner.load(url: url, entry: try manifiesto(), computeUnits: .cpuOnly)
         XCTAssertGreaterThan(try r.warmUp(with: try gris(128)), 0)
