@@ -43,12 +43,16 @@ public final class MetalPartRenderer: PartRendering {
     private let width: Int
     private let height: Int
     private let blind: BlindRect?
+    private let mountedUpsideDown: Bool
 
     /// `blind`: la franja del código de tiempo en el búfer de la cámara, si se pinta.
+    /// `mountedUpsideDown`: el móvil va girado 180° en el soporte (CameraMount); por
+    /// defecto el izquierdo, como `--flip left` en la calibración.
     public init(
         context: MetalContext, rig: RigModel, side: CameraSide, width: Int, height: Int,
-        blind: BlindRect? = nil
+        blind: BlindRect? = nil, mountedUpsideDown: Bool? = nil
     ) throws {
+        self.mountedUpsideDown = mountedUpsideDown ?? (side == .left)
         self.context = context
         kernel = try ReprojectKernel(context: context)
         self.rig = rig
@@ -70,7 +74,9 @@ public final class MetalPartRenderer: PartRendering {
         }
         try kernel.encode(
             source: source,
-            homography: viewHomographyToRaw(rig: rig, view: vista, side: side),
+            homography: mountedUpsideDown
+                ? viewHomographyToRaw(rig: rig, view: vista, side: side)
+                : viewHomography(rig: rig, view: vista, side: side),
             gains: g.count == 3 ? (b: g[0], g: g[1], r: g[2]) : (1, 1, 1),
             blind: blind,
             destination: destination,

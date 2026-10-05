@@ -78,6 +78,10 @@ public final class NWLinkTransport: LinkTransport {
     private var paced: [Data] = []
     private var pacing = false
 
+    /// El ritmo del espaciado; los bancos lo cambian para medir (SPK-02).
+    public var pacingBurstDatagrams = LinkConstants.pacingBurstDatagrams
+    public var pacingIntervalUs = LinkConstants.pacingIntervalMs * 1000
+
     /// La IP del otro móvil por la conexión de control, o nil sin conexión. La lleva el
     /// QR Mando como alternativa, para que el mando siga tras un relevo (IOS-63).
     public var peerHost: String? {
@@ -177,14 +181,14 @@ public final class NWLinkTransport: LinkTransport {
             pacing = false
             return
         }
-        let n = min(LinkConstants.pacingBurstDatagrams, paced.count)
+        let n = min(pacingBurstDatagrams, paced.count)
         for datagrama in paced.prefix(n) {
             mediaConnection.send(content: datagrama, completion: .contentProcessed { _ in })
         }
         paced.removeFirst(n)
         pacing = !paced.isEmpty
         if pacing {
-            queue.asyncAfter(deadline: .now() + .milliseconds(LinkConstants.pacingIntervalMs)) { [weak self] in
+            queue.asyncAfter(deadline: .now() + .microseconds(pacingIntervalUs)) { [weak self] in
                 self?.drainPaced()
             }
         }

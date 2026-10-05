@@ -223,6 +223,13 @@ enum LinkBench {
                                  txt: ["side": "left", "fp": LinkAuth.fingerprint(secret: secreto)]),
                 interfaceType: interfaz)
             : NWLinkTransport(mode: .browse, interfaceType: interfaz)
+        // SPK-02: el ritmo del espaciado, para medirlo sin recompilar.
+        if let golpe = entorno["RIG_LINK_PACING_BURST"].flatMap(Int.init) {
+            transporte.pacingBurstDatagrams = max(1, golpe)
+        }
+        if let us = entorno["RIG_LINK_PACING_US"].flatMap(Int.init) {
+            transporte.pacingIntervalUs = max(100, us)
+        }
         let sesion = RigLinkSession(
             transport: transporte, secret: secreto, side: lado,
             deviceId: UIDevice.current.name,
@@ -326,7 +333,11 @@ enum LinkBench {
             ruta = interfaz
         }
 
+        // SPK-02: con RIG_LINK_PARTS=1, partes sintéticas por el camino de las de verdad.
+        let carga = entorno["RIG_LINK_PARTS"] == "1" ? LinkPartsLoad(session: sesion, environment: entorno) : nil
+
         sesion.start()
+        carga?.run()
         let pasos = max(1, Int(duracion))
         for s in 0..<pasos {
             Thread.sleep(forTimeInterval: 1)
@@ -356,7 +367,9 @@ enum LinkBench {
             }
             progress?(Double(s + 1) / Double(pasos), "enlace \(lado.rawValue): \(conexiones > 0 ? "conectado" : "buscando")")
         }
+        carga?.stop()
         let stats = transporte.stats
+        let deLaCarga = carga?.counters() ?? [:]
         sesion.stop()
 
         cerrojo.lock(); defer { cerrojo.unlock() }
@@ -378,6 +391,8 @@ enum LinkBench {
                 "rejections": rechazos.joined(separator: " | "),
                 "rig_role": rolNegociado,
                 "prefers_master": sesion.prefersMaster ? "1" : "0",
+                "parts_profile": carga?.profileDescription ?? "",
+                "pacing": "\(transporte.pacingBurstDatagrams) cada \(transporte.pacingIntervalUs) us",
             ],
             thermal: [],
             stagesMs: [:],
@@ -407,7 +422,8 @@ enum LinkBench {
                 "media_frames_received": stats.mediaFramesReceived,
                 "media_loss_gaps": stats.mediaLossGaps,
                 "media_stalls_over_100ms": stats.mediaStallsOver100Ms,
-            ]
+                "media_pacer_drops": stats.mediaPacerDrops,
+            ].merging(deLaCarga) { a, _ in a }
         )
         if !rtts.isEmpty {
             informe.stagesMs["link/rtt"] = BenchReport.StageSummary(p50Ms: p(0.5), p90Ms: p(0.9), p99Ms: p(0.99))
@@ -428,4 +444,182 @@ enum LinkBench {
         try encoder.encode(informe).write(to: destino, options: .atomic)
         return destino
     }
+}
+
+// MARK: - La carga de partes del banco (SPK-02)
+
+// La carga de partes sintéticas del banco del enlace (SPK-02, IOS-52).
+//
+// Con RIG_LINK_PARTS=1, el link-bench deja de ser solo apretón y reloj: el esclavo manda
+// partes de vídeo falsas a 30 fps con un perfil de Mbit/s que cambia cada
+// RIG_LINK_PARTS_STEP_S (por defecto 0, 10 y 30 cada 5 min, como pide SPK-02), por el
+// mismo camino que las de verdad (PartPacket → medios → espaciado → reensamblado). El
+// maestro las pasa por PartReceiver, pide IDR ante un hueco y cuenta lo que decide
+// SPK-02: pérdidas, parones de más de 100 y 150 ms, jitter y Mbit/s. Con 0 Mbit/s el
+// esclavo manda `no_part`, que también cuenta como señal de vida para los parones.
+
+
+final class LinkPartsLoad {
+    /// Perfil por defecto, en Mbit/s, y lo que dura cada escalón (SPK-02).
+    static let defaultProfileMbps: [Double] = [0, 10, 30]
+    static let defaultStepS = 300.0
+    static let fps = 30.0
+    /// Cada cuántos fotogramas va un IDR sin que nadie lo pida (2 s, el GOP del programa).
+    static let gopFrames = 60
+    /// Cuánto pesa un IDR frente a una P (sin unidad): lo que se ve en VideoToolbox.
+    static let idrWeight = 4.0
+    /// Umbrales de parón que pide SPK-02, en ms.
+    static let stallMs: [Double] = [100, 150]
+
+    private let session: RigLinkSession
+    private let profile: [Double]
+    private let stepS: Double
+    private let queue = DispatchQueue(label: "io.footballai.zero.bench.parts", qos: .userInitiated)
+    private var timer: DispatchSourceTimer?
+    private let lock = NSLock()
+    private let start = DispatchTime.now().uptimeNanoseconds
+
+    // Esclavo
+    private var frame = 0
+    private var partSeq: UInt32 = 0
+    private var idrPending = false
+    private(set) var partsSent = 0
+    private(set) var bytesSent = 0
+
+    // Maestro
+    private let receiver = PartReceiver()
+    private var lastArrivalMs: Double?
+    private(set) var stalls = [0, 0]
+    private(set) var worstGapMs = 0.0
+    private(set) var noParts = 0
+    private var maxMbps = 0.0
+
+    private let batteryStart: Float
+
+    init(session: RigLinkSession, environment: [String: String]) {
+        self.session = session
+        profile = environment["RIG_LINK_PARTS_PROFILE"]
+            .map { $0.split(separator: ",").compactMap { Double($0) } }
+            .flatMap { $0.isEmpty ? nil : $0 } ?? Self.defaultProfileMbps
+        stepS = environment["RIG_LINK_PARTS_STEP_S"].flatMap(Double.init) ?? Self.defaultStepS
+        UIDevice.current.isBatteryMonitoringEnabled = true
+        batteryStart = UIDevice.current.batteryLevel
+
+        session.onIdrRequest = { [weak self] _ in
+            self?.lock.lock(); self?.idrPending = true; self?.lock.unlock()
+        }
+        session.onPart = { [weak self] parte, llegadaNs in self?.received(parte, arrivalNs: llegadaNs) }
+        session.onNoPart = { [weak self] _ in
+            guard let self else { return }
+            lock.lock(); defer { lock.unlock() }
+            noParts += 1
+            beat(Double(DispatchTime.now().uptimeNanoseconds) / 1e6)
+        }
+    }
+
+    func run() {
+        let t = DispatchSource.makeTimerSource(queue: queue)
+        t.schedule(deadline: .now(), repeating: 1.0 / Self.fps, leeway: .milliseconds(1))
+        t.setEventHandler { [weak self] in self?.tick() }
+        timer = t
+        t.resume()
+    }
+
+    func stop() {
+        timer?.cancel()
+        timer = nil
+    }
+
+    private var elapsedS: Double { Double(DispatchTime.now().uptimeNanoseconds - start) / 1e9 }
+
+    private func currentMbps() -> Double {
+        profile[Int(elapsedS / stepS) % profile.count]
+    }
+
+    /// Un fotograma del esclavo: una parte del tamaño del escalón, o `no_part`.
+    private func tick() {
+        guard !session.isMaster, case .connected = session.state else { return }
+        let ms = Int64(DispatchTime.now().uptimeNanoseconds / 1_000_000)
+        let mbps = currentMbps()
+        lock.lock()
+        frame += 1
+        if mbps <= 0 {
+            lock.unlock()
+            session.send(noPart: NoPartPacket(frameRigMs: ms, viewId: UInt32(truncatingIfNeeded: frame)))
+            return
+        }
+        let esIdr = idrPending || frame % Self.gopFrames == 1
+        idrPending = false
+        let base = mbps * 1_000_000 / 8 / Self.fps
+        let bytes = Int(esIdr ? base * Self.idrWeight : base)
+        let parte = PartPacket(
+            partSeq: partSeq, frameRigMs: ms, view: Self.view, extrapolated: false, isKey: esIdr,
+            accessUnit: Data(count: min(bytes, LinkConstants.maxFrameB / 2))
+        )
+        partSeq &+= 1
+        partsSent += 1
+        bytesSent += parte.accessUnit.count
+        lock.unlock()
+        session.send(part: parte)
+    }
+
+    private func received(_ parte: PartPacket, arrivalNs: Int64) {
+        let ahoraMs = Double(DispatchTime.now().uptimeNanoseconds) / 1e6
+        lock.lock()
+        let decision = receiver.receive(parte, arrivalMs: Int64(ahoraMs))
+        beat(ahoraMs)
+        maxMbps = max(maxMbps, receiver.mbps(nowMs: Int64(ahoraMs)))
+        lock.unlock()
+        if case let .awaitingIdr(seq) = decision {
+            session.requestIdr(partSeq: seq)
+        }
+    }
+
+    /// Una señal de vida del esclavo: mide el hueco con la anterior.
+    private func beat(_ ms: Double) {
+        if let previo = lastArrivalMs {
+            let hueco = ms - previo
+            worstGapMs = max(worstGapMs, hueco)
+            for (i, umbral) in Self.stallMs.enumerated() where hueco > umbral {
+                stalls[i] += 1
+            }
+        }
+        lastArrivalMs = ms
+    }
+
+    /// Lo que va al informe del link-bench.
+    func counters() -> [String: Int] {
+        lock.lock(); defer { lock.unlock() }
+        let recibidas = receiver.received
+        let perdidas = receiver.lost
+        let total = recibidas + perdidas
+        return [
+            "parts_sent": partsSent,
+            "parts_bytes_sent": bytesSent,
+            "parts_received": recibidas,
+            "parts_decodable": receiver.decoded,
+            "parts_lost": perdidas,
+            // En partes por millón: 0,01 % son 100.
+            "parts_loss_ppm": total == 0 ? 0 : perdidas * 1_000_000 / total,
+            "parts_idr_requests": receiver.idrRequests,
+            "no_parts": noParts,
+            "stalls_over_100ms": stalls[0],
+            "stalls_over_150ms": stalls[1],
+            "worst_gap_ms": Int(worstGapMs.rounded()),
+            "parts_jitter_us": Int((receiver.jitterMs * 1000).rounded()),
+            "parts_max_mbps_x10": Int((maxMbps * 10).rounded()),
+            "battery_start_pct": Int((batteryStart * 100).rounded()),
+            "battery_end_pct": Int((UIDevice.current.batteryLevel * 100).rounded()),
+            "battery_charging": UIDevice.current.batteryState == .charging || UIDevice.current.batteryState == .full ? 1 : 0,
+        ]
+    }
+
+    var profileDescription: String {
+        profile.map { String(format: "%.0f", $0) }.joined(separator: ",") + " Mbit/s cada \(Int(stepS)) s"
+    }
+
+    private static let view = ViewWire.quantized(ViewCommand(
+        targetRigMs: 0, viewId: 0, yawRad: 0, pitchRad: 0, hfovRad: 1, sides: [.left, .right],
+        seamYawRad: 0, featherRad: 0.02, gains: .unity
+    ))
 }

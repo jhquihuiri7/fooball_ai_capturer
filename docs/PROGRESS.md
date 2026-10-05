@@ -650,6 +650,43 @@ hubs), ya con esta expectativa.
 
 ---
 
+## 2026-10-04 · SPK-02 — primeras medidas de partes por Wi-Fi (un iPhone y el Mac) · 🚧
+
+**Hecho**
+- link-bench gana la carga de SPK-02: con RIG_LINK_PARTS=1 el esclavo manda partes
+  sintéticas a 30 fps por el camino de las de verdad (PartPacket → medios → espaciado →
+  reensamblado), con un perfil de Mbit/s por escalones (RIG_LINK_PARTS_PROFILE,
+  RIG_LINK_PARTS_STEP_S; por defecto 0, 10 y 30 cada 5 min) y un IDR ×4 cada 2 s o a
+  petición; con 0 Mbit/s manda `no_part`. El maestro pasa las partes por PartReceiver,
+  pide IDR y cuenta pérdidas (ppm), parones de más de 100 y 150 ms, el peor hueco,
+  jitter, Mbit/s y la batería. RIG_LINK_PACING_BURST / RIG_LINK_PACING_US cambian el
+  espaciado sin recompilar.
+- `Tests/RigNetTests/Device/LinkPeerTests.swift`: el Mac hace de móvil izquierdo y
+  maestro por Wi-Fi (se salta sin RIG_LINK_PEER_S), para probar con un solo iPhone.
+- Arreglo de IOS-43: MetalPartRenderer aplicaba el giro de la montura a los dos lados;
+  solo va girado el izquierdo (`--flip left`), ahora con `mountedUpsideDown` explícito.
+
+**Medidas (iPhone 17 de esclavo → Mac de maestro, los dos por la Wi-Fi de la oficina,
+doble salto por el punto de acceso; 60 s por pasada):**
+
+| Mbit/s | Espaciado | Pérdidas | Parones >100 / >150 ms | Peor hueco |
+|---|---|---|---|---|
+| 10 | 16 / 2 ms | 0 | 2 / 1 | 171 ms |
+| 15 | 16 / 2 ms | 0,22 % | 2 / 0 | 140 ms |
+| 20 | 16 / 2 ms | 2,4 % | 44 / 5 | 276 ms |
+| 30 | 16 / 2 ms | 33 % | 165 / 52 | 541 ms |
+| 30 | 4 / 1 ms, 2 / 0,5 ms, sin espaciar | 37–45 % | 75–157 / 52–85 | 374–502 ms |
+
+La puerta de huecos funciona: con un 40 % de pérdidas el decodificador nunca recibió
+una cadena rota. El espaciado no cambia nada a 30 Mbit/s: no son ráfagas, es la
+capacidad de este camino (~18–20 Mbit/s útiles). TCP no lo arreglaría.
+
+**Lectura para decidir (del dueño, no bloquea):** por Wi-Fi de punto de acceso, las
+partes caben hasta ~15 Mbit/s. O el soporte va por Ethernet (lo que dice el ADR 0023),
+o la parte del esclavo baja su bitrate cuando el enlace es Wi-Fi (la escalera de
+degradación ya tiene dónde engancharlo). Falta repetir entre los dos iPhone (mañana) y
+la pasada de 90 min.
+
 ## 2026-10-04 · IOS-44 — el programa del maestro: recepción, decodificación y composición · 🚧 falta el banco program-split en dos iPhone
 
 **Hecho**
