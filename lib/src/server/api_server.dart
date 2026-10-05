@@ -108,6 +108,9 @@ class MasterApi {
     this.relay,
     this.longPollTimeout = apiLongPollTimeout,
     this.commandTimeout = apiCommandTimeout,
+    this.panelHtml,
+    this.thumbnail,
+    this.rigStatus,
   }) : _idempotency = IdempotencyCache(nowMs: monotonicMs);
 
   final MatchEngine engine;
@@ -132,6 +135,16 @@ class MasterApi {
   final Duration commandTimeout;
   final IdempotencyCache _idempotency;
 
+  /// El panel local (IOS-64), servido en `/` sin puerta: la página no lleva datos y
+  /// toma el token del fragmento `#mando=` de la URL del QR.
+  final String? panelHtml;
+
+  /// La última miniatura JPEG de `left`, `right` o `program` (vacía si no hay).
+  final Future<Uint8List> Function(String name)? thumbnail;
+
+  /// El estado del soporte para el panel: enlace, térmica, escalera, fps…
+  final Map<String, Object?> Function()? rigStatus;
+
   int _longPolls = 0;
 
   /// Esperas largas abiertas ahora mismo.
@@ -148,7 +161,13 @@ class MasterApi {
       ..sort((ControlDevice a, ControlDevice b) => b.lastMs.compareTo(a.lastMs));
   }
 
+  static const List<String> _thumbNames = <String>['left', 'right', 'program'];
+
   Future<ApiResponse> handle(ApiRequest request) async {
+    final String? html = panelHtml;
+    if (request.method == 'GET' && (request.path == '/' || request.path == '/index.html') && html != null) {
+      return ApiResponse(HttpStatus.ok, 'text/html; charset=utf-8', utf8.encode(html));
+    }
     if (!request.path.startsWith(panelApiPrefix)) {
       return ApiResponse.problem(HttpStatus.notFound, 'no existe ${request.path}');
     }
@@ -157,6 +176,19 @@ class MasterApi {
       final (Set<String>?, ApiResponse?) acceso = _access(request, null);
       if (acceso.$2 != null) {
         return acceso.$2!;
+      }
+      if (ruta.startsWith('rig/thumb/') && thumbnail != null) {
+        final String nombre = ruta.substring('rig/thumb/'.length);
+        if (!_thumbNames.contains(nombre)) {
+          return ApiResponse.problem(HttpStatus.notFound, 'no hay miniatura de $nombre');
+        }
+        final Uint8List jpeg = await thumbnail!(nombre);
+        return jpeg.isEmpty
+            ? ApiResponse.problem(HttpStatus.notFound, 'todavía no hay miniatura de $nombre')
+            : ApiResponse(HttpStatus.ok, 'image/jpeg', jpeg);
+      }
+      if (ruta == 'rig/status' && rigStatus != null) {
+        return ApiResponse.json(rigStatus!());
       }
       if (ruta != _matchRoute) {
         return ApiResponse.problem(HttpStatus.notFound, 'no existe ${request.path}');

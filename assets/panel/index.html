@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zero · panel del soporte</title>
+<!-- El panel local del maestro (IOS-64): sin framework, servido por la API del mando.
+     El token viene en el fragmento de la URL del QR Mando (#mando=…), que el
+     navegador nunca manda al servidor; las llamadas lo llevan en Authorization. -->
+<style>
+  :root { --bg: #12181a; --card: #1b2326; --ink: #fafaf7; --dim: #8e979c; --acc: #00b8a9; --bad: #e5484d; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.4 -apple-system, system-ui, sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 16px; display: grid; gap: 14px; }
+  .card { background: var(--card); border-radius: 14px; padding: 14px; }
+  h1 { font-size: 18px; margin: 0 0 4px; } h2 { font-size: 13px; color: var(--dim); margin: 0 0 8px; text-transform: uppercase; letter-spacing: .06em; }
+  .marcador { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 22px; font-weight: 700; }
+  .reloj { font-variant-numeric: tabular-nums; margin-left: auto; }
+  button { background: #26323a; color: var(--ink); border: 1px solid #33424b; border-radius: 10px; padding: 8px 12px; font: inherit; font-size: 14px; cursor: pointer; }
+  button:active { background: var(--acc); }
+  .fila { display: flex; gap: 8px; flex-wrap: wrap; }
+  .thumbs { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+  .thumbs figure { margin: 0; } .thumbs img { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 8px; display: block; }
+  figcaption { color: var(--dim); font-size: 12px; margin-top: 4px; }
+  pre { margin: 0; white-space: pre-wrap; color: var(--dim); font-size: 12px; }
+  #aviso { color: var(--bad); }
+</style>
+</head>
+<body>
+<main>
+  <section class="card">
+    <h1>Zero · panel del soporte</h1>
+    <div id="aviso"></div>
+    <div class="marcador">
+      <span id="local">LOCAL</span> <span id="goles">0 - 0</span> <span id="visitante">VISITANTE</span>
+      <span class="reloj" id="reloj">00:00</span>
+    </div>
+  </section>
+  <section class="card">
+    <h2>Partido</h2>
+    <div class="fila">
+      <button data-gol="home,1">+1 local</button><button data-gol="home,-1">−1 local</button>
+      <button data-gol="away,1">+1 visitante</button><button data-gol="away,-1">−1 visitante</button>
+      <button data-reloj="start">▶ reloj</button><button data-reloj="pause">❚❚ reloj</button>
+      <button data-reloj="reset">↺ reloj</button>
+      <button data-nudge="60">+1 min</button><button data-nudge="-60">−1 min</button>
+      <button data-alin="home">alineación local</button><button data-alin="away">alineación visitante</button>
+      <button data-orden="clips/mark">marcar jugada</button>
+    </div>
+  </section>
+  <section class="card">
+    <h2>Cámaras y programa (1 fps)</h2>
+    <div class="thumbs">
+      <figure><img id="t-left" alt=""><figcaption>izquierda</figcaption></figure>
+      <figure><img id="t-right" alt=""><figcaption>derecha</figcaption></figure>
+      <figure><img id="t-program" alt=""><figcaption>programa</figcaption></figure>
+    </div>
+  </section>
+  <section class="card"><h2>Soporte</h2><pre id="estado">—</pre></section>
+</main>
+<script>
+const token = new URLSearchParams(location.hash.slice(1)).get('mando') || '';
+const cab = { 'Authorization': 'Bearer ' + token, 'X-Zero-Device': encodeURIComponent('panel web') };
+let partido = null;
+const $ = id => document.getElementById(id);
+const aviso = t => { $('aviso').textContent = t || ''; };
+if (!token) aviso('Abre esta página desde el QR Mando: falta el token.');
+
+function pinta(p) {
+  partido = p;
+  $('local').textContent = p.home.name; $('visitante').textContent = p.away.name;
+  $('goles').textContent = p.home.goals + ' - ' + p.away.goals;
+  const s = Math.floor(p.clock_ms / 1000);
+  $('reloj').textContent = String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+}
+
+async function orden(ruta, cuerpo) {
+  const r = await fetch('/api/v1/' + ruta, { method: 'POST', headers: { ...cab, 'Content-Type': 'application/json',
+    'Idempotency-Key': crypto.randomUUID ? crypto.randomUUID() : String(Math.random()) }, body: JSON.stringify(cuerpo) });
+  const j = await r.json().catch(() => ({}));
+  if (r.ok) { pinta(j); aviso(''); } else { aviso(j.detail || ('error ' + r.status)); if (j.state) pinta(j.state); }
+}
+
+document.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b || !partido) return;
+  if (b.dataset.gol) { const [team, d] = b.dataset.gol.split(','); orden('match/goal', { team, delta: +d, expect: partido[team].goals }); }
+  if (b.dataset.reloj) orden('match/clock', { action: b.dataset.reloj });
+  if (b.dataset.nudge) orden('match/clock', { action: 'nudge', seconds: +b.dataset.nudge });
+  if (b.dataset.alin) orden('match/lineup', { team: b.dataset.alin, on_air: partido.lineup_on_air !== b.dataset.alin });
+  if (b.dataset.orden) orden(b.dataset.orden, {});
+});
+
+async function espera() {
+  for (;;) {
+    try {
+      const since = partido ? '?since=' + partido.boot + ':' + partido.rev : '';
+      const r = await fetch('/api/v1/match' + since, { headers: cab });
+      if (r.ok) pinta(await r.json()); else { aviso((await r.json().catch(() => ({}))).detail || ('error ' + r.status)); await new Promise(f => setTimeout(f, 2000)); }
+    } catch { aviso('sin conexión con el maestro'); await new Promise(f => setTimeout(f, 2000)); }
+  }
+}
+
+const urls = {};
+async function miniaturas() {
+  for (const n of ['left', 'right', 'program']) {
+    try {
+      const r = await fetch('/api/v1/rig/thumb/' + n, { headers: cab });
+      if (!r.ok) continue;
+      const u = URL.createObjectURL(await r.blob());
+      $('t-' + n).src = u; if (urls[n]) URL.revokeObjectURL(urls[n]); urls[n] = u;
+    } catch {}
+  }
+  try { const r = await fetch('/api/v1/rig/status', { headers: cab }); if (r.ok) $('estado').textContent = JSON.stringify(await r.json(), null, 2); } catch {}
+}
+
+if (token) { espera(); miniaturas(); setInterval(miniaturas, 1000); }
+</script>
+</body>
+</html>

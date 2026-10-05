@@ -255,6 +255,9 @@ const Duration apiCommandTimeout = Duration(seconds: 5);
 /// alineación ~1 KiB; con más es un error o un abuso.
 const int apiMaxBodyBytes = 64 * 1024;
 
+/// La página del panel local que sirve el maestro en `/` (IOS-64).
+const String panelAssetPath = 'assets/panel/index.html';
+
 /// La carpeta del partido del maestro dentro de Documents (IOS-62).
 const String matchDirectoryName = 'partido';
 

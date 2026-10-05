@@ -19,11 +19,13 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'package:football_ai_capture/src/capture_labels.dart';
 import 'package:football_ai_capture/src/capture_session.dart';
 import 'package:football_ai_capture/src/constants.dart';
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
+import 'package:football_ai_capture/src/generated/rig_api.g.dart';
 import 'package:football_ai_capture/src/graphics/rig_overlay_sink.dart';
 import 'package:football_ai_capture/src/mando_qr_sheet.dart';
 import 'package:football_ai_capture/src/server/master_host.dart';
@@ -99,7 +101,30 @@ class _CapturePageState extends State<CapturePage> {
               peerAddress: _api.linkPeerAddress,
               operatorPin: _api.loadOperatorPin,
               overlaySink: RigOverlaySink(),
+              panelHtml: () => rootBundle.loadString(panelAssetPath),
+              thumbnail: RigHostApi().thumbnail,
+              rigStatus: () => _rigStatus(),
             );
+
+  /// Lo que enseña el panel local del estado del soporte (IOS-64).
+  Map<String, Object?> _rigStatus() {
+    final CaptureStatus? st = _session.status;
+    return <String, Object?>{
+      'role': _session.rigRole?.name ?? (_session.isRigMaster ? 'master' : 'slave'),
+      'term': _session.rigTerm,
+      'link': _session.linkState.name,
+      'peer': _session.linkPeer,
+      if (st != null) ...<String, Object?>{
+        'fps': st.actualFps,
+        'thermal': st.thermalState.name,
+        'pressure': st.pressure.name,
+        'ladder': st.ladderLevel,
+        'battery': st.batteryLevel,
+        'dropped_frames': st.droppedFrames,
+        'stream': st.streamState.name,
+      },
+    };
+  }
 
   late final CaptureSession _session =
       widget.session ??

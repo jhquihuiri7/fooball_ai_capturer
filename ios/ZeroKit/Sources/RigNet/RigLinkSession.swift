@@ -110,6 +110,8 @@ public final class RigLinkSession {
     public var onNoPart: ((NoPartPacket) -> Void)?
     /// El esclavo debe forzar un IDR: el maestro tiene un hueco en `part_seq`.
     public var onIdrRequest: ((UInt32) -> Void)?
+    /// El maestro recibe la miniatura JPEG de la cámara del esclavo (IOS-64).
+    public var onThumb: ((Data) -> Void)?
     /// El maestro recibe la media BGR del solape del esclavo (IOS-38).
     public var onColorMeans: (([Double]) -> Void)?
     /// El esclavo debe guardar los fotogramas de estos instantes para calibrar (IOS-70).
@@ -394,6 +396,15 @@ public final class RigLinkSession {
         }
     }
 
+    /// El esclavo manda la miniatura de su cámara (IOS-64), a 1 Hz, por control: ~30 KB
+    /// que no pueden llegar a trozos.
+    public func send(thumb jpeg: Data) {
+        queue.async { [self] in
+            guard !isMaster, case .connected = state, jpeg.count <= LinkConstants.maxFrameB else { return }
+            send(type: .thumb, payload: jpeg, seq: nextControlSeq())
+        }
+    }
+
     /// El esclavo manda la media BGR de su solape (IOS-38), a 0,5 Hz.
     public func send(colorMeans bgr: [Double]) {
         queue.async { [self] in
@@ -486,6 +497,9 @@ public final class RigLinkSession {
         case .idrRequest:
             guard !isMaster, let seq = IdrRequestWire.decode(frame.payload) else { return }
             onIdrRequest?(seq)
+        case .thumb:
+            guard isMaster, !frame.payload.isEmpty else { return }
+            onThumb?(frame.payload)
         case .colorMeans:
             guard isMaster, let bgr = ColorMeansWire.decode(frame.payload) else { return }
             onColorMeans?(bgr)

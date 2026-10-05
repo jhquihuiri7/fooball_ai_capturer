@@ -198,6 +198,11 @@ final class RigLinkSessionTests: XCTestCase {
         XCTAssertEqual(partes.first, parte)
         XCTAssertEqual(nadas.first, NoPartPacket(frameRigMs: 1034, viewId: 6))
         lock.unlock()
+        // IOS-64: la miniatura del esclavo.
+        nonisolated(unsafe) var miniatura = Data()
+        left.onThumb = { d in lock.lock(); miniatura = d; lock.unlock() }
+        right.send(thumb: Data(repeating: 0xD8, count: 30_000))
+        waitUntil { lock.lock(); defer { lock.unlock() }; return miniatura.count == 30_000 }
         // IOS-38: las medias del solape, del esclavo al maestro.
         nonisolated(unsafe) var medias: [Double] = []
         left.onColorMeans = { m in lock.lock(); medias = m; lock.unlock() }

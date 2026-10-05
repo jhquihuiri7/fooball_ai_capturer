@@ -650,6 +650,36 @@ hubs), ya con esta expectativa.
 
 ---
 
+## 2026-10-04 · IOS-64 — panel local en la LAN con miniaturas · 🚧 falta con dos iPhone y el coste de CPU
+
+**Hecho**
+- `RigMedia/Graphics/Thumbnailer.swift`: NV12 (4K o 1080p) → 640×360 BGRA por
+  VTPixelTransferSession (en la GPU, con bandas si no es 16:9) → JPEG por ImageIO, con
+  pool preasignado.
+- RigLinkSession `send(thumb:)`/`onThumb` (control, del esclavo al maestro); ThumbHub
+  en el Runner guarda la última de cada cámara (la propia del anillo a 1 Hz; la del
+  otro por el enlace) y la del programa (una de cada 30 fotogramas). Pigeon
+  `thumbnail(name)`.
+- API del maestro: `/` sirve `assets/panel/index.html` sin puerta (la página toma el
+  token del fragmento `#mando=` del QR, que el navegador no manda al servidor);
+  `/api/v1/rig/thumb/{left,right,program}` y `/api/v1/rig/status` con token.
+- La página: marcador y reloj por la espera larga, goles con `expect`, reloj, ±1 min,
+  alineaciones al aire, marcar jugada, las tres miniaturas a 1 Hz y el estado.
+- Tests: ThumbnailTests (4K → JPEG 640×360 de pocos KB), la miniatura por la sesión,
+  el panel en la API (página sin puerta, miniaturas y estado con token, 404) y el asset.
+
+**Medido en el iPhone 17** (maestro con el banco, el Mac de esclavo y de portátil):
+la página carga en 48 ms; miniatura de la cámara 6 KB en 25 ms y la del programa
+12 KB en 20 ms (con marcador y franja); el estado dice maestro, enlace conectado,
+30 fps, térmica fair, escalera 1, 0 fotogramas perdidos.
+
+**Ojo**: en el iPhone quedaron dos procesos de la app de dos instalaciones y el viejo
+tenía el puerto; `devicectl … process terminate` de los dos lo arregló. Mañana,
+terminar procesos viejos antes de cada banco.
+
+**Queda fuera**: la miniatura del esclavo de verdad y el coste de CPU (≤2 %) con los
+dos iPhone.
+
 ## 2026-10-04 · IOS-54 — audio del micrófono: captura y AAC · 🚧 falta la pasada de 10 min y meterlo en el programa
 
 **Hecho**

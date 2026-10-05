@@ -929,6 +929,7 @@ final class SplitBench {
     }
 
     private func program(_ buffer: CVPixelBuffer, t: Int64) {
+        ThumbHub.shared.program(buffer)
         programEncoder?.encode(buffer, ptsNs: t * 1_000_000, rigMs: UInt64(max(0, t)))
         programFrames += 1
     }
@@ -1124,5 +1125,67 @@ final class CalibrationPairs {
             try? datos.write(to: carpeta.appendingPathComponent("summary-\(self.side.rawValue).json"))
             completion(String(data: datos, encoding: .utf8) ?? "{}")
         }
+    }
+}
+
+// MARK: - Las miniaturas del panel local (IOS-64)
+
+// La última miniatura JPEG de cada cámara y del programa, a 1 Hz: la propia sale del
+// anillo del pipeline; la del otro móvil llega por el enlace (`thumb`, la manda el
+// esclavo); la del programa, del banco program-split. El panel las pide por Pigeon.
+
+final class ThumbHub {
+    static let shared = ThumbHub()
+
+    private let lock = NSLock()
+    private var latest: [String: Data] = [:]
+    private var timer: DispatchSourceTimer?
+    private let thumbnailer = Thumbnailer()
+    private let programThumbnailer = Thumbnailer()
+    private var programFrames = 0
+    /// Cada cuántos fotogramas del programa se hace su miniatura (1 Hz a 30 fps).
+    static let programEvery = 30
+
+    func jpeg(_ name: String) -> Data? {
+        lock.lock(); defer { lock.unlock() }
+        return latest[name]
+    }
+
+    private func store(_ name: String, _ data: Data) {
+        lock.lock(); latest[name] = data; lock.unlock()
+    }
+
+    /// Arranca la de la cámara propia; si hay enlace, la manda (esclavo) o recibe la del
+    /// otro (maestro).
+    func start(side: CameraSide, pipeline: @escaping () -> RigPipeline?, session: RigLinkSession?) {
+        stop()
+        let otro = side == .left ? "right" : "left"
+        session?.onThumb = { [weak self] d in self?.store(otro, d) }
+        let t = DispatchSource.makeTimerSource(queue: DispatchQueue(label: "io.footballai.zero.thumbs", qos: .utility))
+        t.schedule(deadline: .now() + 1, repeating: 1)
+        t.setEventHandler { [weak self] in
+            guard let self, let ring = pipeline()?.ring, let ultimo = ring.availableRigMs().last,
+                  let lease = ring.acquire(nearest: ultimo, maxDistanceMs: 0)
+            else { return }
+            let jpeg = thumbnailer?.jpeg(from: lease.buffer)
+            ring.release(lease)
+            guard let jpeg else { return }
+            store(side.rawValue, jpeg)
+            if let session, !session.isMaster { session.send(thumb: jpeg) }
+        }
+        timer = t
+        t.resume()
+    }
+
+    func stop() {
+        timer?.cancel()
+        timer = nil
+    }
+
+    /// Un fotograma del programa: uno de cada `programEvery` se vuelve miniatura.
+    func program(_ buffer: CVPixelBuffer) {
+        programFrames += 1
+        guard programFrames % Self.programEvery == 0, let jpeg = programThumbnailer?.jpeg(from: buffer) else { return }
+        store("program", jpeg)
     }
 }

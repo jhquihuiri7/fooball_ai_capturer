@@ -51,6 +51,9 @@ class MasterHost extends ChangeNotifier {
     this.port = masterApiPort,
     this.vpsUrl,
     this.overlaySink,
+    this.panelHtml,
+    this.thumbnail,
+    this.rigStatus,
   }) : wallS = wallS ?? _wallClockS,
        _time = time ?? StopwatchTimeSource(),
        _monotonic = Stopwatch()..start();
@@ -84,6 +87,11 @@ class MasterHost extends ChangeNotifier {
 
   /// El canal del gráfico a Metal (IOS-47); sin él, el maestro no pinta marcador.
   final OverlaySink? overlaySink;
+
+  /// El panel local (IOS-64): la página, las miniaturas y el estado del soporte.
+  final Future<String> Function()? panelHtml;
+  final Future<Uint8List> Function(String name)? thumbnail;
+  final Map<String, Object?> Function()? rigStatus;
   ProgramGraphics? _graphics;
 
   /// El gráfico del programa mientras se sirve (para fijar la competición, p. ej.).
@@ -133,6 +141,9 @@ class MasterHost extends ChangeNotifier {
         wallS: wallS,
         controlSecret: _secret,
         operatorPin: pin.isEmpty ? null : pin,
+        panelHtml: panelHtml == null ? null : await panelHtml!(),
+        thumbnail: thumbnail,
+        rigStatus: rigStatus,
       );
       _server = await MasterApiServer.start(api, port: port);
       _engine = engine;

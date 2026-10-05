@@ -102,6 +102,9 @@ protocol RigHostApi {
   /// "slots": [{"name", "loops"}]}`. `dir` es un directorio de PNG RGBA de 1920×108
   /// dentro de `Documents/ads/`. Arranca en este instante. Devuelve "" o el error.
   func setAdPlaylist(json: String) throws -> String
+  /// La última miniatura JPEG de 640×360 (IOS-64): `left`, `right` o `program`. Vacía si
+  /// todavía no hay.
+  func thumbnail(name: String) throws -> FlutterStandardTypedData
   /// Un anuncio ya cargado que se cuela desde ahora `loops` vueltas; nombre vacío lo quita.
   func setAdOverride(name: String, loops: Int64) throws
 }
@@ -194,6 +197,23 @@ class RigHostApiSetup {
       }
     } else {
       setAdPlaylistChannel.setMessageHandler(nil)
+    }
+    /// La última miniatura JPEG de 640×360 (IOS-64): `left`, `right` o `program`. Vacía si
+    /// todavía no hay.
+    let thumbnailChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.RigHostApi.thumbnail\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      thumbnailChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let nameArg = args[0] as! String
+        do {
+          let result = try api.thumbnail(name: nameArg)
+          reply(wrapResult(result))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      thumbnailChannel.setMessageHandler(nil)
     }
     /// Un anuncio ya cargado que se cuela desde ahora `loops` vueltas; nombre vacío lo quita.
     let setAdOverrideChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.RigHostApi.setAdOverride\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)

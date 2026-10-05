@@ -224,6 +224,10 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
                     )
                 }
             }
+            ThumbHub.shared.start(
+                side: role == .left ? .left : .right,
+                pipeline: { [weak self] in self?.engine.rigPipeline }, session: nw.session
+            )
             if SplitBench.enabled() {
                 let s = SplitBench(
                     session: nw.session, side: role == .left ? .left : .right,
@@ -272,6 +276,7 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
         split?.stop()
         split = nil
         calibPairs = nil
+        ThumbHub.shared.stop()
         link?.stop()
         link = nil
         engine.rigClock = nil

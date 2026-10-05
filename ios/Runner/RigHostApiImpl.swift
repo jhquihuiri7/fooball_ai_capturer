@@ -109,6 +109,10 @@ final class RigHostApiImpl: NSObject, RigHostApi {
         }
     }
 
+    func thumbnail(name: String) throws -> FlutterStandardTypedData {
+        FlutterStandardTypedData(bytes: ThumbHub.shared.jpeg(name) ?? Data())
+    }
+
     func setAdOverride(name: String, loops: Int64) throws {
         let clip = name.isEmpty ? nil : AdHub.store?.clip(named: name)
         AdHub.rotation?.set(override: clip, loops: max(1, Int(loops)), atRigMs: AdHub.nowRigMs())

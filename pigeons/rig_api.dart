@@ -42,6 +42,10 @@ abstract class RigHostApi {
   /// dentro de `Documents/ads/`. Arranca en este instante. Devuelve "" o el error.
   String setAdPlaylist(String json);
 
+  /// La última miniatura JPEG de 640×360 (IOS-64): `left`, `right` o `program`. Vacía si
+  /// todavía no hay.
+  Uint8List thumbnail(String name);
+
   /// Un anuncio ya cargado que se cuela desde ahora `loops` vueltas; nombre vacío lo quita.
   void setAdOverride(String name, int loops);
 }

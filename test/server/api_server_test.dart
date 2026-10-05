@@ -7,6 +7,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:football_ai_capture/src/constants.dart';
@@ -264,6 +265,41 @@ void main() {
       expect(pedidas, <String>['start']);
       api.relay = (String accion) => Completer<void>().future;
       expect((await pedir('POST', 'stream/stop', bearer: _pin, body: <String, Object?>{})).$1, 504);
+    });
+  });
+
+  group('el panel local (IOS-64)', () {
+    test('la página sin puerta; miniaturas y estado con token', () async {
+      final MasterApi conPanel = MasterApi(
+        engine: engine,
+        monotonicMs: () => reloj.ms,
+        wallS: () => _ahoraS,
+        controlSecret: deriveControlSecret(s, engine.matchId),
+        panelHtml: '<html>panel</html>',
+        thumbnail: (String n) async => n == 'left' ? Uint8List.fromList(<int>[0xFF, 0xD8, 1]) : Uint8List(0),
+        rigStatus: () => <String, Object?>{'link': 'connected'},
+      );
+      ApiRequest get(String path, {bool auth = true}) => ApiRequest(
+        method: 'GET',
+        path: path,
+        headers: <String, String>{if (auth) 'authorization': 'Bearer ${token()}'},
+      );
+      final ApiResponse pagina = await conPanel.handle(get('/', auth: false));
+      expect(pagina.status, 200);
+      expect(utf8.decode(pagina.body), contains('panel'));
+      expect((await conPanel.handle(get('/api/v1/rig/thumb/left', auth: false))).status, 401);
+      final ApiResponse foto = await conPanel.handle(get('/api/v1/rig/thumb/left'));
+      expect((foto.status, foto.contentType, foto.body.length), (200, 'image/jpeg', 3));
+      expect((await conPanel.handle(get('/api/v1/rig/thumb/right'))).status, 404, reason: 'aún no hay');
+      expect((await conPanel.handle(get('/api/v1/rig/thumb/otra'))).status, 404);
+      final ApiResponse estado = await conPanel.handle(get('/api/v1/rig/status'));
+      expect(jsonDecode(utf8.decode(estado.body)), <String, Object?>{'link': 'connected'});
+    });
+
+    test('la página del asset existe y lee el token del fragmento', () {
+      final String html = File('assets/panel/index.html').readAsStringSync();
+      expect(html, contains("get('mando')"));
+      expect(html, contains('/api/v1/rig/thumb/'));
     });
   });
 

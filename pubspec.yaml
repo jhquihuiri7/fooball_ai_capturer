@@ -69,6 +69,7 @@ flutter:
 
   assets:
     - assets/brand/
+    - assets/panel/
 
   # Sin `google_fonts` a propósito: la app arranca en una cancha sin red, y una fuente
   # que no descarga es una pantalla ilegible. Los .ttf viajan dentro del binario.

@@ -172,6 +172,27 @@ class RigHostApi {
     return pigeonVar_replyValue! as String;
   }
 
+  /// La última miniatura JPEG de 640×360 (IOS-64): `left`, `right` o `program`. Vacía si
+  /// todavía no hay.
+  Future<Uint8List> thumbnail(String name) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.RigHostApi.thumbnail$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[name]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as Uint8List;
+  }
+
   /// Un anuncio ya cargado que se cuela desde ahora `loops` vueltas; nombre vacío lo quita.
   Future<void> setAdOverride(String name, int loops) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.RigHostApi.setAdOverride$pigeonVar_messageChannelSuffix';
