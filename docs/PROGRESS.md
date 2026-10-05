@@ -650,6 +650,36 @@ hubs), ya con esta expectativa.
 
 ---
 
+## 2026-10-04 · IOS-70 — pareja de fotogramas sincronizados para calibrar · 🚧 falta la pareja con dos iPhone
+
+**Hecho**
+- REF: RIG_CALIB_PAIR_COUNT (5, el DEFAULT_INSTANTS de calibrate_from_recordings, que
+  ahora lo usa), RIG_CALIB_PAIR_SPACING_MS (1000), RIG_CALIB_LEAD_MS (500),
+  RIG_CALIB_JPEG_QUALITY (0,95) y RIG_CALIB_JPEG_MAX_BYTES (6 MiB) en
+  libs/vision/constants.py; se exportan a RigConstants, y también DEFAULT_RIG_*.
+- `RigCore/Runtime/CalibrationPlan.swift`: los destinos y la elección del fotograma
+  (el más cercano a ≤16 ms; si no, el primero de después).
+- `RigMedia/Capture/CalibrationStillCapture.swift`: espera a que el anillo llegue al
+  destino, fija el fotograma, lo guarda en JPEG q95 4K (CoreImage + ImageIO) con el
+  tope de tamaño, y un JSON con lado, instante, destino, intrínsecas de ESE fotograma
+  (RigPipeline las guarda por rigMs), tamaño, mount_flip y lo que añada el llamante.
+  FrameRing gana `availableRigMs()`.
+- RigLinkSession: `send(calibrationCapture:)` (command JSON por control,
+  `kind: calibration_capture`) y `onCalibrationCapture` en el esclavo.
+- Runner: CalibrationPairs captura en los dos con el reloj del soporte en
+  Documents/calib/<id>/ (id = primer destino, el mismo en los dos) con un resumen; los
+  destinos parten del último fotograma del maestro, así caen en su rejilla. Pigeon
+  `captureCalibrationPairs()` y disparo automático con RIG_CALIB_AT_S.
+- Tests: CalibrationPlanTests (2), StillCaptureTests (2: el fotograma elegido, JPEG 4K
+  y su JSON; el plazo agotado), la orden por la sesión.
+
+**Medido en el iPhone 17 (maestro, el Mac de esclavo):** 5 de 5 fotogramas 4K con
+intrínsecas, exposición y balance; Δ al destino 0, −1, −1, −2 y −2 ms; el mayor JPEG,
+0,71 MB (escena oscura). Antes de alinear los destinos a la rejilla, ±15–17 ms.
+
+**Queda fuera**: la pareja de verdad (|ΔrigMs| izquierda-derecha ≤16 ms, objetivo
+≤5 ms) con los dos iPhone; el botón de la app y la subida van con IOS-71.
+
 ## 2026-10-04 · Banco program-split (IOS-43/44) listo para los dos iPhone · 🚧
 
 **Hecho**

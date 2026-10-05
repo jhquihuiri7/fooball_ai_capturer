@@ -799,6 +799,10 @@ protocol CaptureHostApi {
   /// enmienda §3). En el Keychain, como el emparejamiento. Vacío si no hay.
   func loadOperatorPin() throws -> String
   func saveOperatorPin(pin: String) throws
+  /// La pareja de fotogramas para calibrar (IOS-70): el maestro elige los instantes, se
+  /// los manda al esclavo y los dos guardan JPEG q95 4K con su JSON en
+  /// `Documents/calib/<id>/`. Devuelve el resumen del maestro en JSON (o `error`).
+  func captureCalibrationPairs() async throws -> String
   /// PTS recientes del maestro, en tiempo del soporte, pedidos por el enlace (TASK A4).
   /// Solo tiene sentido en el derecho. Vacío si el maestro no contesta a tiempo.
   func masterRecentPtsNs() async throws -> [Int64]
@@ -1268,6 +1272,24 @@ class CaptureHostApiSetup {
       }
     } else {
       saveOperatorPinChannel.setMessageHandler(nil)
+    }
+    /// La pareja de fotogramas para calibrar (IOS-70): el maestro elige los instantes, se
+    /// los manda al esclavo y los dos guardan JPEG q95 4K con su JSON en
+    /// `Documents/calib/<id>/`. Devuelve el resumen del maestro en JSON (o `error`).
+    let captureCalibrationPairsChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.captureCalibrationPairs\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      captureCalibrationPairsChannel.setMessageHandler { _, reply in
+        Task { @MainActor in
+          do {
+            let result = try await api.captureCalibrationPairs()
+            reply(wrapResult(result))
+          } catch {
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      captureCalibrationPairsChannel.setMessageHandler(nil)
     }
     /// PTS recientes del maestro, en tiempo del soporte, pedidos por el enlace (TASK A4).
     /// Solo tiene sentido en el derecho. Vacío si el maestro no contesta a tiempo.

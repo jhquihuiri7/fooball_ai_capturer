@@ -121,6 +121,17 @@ public enum RigConstants {
     /// (Python: `PITCH_PLAYABLE_MARGIN_M`.)
     public static let pitchPlayableMarginM: Double = 3.0
 
+    /// Giro de cada cámara respecto al frente del soporte, como estimación de partida. La
+    /// calibración lo corrige; lo que importa de verdad es la inclinación, que no puede
+    /// corregir.
+    /// (Python: `DEFAULT_RIG_YAW_DEG`.)
+    public static let defaultRigYawDeg: Double = 45.0
+
+    /// Inclinación de partida hacia el césped. Es la que la calibración no puede deducir
+    /// (ADR 0012, B5b): quien monta el soporte debe ajustarla con `--rig-pitch`.
+    /// (Python: `DEFAULT_RIG_PITCH_DEG`.)
+    public static let defaultRigPitchDeg: Double = -8.0
+
     /// Grados. Alabeo máximo creíble de una cámara del soporte tras calibrar. Un soporte bien
     /// montado se queda en unos pocos; los 180 de una cámara sin enderezar son otra cosa, y 45
     /// separa las dos sin dudas.
@@ -141,6 +152,32 @@ public enum RigConstants {
     /// frames que sí eran del mismo instante.
     /// (Python: `RIG_PAIR_TOLERANCE_NS`.)
     public static let rigPairToleranceNs: Int = 16000000
+
+    /// Parejas de fotogramas sincronizados que el maestro pide para calibrar (IOS-70). Cinco,
+    /// como los instantes de `calibrate_from_recordings.py`: una sola puede caer con alguien
+    /// cruzando el solape; de cinco se queda la mejor.
+    /// (Python: `RIG_CALIB_PAIR_COUNT`.)
+    public static let rigCalibPairCount: Int = 5
+
+    /// Milisegundos entre los instantes de destino de dos parejas (IOS-70). Un segundo: lo
+    /// bastante para que la escena cambie entre parejas y poco para que la sesión dure 5 s.
+    /// (Python: `RIG_CALIB_PAIR_SPACING_MS`.)
+    public static let rigCalibPairSpacingMs: Int = 1000
+
+    /// Milisegundos entre la orden y el primer destino: lo que tarda la orden en llegar al
+    /// esclavo por control con margen, para que los dos tengan el fotograma en el anillo.
+    /// (Python: `RIG_CALIB_LEAD_MS`.)
+    public static let rigCalibLeadMs: Int = 500
+
+    /// Calidad del JPEG de cada fotograma de calibración (sin unidad, de 0 a 1). q95 deja las
+    /// esquinas finas que busca el emparejado de rasgos sin pasar del tope de tamaño.
+    /// (Python: `RIG_CALIB_JPEG_QUALITY`.)
+    public static let rigCalibJpegQuality: Double = 0.95
+
+    /// Bytes como mucho de un JPEG 4K de calibración (6 MiB): lo que acepta la subida del VPS
+    /// (NUBE-09) por pareja y lado.
+    /// (Python: `RIG_CALIB_JPEG_MAX_BYTES`.)
+    public static let rigCalibJpegMaxBytes: Int = 6291456
 
     /// Frames que cada lado retiene esperando a su pareja.
     ///

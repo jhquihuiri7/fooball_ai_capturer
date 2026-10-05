@@ -33,6 +33,8 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
     private var link: PeerLinking?
     /// El banco program-split, si se lanzó con RIG_SPLIT=1.
     private var split: SplitBench?
+    /// La pareja de fotogramas para calibrar (IOS-70), con el enlace de Network.
+    private var calibPairs: CalibrationPairs?
 
     /// RIG_LINK_MULTIPEER=0 cambia al enlace nuevo sobre Network (IOS-12). El Multipeer
     /// de hoy sigue siendo el predeterminado hasta la aceptación de campo con hubs.
@@ -160,6 +162,13 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
         (link as? RigLinkNW)?.peerHost ?? ""
     }
 
+    func captureCalibrationPairs() async throws -> String {
+        guard let pares = calibPairs else {
+            return #"{"error":"sin enlace de Network"}"#
+        }
+        return await withCheckedContinuation { c in pares.start { c.resume(returning: $0) } }
+    }
+
     func loadOperatorPin() throws -> String {
         try KeychainText.operatorPin.read() ?? ""
     }
@@ -189,14 +198,6 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
                 )
             }
             let nw = RigLinkNW(role: role, secret: secreto, prefersMaster: prefersMaster)
-            // IOS-80: el rol negociado sube a Dart, que deja de suponer que manda el izquierdo.
-            nw.onRigRole = { [weak self] rol, term, partido in
-                Task { @MainActor in
-                    try? await self?.flutter.onRigRole(
-                        role: rol == .master ? .master : .slave, term: Int64(term), matchId: partido
-                    )
-                }
-            }
             // IOS-13: la cámara lee el reloj nativo por fotograma, sin pasar por
             // Pigeon; a Dart solo le llega la estimación, para la pantalla y la fase.
             engine.rigClock = nw.clock
@@ -211,6 +212,18 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
                 }
             }
             link = nw
+            let pares = CalibrationPairs(session: nw.session, side: role == .left ? .left : .right, engine: engine)
+            calibPairs = pares
+            // IOS-80: el rol negociado sube a Dart, que deja de suponer que manda el
+            // izquierdo; al dirigir, se arma el disparo automático de la calibración.
+            nw.onRigRole = { [weak self, weak pares] rol, term, partido in
+                if rol == .master { pares?.armAutoTrigger() }
+                Task { @MainActor in
+                    try? await self?.flutter.onRigRole(
+                        role: rol == .master ? .master : .slave, term: Int64(term), matchId: partido
+                    )
+                }
+            }
             if SplitBench.enabled() {
                 let s = SplitBench(
                     session: nw.session, side: role == .left ? .left : .right,
@@ -258,6 +271,7 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
     func stopLink() throws {
         split?.stop()
         split = nil
+        calibPairs = nil
         link?.stop()
         link = nil
         engine.rigClock = nil

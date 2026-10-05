@@ -1201,6 +1201,28 @@ class CaptureHostApi {
     ;
   }
 
+  /// La pareja de fotogramas para calibrar (IOS-70): el maestro elige los instantes, se
+  /// los manda al esclavo y los dos guardan JPEG q95 4K con su JSON en
+  /// `Documents/calib/<id>/`. Devuelve el resumen del maestro en JSON (o `error`).
+  Future<String> captureCalibrationPairs() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.CaptureHostApi.captureCalibrationPairs$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as String;
+  }
+
   /// PTS recientes del maestro, en tiempo del soporte, pedidos por el enlace (TASK A4).
   /// Solo tiene sentido en el derecho. Vacío si el maestro no contesta a tiempo.
   Future<List<int>> masterRecentPtsNs() async {

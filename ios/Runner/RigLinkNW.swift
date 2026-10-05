@@ -967,3 +967,108 @@ final class SplitBench {
             "program-split-\(side.rawValue)-\(Int(Date().timeIntervalSince1970)).json"))
     }
 }
+
+// MARK: - La pareja de fotogramas para calibrar (IOS-70)
+
+// El maestro elige los instantes (CalibrationPlan), se los manda al esclavo por el enlace
+// y los dos guardan del anillo el fotograma de cada uno en Documents/calib/<id>/: JPEG q95
+// 4K y su JSON. El id es el primer destino, el mismo en los dos móviles, así las parejas
+// se encuentran por nombre. Lo sube IOS-71. Con RIG_CALIB_AT_S=<s> en el entorno, el
+// maestro lo dispara solo a los <s> segundos de conectar (banco desatendido).
+
+final class CalibrationPairs {
+    private let session: RigLinkSession
+    private let side: CameraSide
+    private let engine: CaptureEngine
+    private let lock = NSLock()
+    private var capture: CalibrationStillCapture?
+    private var autoArmed = false
+
+    init(session: RigLinkSession, side: CameraSide, engine: CaptureEngine) {
+        self.session = session
+        self.side = side
+        self.engine = engine
+        session.onCalibrationCapture = { [weak self] destinos in
+            self?.run(targets: destinos) { resumen in NSLog("[calib] esclavo: %@", resumen) }
+        }
+    }
+
+    /// El reloj del soporte de este móvil, en ms: el del host más el desfase del enlace.
+    private func nowRigMs() -> Int64 {
+        let ns = RigLink.hostNowNs()
+        return (ns + session.clock.offsetAt(ns: ns)) / 1_000_000
+    }
+
+    /// Lo dispara el maestro: manda los destinos y captura los suyos. Devuelve el
+    /// resumen en JSON (o el error) cuando termina.
+    func start(completion: @escaping (String) -> Void) {
+        guard session.isMaster, case .connected = session.state else {
+            completion(#"{"error":"solo el maestro con enlace calibra"}"#)
+            return
+        }
+        // Desde el último fotograma propio: el adelanto y la separación son fotogramas
+        // enteros a 30 fps (500 y 1000 ms), así los destinos caen en la rejilla del
+        // maestro y el esclavo queda a la distancia de la fase, no de medio fotograma.
+        let base = engine.rigPipeline?.ring.availableRigMs().last ?? nowRigMs()
+        let destinos = CalibrationPlan.targets(nowRigMs: base)
+        session.send(calibrationCapture: destinos)
+        run(targets: destinos, completion: completion)
+    }
+
+    /// Con RIG_CALIB_AT_S, se arma una vez al conectar como maestro.
+    func armAutoTrigger(environment: [String: String] = ProcessInfo.processInfo.environment) {
+        guard let s = environment["RIG_CALIB_AT_S"].flatMap(Double.init), !autoArmed else { return }
+        autoArmed = true
+        DispatchQueue.global().asyncAfter(deadline: .now() + s) { [weak self] in
+            guard let self, session.isMaster else { return }
+            start { resumen in NSLog("[calib] maestro: %@", resumen) }
+        }
+    }
+
+    private func run(targets: [Int64], completion: @escaping (String) -> Void) {
+        guard let pipeline = engine.rigPipeline, let primero = targets.first else {
+            completion(#"{"error":"sin cámara"}"#)
+            return
+        }
+        let docs = (try? FileManager.default.url(for: .documentDirectory, in: .userDomainMask,
+                                                 appropriateFor: nil, create: true))
+            ?? FileManager.default.temporaryDirectory
+        let carpeta = docs.appendingPathComponent("calib/\(primero)", isDirectory: true)
+        let look = engine.look()
+        let cap = CalibrationStillCapture(
+            side: side, ring: pipeline.ring,
+            intrinsics: { [weak pipeline] ms in pipeline?.intrinsics(atRigMs: ms) },
+            mountedUpsideDown: side == .left,
+            directory: carpeta,
+            extraMeta: {
+                var m: [String: Any] = [
+                    "device": BenchRunner.machine(),
+                    "ios": UIDevice.current.systemVersion,
+                ]
+                if let look {
+                    m["look"] = ["exposure_ns": look.exposureNs, "iso": look.iso, "aperture": look.aperture,
+                                 "kelvin": look.kelvin, "tint": look.tint]
+                }
+                return m
+            }
+        )
+        lock.lock(); capture = cap; lock.unlock()
+        cap.capture(targets: targets, nowRigMs: { [weak self] in self?.nowRigMs() ?? 0 }) { resultado in
+            let resumen: [String: Any]
+            switch resultado {
+            case let .success(fotos):
+                resumen = [
+                    "side": self.side.rawValue, "id": primero, "count": fotos.count,
+                    "delta_ms": fotos.map(\.deltaMs), "rig_ms": fotos.map(\.rigMs),
+                    "bytes_max": fotos.map(\.bytes).max() ?? 0,
+                    "with_intrinsics": fotos.filter(\.hasIntrinsics).count,
+                ]
+            case let .failure(e):
+                resumen = ["side": self.side.rawValue, "id": primero, "error": e.description]
+            }
+            let datos = (try? JSONSerialization.data(withJSONObject: resumen, options: [.sortedKeys])) ?? Data()
+            try? datos.write(to: carpeta.appendingPathComponent("summary-\(self.side.rawValue).json"))
+            completion(String(data: datos, encoding: .utf8) ?? "{}")
+        }
+    }
+}

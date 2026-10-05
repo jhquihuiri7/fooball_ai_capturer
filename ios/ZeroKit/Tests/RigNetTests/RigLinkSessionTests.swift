@@ -198,6 +198,12 @@ final class RigLinkSessionTests: XCTestCase {
         XCTAssertEqual(partes.first, parte)
         XCTAssertEqual(nadas.first, NoPartPacket(frameRigMs: 1034, viewId: 6))
         lock.unlock()
+        // IOS-70: la orden de calibrar, con sus destinos.
+        nonisolated(unsafe) var destinos: [Int64] = []
+        right.onCalibrationCapture = { d in lock.lock(); destinos = d; lock.unlock() }
+        left.send(calibrationCapture: [10_500, 11_500])
+        right.send(calibrationCapture: [1])  // el esclavo no la manda
+        waitUntil { lock.lock(); defer { lock.unlock() }; return destinos == [10_500, 11_500] }
         let enviada = try XCTUnwrap(cableLeft.sentFrames(of: .idrRequest).first)
         XCTAssertEqual(IdrRequestWire.decode(enviada.payload), 10)
         XCTAssertTrue(cableLeft.sentFrames(of: .part).isEmpty)

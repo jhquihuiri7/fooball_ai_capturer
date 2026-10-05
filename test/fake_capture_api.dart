@@ -236,6 +236,9 @@ class FakeCaptureApi extends CaptureHostApi {
   Future<String> loadOperatorPin() async => operatorPin;
 
   @override
+  Future<String> captureCalibrationPairs() async => '{"count":5}';
+
+  @override
   Future<void> saveOperatorPin(String pin) async => operatorPin = pin;
 
   @override

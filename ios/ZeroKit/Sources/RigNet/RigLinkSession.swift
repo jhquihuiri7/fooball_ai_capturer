@@ -110,6 +110,8 @@ public final class RigLinkSession {
     public var onNoPart: ((NoPartPacket) -> Void)?
     /// El esclavo debe forzar un IDR: el maestro tiene un hueco en `part_seq`.
     public var onIdrRequest: ((UInt32) -> Void)?
+    /// El esclavo debe guardar los fotogramas de estos instantes para calibrar (IOS-70).
+    public var onCalibrationCapture: (([Int64]) -> Void)?
 
     public private(set) var state: State = .off {
         didSet { if oldValue != state { onState?(state) } }
@@ -390,6 +392,21 @@ public final class RigLinkSession {
         }
     }
 
+    /// El maestro pide al esclavo los fotogramas de estos instantes (IOS-70): `command`
+    /// por control, en JSON, con `kind: calibration_capture` (ADR 0023 §1).
+    public func send(calibrationCapture targets: [Int64]) {
+        queue.async { [self] in
+            guard isMaster, case .connected = state,
+                  let payload = try? JSONSerialization.data(withJSONObject: [
+                      "kind": Self.calibrationCaptureKind, "targets": targets,
+                  ])
+            else { return }
+            send(type: .command, payload: payload, seq: nextControlSeq())
+        }
+    }
+
+    static let calibrationCaptureKind = "calibration_capture"
+
     /// El maestro pide un IDR, por control, con el part_seq del hueco.
     public func requestIdr(partSeq: UInt32) {
         queue.async { [self] in
@@ -458,6 +475,13 @@ public final class RigLinkSession {
         case .idrRequest:
             guard !isMaster, let seq = IdrRequestWire.decode(frame.payload) else { return }
             onIdrRequest?(seq)
+        case .command:
+            guard !isMaster,
+                  let orden = try? JSONSerialization.jsonObject(with: frame.payload) as? [String: Any],
+                  orden["kind"] as? String == Self.calibrationCaptureKind,
+                  let destinos = orden["targets"] as? [NSNumber]
+            else { return }
+            onCalibrationCapture?(destinos.map(\.int64Value))
         default:
             break
         }

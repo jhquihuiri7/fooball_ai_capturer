@@ -43,6 +43,18 @@ public final class RigPipeline {
     /// El último blit medido, en ms de pared. El histograma fino lo lleva el banco.
     public private(set) var lastBlitMs: Double = 0
 
+    /// Las intrínsecas de los últimos fotogramas, por su rigMs (IOS-70: la calibración
+    /// guarda las del fotograma que usa). Acotado como el anillo, con margen.
+    private var recentIntrinsics: [Int64: [Float]] = [:]
+    private static let intrinsicsMemory = PipelineConstants.frameRingSlots * 4
+
+    /// Las intrínsecas que la cámara dio con el fotograma de `rigMs`, si las dio.
+    public func intrinsics(atRigMs rigMs: Int64) -> [Float]? {
+        lock.lock()
+        defer { lock.unlock() }
+        return recentIntrinsics[rigMs]
+    }
+
     /// El consumidor del fotograma recién copiado (el detector, cuando exista).
     public var onFrame: ((FrameMeta) -> Void)?
 
@@ -101,6 +113,13 @@ public final class RigPipeline {
             }
             lock.lock()
             stored += 1
+            if let intrinsics {
+                recentIntrinsics[rigNs / 1_000_000] = intrinsics
+                if recentIntrinsics.count > Self.intrinsicsMemory {
+                    recentIntrinsics.keys.sorted().prefix(recentIntrinsics.count - Self.intrinsicsMemory)
+                        .forEach { recentIntrinsics[$0] = nil }
+                }
+            }
             lock.unlock()
             onFrame?(FrameMeta(rigNs: rigNs, ptsNs: ptsNs, index: index, intrinsics: intrinsics))
         }

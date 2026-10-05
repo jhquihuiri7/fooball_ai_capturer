@@ -393,6 +393,12 @@ abstract class CaptureHostApi {
 
   void saveOperatorPin(String pin);
 
+  /// La pareja de fotogramas para calibrar (IOS-70): el maestro elige los instantes, se
+  /// los manda al esclavo y los dos guardan JPEG q95 4K con su JSON en
+  /// `Documents/calib/<id>/`. Devuelve el resumen del maestro en JSON (o `error`).
+  @async
+  String captureCalibrationPairs();
+
   /// PTS recientes del maestro, en tiempo del soporte, pedidos por el enlace (TASK A4).
   /// Solo tiene sentido en el derecho. Vacío si el maestro no contesta a tiempo.
   @async

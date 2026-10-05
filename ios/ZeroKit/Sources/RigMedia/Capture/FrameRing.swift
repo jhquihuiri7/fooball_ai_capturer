@@ -107,6 +107,13 @@ public final class FrameRing {
 
     /// El fotograma con el rigMs más cercano al pedido, referenciado, o `nil` si el
     /// anillo está vacío. `maxDistanceMs` descarta un «más cercano» que ya no vale.
+    /// Los instantes que hay ahora en el anillo, de menor a mayor (IOS-70).
+    public func availableRigMs() -> [Int64] {
+        lock.lock()
+        defer { lock.unlock() }
+        return slots.filter(\.occupied).map(\.rigMs).sorted()
+    }
+
     public func acquire(nearest rigMs: Int64, maxDistanceMs: Int64 = .max) -> Lease? {
         lock.lock()
         defer { lock.unlock() }
