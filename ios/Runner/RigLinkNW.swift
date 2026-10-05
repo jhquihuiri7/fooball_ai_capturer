@@ -529,7 +529,8 @@ final class LinkPartsLoad {
     }
 
     func run() {
-        let t = DispatchSource.makeTimerSource(queue: queue)
+        // .strict: el sistema no agrupa los disparos para ahorrar energía.
+        let t = DispatchSource.makeTimerSource(flags: .strict, queue: queue)
         t.schedule(deadline: .now(), repeating: 1.0 / Self.fps, leeway: .milliseconds(1))
         t.setEventHandler { [weak self] in self?.tick() }
         timer = t
@@ -677,6 +678,9 @@ final class SplitBench {
     private let pipelineProvider: () -> RigPipeline?
     private let env: [String: String]
     private let queue = DispatchQueue(label: "io.footballai.zero.split", qos: .userInteractive)
+    /// El disco va aparte: escribir el .ts en la cola del tic retrasaba el programa
+    /// (IOS-44: tic p5 29,43 fps). En serie, así el orden de los paquetes se conserva.
+    private let writerQueue = DispatchQueue(label: "io.footballai.zero.split.writer", qos: .utility)
     private let lock = NSLock()
     private var timer: DispatchSourceTimer?
     private let startNs = DispatchTime.now().uptimeNanoseconds
@@ -769,7 +773,7 @@ final class SplitBench {
             for t in audioWaiting where t.rigMs >= Double(primero) - mediaTramaMs {
                 let crudo = t.adts.dropFirst(Adts.headerLength)
                 if let datos = try? muxer.muxAudio(aacRaw: Data(crudo), pts90k: Int64((t.rigMs * 90).rounded())) {
-                    ts.write(datos)
+                    writerQueue.async { ts.write(datos) }
                     tsAudioFrames += 1
                 }
             }
@@ -1134,8 +1138,9 @@ final class SplitBench {
             }
             let pts = f.ptsNs * 90 / 1_000_000
             if firstVideoT == nil { firstVideoT = f.ptsNs / 1_000_000 }
-            tsFile?.write(muxer.muxVideo(avcc: avcc, parameterSets: [], isKeyframe: f.isKeyframe,
-                                         pts90k: pts, dts90k: pts))
+            let paquetes = muxer.muxVideo(avcc: avcc, parameterSets: [], isKeyframe: f.isKeyframe,
+                                          pts90k: pts, dts90k: pts)
+            if let ts = tsFile { writerQueue.async { ts.write(paquetes) } }
         }
     }
 
@@ -1150,7 +1155,9 @@ final class SplitBench {
         e0?.flush()
         let espera = DispatchSemaphore(value: 0)
         if let r = recorder { r.finish { _ in espera.signal() }; _ = espera.wait(timeout: .now() + 5) }
-        try? tsFile?.close()
+        // Después de lo que quede por escribir en su cola.
+        let ts = tsFile
+        writerQueue.sync { try? ts?.close() }
         guard session.isMaster || slave != nil else { return }
         func pct(_ xs: [Double], _ q: Double) -> Double {
             let o = xs.sorted()
