@@ -12,6 +12,14 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-05 · IOS-44 — el tic del programa sin el disco · medido
+
+El .ts se escribía en la cola del temporizador de 30 Hz; ahora va a una cola de escritura
+en serie, y el temporizador es `.strict`. En el iPhone 17 (180 s, solo): tic p5 29,77 fps
+y p50 30,00, con 5399 fotogramas y 0 fallos. Antes daba 29,43-29,47. La aceptación pide
+p5 ≥29,5 ✅. Falta repetirlo con los dos iPhone y un barrido que cruce la costura, mirando
+los fotogramas desgarrados.
+
 ## 2026-10-05 · SPK-02 — 90 min de enlace entre los dos iPhone por la Wi-Fi del router · 🚧 falta Ethernet
 
 Banco link-90: partes sintéticas a 30 fps con el perfil 0, 10 y 30 Mbit/s cada 5 min, por
