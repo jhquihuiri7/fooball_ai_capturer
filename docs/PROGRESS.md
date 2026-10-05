@@ -650,6 +650,26 @@ hubs), ya con esta expectativa.
 
 ---
 
+## 2026-10-04 · IOS-43 — la parte del esclavo: render, codificación y envío · 🚧 falta medirla en dos iPhone
+
+**Hecho**
+- `RigMedia/Pipeline/SlavePartStage.swift`: por fotograma del esclavo resuelve la vista
+  (SlaveViewResolver), manda `no_part` si la vista no pide su lado, y si la pide pinta la
+  parte en un búfer del pool del codificador, la codifica (VideoEncoder, IOS-50) y la
+  saca por `onPart` con la vista que usó de verdad y el bit de extrapolada. Al IDR le
+  pega los SPS/PPS en banda. Pasa por PartSendQueue (IOS-52): una parte tirada no
+  consume part_seq, y `requestIdr` fuerza el IDR del siguiente fotograma.
+- MetalPartRenderer: la vista → RectilinearView → viewHomographyToRaw del lado →
+  ReprojectKernel con las ganancias de su lado (BGR, el orden de la referencia).
+- RigMedia no ve el enlace: el Runner conectará `onPart`/`onNoPart` a RigLinkSession.
+- Tests (5) con el codificador de verdad y un render falso: sin vista no sale nada;
+  vista de otro lado → `no_part` sin pintar; 10 partes con part_seq seguido, la vista de
+  cada una y el primer IDR con SPS/PPS; IDR en el fotograma siguiente a la petición;
+  extrapolada marcada; un render que falla se cuenta.
+
+**Queda fuera**: el banco part-slave y las medidas de la aceptación (p95 ≤60 ms, GPU
+≤2 ms) en dos iPhone; el enganche al pipeline de captura va con IOS-44.
+
 ## 2026-10-04 · IOS-52 — transporte de las partes por el enlace · 🚧 falta la pasada de 30 min con dos iPhone
 
 **Hecho**
