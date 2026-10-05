@@ -42,6 +42,24 @@ public enum DetectionSpec {
     /// (Python: `PLAYER_CONF_THRESHOLD`.)
     public static let playerConfThreshold: Double = 0.25
 
+    /// Cota superior de detecciones devueltas por ciclo. En el campo hay 22 jugadores,
+    /// 3 árbitros y algún portero suelto; 64 deja margen para duplicados antes del tracker
+    /// y acota el trabajo del post-procesado, que corre en el camino caliente.
+    /// (Python: `PLAYER_MAX_DETECTIONS`.)
+    public static let playerMaxDetections: Int = 64
+
+    /// Píxeles nativos. Cuánto puede separarse el borde de una media caja de la junta del
+    /// mosaico para contarla como «tocando la junta» (REF-26). El recorte por región deja el
+    /// borde EXACTO en la junta; el margen cubre el redondeo del viaje entrada↔nativo.
+    /// (Python: `PLAYER_SEAM_EPS_PX`.)
+    public static let playerSeamEpsPx: Double = 1.5
+
+    /// Fracción (0-1) del ancho de la caja más estrecha que tiene que solaparse en X para
+    /// casar dos medias cajas a ambos lados de la junta. Por debajo son dos personas distintas
+    /// hombro con hombro, no una partida.
+    /// (Python: `PLAYER_SEAM_MIN_X_OVERLAP`.)
+    public static let playerSeamMinXOverlap: Double = 0.5
+
     /// Píxeles. Lado de cada ROI nativa del heatmap del balón (ADR 0020): el lote fijo es
     /// [2, 3, 256, 256]. Las BALL_ROI_* de arriba son del detector DETR del pod, que vive
     /// hasta el corte.

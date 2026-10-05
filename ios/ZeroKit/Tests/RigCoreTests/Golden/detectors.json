@@ -1,0 +1,1306 @@
+{
+  "schema": 1,
+  "module": "detectors",
+  "conventions": {
+    "axes": "Ejes del soporte: X a la derecha, Y hacia abajo, Z hacia delante (rig.py).",
+    "rotation": "R = R_yaw · R_pitch · R_roll, de cámara a soporte; ortonormal (CameraPose.matrix), así que la inversa es la traspuesta.",
+    "angles": "Radianes. Yaw positivo gira la cámara a la derecha; pitch positivo, hacia arriba.",
+    "pixel_center": "El convenio de rig.py: el píxel i cubre [i, i+1) y su centro continuo está en i+0,5; CameraIntrinsics.scaled reescala pasando por ese centro.",
+    "homography": "Las homografías de vista van del programa a la cámara (view_homography).",
+    "scalars": "Float con el repr de Python: ida y vuelta exacta a Double en Swift.",
+    "tensors": "{dtype: f64|f32|u8|i32, shape, b64}, little-endian y orden C; en Swift, Data(base64Encoded:)."
+  },
+  "cases": [
+    {
+      "name": "full_un_jugador",
+      "fn": "PlayerDetector.detect",
+      "inputs": {
+        "classes": [
+          "goalkeeper",
+          "player",
+          "referee"
+        ],
+        "layout": {
+          "regions": [
+            {
+              "dst": [
+                0,
+                0,
+                1920,
+                1080
+              ],
+              "src": [
+                0.0,
+                0.0,
+                1920.0,
+                1080.0
+              ]
+            }
+          ]
+        },
+        "logits": {
+          "dtype": "f32",
+          "shape": [
+            1,
+            3
+          ],
+          "b64": "AAAQwVSfDEAAABDB"
+        },
+        "boxes": {
+          "dtype": "f32",
+          "shape": [
+            1,
+            4
+          ],
+          "b64": "VVX1PtFeAj+rqqo8L6G9PQ=="
+        },
+        "box_format": "cxcywh_norm"
+      },
+      "expected": {
+        "boxes": {
+          "dtype": "f64",
+          "shape": [
+            1,
+            4
+          ],
+          "b64": "AAAAAAAgjEAAAAAgAEB/QAAAAAAAYI1AAAAAAADAgkA="
+        },
+        "classes": [
+          "player"
+        ],
+        "scores": {
+          "dtype": "f64",
+          "shape": [
+            1
+          ],
+          "b64": "AAAAwMzM7D8="
+        }
+      },
+      "tol": {
+        "abs": 0.001,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "full_bajo_el_umbral_no_sale",
+      "fn": "PlayerDetector.detect",
+      "inputs": {
+        "classes": [
+          "goalkeeper",
+          "player",
+          "referee"
+        ],
+        "layout": {
+          "regions": [
+            {
+              "dst": [
+                0,
+                0,
+                1920,
+                1080
+              ],
+              "src": [
+                0.0,
+                0.0,
+                1920.0,
+                1080.0
+              ]
+            }
+          ]
+        },
+        "logits": {
+          "dtype": "f32",
+          "shape": [
+            1,
+            3
+          ],
+          "b64": "AAAQwRhysb8AABDB"
+        },
+        "boxes": {
+          "dtype": "f32",
+          "shape": [
+            1,
+            4
+          ],
+          "b64": "VVX1PtFeAj+rqqo8L6G9PQ=="
+        },
+        "box_format": "cxcywh_norm"
+      },
+      "expected": {
+        "boxes": {
+          "dtype": "f64",
+          "shape": [
+            0,
+            4
+          ],
+          "b64": ""
+        },
+        "classes": [],
+        "scores": {
+          "dtype": "f64",
+          "shape": [
+            0
+          ],
+          "b64": ""
+        }
+      },
+      "tol": {
+        "abs": 0.001,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "full_ordena_por_score",
+      "fn": "PlayerDetector.detect",
+      "inputs": {
+        "classes": [
+          "goalkeeper",
+          "player",
+          "referee"
+        ],
+        "layout": {
+          "regions": [
+            {
+              "dst": [
+                0,
+                0,
+                1920,
+                1080
+              ],
+              "src": [
+                0.0,
+                0.0,
+                1920.0,
+                1080.0
+              ]
+            }
+          ]
+        },
+        "logits": {
+          "dtype": "f32",
+          "shape": [
+            3,
+            3
+          ],
+          "b64": "AAAQwR+Zzz4AABDBAAAQwbBxPEAAABDBAAAQwQAAEMEYcrE/"
+        },
+        "boxes": {
+          "dtype": "f32",
+          "shape": [
+            3,
+            4
+          ],
+          "b64": "VVV1PaG9BD4AAIA8JrSXPVVV9T7RXgI/q6qqPC+hvT0AAEo/mNCePgAAgDyhvYQ9"
+        },
+        "box_format": "cxcywh_norm"
+      },
+      "expected": {
+        "boxes": {
+          "dtype": "f64",
+          "shape": [
+            3,
+            4
+          ],
+          "b64": "AAAAAAAgjEAAAAAgAEB/QAAAAAAAYI1AAAAAAADAgkAAAAAAAHCXQAAAAAAAwHJAAAAAAADol0AAAAAAACB3QAAAAAAAAFlAAAAAAAAAWUAAAAAAAEBgQAAAAAAAgGZA"
+        },
+        "classes": [
+          "player",
+          "referee",
+          "player"
+        ],
+        "scores": {
+          "dtype": "f64",
+          "shape": [
+            3
+          ],
+          "b64": "AAAAgGZm7j8AAACgmZnpPwAAAEAzM+M/"
+        }
+      },
+      "tol": {
+        "abs": 0.001,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "full_las_tres_clases",
+      "fn": "PlayerDetector.detect",
+      "inputs": {
+        "classes": [
+          "goalkeeper",
+          "player",
+          "referee"
+        ],
+        "layout": {
+          "regions": [
+            {
+              "dst": [
+                0,
+                0,
+                1920,
+                1080
+              ],
+              "src": [
+                0.0,
+                0.0,
+                1920.0,
+                1080.0
+              ]
+            }
+          ]
+        },
+        "logits": {
+          "dtype": "f32",
+          "shape": [
+            3,
+            3
+          ],
+          "b64": "g+hYPwAAEMEAABDBAAAQwVSfDEAAABDBAAAQwQAAEMFUn4w/"
+        },
+        "boxes": {
+          "dtype": "f32",
+          "shape": [
+            3,
+            4
+          ],
+          "b64": "AACAPVVV1T6rqqo8L6G9PVVV9T7RXgI/q6qqPC+hvT0AAEo/mNCePgAAgDyhvYQ9"
+        },
+        "box_format": "cxcywh_norm"
+      },
+      "expected": {
+        "boxes": {
+          "dtype": "f64",
+          "shape": [
+            3,
+            4
+          ],
+          "b64": "AAAAAAAgjEAAAAAgAEB/QAAAAAAAYI1AAAAAAADAgkAAAAAAAHCXQAAAAAAAwHJAAAAAAADol0AAAAAAACB3QAAAAAAAAFlAAAAAAAAAeUAAAAAAAIBhQAAAAAAAQH9A"
+        },
+        "classes": [
+          "player",
+          "referee",
+          "goalkeeper"
+        ],
+        "scores": {
+          "dtype": "f64",
+          "shape": [
+            3
+          ],
+          "b64": "AAAAwMzM7D8AAAAAAADoPwAAAGBmZuY/"
+        }
+      },
+      "tol": {
+        "abs": 0.001,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "full_el_balon_se_descarta",
+      "fn": "PlayerDetector.detect",
+      "inputs": {
+        "classes": [
+          "ball",
+          "goalkeeper",
+          "player",
+          "referee"
+        ],
+        "layout": {
+          "regions": [
+            {
+              "dst": [
+                0,
+                0,
+                1920,
+                1080
+              ],
+              "src": [
+                0.0,
+                0.0,
+                1920.0,
+                1080.0
+              ]
+            }
+          ]
+        },
+        "logits": {
+          "dtype": "f32",
+          "shape": [
+            2,
+            4
+          ],
+          "b64": "OQuTQAAAEMEAABDBAAAQwQAAEMEAABDBVJ8MQAAAEME="
+        },
+        "boxes": {
+          "dtype": "f32",
+          "shape": [
+            2,
+            4
+          ],
+          "b64": "q6oAP2gvAT+rqqo7JrQXPFVV9T7RXgI/q6qqPC+hvT0="
+        },
+        "box_format": "cxcywh_norm"
+      },
+      "expected": {
+        "boxes": {
+          "dtype": "f64",
+          "shape": [
+            1,
+            4
+          ],
+          "b64": "AAAAAAAgjEAAAAAgAEB/QAAAAAAAYI1AAAAAAADAgkA="
+        },
+        "classes": [
+          "player"
+        ],
+        "scores": {
+          "dtype": "f64",
+          "shape": [
+            1
+          ],
+          "b64": "AAAAwMzM7D8="
+        }
+      },
+      "tol": {
+        "abs": 0.001,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "full_tope_de_detecciones",
+      "fn": "PlayerDetector.detect",
+      "inputs": {
+        "classes": [
+          "goalkeeper",
+          "player",
+          "referee"
+        ],
+        "layout": {
+          "regions": [
+            {
+              "dst": [
+                0,
+                0,
+                1920,
+                1080
+              ],
+              "src": [
+                0.0,
+                0.0,
+                1920.0,
+                1080.0
+              ]
+            }
+          ]
+        },
+        "logits": {
+          "dtype": "f32",
+          "shape": [
+            6,
+            3
+          ],
+          "b64": "AAAQwQAAAAAAABDBAAAQwd0wJD4AABDBAAAQwY5CpT4AABDBAAAQwRGm+j4AABDBAAAQwabNKT8AABDBAAAQwYPoWD8AABDB"
+        },
+        "boxes": {
+          "dtype": "f32",
+          "shape": [
+            6,
+            4
+          ],
+          "b64": "VVV1PbSX0D4AAIA8JrSXPauquj20l9A+AACAPCa0lz2rqvo9tJfQPgAAgDwmtJc9VVUdPrSX0D4AAIA8JrSXPVVVPT60l9A+AACAPCa0lz1VVV0+tJfQPgAAgDwmtJc9"
+        },
+        "box_format": "cxcywh_norm",
+        "max_detections": 3
+      },
+      "expected": {
+        "boxes": {
+          "dtype": "f64",
+          "shape": [
+            3,
+            4
+          ],
+          "b64": "AAAAAAAAeUAAAAAAAAB5QAAAAAAA4HpAAAAAAAAAfkAAAAAAAEB1QAAAAAAAAHlAAAAAAAAgd0AAAAAAAAB+QAAAAAAAgHFAAAAAAAAAeUAAAAAAAGBzQAAAAAAAAH5A"
+        },
+        "classes": [
+          "player",
+          "player",
+          "player"
+        ],
+        "scores": {
+          "dtype": "f64",
+          "shape": [
+            3
+          ],
+          "b64": "AAAAYGZm5j8AAABAuB7lPwAAAEAK1+M/"
+        }
+      },
+      "tol": {
+        "abs": 0.001,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "full_umbral_propio",
+      "fn": "PlayerDetector.detect",
+      "inputs": {
+        "classes": [
+          "goalkeeper",
+          "player",
+          "referee"
+        ],
+        "layout": {
+          "regions": [
+            {
+              "dst": [
+                0,
+                0,
+                1920,
+                1080
+              ],
+              "src": [
+                0.0,
+                0.0,
+                1920.0,
+                1080.0
+              ]
+            }
+          ]
+        },
+        "logits": {
+          "dtype": "f32",
+          "shape": [
+            1,
+            3
+          ],
+          "b64": "AAAQwYPoWL8AABDB"
+        },
+        "boxes": {
+          "dtype": "f32",
+          "shape": [
+            1,
+            4
+          ],
+          "b64": "VVX1PtFeAj+rqqo8L6G9PQ=="
+        },
+        "box_format": "cxcywh_norm",
+        "conf_threshold": 0.25
+      },
+      "expected": {
+        "boxes": {
+          "dtype": "f64",
+          "shape": [
+            1,
+            4
+          ],
+          "b64": "AAAAAAAgjEAAAAAgAEB/QAAAAAAAYI1AAAAAAADAgkA="
+        },
+        "classes": [
+          "player"
+        ],
+        "scores": {
+          "dtype": "f64",
+          "shape": [
+            1
+          ],
+          "b64": "AAAAQDMz0z8="
+        }
+      },
+      "tol": {
+        "abs": 0.001,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "franja_vuelve_a_nativo",
+      "fn": "PlayerDetector.detect",
+      "inputs": {
+        "classes": [
+          "goalkeeper",
+          "player",
+          "referee"
+        ],
+        "layout": {
+          "regions": [
+            {
+              "dst": [
+                0,
+                0,
+                1920,
+                576
+              ],
+              "src": [
+                0.0,
+                400.0,
+                3840.0,
+                1152.0
+              ]
+            }
+          ]
+        },
+        "logits": {
+          "dtype": "f32",
+          "shape": [
+            2,
+            3
+          ],
+          "b64": "AAAQwVSfDEAAABDBAAAQwQAAEMGD6Fg/"
+        },
+        "boxes": {
+          "dtype": "f32",
+          "shape": [
+            2,
+            4
+          ],
+          "b64": "VVWJPo7jqD4AAIA85DgOPquqSD9yHOc9q6qqO1VVVT0="
+        },
+        "box_format": "cxcywh_norm"
+      },
+      "expected": {
+        "boxes": {
+          "dtype": "f64",
+          "shape": [
+            2,
+            4
+          ],
+          "b64": "AAAA4P8/j0AAAAAAAOCFQAAAAAAAkJBAAAAAAADgikAAAAAAAHCnQAAAAAAAQH9AAAAAAACYp0AAAAAAAICBQA=="
+        },
+        "classes": [
+          "player",
+          "referee"
+        ],
+        "scores": {
+          "dtype": "f64",
+          "shape": [
+            2
+          ],
+          "b64": "AAAAwMzM7D8AAABgZmbmPw=="
+        }
+      },
+      "tol": {
+        "abs": 0.001,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "franja_mascara_de_campo_por_los_pies",
+      "fn": "PlayerDetector.detect",
+      "inputs": {
+        "classes": [
+          "goalkeeper",
+          "player",
+          "referee"
+        ],
+        "layout": {
+          "regions": [
+            {
+              "dst": [
+                0,
+                0,
+                1920,
+                576
+              ],
+              "src": [
+                0.0,
+                400.0,
+                3840.0,
+                1152.0
+              ]
+            }
+          ]
+        },
+        "logits": {
+          "dtype": "f32",
+          "shape": [
+            2,
+            3
+          ],
+          "b64": "AAAQwVSfDEAAABDBAAAQwWgH3j8AABDB"
+        },
+        "boxes": {
+          "dtype": "f32",
+          "shape": [
+            2,
+            4
+          ],
+          "b64": "VVWJPo7jqD4AAIA85DgOPquqSD9VVYU9q6qqOxzHMT0="
+        },
+        "box_format": "cxcywh_norm",
+        "pitch_mask": {
+          "width": 3840,
+          "height": 2160,
+          "inside": [
+            0,
+            600,
+            3840,
+            2160
+          ]
+        }
+      },
+      "expected": {
+        "boxes": {
+          "dtype": "f64",
+          "shape": [
+            1,
+            4
+          ],
+          "b64": "AAAA4P8/j0AAAAAAAOCFQAAAAAAAkJBAAAAAAADgikA="
+        },
+        "classes": [
+          "player"
+        ],
+        "scores": {
+          "dtype": "f64",
+          "shape": [
+            1
+          ],
+          "b64": "AAAAwMzM7D8="
+        }
+      },
+      "tol": {
+        "abs": 0.001,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "mosaico_cada_region_a_su_escala",
+      "fn": "PlayerDetector.detect",
+      "inputs": {
+        "classes": [
+          "goalkeeper",
+          "player",
+          "referee"
+        ],
+        "layout": {
+          "regions": [
+            {
+              "dst": [
+                0,
+                0,
+                1920,
+                384
+              ],
+              "src": [
+                0.0,
+                300.0,
+                3840.0,
+                768.0
+              ]
+            },
+            {
+              "dst": [
+                0,
+                384,
+                960,
+                192
+              ],
+              "src": [
+                0.0,
+                1068.0,
+                3840.0,
+                768.0
+              ]
+            }
+          ]
+        },
+        "logits": {
+          "dtype": "f32",
+          "shape": [
+            2,
+            3
+          ],
+          "b64": "AAAQwRhysT8AABDBAAAQwVSfDEAAABDB"
+        },
+        "boxes": {
+          "dtype": "f32",
+          "shape": [
+            2,
+            4
+          ],
+          "b64": "AAAIPsdxTD6rqqo7VVVVPauqiD5yHFU/VVVVPFVVBT4="
+        },
+        "box_format": "cxcywh_norm"
+      },
+      "expected": {
+        "boxes": {
+          "dtype": "f64",
+          "shape": [
+            2,
+            4
+          ],
+          "b64": "AAAAIABAn0AAAAAAAFCUQAAAAAAAaKBAAAAAAAAAmUAAAAAAAEB/QAAAAAAAQH9AAAAAAABAgEAAAAAAAICBQA=="
+        },
+        "classes": [
+          "player",
+          "player"
+        ],
+        "scores": {
+          "dtype": "f64",
+          "shape": [
+            2
+          ],
+          "b64": "AAAAwMzM7D8AAACgmZnpPw=="
+        }
+      },
+      "tol": {
+        "abs": 0.001,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "mosaico_partido_por_la_junta_sale_una_vez",
+      "fn": "PlayerDetector.detect",
+      "inputs": {
+        "classes": [
+          "goalkeeper",
+          "player",
+          "referee"
+        ],
+        "layout": {
+          "regions": [
+            {
+              "dst": [
+                0,
+                0,
+                1920,
+                384
+              ],
+              "src": [
+                0.0,
+                300.0,
+                3840.0,
+                768.0
+              ]
+            },
+            {
+              "dst": [
+                0,
+                384,
+                960,
+                192
+              ],
+              "src": [
+                0.0,
+                1068.0,
+                3840.0,
+                768.0
+              ]
+            }
+          ]
+        },
+        "logits": {
+          "dtype": "f32",
+          "shape": [
+            2,
+            3
+          ],
+          "b64": "AAAQwRhysT8AABDBAAAQwWgH3j8AABDB"
+        },
+        "boxes": {
+          "dtype": "f32",
+          "shape": [
+            2,
+            4
+          ],
+          "b64": "q6ryPnIcIz+rqio8HMdxPe/ucj7kOC8/q6qqOxzHET0="
+        },
+        "box_format": "cxcywh_norm"
+      },
+      "expected": {
+        "boxes": {
+          "dtype": "f64",
+          "shape": [
+            1,
+            4
+          ],
+          "b64": "AAAAAAAgnEAAAAAAAECPQAAAAAAAyJxAAAAAAAD4kUA="
+        },
+        "classes": [
+          "player"
+        ],
+        "scores": {
+          "dtype": "f64",
+          "shape": [
+            1
+          ],
+          "b64": "AAAAQDMz6z8="
+        }
+      },
+      "tol": {
+        "abs": 0.001,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "mosaico_hombro_con_hombro_no_se_funde",
+      "fn": "PlayerDetector.detect",
+      "inputs": {
+        "classes": [
+          "goalkeeper",
+          "player",
+          "referee"
+        ],
+        "layout": {
+          "regions": [
+            {
+              "dst": [
+                0,
+                0,
+                1920,
+                384
+              ],
+              "src": [
+                0.0,
+                300.0,
+                3840.0,
+                768.0
+              ]
+            },
+            {
+              "dst": [
+                0,
+                384,
+                960,
+                192
+              ],
+              "src": [
+                0.0,
+                1068.0,
+                3840.0,
+                768.0
+              ]
+            }
+          ]
+        },
+        "logits": {
+          "dtype": "f32",
+          "shape": [
+            2,
+            3
+          ],
+          "b64": "AAAQwRhysT8AABDBAAAQwWgH3j8AABDB"
+        },
+        "boxes": {
+          "dtype": "f32",
+          "shape": [
+            2,
+            4
+          ],
+          "b64": "q6ryPnIcIz+rqio8HMdxPQAAgD7kOC8/q6qqOxzHET0="
+        },
+        "box_format": "cxcywh_norm"
+      },
+      "expected": {
+        "boxes": {
+          "dtype": "f64",
+          "shape": [
+            2,
+            4
+          ],
+          "b64": "AAAAAACwnUAAAAAgALCQQAAAAAAAUJ5AAAAAAAD4kUAAAAAAACCcQAAAAAAAQI9AAAAAAADAnEAAAAAAALCQQA=="
+        },
+        "classes": [
+          "player",
+          "player"
+        ],
+        "scores": {
+          "dtype": "f64",
+          "shape": [
+            2
+          ],
+          "b64": "AAAAQDMz6z8AAACgmZnpPw=="
+        }
+      },
+      "tol": {
+        "abs": 0.001,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "mosaico_clases_distintas_en_la_junta_no_se_funden",
+      "fn": "PlayerDetector.detect",
+      "inputs": {
+        "classes": [
+          "goalkeeper",
+          "player",
+          "referee"
+        ],
+        "layout": {
+          "regions": [
+            {
+              "dst": [
+                0,
+                0,
+                1920,
+                384
+              ],
+              "src": [
+                0.0,
+                300.0,
+                3840.0,
+                768.0
+              ]
+            },
+            {
+              "dst": [
+                0,
+                384,
+                960,
+                192
+              ],
+              "src": [
+                0.0,
+                1068.0,
+                3840.0,
+                768.0
+              ]
+            }
+          ]
+        },
+        "logits": {
+          "dtype": "f32",
+          "shape": [
+            2,
+            3
+          ],
+          "b64": "AAAQwQAAEMEYcrE/AAAQwWgH3j8AABDB"
+        },
+        "boxes": {
+          "dtype": "f32",
+          "shape": [
+            2,
+            4
+          ],
+          "b64": "q6ryPnIcIz+rqio8HMdxPe/ucj7kOC8/q6qqOxzHET0="
+        },
+        "box_format": "cxcywh_norm"
+      },
+      "expected": {
+        "boxes": {
+          "dtype": "f64",
+          "shape": [
+            2,
+            4
+          ],
+          "b64": "AAAAAAAonEAAAAAgALCQQAAAAAAAyJxAAAAAAAD4kUAAAAAAACCcQAAAAAAAQI9AAAAAAADAnEAAAAAAALCQQA=="
+        },
+        "classes": [
+          "player",
+          "referee"
+        ],
+        "scores": {
+          "dtype": "f64",
+          "shape": [
+            2
+          ],
+          "b64": "AAAAQDMz6z8AAACgmZnpPw=="
+        }
+      },
+      "tol": {
+        "abs": 0.001,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "nms_quita_el_duplicado",
+      "fn": "PlayerDetector.detect",
+      "inputs": {
+        "classes": [
+          "goalkeeper",
+          "player",
+          "referee"
+        ],
+        "layout": {
+          "regions": [
+            {
+              "dst": [
+                0,
+                0,
+                1920,
+                1080
+              ],
+              "src": [
+                0.0,
+                0.0,
+                1920.0,
+                1080.0
+              ]
+            }
+          ]
+        },
+        "logits": {
+          "dtype": "f32",
+          "shape": [
+            2,
+            3
+          ],
+          "b64": "AAAQwVSfDEAAABDBAAAQwRhysT8AABDB"
+        },
+        "boxes": {
+          "dtype": "f32",
+          "shape": [
+            2,
+            4
+          ],
+          "b64": "VVX1PtFeAj+rqqo8L6G9Pd7d9T4u2AI/q6qqPC+hvT0="
+        },
+        "box_format": "cxcywh_norm",
+        "postprocess": "nms",
+        "nms_iou": 0.5
+      },
+      "expected": {
+        "boxes": {
+          "dtype": "f64",
+          "shape": [
+            1,
+            4
+          ],
+          "b64": "AAAAAAAgjEAAAAAgAEB/QAAAAAAAYI1AAAAAAADAgkA="
+        },
+        "classes": [
+          "player"
+        ],
+        "scores": {
+          "dtype": "f64",
+          "shape": [
+            1
+          ],
+          "b64": "AAAAwMzM7D8="
+        }
+      },
+      "tol": {
+        "abs": 0.001,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "nms_no_cruza_clases",
+      "fn": "PlayerDetector.detect",
+      "inputs": {
+        "classes": [
+          "goalkeeper",
+          "player",
+          "referee"
+        ],
+        "layout": {
+          "regions": [
+            {
+              "dst": [
+                0,
+                0,
+                1920,
+                1080
+              ],
+              "src": [
+                0.0,
+                0.0,
+                1920.0,
+                1080.0
+              ]
+            }
+          ]
+        },
+        "logits": {
+          "dtype": "f32",
+          "shape": [
+            2,
+            3
+          ],
+          "b64": "AAAQwVSfDEAAABDBAAAQwQAAEMEYcrE/"
+        },
+        "boxes": {
+          "dtype": "f32",
+          "shape": [
+            2,
+            4
+          ],
+          "b64": "VVX1PtFeAj+rqqo8L6G9Pd7d9T4u2AI/q6qqPC+hvT0="
+        },
+        "box_format": "cxcywh_norm",
+        "postprocess": "nms",
+        "nms_iou": 0.5
+      },
+      "expected": {
+        "boxes": {
+          "dtype": "f64",
+          "shape": [
+            2,
+            4
+          ],
+          "b64": "AAAAAAAgjEAAAAAgAEB/QAAAAAAAYI1AAAAAAADAgkAAAAAAADCMQAAAACAAYH9AAAAAAABwjUAAAAAAANCCQA=="
+        },
+        "classes": [
+          "player",
+          "referee"
+        ],
+        "scores": {
+          "dtype": "f64",
+          "shape": [
+            2
+          ],
+          "b64": "AAAAwMzM7D8AAACgmZnpPw=="
+        }
+      },
+      "tol": {
+        "abs": 0.001,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "nms_con_cajas_xyxy_en_la_franja",
+      "fn": "PlayerDetector.detect",
+      "inputs": {
+        "classes": [
+          "goalkeeper",
+          "player",
+          "referee"
+        ],
+        "layout": {
+          "regions": [
+            {
+              "dst": [
+                0,
+                0,
+                1920,
+                576
+              ],
+              "src": [
+                0.0,
+                400.0,
+                3840.0,
+                1152.0
+              ]
+            }
+          ]
+        },
+        "logits": {
+          "dtype": "f32",
+          "shape": [
+            2,
+            3
+          ],
+          "b64": "AAAQwVSfDEAAABDBAAAQwR+Zzz4AABDB"
+        },
+        "boxes": {
+          "dtype": "f32",
+          "shape": [
+            2,
+            4
+          ],
+          "b64": "AAD6QwAAFkMAgAREAABmQwAA+0MAABhDAAAFRAAAaEM="
+        },
+        "box_format": "xyxy_input_px",
+        "postprocess": "nms",
+        "nms_iou": 0.5
+      },
+      "expected": {
+        "boxes": {
+          "dtype": "f64",
+          "shape": [
+            1,
+            4
+          ],
+          "b64": "AAAAAABAj0AAAAAAAOCFQAAAAAAAkJBAAAAAAADgikA="
+        },
+        "classes": [
+          "player"
+        ],
+        "scores": {
+          "dtype": "f64",
+          "shape": [
+            1
+          ],
+          "b64": "AAAAwMzM7D8="
+        }
+      },
+      "tol": {
+        "abs": 0.001,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "nms_en_el_mosaico_con_la_junta",
+      "fn": "PlayerDetector.detect",
+      "inputs": {
+        "classes": [
+          "goalkeeper",
+          "player",
+          "referee"
+        ],
+        "layout": {
+          "regions": [
+            {
+              "dst": [
+                0,
+                0,
+                1920,
+                384
+              ],
+              "src": [
+                0.0,
+                300.0,
+                3840.0,
+                768.0
+              ]
+            },
+            {
+              "dst": [
+                0,
+                384,
+                960,
+                192
+              ],
+              "src": [
+                0.0,
+                1068.0,
+                3840.0,
+                768.0
+              ]
+            }
+          ]
+        },
+        "logits": {
+          "dtype": "f32",
+          "shape": [
+            3,
+            3
+          ],
+          "b64": "AAAQwRhysT8AABDBAAAQwWgH3j8AABDBg+hYPwAAEMEAABDB"
+        },
+        "boxes": {
+          "dtype": "f32",
+          "shape": [
+            3,
+            4
+          ],
+          "b64": "q6ryPnIcIz+rqio8HMdxPe/ucj7kOC8/q6qqOxzHET0AAAg+x3FMPquqqjtVVVU9"
+        },
+        "box_format": "cxcywh_norm",
+        "postprocess": "nms",
+        "nms_iou": 0.5
+      },
+      "expected": {
+        "boxes": {
+          "dtype": "f64",
+          "shape": [
+            2,
+            4
+          ],
+          "b64": "AAAAAAAgnEAAAAAAAECPQAAAAAAAyJxAAAAAAAD4kUAAAAAAAEB/QAAAAAAAQH9AAAAAAABAgEAAAAAAAICBQA=="
+        },
+        "classes": [
+          "player",
+          "goalkeeper"
+        ],
+        "scores": {
+          "dtype": "f64",
+          "shape": [
+            2
+          ],
+          "b64": "AAAAQDMz6z8AAABgZmbmPw=="
+        }
+      },
+      "tol": {
+        "abs": 0.001,
+        "rel": 0.0
+      }
+    }
+  ]
+}

@@ -141,7 +141,7 @@ final class BandGeometryTests: XCTestCase {
         return try BandGeometry.fromDictionary(crudo)
     }
 
-    private static func layout(_ valor: GoldenValue) throws -> InputLayout {
+    static func layout(_ valor: GoldenValue) throws -> InputLayout {
         guard case let .array(crudas)? = try? valor.field("regions") else {
             throw GoldenError.message("regions no es una lista")
         }

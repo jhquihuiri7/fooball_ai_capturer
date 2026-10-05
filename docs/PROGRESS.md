@@ -650,6 +650,28 @@ hubs), ya con esta expectativa.
 
 ---
 
+## 2026-10-04 · IOS-23 — postproceso de detecciones en RigCore · 🚧 falta medir 300 queries en el iPhone
+
+**Hecho**
+- `RigCore/Detection/Postprocess.swift`: réplica de libs/vision/postprocess.py —
+  sigmoid por tanh en Float, cajas a esquinas, cxcywh y xyxy por layout (región del
+  centro, recorte y a nativo; cuentas en Double y salida en Float como la referencia),
+  NMS por clase con el truco del desplazamiento y desempate por índice, picos del
+  heatmap (ventana con borde replicado, umbral, una meseta = un pico, desempate por
+  clase, fila y columna) y el refinado subpíxel.
+- PlayerDecoder: réplica de PlayerDetector.detect sin el backend — argmax con umbral
+  sin rescatar la segunda clase, clases por la ficha (lo que no se emite, fuera), la
+  junta del mosaico (`mergeSeam`: misma clase, lados opuestos, solape en X; la unión con
+  los pies de abajo), la máscara de campo por los pies y DETR (orden por score, tope) o
+  NMS.
+- REF exporta PLAYER_MAX_DETECTIONS y PLAYER_SEAM_* a DetectionSpec.
+- Tests: PostprocessTests — los 7 tipos de postprocess.json (sigmoid, esquinas, cxcywh,
+  xyxy, nms, picos, refinado) y los 17 casos de detectors.json (REF-39) de punta a punta,
+  más una pasada de 300 queries.
+
+**Queda fuera**: la cifra de la aceptación (300 queries en <0,2 ms en el iPhone) va con
+el banco del detector (SPK-01/IOS-25).
+
 ## 2026-10-04 · IOS-48 — franja de anuncios en el maestro · 🚧 falta la pasada de 10 min con overrides
 
 **Hecho**
