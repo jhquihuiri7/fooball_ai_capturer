@@ -38,12 +38,18 @@ public final class FrameRing {
     /// Descartes por anillo lleno (todos los huecos referenciados). Telemetría.
     public private(set) var dropped = 0
 
+    /// El tamaño de los fotogramas del anillo, en píxeles.
+    public let width: Int
+    public let height: Int
+
     public init?(
         slots count: Int = PipelineConstants.frameRingSlots,
         width: Int,
         height: Int,
         pixelFormat: OSType = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
     ) {
+        self.width = width
+        self.height = height
         guard count > 0,
               let pool = PixelBufferPool(
                   width: width, height: height, pixelFormat: pixelFormat, capacity: count

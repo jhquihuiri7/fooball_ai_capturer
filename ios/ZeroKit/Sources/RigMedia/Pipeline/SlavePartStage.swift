@@ -97,6 +97,8 @@ public final class SlavePartStage {
         /// Partes que la cola del esclavo tiró (PartSendQueue).
         public var dropped = 0
         public var idrRequests = 0
+
+        public init() {}
     }
 
     public let side: CameraSide

@@ -14,27 +14,35 @@ import RigCore
 final class LinkPeerTests: XCTestCase {
     func testElMacDeIzquierdoRecibeLasPartesDelIphone() throws {
         let entorno = ProcessInfo.processInfo.environment
+        let lock = NSLock()
         guard let segundos = entorno["RIG_LINK_PEER_S"].flatMap(Double.init),
               let secreto = entorno["RIG_LINK_SECRET"].flatMap({ Data(base64Encoded: $0) })
         else {
             throw XCTSkip("sin RIG_LINK_PEER_S y RIG_LINK_SECRET: banco con iPhone")
         }
-        let transporte = NWLinkTransport(
-            mode: .advertise(
-                name: "mac-banco",
-                txt: ["side": "left", "fp": LinkAuth.fingerprint(secret: secreto)]
-            ),
-            interfaceType: .wifi
-        )
+        // RIG_LINK_PEER_SIDE=right: el Mac es el derecho y no dirige (el iPhone es el
+        // maestro con su cámara: program-split en una lente).
+        let derecho = entorno["RIG_LINK_PEER_SIDE"] == "right"
+        let transporte = derecho
+            ? NWLinkTransport(mode: .browse, interfaceType: .wifi)
+            : NWLinkTransport(
+                mode: .advertise(
+                    name: "mac-banco",
+                    txt: ["side": "left", "fp": LinkAuth.fingerprint(secret: secreto)]
+                ),
+                interfaceType: .wifi
+            )
         let sesion = RigLinkSession(
-            transport: transporte, secret: secreto, side: .left, deviceId: "mac-banco", appVersion: "banco"
+            transport: transporte, secret: secreto, side: derecho ? .right : .left,
+            deviceId: "mac-banco", appVersion: "banco"
         )
         let reloj = { Int64(DispatchTime.now().uptimeNanoseconds) }
         sesion.hostNowNs = reloj
         sesion.claimedRole = .slave
-        sesion.prefersMaster = true
+        sesion.prefersMaster = !derecho
+        nonisolated(unsafe) var vistas = 0
+        sesion.onViews = { _ in lock.lock(); vistas += 1; lock.unlock() }
 
-        let lock = NSLock()
         let receptor = PartReceiver()
         nonisolated(unsafe) var ultimo: Double?
         nonisolated(unsafe) var peorHueco = 0.0
@@ -75,6 +83,7 @@ final class LinkPeerTests: XCTestCase {
         let total = receptor.received + receptor.lost
         let informe: [String: Any] = [
             "connected": conectado,
+            "views_received": vistas,
             "is_master": sesion.isMaster,
             "parts_received": receptor.received,
             "parts_decodable": receptor.decoded,

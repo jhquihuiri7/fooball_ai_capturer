@@ -650,6 +650,32 @@ hubs), ya con esta expectativa.
 
 ---
 
+## 2026-10-04 · Banco program-split (IOS-43/44) listo para los dos iPhone · 🚧
+
+**Hecho**
+- SplitBench (Runner, RigLinkNW.swift): con RIG_SPLIT=1 y el enlace de Network
+  (RIG_LINK_MULTIPEER=0), la pantalla de captura normal monta el render repartido. El
+  esclavo pinta, codifica y manda su parte por fotograma del pipeline; el maestro genera
+  a 30 Hz un barrido de guion que cruza la costura (no hay director todavía), lo manda
+  como `view` con 67 ms de adelanto, compone en T + 100 ms, codifica el programa a
+  6 Mbit/s y lo graba en Documents/bench/program-split-<t>.ts, con informe JSON (dos y
+  una lente, partes, IDR, tic p5/p50, latencia añadida p50/p95). Usa Documents/rig.json
+  si existe; si no, un soporte nominal (±35°, HFOV 106°, pitch −8°, todo por entorno).
+  Bitrate de la parte por RIG_SPLIT_PART_MBPS (12 por defecto, por lo medido en SPK-02).
+- FrameRing expone su tamaño; CaptureEngine, el pipeline; RigLinkNW, la sesión.
+- LinkPeerTests: el Mac puede hacer de derecho (RIG_LINK_PEER_SIDE=right).
+
+**Medido hoy con un iPhone (iPhone 17 de maestro izquierdo con su cámara 4K, el Mac de
+esclavo sin cámara, Wi-Fi), 90 s:** 2667 fotogramas de programa, todos de una lente
+(el Mac no manda partes), tic p5 29,65 / p50 30,0 fps, 0 fallos de composición,
+latencia añadida p50 132 / p95 133 ms (los 100 de espera fija más la rejilla), .ts
+válido (ffprobe: H.264 1920×1080, 2667 fotogramas). El Mac recibió 2667 vistas. La
+imagen salió negra porque la cámara veía negro (luma media 17,7 en el volcado NV12
+crudo del mismo minuto): el móvil estaba boca abajo.
+
+**Mañana con los dos iPhone**: AUTO_ROLE=left en uno y right en el otro, RIG_SPLIT=1,
+RIG_SPLIT_S=600, mirando a algo iluminado; de ahí salen las cifras de IOS-43/44.
+
 ## 2026-10-04 · SPK-02 — primeras medidas de partes por Wi-Fi (un iPhone y el Mac) · 🚧
 
 **Hecho**

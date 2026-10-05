@@ -76,6 +76,8 @@ public final class MasterProgramStage {
         /// Instantes sin fotograma propio cerca: no se puede pintar nada.
         public var withoutMasterFrame = 0
         public var composeFailures = 0
+
+        public init() {}
     }
 
     /// Partes decodificadas que se guardan como mucho, esperando su tic.

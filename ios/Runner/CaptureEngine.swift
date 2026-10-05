@@ -36,6 +36,9 @@ final class CaptureEngine: NSObject {
     // IOS-09: el enganche del pipeline. Copia cada fotograma al anillo propio sin
     // retener más de un búfer de la cámara; sus consumidores llegan con IOS-23+.
     private var pipeline: RigPipeline?
+
+    /// El pipeline, para los bancos que cuelgan etapas de él (program-split).
+    var rigPipeline: RigPipeline? { pipeline }
     private var ladderSteppedAt = CMClockGetTime(CMClockGetHostTimeClock())
 
     private var writer: AVAssetWriter?

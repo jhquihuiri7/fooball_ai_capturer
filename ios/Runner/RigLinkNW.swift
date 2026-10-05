@@ -44,7 +44,8 @@ final class RigLinkNW: PeerLinking {
     var onLook: ((CameraLook) -> Void)?
     var onCommand: ((RigCommand) -> Void)?
 
-    private let session: RigLinkSession
+    /// La sesión, para los bancos que hablan el render repartido (program-split).
+    let session: RigLinkSession
     private let transport: NWLinkTransport
 
     /// La IP del otro móvil, o nil sin enlace (IOS-63).
@@ -622,4 +623,347 @@ final class LinkPartsLoad {
         targetRigMs: 0, viewId: 0, yawRad: 0, pitchRad: 0, hfovRad: 1, sides: [.left, .right],
         seamYawRad: 0, featherRad: 0.02, gains: .unity
     ))
+}
+
+// MARK: - El banco program-split (IOS-43, IOS-44)
+
+// El cosido entre los dos móviles con las cámaras de verdad. Con RIG_SPLIT=1 en el
+// entorno del lanzamiento (y el enlace de Network: RIG_LINK_MULTIPEER=0), la pantalla de
+// captura normal además:
+// - en el ESCLAVO, por cada fotograma del pipeline pinta su parte con la vista que manda
+//   el maestro, la codifica y la manda (SlavePartStage);
+// - en el MAESTRO, genera a 30 Hz un barrido de guion que cruza la costura (no hay
+//   director todavía), lo manda como `view`, compone el programa con la parte en
+//   T + PART_MAX_WAIT_MS (MasterProgramStage), lo codifica y lo graba en
+//   Documents/bench/program-split-<t>.ts, con un informe JSON al terminar.
+//
+//   RIG_SPLIT_S             lo que dura (600 por defecto: los 10 min de IOS-44)
+//   RIG_SPLIT_PART_MBPS     bitrate de la parte (12: por Wi-Fi caben ~15, SPK-02)
+//   RIG_SPLIT_SWEEP_DEG     amplitud del barrido en yaw (30)
+//   RIG_SPLIT_SWEEP_S       periodo del barrido (20)
+//   RIG_SPLIT_HFOV_DEG      el encuadre (60)
+//   RIG_NOMINAL_YAW_DEG     sin Documents/rig.json, la apertura nominal de cada cámara (35)
+//   RIG_NOMINAL_HFOV_DEG    y su HFOV (106, la ultra gran angular)
+//   RIG_NOMINAL_PITCH_DEG   y su pitch (-8)
+
+final class SplitBench {
+    static func enabled(_ entorno: [String: String] = ProcessInfo.processInfo.environment) -> Bool {
+        entorno["RIG_SPLIT"] == "1"
+    }
+
+    static let fps = 30.0
+    static let programWidth = 1920
+    static let programHeight = 1080
+    static let programBitrateBps = 6_000_000
+    /// Cuánto se adelanta la vista que manda el maestro al instante que pinta: el
+    /// esclavo tiene que tenerla antes de procesar su fotograma (2 fotogramas).
+    static let viewLeadMs: Int64 = 67
+    /// Distancia máxima entre el instante pedido y el fotograma propio que se usa.
+    static let frameMatchMs: Int64 = 20
+
+    private let session: RigLinkSession
+    private let side: CameraSide
+    private let pipelineProvider: () -> RigPipeline?
+    private let env: [String: String]
+    private let queue = DispatchQueue(label: "io.footballai.zero.split", qos: .userInteractive)
+    private let lock = NSLock()
+    private var timer: DispatchSourceTimer?
+    private let startNs = DispatchTime.now().uptimeNanoseconds
+    private let durationS: Double
+
+    // Montado al haber pipeline (sabe el tamaño de la cámara).
+    private var rig: RigModel?
+    private var rigSource = ""
+    private var context: MetalContext?
+    private var slave: SlavePartStage?
+    private var slaveEncoder: VideoEncoder?
+    private var master: MasterProgramStage?
+    private var programEncoder: VideoEncoder?
+    private let history = ViewHistory()
+    private var viewId: UInt32 = 0
+    private var lastProgramT: Int64?
+    private let muxer = TsMuxer(audio: nil)
+    private var tsFile: FileHandle?
+    private var tsURL: URL?
+    private var finished = false
+
+    // Medidas
+    private var tickIntervalsMs: [Double] = []
+    private var lastTickNs: UInt64?
+    private var composeLatencyMs: [Double] = []
+    private var programFrames = 0
+
+    init(session: RigLinkSession, side: CameraSide, pipeline: @escaping () -> RigPipeline?,
+         environment: [String: String] = ProcessInfo.processInfo.environment) {
+        self.session = session
+        self.side = side
+        pipelineProvider = pipeline
+        env = environment
+        durationS = environment["RIG_SPLIT_S"].flatMap(Double.init) ?? 600
+    }
+
+    private func number(_ key: String, _ def: Double) -> Double {
+        env[key].flatMap(Double.init) ?? def
+    }
+
+    func start() {
+        let t = DispatchSource.makeTimerSource(queue: queue)
+        t.schedule(deadline: .now(), repeating: 1.0 / Self.fps, leeway: .milliseconds(1))
+        t.setEventHandler { [weak self] in self?.tick() }
+        timer = t
+        t.resume()
+        session.onViews = { [weak self] vistas in self?.slave?.receive(views: vistas) }
+        session.onIdrRequest = { [weak self] _ in self?.slave?.requestIdr() }
+        session.onPart = { [weak self] parte, _ in
+            self?.master?.receive(part: parte, arrivalRigMs: Self.nowMs())
+        }
+        session.onNoPart = { [weak self] nada in self?.master?.receive(noPart: nada) }
+    }
+
+    func stop() {
+        timer?.cancel()
+        timer = nil
+        queue.sync { finish() }
+    }
+
+    static func nowMs() -> Int64 { RigLink.hostNowNs() / 1_000_000 }
+
+    // MARK: - Montaje
+
+    private func setUpIfNeeded() -> Bool {
+        if rig != nil { return true }
+        guard let pipeline = pipelineProvider() else { return false }
+        let ring = pipeline.ring
+        do {
+            let (modelo, fuente) = try Self.loadRig(width: ring.width, height: ring.height, env: env)
+            guard let ctx = MetalContext() else { return false }
+            rig = modelo
+            rigSource = fuente
+            context = ctx
+
+            // Esclavo: su parte.
+            let enc = try VideoEncoder(
+                width: Self.programWidth, height: Self.programHeight,
+                bitrateBps: Int(number("RIG_SPLIT_PART_MBPS", 12) * 1_000_000), viewId: side == .left ? 0 : 1
+            )
+            let s = SlavePartStage(
+                side: side,
+                resolver: SlaveViewResolver(frameDurationMs: 1000 / Self.fps),
+                renderer: try MetalPartRenderer(context: ctx, rig: modelo, side: side,
+                                                width: Self.programWidth, height: Self.programHeight),
+                encoder: enc
+            )
+            s.onPart = { [weak self] p in self?.session.send(part: p) }
+            s.onNoPart = { [weak self] n in self?.session.send(noPart: n) }
+            slaveEncoder = enc
+            slave = s
+            pipeline.onFrame = { [weak self] meta in self?.slaveFrame(meta, ring: ring) }
+
+            // Maestro: el programa.
+            var pool: CVPixelBufferPool?
+            CVPixelBufferPoolCreate(nil, nil, [
+                kCVPixelBufferPixelFormatTypeKey: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+                kCVPixelBufferWidthKey: Self.programWidth, kCVPixelBufferHeightKey: Self.programHeight,
+                kCVPixelBufferIOSurfacePropertiesKey: [:] as CFDictionary,
+                kCVPixelBufferMetalCompatibilityKey: true,
+            ] as CFDictionary, &pool)
+            guard let pool else { return false }
+            let m = MasterProgramStage(
+                masterSide: side, frameDurationMs: 1000 / Self.fps,
+                renderer: try MetalPartRenderer(context: ctx, rig: modelo, side: side,
+                                                width: Self.programWidth, height: Self.programHeight),
+                composer: try MetalProgramComposer(context: ctx, masterSide: side,
+                                                   width: Self.programWidth, height: Self.programHeight),
+                masterPool: pool
+            )
+            m.masterFrame = { ms in
+                guard let lease = ring.acquire(nearest: ms, maxDistanceMs: Self.frameMatchMs) else { return nil }
+                return (lease.buffer, { ring.release(lease) })
+            }
+            m.onIdrRequest = { [weak self] seq in self?.session.requestIdr(partSeq: seq) }
+            m.onProgram = { [weak self] buffer, t in self?.program(buffer, t: t) }
+            master = m
+            programEncoder = try VideoEncoder(
+                width: Self.programWidth, height: Self.programHeight,
+                bitrateBps: Self.programBitrateBps, viewId: 0
+            )
+            return true
+        } catch {
+            NSLog("[split] no se pudo montar: %@", "\(error)")
+            return false
+        }
+    }
+
+    /// Documents/rig.json si lo hay (la calibración); si no, un soporte nominal.
+    static func loadRig(width: Int, height: Int, env: [String: String]) throws -> (RigModel, String) {
+        let docs = try FileManager.default.url(for: .documentDirectory, in: .userDomainMask,
+                                               appropriateFor: nil, create: true)
+        let fichero = docs.appendingPathComponent("rig.json")
+        if FileManager.default.fileExists(atPath: fichero.path) {
+            return (try RigModel.load(from: fichero), "rig.json")
+        }
+        let grados = { (k: String, d: Double) in (env[k].flatMap(Double.init) ?? d) * .pi / 180 }
+        let intr = try CameraIntrinsics.fromHfov(width: width, height: height,
+                                                 hfovRad: grados("RIG_NOMINAL_HFOV_DEG", 106))
+        let yaw = grados("RIG_NOMINAL_YAW_DEG", 35)
+        let pitch = grados("RIG_NOMINAL_PITCH_DEG", -8)
+        return (RigModel(
+            left: RigCamera(intrinsics: intr, pose: CameraPose(yawRad: -yaw, pitchRad: pitch)),
+            right: RigCamera(intrinsics: intr, pose: CameraPose(yawRad: yaw, pitchRad: pitch))
+        ), "nominal")
+    }
+
+    // MARK: - Esclavo
+
+    private func slaveFrame(_ meta: RigPipeline.FrameMeta, ring: FrameRing) {
+        guard !session.isMaster, case .connected = session.state, let slave else { return }
+        let ms = meta.rigNs / 1_000_000
+        guard let lease = ring.acquire(nearest: ms, maxDistanceMs: 1) else { return }
+        slave.process(frame: lease.buffer, frameRigMs: ms, ptsNs: meta.ptsNs)
+        ring.release(lease)
+    }
+
+    // MARK: - Maestro
+
+    /// El barrido de guion: un seno en yaw que cruza la costura, a pitch y HFOV fijos.
+    private func scriptedView(_ t: Int64) -> ViewCommand {
+        guard let rig else { fatalError("sin soporte") }
+        let a = number("RIG_SPLIT_SWEEP_DEG", 30) * .pi / 180
+        let periodo = number("RIG_SPLIT_SWEEP_S", 20)
+        let hfov = number("RIG_SPLIT_HFOV_DEG", 60) * .pi / 180
+        let costura = (rig.camera(.left).pose.yawRad + rig.camera(.right).pose.yawRad) / 2
+        let pitch = (rig.camera(.left).pose.pitchRad + rig.camera(.right).pose.pitchRad) / 2
+        let yaw = costura + a * sin(2 * .pi * Double(t) / 1000 / periodo)
+        let lados: [CameraSide]
+        if let v = try? RectilinearView(yawRad: yaw, pitchRad: pitch, hfovRad: hfov,
+                                        width: Self.programWidth, height: Self.programHeight) {
+            lados = sidesFor(rig: rig, view: v)
+        } else {
+            lados = [.left, .right]
+        }
+        return ViewWire.quantized(ViewCommand(
+            targetRigMs: t, viewId: UInt32(truncatingIfNeeded: t / 33), yawRad: yaw, pitchRad: pitch,
+            hfovRad: hfov, sides: lados, seamYawRad: costura,
+            featherRad: RigConstants.panoramaFeatherRad, gains: .unity
+        ))
+    }
+
+    private func tick() {
+        guard !finished else { return }
+        if Double(DispatchTime.now().uptimeNanoseconds - startNs) / 1e9 > durationS {
+            finish()
+            return
+        }
+        guard case .connected = session.state, session.isMaster, setUpIfNeeded(), let master else {
+            _ = setUpIfNeeded()
+            return
+        }
+        let ahora = DispatchTime.now().uptimeNanoseconds
+        if let previo = lastTickNs { tickIntervalsMs.append(Double(ahora - previo) / 1e6) }
+        lastTickNs = ahora
+
+        let now = Self.nowMs()
+        let paso = 1000 / Self.fps
+        // La rejilla del programa: instantes k · 33,3 ms.
+        let rejilla = { (ms: Int64) in Int64((Double(ms) / paso).rounded(.down) * paso) }
+        history.append(scriptedView(rejilla(now + Self.viewLeadMs)))
+        session.send(views: history.message())
+
+        let t = rejilla(now - LinkConstants.partMaxWaitMs)
+        guard t != lastProgramT else { return }
+        lastProgramT = t
+        let inicio = DispatchTime.now().uptimeNanoseconds
+        if master.tick(programRigMs: t, nowRigMs: now, masterView: scriptedView(t)) != nil {
+            composeLatencyMs.append(Double(now - t) + Double(DispatchTime.now().uptimeNanoseconds - inicio) / 1e6)
+        }
+        drainProgram()
+    }
+
+    private func program(_ buffer: CVPixelBuffer, t: Int64) {
+        programEncoder?.encode(buffer, ptsNs: t * 1_000_000, rigMs: UInt64(max(0, t)))
+        programFrames += 1
+    }
+
+    private func drainProgram() {
+        guard let enc = programEncoder else { return }
+        if tsFile == nil {
+            let base = try? FileManager.default.url(for: .documentDirectory, in: .userDomainMask,
+                                                    appropriateFor: nil, create: true)
+                .appendingPathComponent("bench", isDirectory: true)
+            if let base {
+                try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+                let url = base.appendingPathComponent("program-split-\(Int(Date().timeIntervalSince1970)).ts")
+                FileManager.default.createFile(atPath: url.path, contents: nil)
+                tsURL = url
+                tsFile = try? FileHandle(forWritingTo: url)
+            }
+        }
+        while let f = enc.pop() {
+            var avcc = f.data
+            if f.isKeyframe, let fd = f.formatDescription {
+                avcc = H264ParameterSets.avccNals(from: fd) + avcc
+            }
+            let pts = f.ptsNs * 90 / 1_000_000
+            tsFile?.write(muxer.muxVideo(avcc: avcc, parameterSets: [], isKeyframe: f.isKeyframe,
+                                         pts90k: pts, dts90k: pts))
+        }
+    }
+
+    // MARK: - Informe
+
+    private func finish() {
+        guard !finished else { return }
+        finished = true
+        timer?.cancel()
+        programEncoder?.flush()
+        drainProgram()
+        try? tsFile?.close()
+        guard session.isMaster || slave != nil else { return }
+        func pct(_ xs: [Double], _ q: Double) -> Double {
+            let o = xs.sorted()
+            return o.isEmpty ? 0 : o[min(o.count - 1, Int(q * Double(o.count)))]
+        }
+        let ms = master?.stats ?? .init()
+        let ss = slave?.stats ?? .init()
+        let link = master?.linkStats(nowRigMs: Self.nowMs())
+        let fpsTicks = tickIntervalsMs.map { 1000 / max($0, 0.001) }
+        let informe: [String: Any] = [
+            "name": "program-split",
+            "device": BenchRunner.machine(),
+            "side": side.rawValue,
+            "role": session.isMaster ? "master" : "slave",
+            "rig": rigSource,
+            "duration_s": durationS,
+            "ts": tsURL?.lastPathComponent ?? "",
+            "program_frames": programFrames,
+            "two_lens_frames": ms.twoLensFrames,
+            "one_lens_frames": ms.oneLensFrames,
+            "parts_received": ms.partsReceived,
+            "parts_decoded": ms.partsDecoded,
+            "parts_lost": link?.lost ?? 0,
+            "parts_mbps": link?.mbps ?? 0,
+            "parts_jitter_ms": link?.jitterMs ?? 0,
+            "idr_requests": ms.idrRequests,
+            "without_master_frame": ms.withoutMasterFrame,
+            "compose_failures": ms.composeFailures,
+            "tick_fps_p5": pct(fpsTicks, 0.05),
+            "tick_fps_p50": pct(fpsTicks, 0.5),
+            "added_latency_ms_p50": pct(composeLatencyMs, 0.5),
+            "added_latency_ms_p95": pct(composeLatencyMs, 0.95),
+            "slave_parts": ss.parts,
+            "slave_no_parts": ss.noParts,
+            "slave_without_view": ss.withoutView,
+            "slave_render_failures": ss.renderFailures,
+            "slave_dropped": ss.dropped,
+            "slave_idr_requests": ss.idrRequests,
+        ]
+        guard let base = try? FileManager.default.url(for: .documentDirectory, in: .userDomainMask,
+                                                      appropriateFor: nil, create: true)
+            .appendingPathComponent("bench", isDirectory: true),
+            let json = try? JSONSerialization.data(withJSONObject: informe, options: [.sortedKeys, .prettyPrinted])
+        else { return }
+        try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+        try? json.write(to: base.appendingPathComponent(
+            "program-split-\(side.rawValue)-\(Int(Date().timeIntervalSince1970)).json"))
+    }
 }

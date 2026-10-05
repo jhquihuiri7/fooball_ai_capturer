@@ -31,6 +31,8 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
 
     /// El enlace con el otro móvil del soporte. Se crea al preparar la cámara.
     private var link: PeerLinking?
+    /// El banco program-split, si se lanzó con RIG_SPLIT=1.
+    private var split: SplitBench?
 
     /// RIG_LINK_MULTIPEER=0 cambia al enlace nuevo sobre Network (IOS-12). El Multipeer
     /// de hoy sigue siendo el predeterminado hasta la aceptación de campo con hubs.
@@ -209,6 +211,14 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
                 }
             }
             link = nw
+            if SplitBench.enabled() {
+                let s = SplitBench(
+                    session: nw.session, side: role == .left ? .left : .right,
+                    pipeline: { [weak self] in self?.engine.rigPipeline }
+                )
+                s.start()
+                split = s
+            }
         }
         // El maestro contesta con los PTS de su propia cámara, ya en tiempo del soporte.
         link.recentPts = { [weak self] in self?.engine.recentFramePtsNs() ?? [] }
@@ -246,6 +256,8 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
     }
 
     func stopLink() throws {
+        split?.stop()
+        split = nil
         link?.stop()
         link = nil
         engine.rigClock = nil
