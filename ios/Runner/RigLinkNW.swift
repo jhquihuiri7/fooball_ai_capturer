@@ -683,6 +683,11 @@ final class SplitBench {
     private let history = ViewHistory()
     /// IOS-73: con RIG_SPLIT_DIRECTOR=1 dirige el director de verdad y no el barrido.
     private var director: DirectorService?
+    /// IOS-75: el registro N0 del maestro (Documents/n0/<partido>-<lado>.jsonl).
+    private var e0: E0Logger?
+    private var e0Ticks = 0
+    /// Una vista de cada 4 tics del programa: los 7,5 Hz del registro.
+    static let e0ViewEvery = 4
     // IOS-38: el igualado de color, medido cada `colorEveryMs`.
     private var overlap: OverlapMeans?
     private let matcher = ColorMatcher()
@@ -822,6 +827,18 @@ final class SplitBench {
             }
             m.onProgram = { [weak self] buffer, t in self?.program(buffer, t: t) }
             master = m
+            if let docs = try? FileManager.default.url(for: .documentDirectory, in: .userDomainMask,
+                                                       appropriateFor: nil, create: true) {
+                let id = "banco-\(Int(Date().timeIntervalSince1970))"
+                e0 = try? E0Logger(
+                    url: docs.appendingPathComponent("n0/\(id)-\(side.rawValue).jsonl"),
+                    header: .header(matchId: id, rigId: "banco",
+                                    // El dominio del reloj de host de este arranque (ADR 0023 §4).
+                                    clockDomain: "banco" + String(format: "%08x", UInt32.random(in: .min ... .max)),
+                                    appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0",
+                                    models: [], rigSha: nil, pitchSha: nil, bandSha: nil)
+                )
+            }
             programEncoder = try VideoEncoder(
                 width: Self.programWidth, height: Self.programHeight,
                 bitrateBps: Self.programBitrateBps, viewId: 0
@@ -947,6 +964,12 @@ final class SplitBench {
         lastProgramT = t
         let inicio = DispatchTime.now().uptimeNanoseconds
         let vistaPropia = history.view(at: t) ?? scriptedView(t)
+        e0Ticks += 1
+        if e0Ticks % Self.e0ViewEvery == 0 {
+            let grados = 180 / Double.pi
+            e0?.log(.view(rigMs: t, yawDeg: vistaPropia.yawRad * grados, pitchDeg: vistaPropia.pitchRad * grados,
+                          hfovDeg: vistaPropia.hfovRad * grados, shot: director == nil ? "script" : "director"))
+        }
         if master.tick(programRigMs: t, nowRigMs: now, masterView: vistaPropia) != nil {
             composeLatencyMs.append(Double(now - t) + Double(DispatchTime.now().uptimeNanoseconds - inicio) / 1e6)
         }
@@ -992,6 +1015,7 @@ final class SplitBench {
         timer?.cancel()
         programEncoder?.flush()
         drainProgram()
+        e0?.flush()
         try? tsFile?.close()
         guard session.isMaster || slave != nil else { return }
         func pct(_ xs: [Double], _ q: Double) -> Double {
@@ -1021,6 +1045,8 @@ final class SplitBench {
             "idr_requests": ms.idrRequests,
             "without_master_frame": ms.withoutMasterFrame,
             "compose_failures": ms.composeFailures,
+            "e0_written": e0?.written ?? 0,
+            "e0_dropped": e0?.dropped ?? 0,
             "overlay_uploads": OverlayHub.shared?.uploads ?? 0,
             "overlay_last_upload_ms": OverlayHub.shared?.lastUploadMs ?? 0,
             "color_observations": colorObservations,

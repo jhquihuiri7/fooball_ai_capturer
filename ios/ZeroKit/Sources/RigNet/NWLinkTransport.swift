@@ -40,6 +40,11 @@ public final class NWLinkTransport: LinkTransport {
     /// caché de Bonjour (un proceso anterior) y por UDP nada avisa de que no hay nadie.
     static let mediaWatchdogS: Double = 3
 
+    /// Segundos que se espera a que el control quede listo antes de darlo por perdido y
+    /// probar otro anuncio: una conexión a un anuncio muerto se queda en `.waiting` sin
+    /// fallar nunca.
+    static let controlConnectTimeoutS: Double = 4
+
     /// Espera creciente de la reconexión, con el tope de 2 s de la decisión 3.
     static let reconnectDelaysS: [Double] = [0.25, 0.5, 1.0, 2.0]
 
@@ -74,6 +79,8 @@ public final class NWLinkTransport: LinkTransport {
     private var mediaBrowser: NWBrowser?
     private var mediaConnection: NWConnection?
     // El lado que busca: los anuncios de medios vistos, el que se prueba y desde cuándo.
+    private var controlCandidates: [NWEndpoint] = []
+    private var controlCandidateIndex = 0
     private var mediaCandidates: [NWEndpoint] = []
     private var mediaCandidateIndex = 0
     private var mediaOpenedAt: Date?
@@ -286,7 +293,10 @@ public final class NWLinkTransport: LinkTransport {
             using: parameters()
         )
         browser.browseResultsChangedHandler = { [weak self] results, cambios in
-            guard let self, self.state != .connected else { return }
+            guard let self else { return }
+            // En un orden fijo (los resultados son un conjunto): rotar tiene que avanzar.
+            self.controlCandidates = results.map(\.endpoint).sorted { "\($0)" < "\($1)" }
+            guard self.state != .connected else { return }
             // Un anuncio que acaba de aparecer manda sobre la conexión a medias: al
             // arrancar, la caché de Bonjour trae el anuncio del izquierdo de antes, ya
             // muerto, y esperar a que esa conexión falle (con su espera creciente)
@@ -298,8 +308,10 @@ public final class NWLinkTransport: LinkTransport {
             if let nuevo {
                 self.connection?.cancel()
                 self.openConnection(to: nuevo)
-            } else if self.connection == nil, let primero = results.first {
-                self.openConnection(to: primero.endpoint)
+            } else if self.connection == nil, !self.controlCandidates.isEmpty {
+                // Tras una caída, el siguiente anuncio: el que falló puede ser el muerto.
+                let i = self.controlCandidateIndex % self.controlCandidates.count
+                self.openConnection(to: self.controlCandidates[i])
             }
         }
         browser.stateUpdateHandler = { [weak self] estado in
@@ -317,6 +329,11 @@ public final class NWLinkTransport: LinkTransport {
         state = .connecting
         let conexion = NWConnection(to: endpoint, using: parameters())
         adopt(connection: conexion)
+        queue.asyncAfter(deadline: .now() + Self.controlConnectTimeoutS) { [weak self, weak conexion] in
+            guard let self, let conexion, conexion === self.connection, self.state != .connected else { return }
+            self.log.info("control sin respuesta en \(Self.controlConnectTimeoutS) s: otro anuncio")
+            self.dropConnection()
+        }
     }
 
     private func adopt(connection nueva: NWConnection) {
@@ -333,6 +350,11 @@ public final class NWLinkTransport: LinkTransport {
                 self.receive(on: nueva)
             case let .failed(error):
                 self.log.info("control caído: \(String(describing: error))")
+                self.dropConnection()
+            case let .waiting(error):
+                // Rechazada o sin ruta: Network reintentaría el mismo anuncio para
+                // siempre. Se suelta y se prueba otro.
+                self.log.info("control en espera: \(String(describing: error))")
                 self.dropConnection()
             case .cancelled:
                 self.dropConnection()
@@ -354,6 +376,7 @@ public final class NWLinkTransport: LinkTransport {
             state = .listening
         case .browse, .connect:
             state = .connecting
+            controlCandidateIndex += 1
             scheduleReopen()
         }
     }

@@ -650,6 +650,35 @@ hubs), ya con esta expectativa.
 
 ---
 
+## 2026-10-04 · IOS-75 — registro N0 (JSONL) en el dispositivo · 🚧 faltan las detecciones (modelo) y la pasada de 10 min
+
+**Hecho**
+- `RigCore/Runtime/MatchLogRecord.swift`: los registros de match-log-v1 (EV-02) —
+  cabecera, det, view, mark, score, clock, audio y clip— escritos byte a byte como
+  `json.dumps(sort_keys=True, ensure_ascii=False)` de Python (PyJSON: claves ordenadas,
+  ", " y ": ", el repr más corto de los decimales). **Los 9 tipos reproducen las líneas
+  de match_log_sample.jsonl.** El esquema v1 es estricto: la vista lleva yaw, pitch,
+  hfov y plano; la escalera y el enlace que pedía la tarjeta no están en la v1 y no se
+  escriben (irían con una v2 del esquema). `fused` y `ball` llegan con la fusión y el
+  balón.
+- `RigMedia/Obs/E0Logger.swift`: un JSONL por partido y móvil; cabecera una vez (al
+  reabrir no se repite), cola acotada a MATCH_LOG_QUEUE_MAX con vaciados cada
+  MATCH_LOG_FLUSH_LINES en una cola propia, descartes contados; rechaza un
+  `clock_domain` que el validador no aceptaría.
+- Banco program-split: el maestro escribe las vistas a 7,5 Hz en Documents/n0/.
+- Tests: E0RecordTests (la muestra, los decimales de Python), E0LoggerTests (cabecera,
+  orden, descartes, dominio de reloj).
+
+**Medido en el iPhone 17**: `read_match_log` de la referencia valida el N0 del banco:
+172 registros en ~25 s, 0 inválidos, sin truncar. Antes cazó un fallo real: el banco
+escribía `clock_domain: host-left`, que no cumple [a-z0-9]{8,32} (ADR 0023 §4).
+
+**Arreglo del enlace (IOS-11)**: el control tampoco conectaba a veces tras reiniciar la
+app: la conexión TCP al anuncio viejo se quedaba en `.waiting` (rechazada) y Network la
+reintentaba para siempre. Ahora `.waiting` cuenta como caída, hay un plazo de 4 s para
+quedar listo y al reintentar se prueba el siguiente anuncio. **6 de 6 pasadas seguidas
+conectan, matando la app vieja cada vez (antes fallaban 1 de cada 3).**
+
 ## 2026-10-04 · IOS-73 — DirectorService, y el canal de medios que se quedaba mudo · 🚧 falta con dos iPhone y el modelo
 
 **Hecho**
