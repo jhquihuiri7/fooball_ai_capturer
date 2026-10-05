@@ -221,6 +221,40 @@ const List<String> matchFormations = <String>[
   '4-4-2', '4-3-3', '4-2-3-1', '4-1-4-1', '3-5-2', '3-4-3', '5-3-2', '5-4-1',
 ];
 
+// --------------------------------------------------------------------------- //
+// La API del mando servida por el maestro (IOS-62, ADR 0017/0022)
+// --------------------------------------------------------------------------- //
+
+/// Lo que espera `GET /api/v1/match?since=` si no cambia nada (`LONG_POLL_TIMEOUT_S`).
+const Duration apiLongPollTimeout = Duration(seconds: 25);
+
+/// Esperas largas a la vez (`MAX_LONG_POLLS`); la siguiente recibe un 503.
+const int apiMaxLongPolls = 8;
+
+/// Respuestas que recuerda la caché de `Idempotency-Key` (`IDEMPOTENCY_CACHE_SIZE`).
+const int apiIdempotencyCacheSize = 256;
+
+/// Cuánto vale una `Idempotency-Key` (`IDEMPOTENCY_TTL_S`): mucho más que la ventana de
+/// reintento de la app, y poco para que conteste por una orden de otro momento.
+const Duration apiIdempotencyTtl = Duration(minutes: 10);
+
+/// Lo más largo que se enseña del nombre de un mando (`MAX_DEVICE_NAME_CHARS`).
+const int apiMaxDeviceNameChars = 40;
+
+/// Mandos que se recuerdan (`MAX_CONTROL_DEVICES`).
+const int apiMaxControlDevices = 16;
+
+/// Cuánto sigue en la lista un mando desde su última petición (`CONTROL_DEVICE_RECENT_S`).
+const Duration apiControlDeviceRecent = Duration(seconds: 60);
+
+/// Lo que espera el maestro la respuesta del VPS a un `relay_command`
+/// (`COMMAND_TIMEOUT_S`, ADR 0022); si vence, 504.
+const Duration apiCommandTimeout = Duration(seconds: 5);
+
+/// Lo más grande que se lee de un cuerpo: una orden son unas decenas de bytes y una
+/// alineación ~1 KiB; con más es un error o un abuso.
+const int apiMaxBodyBytes = 64 * 1024;
+
 /// Las alineaciones del partido, junto al fichero del partido (`--lineups` del panel).
 const String lineupsFileName = 'lineups.json';
 

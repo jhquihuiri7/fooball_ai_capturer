@@ -8,6 +8,7 @@
 /// sistema a mitad de partido no lo mueve.
 library;
 
+import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
@@ -203,6 +204,11 @@ class MatchEngine {
   /// `clips/mark`; sin búfer de repetición no hay con qué cumplirla (404).
   void Function()? onClipMark;
 
+  final StreamController<void> _changes = StreamController<void>.broadcast(sync: true);
+
+  /// Un evento por cada subida de `rev`: despierta las esperas largas de la API.
+  Stream<void> get changes => _changes.stream;
+
   /// Aplica una orden por su ruta bajo `/api/v1/` y devuelve el partido como quedó, o
   /// lanza [OrderError] sin haber tocado nada.
   Map<String, Object?> apply(String name, Map<String, Object?> body) {
@@ -372,6 +378,7 @@ class MatchEngine {
   void _changed() {
     rev += 1;
     _save();
+    _changes.add(null);
   }
 
   /// Guarda el cronómetro si corre y toca; lo llama quien lleve el compás (1 Hz basta).

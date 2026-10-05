@@ -650,6 +650,33 @@ hubs), ya con esta expectativa.
 
 ---
 
+## 2026-10-04 · IOS-62 — API /api/v1 del mando servida por el maestro · 🚧 falta cablearla en la app y la prueba en la LAN
+
+**Hecho**
+- `lib/src/server/api_server.dart`: MasterApi, sin sockets (ApiRequest → ApiResponse,
+  para que IOS-65 atienda con lo mismo los `command` del túnel), y MasterApiServer, el
+  HttpServer de dart:io en masterApiPort. GET /api/v1/match con `since=<boot>:<rev>` y
+  espera larga ≤25 s (despierta con `MatchEngine.changes`), 8 esperas como mucho y 503
+  a la novena; los POST de ORDERS con Idempotency-Key; errores RFC 7807 (409 con el
+  partido y sus scopes); 415/400/404/413; X-Zero-Device para la lista de mandos (16, el
+  último minuto).
+- La puerta: Bearer con el token de mando (verificado con el secreto derivado del
+  partido; da `match` y `stream` como mucho, nunca `rig`, ADR 0017 enmienda §3) o con el
+  PIN del operador (los tres ámbitos), comparado en tiempo constante.
+- `stream/*` va al relé del VPS (ADR 0022): `relay` manda el `relay_command` y se espera
+  apiCommandTimeout (5 s, si vence 504); sin túnel, 503.
+- `lib/src/server/idempotency.dart`: porte de tools/idempotency.py (256 claves, 600 s,
+  el patrón de clave); guarda el Future, así que un reintento que llega mientras la
+  primera se aplica espera a esa respuesta.
+- Tests (13), de integración con PanelControl contra el servidor real: gol y el de otro
+  mando por la espera larga, 409 con el partido bueno, 403 sin `stream`, la misma clave
+  aplicada una vez, la espera larga despierta en ≤100 ms, 503 a la novena, 401/410,
+  `rig` que no se gana con token, 404/415/400, stream sin túnel 503 y 504 sin respuesta.
+
+**Queda fuera**: arrancar el servidor cuando el móvil pasa a maestro, el secreto
+derivado por Pigeon (S no sale de nativo), el PIN en el Keychain y el QR en pantalla
+(siguiente commit); la prueba con un tercer iPhone en la LAN.
+
 ## 2026-10-04 · IOS-61 — alineaciones en el maestro · ✅
 
 **Hecho**
