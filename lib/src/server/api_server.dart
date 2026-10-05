@@ -21,7 +21,9 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:football_ai_capture/src/constants.dart';
+import 'package:football_ai_capture/src/match_state.dart' show MatchTeam;
 import 'package:football_ai_capture/src/server/control_token.dart';
+import 'package:football_ai_capture/src/server/lineups.dart';
 import 'package:football_ai_capture/src/server/idempotency.dart';
 import 'package:football_ai_capture/src/server/match_engine.dart';
 
@@ -298,13 +300,19 @@ class MasterApi {
     'match/score',
     'match/clock',
     'match/lineup',
+    'match/roster',
     'clips/mark',
     'stream/start',
     'stream/stop',
   };
 
-  /// Emitir o parar es `stream`; lo demás, `match` (`order_scope`).
-  static String _scopeOf(String name) => name.startsWith('stream/') ? panelScopeStream : panelScopeMatch;
+  /// Emitir o parar es `stream`; las plantillas, `rig` (ADR 0017 enmienda §2: el QR
+  /// Mando no las edita); lo demás, `match` (`order_scope`).
+  static String _scopeOf(String name) => switch (name) {
+    'match/roster' => controlScopeRig,
+    _ when name.startsWith('stream/') => panelScopeStream,
+    _ => panelScopeMatch,
+  };
 
   Future<ApiResponse> _order(String name, ApiRequest request, Set<String> scopes) async {
     final String? clave = request.headers['idempotency-key'];
@@ -341,6 +349,9 @@ class MasterApi {
     if (name.startsWith('stream/')) {
       return _stream(name, ambitos);
     }
+    if (name == 'match/roster') {
+      return _roster(body, ambitos);
+    }
     try {
       final Map<String, Object?> partido = engine.apply(name, body);
       return ApiResponse.json(<String, Object?>{...partido, 'scopes': ambitos});
@@ -352,6 +363,24 @@ class MasterApi {
         actual == null ? null : <String, Object?>{...actual, 'scopes': ambitos},
       );
     }
+  }
+
+  /// `match/roster` {team, name, coach, formation, roster}: la plantilla tecleada, pegada
+  /// o en CSV, leída con las reglas de tools/lineup.py (IOS-87). El nombre pasa al
+  /// marcador.
+  ApiResponse _roster(Map<String, Object?> body, List<String> ambitos) {
+    final Object? equipo = body['team'];
+    final MatchTeam? lado = equipo == 'home' ? MatchTeam.home : (equipo == 'away' ? MatchTeam.away : null);
+    if (lado == null) {
+      return ApiResponse.problem(HttpStatus.badRequest, 'team tiene que ser home o away');
+    }
+    String texto(String k) => body[k] is String ? body[k]! as String : '';
+    try {
+      engine.saveLineup(lado, texto('name'), texto('formation'), texto('roster'), coach: texto('coach'));
+    } on LineupError catch (error) {
+      return ApiResponse.problem(HttpStatus.badRequest, error.message);
+    }
+    return ApiResponse.json(<String, Object?>{...engine.toJson(), 'scopes': ambitos});
   }
 
   /// `stream/*` desde la LAN: el relé está en el VPS (ADR 0022). El maestro no cambia

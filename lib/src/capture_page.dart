@@ -20,6 +20,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:football_ai_capture/src/capture_labels.dart';
 import 'package:football_ai_capture/src/capture_session.dart';
@@ -28,6 +29,7 @@ import 'package:football_ai_capture/src/generated/capture_api.g.dart';
 import 'package:football_ai_capture/src/generated/rig_api.g.dart';
 import 'package:football_ai_capture/src/graphics/rig_overlay_sink.dart';
 import 'package:football_ai_capture/src/mando_qr_sheet.dart';
+import 'package:football_ai_capture/src/match_state.dart' show matchStateKey;
 import 'package:football_ai_capture/src/server/master_host.dart';
 import 'package:football_ai_capture/src/theme/zero_colors.dart';
 import 'package:football_ai_capture/src/theme/zero_mark.dart';
@@ -104,6 +106,7 @@ class _CapturePageState extends State<CapturePage> {
               panelHtml: () => rootBundle.loadString(panelAssetPath),
               thumbnail: RigHostApi().thumbnail,
               rigStatus: () => _rigStatus(),
+              legacyMatch: () async => (await SharedPreferences.getInstance()).getString(matchStateKey),
             );
 
   /// Lo que enseña el panel local del estado del soporte (IOS-64).

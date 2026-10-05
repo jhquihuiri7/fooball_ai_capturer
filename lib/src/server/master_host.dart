@@ -17,6 +17,7 @@ import 'package:football_ai_capture/src/panel_pairing.dart';
 import 'package:football_ai_capture/src/server/api_server.dart';
 import 'package:football_ai_capture/src/server/control_token.dart';
 import 'package:football_ai_capture/src/server/match_engine.dart';
+import 'package:football_ai_capture/src/server/match_migration.dart';
 
 /// La carpeta Documents de la app en iOS: el temporal es `<contenedor>/tmp`, así que su
 /// padre es el contenedor. Sin depender de HOME ni de path_provider.
@@ -54,6 +55,7 @@ class MasterHost extends ChangeNotifier {
     this.panelHtml,
     this.thumbnail,
     this.rigStatus,
+    this.legacyMatch,
   }) : wallS = wallS ?? _wallClockS,
        _time = time ?? StopwatchTimeSource(),
        _monotonic = Stopwatch()..start();
@@ -92,6 +94,13 @@ class MasterHost extends ChangeNotifier {
   final Future<String> Function()? panelHtml;
   final Future<Uint8List> Function(String name)? thumbnail;
   final Map<String, Object?> Function()? rigStatus;
+
+  /// «zero.match» del MatchState local, si lo hay (IOS-87): se migra una vez, al abrir
+  /// el maestro sin partido guardado.
+  final Future<String?> Function()? legacyMatch;
+
+  /// Si al abrir se migró el partido local.
+  bool migrated = false;
   ProgramGraphics? _graphics;
 
   /// El gráfico del programa mientras se sirve (para fijar la competición, p. ej.).
@@ -124,6 +133,7 @@ class MasterHost extends ChangeNotifier {
     }
     await stepDown();
     try {
+      await _migrateIfNeeded(matchId);
       final MatchEngine engine = MatchEngine.open(
         file: File('${directory.path}/$matchFileName'),
         time: _time,
@@ -153,6 +163,25 @@ class MasterHost extends ChangeNotifier {
       problem = 'no se pudo servir el mando: $error';
     }
     notifyListeners();
+  }
+
+  Future<void> _migrateIfNeeded(String? matchId) async {
+    final Future<String?> Function()? leer = legacyMatch;
+    if (leer == null || File('${directory.path}/$matchFileName').existsSync()) {
+      return;
+    }
+    final String? crudo = await leer();
+    if (crudo == null) {
+      return;
+    }
+    final MigrationResult? m = migrateLocalMatch(
+      crudo,
+      matchId: matchId ?? 'm_migrado_${wallS()}',
+      nowWallMs: wallS() * Duration.millisecondsPerSecond,
+    );
+    if (m != null) {
+      migrated = applyMigration(directory, m, matchFileName: matchFileName);
+    }
   }
 
   /// El marcador y la alineación del programa: con cada cambio y cada segundo.

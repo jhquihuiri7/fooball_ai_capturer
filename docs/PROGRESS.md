@@ -650,6 +650,32 @@ hubs), ya con esta expectativa.
 
 ---
 
+## 2026-10-04 · IOS-87 — un solo partido en el maestro: migración y plantillas · 🚧 falta el MasterBoard de la pantalla
+
+**Hecho**
+- `lib/src/server/match_migration.dart`: la migración única de «zero.match» al partido
+  del maestro: marcador y nombres; el cronómetro parado (lo acumulado más lo que corría
+  por la hora de pared que guardaba el MatchState local, con un tope de 3 h) y, si
+  corría, con `clock_restored` (dominio `migrado0`); las plantillas Player{número,
+  nombre, puesto} a la lista de tools/lineup.py: el once en el orden de la formación
+  local (portero y líneas de atrás adelante, Formation.lineUp) y el resto de suplentes.
+  Una plantilla que no cumple las reglas no tumba la migración. Solo si el maestro aún
+  no tiene partido; MasterHost la lanza al abrir (`legacyMatch` lee la clave).
+- **Decisión**: el MatchState local se queda para el móvil que lleva el marcador sin
+  soporte; la migración solo lo lee.
+- `POST /api/v1/match/roster` {team, name, coach, formation, roster} con el ámbito `rig`
+  (el QR Mando no edita plantillas, ADR 0017 enmienda §2), con parse_roster (texto o
+  CSV); el nombre pasa al marcador. `MatchEngine.importLineups` y `readPodLineups`: el
+  alineaciones.json del pod (`--lineups`) se importa tal cual (mismo formato).
+- Tests (5): 2-1 en el 44:00 con dos plantillas de 14 → abre con ese marcador, el reloj
+  parado en 44:00, el portero primero y 3 suplentes; un reloj en marcha migra parado con
+  lo que corrió y clock_restored; basura no migra; MasterHost migra al abrir; roster con
+  token → 403, con PIN → 200 (CSV, nombre al marcador, DT), una lista corta → 400, y el
+  importador del pod.
+
+**Queda fuera**: el MasterBoard (MatchBoard sobre el motor en el mismo proceso) para la
+pantalla del maestro.
+
 ## 2026-10-04 · IOS-75 — registro N0 (JSONL) en el dispositivo · 🚧 faltan las detecciones (modelo) y la pasada de 10 min
 
 **Hecho**

@@ -394,6 +394,20 @@ class MatchEngine {
     return equipo;
   }
 
+  /// Sustituye las plantillas por las importadas (el alineaciones.json del pod) y pasa
+  /// sus nombres al marcador. [LineupError] si no se pueden guardar.
+  void importLineups(Map<MatchTeam, Team> teams) {
+    for (final MapEntry<MatchTeam, Team> e in teams.entries) {
+      lineups.set(e.key, e.value);
+      if (e.key == MatchTeam.home) {
+        home = e.value.name;
+      } else {
+        away = e.value.name;
+      }
+    }
+    _changed();
+  }
+
   void _changed() {
     rev += 1;
     _save();
