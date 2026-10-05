@@ -735,6 +735,8 @@ final class SplitBench {
     private var adOverridesDone: [[String: Any]] = []
     /// La huella del proceso una vez por minuto, en MB: que no crezca (IOS-47/48).
     private var footprintMb: [Double] = []
+    /// IOS-64: la CPU del proceso al arrancar el banco, para su coste medio en el informe.
+    private let cpuStartS = SplitBench.processCpuSeconds()
     private var cameraOnDone = false
     private var finished = false
 
@@ -1079,6 +1081,14 @@ final class SplitBench {
     private static let footprintEveryS = 60.0
 
     /// `phys_footprint` del proceso, lo que mira jetsam, en MB.
+    /// Segundos de CPU del proceso (usuario + sistema, todos los hilos), de getrusage.
+    static func processCpuSeconds() -> Double {
+        var uso = rusage()
+        getrusage(RUSAGE_SELF, &uso)
+        func s(_ t: timeval) -> Double { Double(t.tv_sec) + Double(t.tv_usec) / 1e6 }
+        return s(uso.ru_utime) + s(uso.ru_stime)
+    }
+
     static func footprintMb() -> Double {
         var info = task_vm_info_data_t()
         var n = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
@@ -1198,6 +1208,11 @@ final class SplitBench {
             "ad_bytes": AdHub.store?.usedBytes ?? 0,
             "ad_budget_bytes": AdHub.store?.budgetBytes ?? 0,
             "footprint_mb": footprintMb,
+            // El coste medio de la app entera durante el banco, en % de UN núcleo
+            // (100 = un núcleo lleno; el iPhone 17 tiene 6).
+            "cpu_pct_one_core": 100 * (Self.processCpuSeconds() - cpuStartS)
+                / max(1e-3, Double(DispatchTime.now().uptimeNanoseconds - startNs) / 1e9),
+            "cpu_cores": ProcessInfo.processInfo.activeProcessorCount,
             "ad_overrides": adOverridesDone,
             "ad_playlist": AdHub.rotation.map { r -> [String: Any] in
                 let (desde, lista) = r.started

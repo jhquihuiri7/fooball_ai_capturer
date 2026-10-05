@@ -12,6 +12,22 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-05 · IOS-64 — el coste de CPU del panel local, medido · ✅
+
+El informe del banco gana `cpu_pct_one_core`: los segundos de CPU del proceso entero
+(getrusage, usuario + sistema, todos los hilos) entre el tiempo de pared, en % de un
+núcleo. Dos pasadas de 120 s en el iPhone 17 como maestro, solo:
+
+| Pasada | CPU de la app | Fotogramas | tic p5 |
+|---|---|---|---|
+| Sin panel | 17,1 % de un núcleo | 3599 | 29,64 |
+| Panel a 1 Hz desde el Mac (miniaturas izquierda y programa, y estado: 304 peticiones, 2 fallos al arrancar) | 19,1 % de un núcleo | 3599 | 29,56 |
+
+El panel cuesta ~2,1 % de un núcleo, que con 6 núcleos son un **0,35 % de la CPU del
+maestro** (objetivo ≤2 % ✅). Antes ya estaban la página en 26 ms y las miniaturas en
+22-36 ms, con la del derecho llegando por el enlace. Es una sola pasada por caso, así que
+el ruido entre pasadas es del orden de la diferencia; el orden de magnitud está claro.
+
 ## 2026-10-05 · IOS-75 — los 10 min del N0 validados · 🚧 faltan las detecciones (modelo)
 
 El N0 del maestro en la pasada split de 10 min con los dos iPhone
