@@ -146,7 +146,7 @@ class _MandoPageState extends State<MandoPage> {
   Widget? _banner(PanelBoard? board) {
     switch (_control.link) {
       case PanelLink.ended:
-        return _Banner(
+        return MatchBanner(
           text:
               'Esta transmisión terminó. Escanea el QR «Mando» del partido nuevo.',
           danger: true,
@@ -154,7 +154,7 @@ class _MandoPageState extends State<MandoPage> {
           onAction: _rescan,
         );
       case PanelLink.unauthorized:
-        return _Banner(
+        return MatchBanner(
           text:
               'El panel ya no acepta este QR. Escanea el de la tarjeta «Mando».',
           danger: true,
@@ -163,7 +163,7 @@ class _MandoPageState extends State<MandoPage> {
         );
       case PanelLink.offline:
         final int seconds = _control.silence.inSeconds;
-        return _Banner(
+        return MatchBanner(
           text: board == null
               ? 'El panel no contesta ($seconds s). Se sigue intentando.'
               : 'Sin panel desde hace $seconds s: esto es lo último que dijo.',
@@ -171,7 +171,7 @@ class _MandoPageState extends State<MandoPage> {
         );
       case PanelLink.connecting || PanelLink.online:
         final String? message = board?.message;
-        return message == null ? null : _Banner(text: message);
+        return message == null ? null : MatchBanner(text: message);
     }
   }
 }
@@ -215,9 +215,10 @@ class _Waiting extends StatelessWidget {
   }
 }
 
-class _Banner extends StatelessWidget {
-  const _Banner({
+class MatchBanner extends StatelessWidget {
+  const MatchBanner({
     required this.text,
+    super.key,
     this.danger = false,
     this.action,
     this.onAction,

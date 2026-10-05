@@ -12,6 +12,26 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-04 · IOS-87 — un solo partido en el maestro: el MasterBoard · ✅
+
+**Hecho** (cierra lo que quedó fuera en la entrada 🚧 de abajo)
+- `lib/src/master_board.dart`: MasterBoard implementa MatchBoard sobre el MatchEngine
+  del mismo proceso. Cada botón es la misma orden que la API del mando (`apply` con su
+  `expect`), sin red ni token; lo que el motor rechaza queda en `message` y la pantalla
+  lo enseña con `MatchBanner` (el aviso del mando, ahora público). La alineación se ve
+  con el puesto por línea (`lineupSlots`: POR, DEF, MED, DEL), se recoloca y sale al aire.
+- CapturePage avisa de su MasterHost (`onMasterHost`) y ZeroShell enseña el MasterBoard
+  mientras el motor exista; si el móvil deja de dirigir, vuelve el MatchState local (que
+  queda para el móvil sin soporte, como se decidió).
+- Tests (3): goles, reloj y marcador como órdenes del motor, y un gol de un mando se ve
+  aquí; los rechazos (sin alineación, sin túnel) con sus palabras; la alineación
+  guardada, recolocada a 4-3-3, al aire y fuera.
+
+**Medido en el iPhone 17, solo**: con el rol al arrancar (IOS-84), el maestro sirve el
+partido sin esperar al esclavo: panel 200 en 125 ms y `/api/v1/match` sin token 401.
+
+**Siguiente paso**: los bancos de dos iPhone, mañana.
+
 ## 2026-10-04 · IOS-57 — copias locales: la 4K con audio y la política de disco · ✅
 
 **Hecho** (cierra lo que quedó fuera en la entrada 🚧 de abajo)

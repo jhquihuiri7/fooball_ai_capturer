@@ -14,8 +14,12 @@ import 'package:flutter/material.dart';
 import 'package:football_ai_capture/src/capture_page.dart';
 import 'package:football_ai_capture/src/capture_session.dart';
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
+import 'package:football_ai_capture/src/mando_page.dart' show MatchBanner;
+import 'package:football_ai_capture/src/master_board.dart';
 import 'package:football_ai_capture/src/match_page.dart';
 import 'package:football_ai_capture/src/match_state.dart';
+import 'package:football_ai_capture/src/server/master_host.dart';
+import 'package:football_ai_capture/src/server/match_engine.dart';
 import 'package:football_ai_capture/src/theme/zero_colors.dart';
 import 'package:football_ai_capture/src/theme/zero_mark.dart';
 
@@ -59,9 +63,52 @@ class ZeroShell extends StatefulWidget {
 }
 
 class _ZeroShellState extends State<ZeroShell> {
+  Widget _matchPage() {
+    final MasterBoard? board = _board;
+    final int destinos = widget.serverHost.trim().isEmpty ? 0 : 1;
+    if (board == null) {
+      return MatchPage(match: _match, destinations: destinos);
+    }
+    return ListenableBuilder(
+      listenable: board,
+      builder: (BuildContext context, Widget? _) {
+        final String? aviso = board.message;
+        return MatchPage(
+          match: board,
+          destinations: destinos,
+          banner: aviso == null ? null : MatchBanner(text: aviso, danger: true),
+        );
+      },
+    );
+  }
+
   late final MatchState _match = widget.match ?? MatchState();
   bool _ownsMatch = false;
   int _index = 0;
+
+  /// IOS-87: mientras este móvil dirige, la pestaña Partido es la del partido del
+  /// maestro (el mismo que ven el panel local y los mandos). Si deja de dirigir, vuelve
+  /// el marcador local, que queda para el móvil sin soporte.
+  MasterHost? _host;
+  MasterBoard? _board;
+
+  void _onMasterHost(MasterHost host) {
+    _host?.removeListener(_hostChanged);
+    _host = host..addListener(_hostChanged);
+    _hostChanged();
+  }
+
+  void _hostChanged() {
+    final MatchEngine? engine = _host?.engine;
+    if (engine == _board?.engine) {
+      return;
+    }
+    _board?.dispose();
+    _board = engine == null ? null : MasterBoard(engine);
+    if (mounted) {
+      setState(() {});
+    }
+  }
 
   @override
   void initState() {
@@ -77,6 +124,8 @@ class _ZeroShellState extends State<ZeroShell> {
 
   @override
   void dispose() {
+    _host?.removeListener(_hostChanged);
+    _board?.dispose();
     if (_ownsMatch) {
       _match.dispose();
     }
@@ -97,8 +146,9 @@ class _ZeroShellState extends State<ZeroShell> {
             linkOnly: widget.linkOnly,
             autoRecordSeconds: widget.autoRecordSeconds,
             prefersMaster: widget.prefersMaster,
+            onMasterHost: _onMasterHost,
           ),
-          MatchPage(match: _match, destinations: widget.serverHost.trim().isEmpty ? 0 : 1),
+          _matchPage(),
         ],
       ),
       // La misma línea al 9 % que cierra la cabecera por abajo: sin ella, la barra se

@@ -56,10 +56,15 @@ class CapturePage extends StatefulWidget {
     this.linkOnly = false,
     this.autoRecordSeconds = 0,
     this.prefersMaster,
+    this.onMasterHost,
     super.key,
   });
 
   final CameraRole role;
+
+  /// Avisa del servidor del mando de este móvil, si lo hay: la pestaña Partido del
+  /// maestro enseña su partido (IOS-87).
+  final ValueChanged<MasterHost>? onMasterHost;
 
   /// Inyectable para los tests: sin esto habría que hablar con la cámara de verdad.
   final CaptureSession? session;
@@ -169,6 +174,11 @@ class _CapturePageState extends State<CapturePage> {
     // paso previo. En un microtask y no aquí mismo, porque `prepare` notifica nada más
     // empezar y eso sería un `setState` en mitad del primer build.
     unawaited(Future<void>.microtask(_session.prepare));
+    final MasterHost? host = _host;
+    if (host != null) {
+      // Fuera del build: el padre hace setState al saberlo.
+      unawaited(Future<void>.microtask(() => widget.onMasterHost?.call(host)));
+    }
     _refresh = Timer.periodic(statusRefreshInterval, (_) => unawaited(_session.refreshStatus()));
   }
 
