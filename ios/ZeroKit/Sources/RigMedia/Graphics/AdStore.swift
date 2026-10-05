@@ -223,6 +223,12 @@ public final class AdRotation {
         override = clip.map { AdOverride(ad: $0, startNs: (atRigMs - startRigMs) * 1_000_000, loops: loops) }
     }
 
+    /// Desde cuándo corre la lista y cuál es (para el informe del banco, IOS-48).
+    public var started: (rigMs: Int64, playlist: AdPlaylist) {
+        lock.lock(); defer { lock.unlock() }
+        return (startRigMs, playlist)
+    }
+
     /// La franja del fotograma del programa de instante `rigMs`, o nil sin anuncios.
     public func strip(atRigMs rigMs: Int64) -> (ComposeProgramKernel.Strip, AdCue)? {
         lock.lock()

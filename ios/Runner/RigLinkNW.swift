@@ -698,7 +698,14 @@ final class SplitBench {
     private var colorObservations = 0
     static let colorEveryMs: Int64 = 2000
     private var lastProgramT: Int64?
-    private let muxer = TsMuxer(audio: nil)
+    /// El micro del iPhone es mono: el PMT declara el AAC desde el primer paquete.
+    private static let micChannels = 1
+    private let muxer = TsMuxer(
+        audio: CaptureEngine.audioEnabled
+            ? TsMuxer.AudioConfig(sampleRate: AudioConstants.sampleRate, channels: micChannels) : nil
+    )
+    /// El primer instante de vídeo del .ts: el audio de antes no entra (IOS-54).
+    private var firstVideoT: Int64?
     private var tsFile: FileHandle?
     private var tsURL: URL?
     // IOS-57: la copia local del programa en .mov (con el audio del micro si lo hay).
@@ -707,6 +714,13 @@ final class SplitBench {
     /// Para y reanuda la cámara (IOS-84: RIG_SPLIT_CAM_OFF_S / RIG_SPLIT_CAM_ON_S).
     var cameraSwitch: ((Bool) -> Void)?
     private var cameraOffDone = false
+    /// IOS-48: el cue de la franja una vez por segundo y los overrides programados
+    /// (RIG_ADS_OVERRIDES="gol:2@30,gol:1@200": nombre, vueltas y segundo del banco).
+    private var adCues: [[Any]] = []
+    private var lastAdCueT: Int64?
+    private var adOverridesDone: [[String: Any]] = []
+    /// La huella del proceso una vez por minuto, en MB: que no crezca (IOS-47/48).
+    private var footprintMb: [Double] = []
     private var cameraOnDone = false
     private var finished = false
 
@@ -731,8 +745,31 @@ final class SplitBench {
 
     /// Una trama AAC del micro (con RIG_AUDIO=1): a la copia local del programa.
     func audio(_ trama: AacFrame) {
-        queue.async { [weak self] in try? self?.recorder?.append(audio: trama) }
+        queue.async { [weak self] in
+            guard let self else { return }
+            try? recorder?.append(audio: trama)
+            // IOS-54: el AAC también en el programa .ts, en el mismo eje que el vídeo
+            // (rigMs × 90). El primer fotograma sale del codificador después de su
+            // instante: hasta saberlo, las tramas esperan en una cola acotada (si se
+            // llena, se tira la más vieja), y entran desde media trama antes de él.
+            audioWaiting.append(trama)
+            if audioWaiting.count > Self.audioWaitSlots { audioWaiting.removeFirst() }
+            guard let primero = firstVideoT, let ts = tsFile else { return }
+            let mediaTramaMs = 500 * Double(AudioConstants.samplesPerFrame) / Double(AudioConstants.sampleRate)
+            for t in audioWaiting where t.rigMs >= Double(primero) - mediaTramaMs {
+                let crudo = t.adts.dropFirst(Adts.headerLength)
+                if let datos = try? muxer.muxAudio(aacRaw: Data(crudo), pts90k: Int64((t.rigMs * 90).rounded())) {
+                    ts.write(datos)
+                    tsAudioFrames += 1
+                }
+            }
+            audioWaiting.removeAll(keepingCapacity: true)
+        }
     }
+    /// Lo que espera el audio al primer fotograma: AudioConstants.encodedQueueSlots (~1,4 s).
+    private static let audioWaitSlots = AudioConstants.encodedQueueSlots
+    private var audioWaiting: [AacFrame] = []
+    private var tsAudioFrames = 0
 
     func start() {
         let t = DispatchSource.makeTimerSource(queue: queue)
@@ -970,6 +1007,10 @@ final class SplitBench {
             cameraOnDone = true
             cameraSwitch?(true)
         }
+        scheduledAdOverrides(transcurrido: transcurrido)
+        if transcurrido >= Double(footprintMb.count) * Self.footprintEveryS {
+            footprintMb.append(Self.footprintMb())
+        }
         if case .connected = session.state, setUpIfNeeded() {
             colorTick(now: Self.nowMs())
         }
@@ -1009,10 +1050,45 @@ final class SplitBench {
             e0?.log(.view(rigMs: t, yawDeg: vistaPropia.yawRad * grados, pitchDeg: vistaPropia.pitchRad * grados,
                           hfovDeg: vistaPropia.hfovRad * grados, shot: director == nil ? "script" : "director"))
         }
+        if t - (lastAdCueT ?? t - Self.adCueEveryMs) >= Self.adCueEveryMs, let (_, cue) = AdHub.rotation?.strip(atRigMs: t) {
+            lastAdCueT = t
+            adCues.append([t, cue.ad.name, cue.frame])
+        }
         if master.tick(programRigMs: t, nowRigMs: now, masterView: vistaPropia) != nil {
             composeLatencyMs.append(Double(now - t) + Double(DispatchTime.now().uptimeNanoseconds - inicio) / 1e6)
         }
         drainProgram()
+    }
+
+    private static let footprintEveryS = 60.0
+
+    /// `phys_footprint` del proceso, lo que mira jetsam, en MB.
+    static func footprintMb() -> Double {
+        var info = task_vm_info_data_t()
+        var n = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
+        let r = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(n)) { task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &n) }
+        }
+        return r == KERN_SUCCESS ? Double(info.phys_footprint) / 1_048_576 : -1
+    }
+
+    /// Cada cuánto se apunta el cue de la franja en el informe.
+    private static let adCueEveryMs: Int64 = 1000
+
+    private func scheduledAdOverrides(transcurrido: Double) {
+        guard let lista = env["RIG_ADS_OVERRIDES"], let store = AdHub.store, let rotation = AdHub.rotation else {
+            return
+        }
+        for (i, item) in lista.split(separator: ",").enumerated() where i >= adOverridesDone.count {
+            let partes = item.split(whereSeparator: { $0 == ":" || $0 == "@" }).map(String.init)
+            guard partes.count == 3, let vueltas = Int(partes[1]), let s = Double(partes[2]) else { return }
+            guard transcurrido >= s else { return }
+            let clip = store.clip(named: partes[0])
+            let ahora = AdHub.nowRigMs()
+            rotation.set(override: clip, loops: vueltas, atRigMs: ahora)
+            adOverridesDone.append(["name": partes[0], "loops": vueltas, "start_rig_ms": ahora,
+                                    "frames": clip?.frames ?? 0, "fps": clip?.fps ?? 0])
+        }
     }
 
     private func program(_ buffer: CVPixelBuffer, t: Int64) {
@@ -1045,6 +1121,7 @@ final class SplitBench {
                 avcc = H264ParameterSets.avccNals(from: fd) + avcc
             }
             let pts = f.ptsNs * 90 / 1_000_000
+            if firstVideoT == nil { firstVideoT = f.ptsNs / 1_000_000 }
             tsFile?.write(muxer.muxVideo(avcc: avcc, parameterSets: [], isKeyframe: f.isKeyframe,
                                          pts90k: pts, dts90k: pts))
         }
@@ -1092,11 +1169,23 @@ final class SplitBench {
             "compose_failures": ms.composeFailures,
             "mov_video_frames": recorder?.videoFrames ?? 0,
             "mov_audio_frames": recorder?.audioFrames ?? 0,
+            "ts_audio_frames": tsAudioFrames,
             "peer_states": peerStates,
             "program_sources": master?.sources.counts ?? [:],
             "e0_written": e0?.written ?? 0,
             "e0_dropped": e0?.dropped ?? 0,
             "overlay_uploads": OverlayHub.shared?.uploads ?? 0,
+            "ad_cues": adCues,
+            "ad_bytes": AdHub.store?.usedBytes ?? 0,
+            "ad_budget_bytes": AdHub.store?.budgetBytes ?? 0,
+            "footprint_mb": footprintMb,
+            "ad_overrides": adOverridesDone,
+            "ad_playlist": AdHub.rotation.map { r -> [String: Any] in
+                let (desde, lista) = r.started
+                return ["start_rig_ms": desde, "slots": lista.slots.map {
+                    ["name": $0.ad.name, "frames": $0.ad.frames, "fps": $0.ad.fps, "loops": $0.loops]
+                }]
+            } ?? [:],
             "overlay_last_upload_ms": OverlayHub.shared?.lastUploadMs ?? 0,
             "color_observations": colorObservations,
             "color_gains_left": matcher.gains.left,

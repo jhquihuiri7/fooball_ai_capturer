@@ -12,6 +12,39 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-04 · IOS-47 e IOS-48 — la pasada de 10 min del gráfico y la franja · ✅ · IOS-54 sigue 🚧
+
+**Hecho**
+- Banco program-split: el cue de la franja una vez por segundo (`ad_cues`), la lista y
+  su arranque (`ad_playlist`, de `AdRotation.started`), overrides programados con
+  RIG_ADS_OVERRIDES="gol:2@60,…" (`ad_overrides`), la memoria de la franja
+  (`ad_bytes`) y la huella del proceso cada minuto (`footprint_mb`).
+- IOS-54: el AAC del micro entra también en el programa .ts del banco (el PMT lo declara
+  si RIG_AUDIO=1), en el eje rigMs × 90 del vídeo; hasta conocer el primer fotograma, las
+  tramas esperan en una cola acotada de 64.
+- Comparación de los cues con la referencia: un guion de banco recalcula cada cue con
+  `tools/ad_strip.ad_at` (football-ai) desde la lista y los overrides del informe.
+
+**Medido en el iPhone 17, solo, 10 min** (reloj del partido en marcha, RIG_AUDIO=1, 3
+anuncios de prueba y 3 overrides):
+- programa: 17 990 fotogramas, 0 fallos de composición, tic p5 29,47 / p50 30,0 fps;
+- marcador: 601 subidas (una por segundo), la última de 0,012 ms (objetivo ≤1 ms); la
+  huella se queda en ~490 MB del minuto 1 al 10 (sin crecer: no hay reservas por
+  fotograma);
+- franja: 600 cues, **0 distintos de la referencia de Python**, 10 de ellos en override;
+  57 MB de 192 MB de presupuesto;
+- micro: 0 huecos y 0 fallos en ~54 min seguidos (siguió tras el banco).
+
+**Medido, 30 s con el AAC en el .ts**: 899 fotogramas y 1407 tramas (30,0 s frente a
+29,97 s: no derivan); ffprobe sin errores y PTS monótonos. El audio empieza 66 ms
+después del primer fotograma del programa (el micro arranca después que el
+compositor), así que `ts_validate.sh` lo marca por su regla de arranque <20 ms.
+
+**Fuera (IOS-54)**: el desfase A/V real (±20 ms) necesita una palmada delante de la
+cámara, con Alexander; y la interrupción audioDeviceInUseByAnotherClient.
+
+**Siguiente paso**: los bancos de dos iPhone, mañana.
+
 ## 2026-10-04 · IOS-87 — un solo partido en el maestro: el MasterBoard · ✅
 
 **Hecho** (cierra lo que quedó fuera en la entrada 🚧 de abajo)
