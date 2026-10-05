@@ -650,6 +650,24 @@ hubs), ya con esta expectativa.
 
 ---
 
+## 2026-10-04 · IOS-83 — elección de roles con terms (lógica pura) · ✅ en lo puro; la prueba con VPS va con IOS-85
+
+**Hecho**
+- `RigCore/Runtime/RoleElection.swift`: el esclavo se promueve (term + 1) solo con las
+  tres condiciones del ADR 0023 §8 —enlace caído ≥PROMOTE_AFTER_MS (2 s), `welcome` en su
+  túnel y el hub diciendo `master_status: lost` ≥MASTER_LOST_PROMOTE_MS (5 s)— o si lo
+  fuerza el operador; sin VPS no hay promoción automática. Quien ve un term mayor del
+  maestro (enlace) o recibe 4409 pasa a esclavo. `mayPublish`: el cercado del SRT (con el
+  enlace caído >LINK_FENCE_MS en un partido con esclavo, solo tras un `welcome`
+  posterior a la caída). Constantes nuevas en LinkConstants, con las del ADR.
+- Tests: RoleElectionTests (las tres condiciones una a una, el operador sin VPS, el
+  antiguo maestro que se degrada, el cercado) y **200 partidas de 10 min con particiones
+  al azar entre maestro, esclavo y hub: nunca dos publicadores con el mismo term, y si
+  hay dos, el hub se queda con el de term mayor** (más de 20 promociones de verdad).
+
+**Queda fuera**: guardar el term en disco antes de anunciarlo y el arranque del
+promovido (IOS-85, con VPS).
+
 ## 2026-10-04 · IOS-81 — latido, detección de caída y una lente · 🚧 falta SPK-06 con dos iPhone
 
 **Hecho**

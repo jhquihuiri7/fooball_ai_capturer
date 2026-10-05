@@ -35,6 +35,19 @@ public enum LinkConstants {
     /// (HEARTBEAT_LOSS_MS, objetivo hasta SPK-06). A la mitad pasa a «dudoso».
     public static let heartbeatLossMs: Int64 = 500
 
+    /// El enlace tiene que llevar caído esto para que el esclavo se promueva
+    /// (PROMOTE_AFTER_MS, objetivo hasta SPK-06).
+    public static let promoteAfterMs: Int64 = 2000
+
+    /// Y el hub tiene que decir `master_status: lost` desde hace esto
+    /// (MASTER_LOST_PROMOTE_MS, objetivo hasta SPK-06).
+    public static let masterLostPromoteMs: Int64 = 5000
+
+    /// Con el enlace caído más de esto, en un partido que tuvo esclavo, el maestro solo
+    /// reabre el SRT tras un `welcome` posterior a la caída (LINK_FENCE_MS; menor que
+    /// PROMOTE_AFTER_MS).
+    public static let linkFenceMs: Int64 = 1000
+
     /// Datagramas que el emisor suelta de golpe antes de esperar (IOS-52, ADR 0023 §5):
     /// un IDR de cientos de KB en ráfaga desbordaría el búfer del receptor. 16 × 1200 B
     /// son 19 KB por golpe.
