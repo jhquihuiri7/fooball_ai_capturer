@@ -28,8 +28,12 @@ public protocol ProgramComposing: AnyObject {
     ) throws
 }
 
-/// La composición con el kernel de IOS-41, sin gráfico ni franja (IOS-47/48 los ponen).
+/// La composición con el kernel de IOS-41, con el gráfico de Dart si lo hay (IOS-47); la
+/// franja llega con IOS-48.
 public final class MetalProgramComposer: ProgramComposing {
+    /// El gráfico que manda Dart (marcador, alineación, SIN SEÑAL).
+    public var overlay: OverlayStore?
+
     private let context: MetalContext
     private let kernel: ComposeProgramKernel
     private let masterSide: CameraSide
@@ -55,10 +59,12 @@ public final class MetalProgramComposer: ProgramComposing {
         guard let buffer = context.queue.makeCommandBuffer() else {
             throw ReprojectKernelError.pipeline("no hay command buffer")
         }
+        let grafico = overlay?.beginFrame()
+        defer { if grafico != nil { overlay?.endFrame() } }
         try kernel.encode(
             master: master, masterSide: masterSide, slave: slave, view: vista,
             seamYawRad: view.seamYawRad, featherRad: view.featherRad,
-            graphic: nil, strip: nil, destination: destination, commandBuffer: buffer
+            graphic: grafico, strip: nil, destination: destination, commandBuffer: buffer
         )
         buffer.commit()
         buffer.waitUntilCompleted()

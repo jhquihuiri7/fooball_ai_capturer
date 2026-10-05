@@ -108,6 +108,47 @@ class RigHostApi {
     ;
     return pigeonVar_replyValue! as String;
   }
+
+  /// Una capa del gráfico del programa (IOS-47): RGBA sin premultiplicar de
+  /// `width × height`, ya recortada a su caja con contenido, en (`x`, `y`) del programa.
+  /// `layer`: 0 marcador, 1 alineación, 2 SIN SEÑAL. Una `generation` que no sube se
+  /// ignora en nativo.
+  Future<void> setOverlay(Uint8List rgba, int width, int height, int x, int y, int layer, int generation) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.RigHostApi.setOverlay$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[rgba, width, height, x, y, layer, generation]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
+  /// Quita una capa del gráfico.
+  Future<void> clearOverlay(int layer) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.RigHostApi.clearOverlay$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[layer]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
 }
 
 abstract class RigFlutterApi {

@@ -650,6 +650,35 @@ hubs), ya con esta expectativa.
 
 ---
 
+## 2026-10-04 · IOS-47 — puente del gráfico a Metal · 🚧 falta el banco de 10 min
+
+**Hecho**
+- Pigeon rig_api: `setOverlay(rgba, width, height, x, y, layer, generation)` y
+  `clearOverlay(layer)`.
+- `RigMedia/Graphics/OverlayStore.swift`: las capas (marcador, alineación, SIN SEÑAL)
+  en CPU con su caja; un búfer RGBA a tamaño de programa preasignado con las capas
+  apiladas («over» sin premultiplicar), recompuesto solo en el rectángulo sucio; dos
+  texturas preasignadas: se sube a la de atrás lo sucio más lo que le faltaba y se
+  cambia de golpe. La composición toma la activa con `beginFrame`/`endFrame` y mientras
+  la lee nadie la escribe. Una generación vieja se ignora. Nada se reserva por fotograma.
+- MetalProgramComposer lee el gráfico del OverlayStore; el Runner tiene uno
+  (OverlayHub) que llena Dart y lee el banco program-split.
+- Dart: `overlay_bridge.dart` (recorte a la caja con contenido antes de cruzar Pigeon,
+  generación por capa, vacía = quitar), `program_graphics.dart` (del MatchEngine al
+  marcador y a la tarjeta de alineación al aire) y `rig_overlay_sink.dart`. MasterHost
+  lo arranca al dirigir: con cada cambio del partido y una vez por segundo.
+- Tests: OverlayStoreTests (2: apilado, generaciones, borrado, las dos texturas
+  coherentes; la textura en uso no se cambia hasta soltarla), overlay_bridge_test (2),
+  program_graphics_test (marcador por cambio y por segundo, la alineación al aire y
+  fuera).
+
+**Medido en el iPhone 17** (maestro con RIG_SPLIT, el Mac de esclavo): el marcador de
+Dart sale compuesto en el .ts del programa («LOCAL 0-0 VISITANTE», «CÁMARA IA AUTO» y
+la franja de patrocinio), 1135 fotogramas sin un fallo de composición.
+
+**Queda fuera**: las cifras de la aceptación (10 min, subida ≤1 ms) salen del informe
+del banco (`overlay_uploads`, `overlay_last_upload_ms`) en la pasada larga.
+
 ## 2026-10-04 · IOS-38 — igualado de color en el solape · 🚧 falta la prueba de +1/3 EV en dos iPhone
 
 **Hecho**

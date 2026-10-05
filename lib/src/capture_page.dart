@@ -24,6 +24,7 @@ import 'package:football_ai_capture/src/capture_labels.dart';
 import 'package:football_ai_capture/src/capture_session.dart';
 import 'package:football_ai_capture/src/constants.dart';
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
+import 'package:football_ai_capture/src/graphics/rig_overlay_sink.dart';
 import 'package:football_ai_capture/src/mando_qr_sheet.dart';
 import 'package:football_ai_capture/src/server/master_host.dart';
 import 'package:football_ai_capture/src/theme/zero_colors.dart';
@@ -97,6 +98,7 @@ class _CapturePageState extends State<CapturePage> {
               announceMatch: _api.setMatchId,
               peerAddress: _api.linkPeerAddress,
               operatorPin: _api.loadOperatorPin,
+              overlaySink: RigOverlaySink(),
             );
 
   late final CaptureSession _session =

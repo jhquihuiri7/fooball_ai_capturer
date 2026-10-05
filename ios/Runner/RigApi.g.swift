@@ -91,6 +91,13 @@ protocol RigHostApi {
   /// Es la prueba de una sola acción: `flutter run --dart-define=BENCH=<nombre>`
   /// arranca, corre y escribe, sin tocar la pantalla.
   func runBench(name: String, paramsJson: String) async throws -> String
+  /// Una capa del gráfico del programa (IOS-47): RGBA sin premultiplicar de
+  /// `width × height`, ya recortada a su caja con contenido, en (`x`, `y`) del programa.
+  /// `layer`: 0 marcador, 1 alineación, 2 SIN SEÑAL. Una `generation` que no sube se
+  /// ignora en nativo.
+  func setOverlay(rgba: FlutterStandardTypedData, width: Int64, height: Int64, x: Int64, y: Int64, layer: Int64, generation: Int64) throws
+  /// Quita una capa del gráfico.
+  func clearOverlay(layer: Int64) throws
 }
 
 /// Generated setup class from Pigeon to handle messages through the `binaryMessenger`.
@@ -122,6 +129,47 @@ class RigHostApiSetup {
       }
     } else {
       runBenchChannel.setMessageHandler(nil)
+    }
+    /// Una capa del gráfico del programa (IOS-47): RGBA sin premultiplicar de
+    /// `width × height`, ya recortada a su caja con contenido, en (`x`, `y`) del programa.
+    /// `layer`: 0 marcador, 1 alineación, 2 SIN SEÑAL. Una `generation` que no sube se
+    /// ignora en nativo.
+    let setOverlayChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.RigHostApi.setOverlay\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      setOverlayChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let rgbaArg = args[0] as! FlutterStandardTypedData
+        let widthArg = args[1] as! Int64
+        let heightArg = args[2] as! Int64
+        let xArg = args[3] as! Int64
+        let yArg = args[4] as! Int64
+        let layerArg = args[5] as! Int64
+        let generationArg = args[6] as! Int64
+        do {
+          try api.setOverlay(rgba: rgbaArg, width: widthArg, height: heightArg, x: xArg, y: yArg, layer: layerArg, generation: generationArg)
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      setOverlayChannel.setMessageHandler(nil)
+    }
+    /// Quita una capa del gráfico.
+    let clearOverlayChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.RigHostApi.clearOverlay\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      clearOverlayChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let layerArg = args[0] as! Int64
+        do {
+          try api.clearOverlay(layer: layerArg)
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      clearOverlayChannel.setMessageHandler(nil)
     }
   }
 }

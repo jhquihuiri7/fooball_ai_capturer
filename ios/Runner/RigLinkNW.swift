@@ -783,8 +783,12 @@ final class SplitBench {
                 masterSide: side, frameDurationMs: 1000 / Self.fps,
                 renderer: try MetalPartRenderer(context: ctx, rig: modelo, side: side,
                                                 width: Self.programWidth, height: Self.programHeight),
-                composer: try MetalProgramComposer(context: ctx, masterSide: side,
-                                                   width: Self.programWidth, height: Self.programHeight),
+                composer: try {
+                    let c = try MetalProgramComposer(context: ctx, masterSide: side,
+                                                     width: Self.programWidth, height: Self.programHeight)
+                    c.overlay = OverlayHub.shared  // el marcador de Dart (IOS-47)
+                    return c
+                }(),
                 masterPool: pool
             )
             m.masterFrame = { ms in
@@ -983,6 +987,8 @@ final class SplitBench {
             "idr_requests": ms.idrRequests,
             "without_master_frame": ms.withoutMasterFrame,
             "compose_failures": ms.composeFailures,
+            "overlay_uploads": OverlayHub.shared?.uploads ?? 0,
+            "overlay_last_upload_ms": OverlayHub.shared?.lastUploadMs ?? 0,
             "color_observations": colorObservations,
             "color_gains_left": matcher.gains.left,
             "color_gains_right": matcher.gains.right,

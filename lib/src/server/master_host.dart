@@ -6,10 +6,13 @@
 /// móvil, el PIN del Keychain), así que esto se prueba sin Pigeon y sin iPhone.
 library;
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:football_ai_capture/src/constants.dart';
+import 'package:football_ai_capture/src/graphics/overlay_bridge.dart';
+import 'package:football_ai_capture/src/graphics/program_graphics.dart';
 import 'package:football_ai_capture/src/panel_pairing.dart';
 import 'package:football_ai_capture/src/server/api_server.dart';
 import 'package:football_ai_capture/src/server/control_token.dart';
@@ -43,6 +46,7 @@ class MasterHost extends ChangeNotifier {
     MatchTimeSource? time,
     this.port = masterApiPort,
     this.vpsUrl,
+    this.overlaySink,
   }) : wallS = wallS ?? _wallClockS,
        _time = time ?? StopwatchTimeSource(),
        _monotonic = Stopwatch()..start();
@@ -73,6 +77,15 @@ class MasterHost extends ChangeNotifier {
   /// La API del mando en el VPS, si el soporte tiene túnel (ADR 0022): tercera dirección
   /// del QR Mando.
   Uri? vpsUrl;
+
+  /// El canal del gráfico a Metal (IOS-47); sin él, el maestro no pinta marcador.
+  final OverlaySink? overlaySink;
+  ProgramGraphics? _graphics;
+
+  /// El gráfico del programa mientras se sirve (para fijar la competición, p. ej.).
+  ProgramGraphics? get graphics => _graphics;
+  StreamSubscription<void>? _changes;
+  Timer? _clockTick;
 
   MatchEngine? _engine;
   MasterApiServer? _server;
@@ -119,6 +132,7 @@ class MasterHost extends ChangeNotifier {
       );
       _server = await MasterApiServer.start(api, port: port);
       _engine = engine;
+      _startGraphics(engine);
       problem = engine.lineupsError;
     } on Exception catch (error) {
       problem = 'no se pudo servir el mando: $error';
@@ -126,8 +140,30 @@ class MasterHost extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// El marcador y la alineación del programa: con cada cambio y cada segundo.
+  void _startGraphics(MatchEngine engine) {
+    final OverlaySink? sink = overlaySink;
+    if (sink == null) {
+      return;
+    }
+    final ProgramGraphics g = ProgramGraphics(engine: engine, bridge: OverlayBridge(sink));
+    _graphics = g;
+    _changes = engine.changes.listen((_) => unawaited(g.refresh()));
+    _clockTick = Timer.periodic(const Duration(seconds: 1), (_) => unawaited(g.refresh()));
+    unawaited(g.refresh());
+  }
+
+  void _stopGraphics() {
+    unawaited(_changes?.cancel());
+    _changes = null;
+    _clockTick?.cancel();
+    _clockTick = null;
+    _graphics = null;
+  }
+
   /// Deja de servir: otro móvil dirige, o se cerró la sesión.
   Future<void> stepDown() async {
+    _stopGraphics();
     final MasterApiServer? server = _server;
     _server = null;
     _engine = null;
@@ -177,6 +213,7 @@ class MasterHost extends ChangeNotifier {
 
   @override
   void dispose() {
+    _stopGraphics();
     final MasterApiServer? server = _server;
     _server = null;
     if (server != null) {
