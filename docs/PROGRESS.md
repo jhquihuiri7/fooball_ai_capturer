@@ -650,6 +650,30 @@ hubs), ya con esta expectativa.
 
 ---
 
+## 2026-10-04 · IOS-54 — audio del micrófono: captura y AAC · 🚧 falta la pasada de 10 min y meterlo en el programa
+
+**Hecho**
+- `RigMedia/Audio/AacEncoder.swift`: PCM de 48 kHz → AVAudioConverter → AAC-LC a
+  128 kbit/s en tasa CONSTANTE (el relé espera caudal estable) → tramas con su cabecera
+  ADTS (Adts de IOS-53) en una BoundedQueue; cada trama lleva el rigMs de la primera
+  muestra más las ya codificadas.
+- `RigMedia/Audio/AudioCapture.swift`: el delegado del micro, aparte del de vídeo (los
+  dos protocolos comparten selector); el PTS pasa al reloj del soporte con el mismo
+  desfase que los fotogramas; cuenta búferes, huecos de más de una trama y fallos.
+- CaptureEngine: con RIG_AUDIO=1, el micro entra en la misma sesión y las tramas van a
+  Documents/bench/audio-<t>.aac con un resumen cada ~10 s. Apagado por defecto hasta
+  que el programa lo use (y para no pedir permiso a nadie en banco).
+- Tests: AacEncoderTests (10 s de un tono de 1 kHz: tramas ADTS seguidas sin huecos, su
+  instante cada 21,33 ms, ~128 kbit/s, y decodificado vuelve un 1 kHz).
+
+**Medido en el iPhone 17** (RIG_AUDIO=1, ~69 s): 2820 tramas, 0 huecos, 0 fallos;
+ffprobe: AAC-LC, 48 kHz, mono, 130 kbit/s; nivel medio −35 dB y pico −1,9 dB (el
+sonido de la sala).
+
+**Queda fuera**: los 10 min con el desfase A/V frente al rigMs del vídeo, la pista en
+el TS del programa (en vez del silencio del relé) y la interrupción
+audioDeviceInUseByAnotherClient.
+
 ## 2026-10-04 · IOS-23 — postproceso de detecciones en RigCore · 🚧 falta medir 300 queries en el iPhone
 
 **Hecho**

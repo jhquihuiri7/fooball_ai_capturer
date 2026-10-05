@@ -37,6 +37,16 @@ final class CaptureEngine: NSObject {
     // retener más de un búfer de la cámara; sus consumidores llegan con IOS-23+.
     private var pipeline: RigPipeline?
 
+    // IOS-54: el micrófono, solo con RIG_AUDIO=1 hasta que se acepte el permiso en los
+    // dos móviles. Las tramas AAC van a Documents/bench/audio-<t>.aac, con su informe.
+    private let audioOutput = AVCaptureAudioDataOutput()
+    private let audioQueue = DispatchQueue(label: "io.footballai.capture.audio", qos: .userInitiated)
+    private var audio: AudioCapture?
+    private var audioFile: FileHandle?
+    private var audioURL: URL?
+    private var audioFrames = 0
+    static var audioEnabled: Bool { ProcessInfo.processInfo.environment["RIG_AUDIO"] == "1" }
+
     /// El pipeline, para los bancos que cuelgan etapas de él (program-split).
     var rigPipeline: RigPipeline? { pipeline }
     private var ladderSteppedAt = CMClockGetTime(CMClockGetHostTimeClock())
@@ -138,6 +148,9 @@ final class CaptureEngine: NSObject {
             throw CameraSetupError.noUltraWideCamera
         }
         session.addInput(input)
+        if Self.audioEnabled {
+            addMicrophone()
+        }
 
         if !session.outputs.contains(output) {
             // 4:2:0 biplanar con la luma en el plano 0: es donde `RigTimecode` pinta.
@@ -240,6 +253,53 @@ final class CaptureEngine: NSObject {
             try? await Task.sleep(nanoseconds: meteringPollNs)
             if poll >= meteringMinPolls, !device.isAdjustingExposure, !device.isAdjustingWhiteBalance {
                 return
+            }
+        }
+    }
+
+    /// El micro en la misma sesión (IOS-54). Si falla, sigue sin audio y lo dice.
+    private func addMicrophone() {
+        guard let mic = AVCaptureDevice.default(for: .audio),
+              let entrada = try? AVCaptureDeviceInput(device: mic), session.canAddInput(entrada)
+        else {
+            NSLog("[audio] sin micrófono: sigue sin audio")
+            return
+        }
+        session.addInput(entrada)
+        if !session.outputs.contains(audioOutput), session.canAddOutput(audioOutput) {
+            session.addOutput(audioOutput)
+        }
+        let captura = AudioCapture { [weak self] pts in
+            let ns = CMTimeConvertScale(pts, timescale: 1_000_000_000, method: .default).value
+            let offset = self?.rigClock?.offsetAt(ns: ns) ?? self?.clockOffsetNs ?? 0
+            return Double(ns + offset) / 1e6
+        }
+        captura.onFrame = { [weak self] trama in self?.writeAudio(trama) }
+        audioOutput.setSampleBufferDelegate(captura, queue: audioQueue)
+        audio = captura
+    }
+
+    private func writeAudio(_ trama: AacFrame) {
+        if audioFile == nil {
+            let base = try? FileManager.default.url(for: .documentDirectory, in: .userDomainMask,
+                                                    appropriateFor: nil, create: true)
+                .appendingPathComponent("bench", isDirectory: true)
+            if let base {
+                try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+                let url = base.appendingPathComponent("audio-\(Int(Date().timeIntervalSince1970)).aac")
+                FileManager.default.createFile(atPath: url.path, contents: nil)
+                audioURL = url
+                audioFile = try? FileHandle(forWritingTo: url)
+            }
+        }
+        audioFile?.write(trama.adts)
+        audioFrames += 1
+        // Un resumen cada ~10 s, para el banco de 10 min.
+        if audioFrames % 470 == 0, let url = audioURL, let a = audio {
+            let resumen: [String: Any] = ["frames": audioFrames, "buffers_in": a.buffersIn,
+                                          "gaps": a.gaps, "failures": a.failures, "last_rig_ms": trama.rigMs]
+            if let d = try? JSONSerialization.data(withJSONObject: resumen, options: [.sortedKeys]) {
+                try? d.write(to: url.deletingPathExtension().appendingPathExtension("json"))
             }
         }
     }
