@@ -255,6 +255,21 @@ const Duration apiCommandTimeout = Duration(seconds: 5);
 /// alineación ~1 KiB; con más es un error o un abuso.
 const int apiMaxBodyBytes = 64 * 1024;
 
+/// Cada cuánto el maestro manda la réplica aunque nada cambie (REPLICA_INTERVAL_S,
+/// ADR 0023 §11).
+const Duration replicaInterval = Duration(seconds: 5);
+
+/// Las claves de idempotencia que viajan en la réplica: las de los últimos
+/// IDEMPOTENCY_REPLICA_S, 64 como mucho (por encima de la ventana de reintento de 10 s).
+const Duration idempotencyReplicaWindow = Duration(seconds: 30);
+const int idempotencyReplicaMax = 64;
+
+/// Donde guarda el esclavo la última pizarra, junto al partido.
+const String replicaFileName = 'replica.json';
+
+/// Lo más grande que puede ser una réplica (ADR 0023 §7), en bytes.
+const int replicaMaxBytes = 64 * 1024;
+
 /// La página del panel local que sirve el maestro en `/` (IOS-64).
 const String panelAssetPath = 'assets/panel/index.html';
 

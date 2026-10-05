@@ -799,6 +799,8 @@ protocol CaptureHostApi {
   /// enmienda §3). En el Keychain, como el emparejamiento. Vacío si no hay.
   func loadOperatorPin() throws -> String
   func saveOperatorPin(pin: String) throws
+  /// La pizarra del partido (IOS-82): el maestro la manda al esclavo por el enlace.
+  func sendReplica(json: String) throws
   /// La pareja de fotogramas para calibrar (IOS-70): el maestro elige los instantes, se
   /// los manda al esclavo y los dos guardan JPEG q95 4K con su JSON en
   /// `Documents/calib/<id>/`. Devuelve el resumen del maestro en JSON (o `error`).
@@ -1273,6 +1275,22 @@ class CaptureHostApiSetup {
     } else {
       saveOperatorPinChannel.setMessageHandler(nil)
     }
+    /// La pizarra del partido (IOS-82): el maestro la manda al esclavo por el enlace.
+    let sendReplicaChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.sendReplica\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      sendReplicaChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let jsonArg = args[0] as! String
+        do {
+          try api.sendReplica(json: jsonArg)
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      sendReplicaChannel.setMessageHandler(nil)
+    }
     /// La pareja de fotogramas para calibrar (IOS-70): el maestro elige los instantes, se
     /// los manda al esclavo y los dos guardan JPEG q95 4K con su JSON en
     /// `Documents/calib/<id>/`. Devuelve el resumen del maestro en JSON (o `error`).
@@ -1337,6 +1355,8 @@ protocol CaptureFlutterApiProtocol {
   /// El enlace negoció quién manda (IOS-80): el rol, el term y el partido (o null, si
   /// ninguno de los dos traía) con los que sigue.
   @MainActor func onRigRole(role roleArg: RigRole, term termArg: Int64, matchId matchIdArg: String?) async throws
+  /// Llegó la pizarra del maestro (IOS-82). Solo la recibe el esclavo.
+  @MainActor func onReplica(json jsonArg: String) async throws
 }
 class CaptureFlutterApi: CaptureFlutterApiProtocol {
   private let binaryMessenger: FlutterBinaryMessenger
@@ -1526,6 +1546,27 @@ class CaptureFlutterApi: CaptureFlutterApiProtocol {
       let channelName: String = "dev.flutter.pigeon.football_ai_capture.CaptureFlutterApi.onRigRole\(messageChannelSuffix)"
       let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
       channel.sendMessage([roleArg, termArg, matchIdArg] as [Any?]) { response in
+        guard let listResponse = response as? [Any?] else {
+          continuation.resume(throwing: createConnectionError(withChannelName: channelName))
+          return
+        }
+        if listResponse.count > 1 {
+          let code: String = listResponse[0] as! String
+          let message: String? = nilOrValue(listResponse[1])
+          let details: String? = nilOrValue(listResponse[2])
+          continuation.resume(throwing: PigeonError(code: code, message: message, details: details))
+        } else {
+          continuation.resume()
+        }
+      }
+    }
+  }
+  /// Llegó la pizarra del maestro (IOS-82). Solo la recibe el esclavo.
+  @MainActor func onReplica(json jsonArg: String) async throws {
+    return try await withCheckedThrowingContinuation { continuation in
+      let channelName: String = "dev.flutter.pigeon.football_ai_capture.CaptureFlutterApi.onReplica\(messageChannelSuffix)"
+      let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
+      channel.sendMessage([jsonArg] as [Any?]) { response in
         guard let listResponse = response as? [Any?] else {
           continuation.resume(throwing: createConnectionError(withChannelName: channelName))
           return

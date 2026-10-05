@@ -31,6 +31,7 @@ import 'package:football_ai_capture/src/graphics/rig_overlay_sink.dart';
 import 'package:football_ai_capture/src/mando_qr_sheet.dart';
 import 'package:football_ai_capture/src/match_state.dart' show matchStateKey;
 import 'package:football_ai_capture/src/server/master_host.dart';
+import 'package:football_ai_capture/src/server/replica.dart';
 import 'package:football_ai_capture/src/theme/zero_colors.dart';
 import 'package:football_ai_capture/src/theme/zero_mark.dart';
 import 'package:football_ai_capture/src/theme/zero_metrics.dart';
@@ -107,6 +108,8 @@ class _CapturePageState extends State<CapturePage> {
               thumbnail: RigHostApi().thumbnail,
               rigStatus: () => _rigStatus(),
               legacyMatch: () async => (await SharedPreferences.getInstance()).getString(matchStateKey),
+              replicaSink: _api.sendReplica,
+              term: () => _session.rigTerm,
             );
 
   /// Lo que enseña el panel local del estado del soporte (IOS-64).
@@ -138,6 +141,9 @@ class _CapturePageState extends State<CapturePage> {
         linkOnly: widget.linkOnly,
         prefersMaster: widget.prefersMaster,
         masterHost: _host,
+        replicaStore: _host == null
+            ? null
+            : ReplicaStore(File('${appDocumentsPath()}/$matchDirectoryName/$replicaFileName')),
       );
 
   /// Refresco del estado nativo. Además de traer batería, calor y frames perdidos,

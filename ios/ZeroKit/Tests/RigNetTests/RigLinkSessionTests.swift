@@ -215,6 +215,11 @@ final class RigLinkSessionTests: XCTestCase {
         XCTAssertEqual(partes.first, parte)
         XCTAssertEqual(nadas.first, NoPartPacket(frameRigMs: 1034, viewId: 6))
         lock.unlock()
+        // IOS-82: la pizarra, del maestro al esclavo.
+        nonisolated(unsafe) var pizarra = Data()
+        right.onReplica = { d in lock.lock(); pizarra = d; lock.unlock() }
+        left.send(replica: Data("{\"version\":1}".utf8))
+        waitUntil { lock.lock(); defer { lock.unlock() }; return pizarra.count == 13 }
         // IOS-73: las detecciones del esclavo, con su instante.
         nonisolated(unsafe) var detec: (Int64, [PlayerDetection])?
         left.onDetections = { t, _, d in lock.lock(); detec = (t, d); lock.unlock() }

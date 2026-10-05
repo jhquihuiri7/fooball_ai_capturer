@@ -23,6 +23,7 @@ import 'package:football_ai_capture/src/exposure_phase.dart';
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
 import 'package:football_ai_capture/src/rig_clock.dart';
 import 'package:football_ai_capture/src/server/master_host.dart';
+import 'package:football_ai_capture/src/server/replica.dart';
 import 'package:football_ai_capture/src/stream_url.dart';
 
 /// Cómo va la subida de la grabación al panel para calibrar.
@@ -78,6 +79,7 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
     this.uploader = _defaultUploader,
     bool? prefersMaster,
     this.masterHost,
+    this.replicaStore,
   })  : prefersMaster = prefersMaster ?? role == CameraRole.left,
         _api = api ?? CaptureHostApi(),
         _clock = clock ?? RigClock() {
@@ -163,6 +165,9 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
 
   /// El servidor del mando, si esta pantalla lo levanta al dirigir (IOS-62).
   final MasterHost? masterHost;
+
+  /// La pizarra del maestro que guarda el esclavo (IOS-82).
+  final ReplicaStore? replicaStore;
 
   /// Quién manda en el soporte: el negociado si lo hay; si no, el izquierdo.
   bool get isRigMaster => rigRole == null ? role == CameraRole.left : rigRole == RigRole.master;
@@ -759,6 +764,11 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
       unawaited(role == RigRole.master ? host.becomeMaster(matchId) : host.stepDown());
     }
     notifyListeners();
+  }
+
+  @override
+  void onReplica(String json) {
+    replicaStore?.accept(json);
   }
 
   @override

@@ -137,6 +137,9 @@ class MasterApi {
   final Duration commandTimeout;
   final IdempotencyCache _idempotency;
 
+  /// La caché de idempotencia, para la réplica (IOS-82).
+  IdempotencyCache get idempotency => _idempotency;
+
   /// El panel local (IOS-64), servido en `/` sin puerta: la página no lleva datos y
   /// toma el token del fragmento `#mando=` de la URL del QR.
   final String? panelHtml;

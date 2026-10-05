@@ -154,6 +154,10 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
         RigLinkNW.controlSecret(matchId: matchId) ?? ""
     }
 
+    func sendReplica(json: String) throws {
+        (link as? RigLinkNW)?.session.send(replica: Data(json.utf8))
+    }
+
     func setMatchId(matchId: String) throws {
         (link as? RigLinkNW)?.matchId = matchId
     }
@@ -223,6 +227,10 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
                         role: rol == .master ? .master : .slave, term: Int64(term), matchId: partido
                     )
                 }
+            }
+            nw.session.onReplica = { [weak self] datos in
+                let json = String(decoding: datos, as: UTF8.self)
+                Task { @MainActor in try? await self?.flutter.onReplica(json: json) }
             }
             ThumbHub.shared.start(
                 side: role == .left ? .left : .right,

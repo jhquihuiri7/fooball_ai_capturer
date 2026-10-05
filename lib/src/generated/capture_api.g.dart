@@ -1201,6 +1201,25 @@ class CaptureHostApi {
     ;
   }
 
+  /// La pizarra del partido (IOS-82): el maestro la manda al esclavo por el enlace.
+  Future<void> sendReplica(String json) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.CaptureHostApi.sendReplica$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[json]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
   /// La pareja de fotogramas para calibrar (IOS-70): el maestro elige los instantes, se
   /// los manda al esclavo y los dos guardan JPEG q95 4K con su JSON en
   /// `Documents/calib/<id>/`. Devuelve el resumen del maestro en JSON (o `error`).
@@ -1279,6 +1298,9 @@ abstract class CaptureFlutterApi {
   /// El enlace negoció quién manda (IOS-80): el rol, el term y el partido (o null, si
   /// ninguno de los dos traía) con los que sigue.
   void onRigRole(RigRole role, int term, String? matchId);
+
+  /// Llegó la pizarra del maestro (IOS-82). Solo la recibe el esclavo.
+  void onReplica(String json);
 
   static void setUp(CaptureFlutterApi? api, {
     BinaryMessenger? binaryMessenger, 
@@ -1473,6 +1495,27 @@ abstract class CaptureFlutterApi {
           final String? arg_matchId = args[2] as String?;
           try {
             api.onRigRole(arg_role, arg_term, arg_matchId);
+            return wrapResponse(empty: true);
+          } on PlatformException catch (e) {
+            return wrapResponse(error: e);
+          }          catch (e) {
+            return wrapResponse(error: PlatformException(code: 'error', message: e.toString()));
+          }
+        });
+      }
+    }
+    {
+      final pigeonVar_channel = BasicMessageChannel<Object?>(
+          'dev.flutter.pigeon.football_ai_capture.CaptureFlutterApi.onReplica$messageChannelSuffix', pigeonChannelCodec,
+          binaryMessenger: binaryMessenger);
+      if (api == null) {
+        pigeonVar_channel.setMessageHandler(null);
+      } else {
+        pigeonVar_channel.setMessageHandler((Object? message) async {
+          final List<Object?> args = message! as List<Object?>;
+          final String arg_json = args[0]! as String;
+          try {
+            api.onReplica(arg_json);
             return wrapResponse(empty: true);
           } on PlatformException catch (e) {
             return wrapResponse(error: e);

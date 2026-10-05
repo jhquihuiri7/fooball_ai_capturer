@@ -650,6 +650,30 @@ hubs), ya con esta expectativa.
 
 ---
 
+## 2026-10-04 · IOS-82 — la pizarra replicada en el esclavo · 🚧 falta el VPS (IOS-65) y la prueba con dos iPhone
+
+**Hecho**
+- `lib/src/server/replica.dart`: StateReplica según el ADR 0023 §7 —match_id, term, seq,
+  instante y `clock_domain`, boot/rev, el MatchRecord, las alineaciones y las claves de
+  idempotencia de los últimos 30 s (64 como mucho, con su status y rev)—, ≤64 KiB y SIN
+  secretos (el ADR manda sobre la tarjeta, que aún hablaba de mandar el secreto del
+  token). ReplicaStore en el esclavo: se queda la más fresca por (term, seq), en memoria
+  y en disco (atómico).
+- MasterHost la manda con cada cambio del partido y cada REPLICA_INTERVAL_S (5 s), con
+  el term de la negociación y un seq que sube; el esclavo la guarda en
+  Documents/partido/replica.json. IdempotencyCache gana `recent`.
+- Enlace: `replica` por control del maestro al esclavo (RigLinkSession), Pigeon
+  `sendReplica` y `onReplica`.
+- Tests: ida y vuelta con la idempotencia y sin el PIN; la más fresca (también un term
+  mayor con seq nuevo) y el disco tras reiniciar; el maestro la manda al cambiar; **en el
+  mismo dominio de reloj, el partido abierto desde la réplica sigue en marcha, sin
+  clock_restored, y el reloj al aire no retrocede (≤ lo transcurrido + 1 s)**.
+
+**Queda fuera**: la réplica al VPS (IOS-65), la del esclavo al conectar el enlace y
+REPLICA_ADOPT_S (IOS-85). El reloj del partido en Dart sigue siendo un Stopwatch: hasta
+que el reloj del soporte (IOS-13) llegue a Dart con su dominio, la promoción abriría el
+reloj parado con clock_restored en vez de seguir en marcha.
+
 ## 2026-10-04 · IOS-83 — elección de roles con terms (lógica pura) · ✅ en lo puro; la prueba con VPS va con IOS-85
 
 **Hecho**

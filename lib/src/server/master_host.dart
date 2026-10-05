@@ -7,6 +7,7 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -18,6 +19,7 @@ import 'package:football_ai_capture/src/server/api_server.dart';
 import 'package:football_ai_capture/src/server/control_token.dart';
 import 'package:football_ai_capture/src/server/match_engine.dart';
 import 'package:football_ai_capture/src/server/match_migration.dart';
+import 'package:football_ai_capture/src/server/replica.dart';
 
 /// La carpeta Documents de la app en iOS: el temporal es `<contenedor>/tmp`, así que su
 /// padre es el contenedor. Sin depender de HOME ni de path_provider.
@@ -56,6 +58,8 @@ class MasterHost extends ChangeNotifier {
     this.thumbnail,
     this.rigStatus,
     this.legacyMatch,
+    this.replicaSink,
+    this.term,
   }) : wallS = wallS ?? _wallClockS,
        _time = time ?? StopwatchTimeSource(),
        _monotonic = Stopwatch()..start();
@@ -101,6 +105,20 @@ class MasterHost extends ChangeNotifier {
 
   /// Si al abrir se migró el partido local.
   bool migrated = false;
+
+  /// Por dónde sale la pizarra hacia el esclavo (IOS-82); null sin enlace.
+  final Future<void> Function(String json)? replicaSink;
+
+  /// El term vigente del soporte (el de la negociación, IOS-80).
+  final int Function()? term;
+  StreamSubscription<void>? _replicaChanges;
+  Timer? _replicaTick;
+  int _replicaSeq = 0;
+  MasterApi? _api;
+  final Stopwatch _replicaClock = Stopwatch()..start();
+
+  /// Réplicas mandadas.
+  int replicasSent = 0;
   ProgramGraphics? _graphics;
 
   /// El gráfico del programa mientras se sirve (para fijar la competición, p. ej.).
@@ -157,7 +175,9 @@ class MasterHost extends ChangeNotifier {
       );
       _server = await MasterApiServer.start(api, port: port);
       _engine = engine;
+      _api = api;
       _startGraphics(engine);
+      _startReplica(engine);
       problem = engine.lineupsError;
     } on Exception catch (error) {
       problem = 'no se pudo servir el mando: $error';
@@ -197,6 +217,46 @@ class MasterHost extends ChangeNotifier {
     unawaited(g.refresh());
   }
 
+  /// La pizarra al esclavo: con cada cambio del partido y cada REPLICA_INTERVAL_S.
+  void _startReplica(MatchEngine engine) {
+    if (replicaSink == null) {
+      return;
+    }
+    _replicaChanges = engine.changes.listen((_) => unawaited(sendReplica()));
+    _replicaTick = Timer.periodic(replicaInterval, (_) => unawaited(sendReplica()));
+    unawaited(sendReplica());
+  }
+
+  /// Manda la pizarra ahora (si se sirve un partido).
+  Future<void> sendReplica() async {
+    final MatchEngine? engine = _engine;
+    final Future<void> Function(String json)? sink = replicaSink;
+    if (engine == null || sink == null) {
+      return;
+    }
+    _replicaSeq += 1;
+    final StateReplica r = StateReplica.fromEngine(
+      engine,
+      term: term?.call() ?? 1,
+      seq: _replicaSeq,
+      rigMs: _replicaClock.elapsedMilliseconds,
+      clockDomain: engine.record().clockDomain,
+      idempotency: _api?.idempotency,
+    );
+    final String json = r.encode();
+    if (utf8.encode(json).length <= replicaMaxBytes) {
+      replicasSent += 1;
+      await sink(json);
+    }
+  }
+
+  void _stopReplica() {
+    unawaited(_replicaChanges?.cancel());
+    _replicaChanges = null;
+    _replicaTick?.cancel();
+    _replicaTick = null;
+  }
+
   void _stopGraphics() {
     unawaited(_changes?.cancel());
     _changes = null;
@@ -208,6 +268,7 @@ class MasterHost extends ChangeNotifier {
   /// Deja de servir: otro móvil dirige, o se cerró la sesión.
   Future<void> stepDown() async {
     _stopGraphics();
+    _stopReplica();
     final MasterApiServer? server = _server;
     _server = null;
     _engine = null;
@@ -258,6 +319,7 @@ class MasterHost extends ChangeNotifier {
   @override
   void dispose() {
     _stopGraphics();
+    _stopReplica();
     final MasterApiServer? server = _server;
     _server = null;
     if (server != null) {

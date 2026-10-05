@@ -423,6 +423,19 @@ class MatchEngine {
     }
   }
 
+  /// El partido tal y como se guarda (para la réplica, IOS-82).
+  MatchRecord record() => MatchRecord(
+    matchId: matchId,
+    home: home,
+    away: away,
+    homeGoals: homeGoals,
+    awayGoals: awayGoals,
+    accumulatedMs: clock.accumulatedMs,
+    running: clock.running,
+    startedRigMs: clock.startedMs,
+    clockDomain: _time.domain,
+  );
+
   void _save() {
     try {
       saveRecord(

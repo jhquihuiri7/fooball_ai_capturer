@@ -238,6 +238,11 @@ class FakeCaptureApi extends CaptureHostApi {
   @override
   Future<String> captureCalibrationPairs() async => '{"count":5}';
 
+  final List<String> replicas = <String>[];
+
+  @override
+  Future<void> sendReplica(String json) async => replicas.add(json);
+
   @override
   Future<void> saveOperatorPin(String pin) async => operatorPin = pin;
 

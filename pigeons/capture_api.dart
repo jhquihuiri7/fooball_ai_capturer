@@ -393,6 +393,9 @@ abstract class CaptureHostApi {
 
   void saveOperatorPin(String pin);
 
+  /// La pizarra del partido (IOS-82): el maestro la manda al esclavo por el enlace.
+  void sendReplica(String json);
+
   /// La pareja de fotogramas para calibrar (IOS-70): el maestro elige los instantes, se
   /// los manda al esclavo y los dos guardan JPEG q95 4K con su JSON en
   /// `Documents/calib/<id>/`. Devuelve el resumen del maestro en JSON (o `error`).
@@ -438,4 +441,7 @@ abstract class CaptureFlutterApi {
   /// El enlace negoció quién manda (IOS-80): el rol, el term y el partido (o null, si
   /// ninguno de los dos traía) con los que sigue.
   void onRigRole(RigRole role, int term, String? matchId);
+
+  /// Llegó la pizarra del maestro (IOS-82). Solo la recibe el esclavo.
+  void onReplica(String json);
 }

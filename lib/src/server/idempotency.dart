@@ -42,6 +42,24 @@ class IdempotencyCache {
 
   int get length => _entries.length;
 
+  /// Las respuestas ya resueltas de los últimos `windowMs`, las más nuevas, `max` como
+  /// mucho: lo que viaja en la réplica para que la idempotencia sobreviva al relevo
+  /// (ADR 0023 §7). Solo las ya terminadas: una en vuelo no tiene aún status.
+  Map<String, (int, StoredResponse)> recent({required int windowMs, required int max}) {
+    final int desde = nowMs() - windowMs;
+    final Map<String, (int, StoredResponse)> out = <String, (int, StoredResponse)>{};
+    for (final MapEntry<String, (int, StoredResponse)> e in _done.entries.toList().reversed) {
+      if (out.length >= max || e.value.$1 < desde) {
+        break;
+      }
+      out[e.key] = e.value;
+    }
+    return out;
+  }
+
+  /// Las terminadas, por clave, en orden de llegada (para `recent`).
+  final LinkedHashMap<String, (int, StoredResponse)> _done = LinkedHashMap<String, (int, StoredResponse)>();
+
   /// La respuesta guardada para `key`, o la de `respond()`, que queda guardada. Se guarda
   /// el Future, no el resultado: un reintento que llega mientras la primera aún se aplica
   /// espera a esa respuesta en vez de aplicarla otra vez (el lock de Python).
@@ -56,6 +74,12 @@ class IdempotencyCache {
     }
     final Future<StoredResponse> respuesta = respond();
     _entries[key] = (ahora, respuesta);
+    respuesta.then((StoredResponse r) {
+      _done[key] = (ahora, r);
+      while (_done.length > size) {
+        _done.remove(_done.keys.first);
+      }
+    });
     if (_entries.length > size) {
       _entries.remove(_entries.keys.first);
     }

@@ -124,6 +124,9 @@ public final class RigLinkSession {
     private var lastHeardMediaSeq: UInt32 = 0
     private var heartbeatTimer: DispatchSourceTimer?
 
+    /// El esclavo recibe la pizarra del maestro (IOS-82): el JSON de la réplica.
+    public var onReplica: ((Data) -> Void)?
+
     /// El maestro recibe las detecciones del esclavo de un instante de la rejilla
     /// (IOS-73): instante, ms de inferencia y cajas nativas.
     public var onDetections: ((Int64, Double, [PlayerDetection]) -> Void)?
@@ -444,6 +447,14 @@ public final class RigLinkSession {
         }
     }
 
+    /// El maestro manda la pizarra (IOS-82), por control: ≤64 KiB de JSON, sin secretos.
+    public func send(replica json: Data) {
+        queue.async { [self] in
+            guard isMaster, case .connected = state, json.count <= 64 * 1024 else { return }
+            send(type: .replica, payload: json, seq: nextControlSeq())
+        }
+    }
+
     /// El esclavo manda sus detecciones del instante `targetRigMs` (IOS-25/73), por medios.
     public func send(detections: [PlayerDetection], targetRigMs: Int64, inferMs: Double) {
         queue.async { [self] in
@@ -561,6 +572,9 @@ public final class RigLinkSession {
         case .idrRequest:
             guard !isMaster, let seq = IdrRequestWire.decode(frame.payload) else { return }
             onIdrRequest?(seq)
+        case .replica:
+            guard !isMaster, !frame.payload.isEmpty else { return }
+            onReplica?(frame.payload)
         case .heartbeat:
             guard let hb = Heartbeat.decode(frame.payload) else { return }
             health.heard(hb, nowMs: llegada / 1_000_000)
