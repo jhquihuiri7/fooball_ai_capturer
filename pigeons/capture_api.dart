@@ -396,6 +396,13 @@ abstract class CaptureHostApi {
   /// La pizarra del partido (IOS-82): el maestro la manda al esclavo por el enlace.
   void sendReplica(String json);
 
+  /// El reloj del soporte ahora (ADR 0023 §4): JSON `{"rig_ns": …, "domain": "…"}`. El
+  /// del maestro es su reloj de host; el del esclavo, su host más el desfase estimado.
+  String rigClockSnapshot();
+
+  /// El esclavo adopta el `clock_domain` del maestro (llega con la pizarra).
+  void adoptClockDomain(String domain);
+
   /// La pareja de fotogramas para calibrar (IOS-70): el maestro elige los instantes, se
   /// los manda al esclavo y los dos guardan JPEG q95 4K con su JSON en
   /// `Documents/calib/<id>/`. Devuelve el resumen del maestro en JSON (o `error`).

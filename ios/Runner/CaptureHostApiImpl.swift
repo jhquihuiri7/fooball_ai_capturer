@@ -154,6 +154,16 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
         RigLinkNW.controlSecret(matchId: matchId) ?? ""
     }
 
+    func rigClockSnapshot() throws -> String {
+        let host = RigLink.hostNowNs()
+        let offset = (link as? RigLinkNW)?.clock.offsetAt(ns: host) ?? 0
+        return #"{"rig_ns":\#(host + offset),"domain":"\#(RigClockDomain.current())"}"#
+    }
+
+    func adoptClockDomain(domain: String) throws {
+        RigClockDomain.adopt(domain)
+    }
+
     func sendReplica(json: String) throws {
         (link as? RigLinkNW)?.session.send(replica: Data(json.utf8))
     }

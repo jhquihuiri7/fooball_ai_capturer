@@ -1220,6 +1220,46 @@ class CaptureHostApi {
     ;
   }
 
+  /// El reloj del soporte ahora (ADR 0023 §4): JSON `{"rig_ns": …, "domain": "…"}`. El
+  /// del maestro es su reloj de host; el del esclavo, su host más el desfase estimado.
+  Future<String> rigClockSnapshot() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.CaptureHostApi.rigClockSnapshot$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as String;
+  }
+
+  /// El esclavo adopta el `clock_domain` del maestro (llega con la pizarra).
+  Future<void> adoptClockDomain(String domain) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.CaptureHostApi.adoptClockDomain$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[domain]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
   /// La pareja de fotogramas para calibrar (IOS-70): el maestro elige los instantes, se
   /// los manda al esclavo y los dos guardan JPEG q95 4K con su JSON en
   /// `Documents/calib/<id>/`. Devuelve el resumen del maestro en JSON (o `error`).

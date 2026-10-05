@@ -801,6 +801,11 @@ protocol CaptureHostApi {
   func saveOperatorPin(pin: String) throws
   /// La pizarra del partido (IOS-82): el maestro la manda al esclavo por el enlace.
   func sendReplica(json: String) throws
+  /// El reloj del soporte ahora (ADR 0023 §4): JSON `{"rig_ns": …, "domain": "…"}`. El
+  /// del maestro es su reloj de host; el del esclavo, su host más el desfase estimado.
+  func rigClockSnapshot() throws -> String
+  /// El esclavo adopta el `clock_domain` del maestro (llega con la pizarra).
+  func adoptClockDomain(domain: String) throws
   /// La pareja de fotogramas para calibrar (IOS-70): el maestro elige los instantes, se
   /// los manda al esclavo y los dos guardan JPEG q95 4K con su JSON en
   /// `Documents/calib/<id>/`. Devuelve el resumen del maestro en JSON (o `error`).
@@ -1290,6 +1295,37 @@ class CaptureHostApiSetup {
       }
     } else {
       sendReplicaChannel.setMessageHandler(nil)
+    }
+    /// El reloj del soporte ahora (ADR 0023 §4): JSON `{"rig_ns": …, "domain": "…"}`. El
+    /// del maestro es su reloj de host; el del esclavo, su host más el desfase estimado.
+    let rigClockSnapshotChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.rigClockSnapshot\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      rigClockSnapshotChannel.setMessageHandler { _, reply in
+        do {
+          let result = try api.rigClockSnapshot()
+          reply(wrapResult(result))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      rigClockSnapshotChannel.setMessageHandler(nil)
+    }
+    /// El esclavo adopta el `clock_domain` del maestro (llega con la pizarra).
+    let adoptClockDomainChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.adoptClockDomain\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      adoptClockDomainChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let domainArg = args[0] as! String
+        do {
+          try api.adoptClockDomain(domain: domainArg)
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      adoptClockDomainChannel.setMessageHandler(nil)
     }
     /// La pareja de fotogramas para calibrar (IOS-70): el maestro elige los instantes, se
     /// los manda al esclavo y los dos guardan JPEG q95 4K con su JSON en

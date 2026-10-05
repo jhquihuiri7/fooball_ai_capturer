@@ -239,6 +239,14 @@ class FakeCaptureApi extends CaptureHostApi {
   Future<String> captureCalibrationPairs() async => '{"count":5}';
 
   final List<String> replicas = <String>[];
+  int rigNs = 1000000000;
+  String clockDomain = 'rdominioprueba1';
+
+  @override
+  Future<String> rigClockSnapshot() async => '{"rig_ns":$rigNs,"domain":"$clockDomain"}';
+
+  @override
+  Future<void> adoptClockDomain(String domain) async => clockDomain = domain;
 
   @override
   Future<void> sendReplica(String json) async => replicas.add(json);

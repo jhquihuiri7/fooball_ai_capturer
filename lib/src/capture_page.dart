@@ -32,6 +32,7 @@ import 'package:football_ai_capture/src/mando_qr_sheet.dart';
 import 'package:football_ai_capture/src/match_state.dart' show matchStateKey;
 import 'package:football_ai_capture/src/server/master_host.dart';
 import 'package:football_ai_capture/src/server/replica.dart';
+import 'package:football_ai_capture/src/server/rig_time.dart';
 import 'package:football_ai_capture/src/theme/zero_colors.dart';
 import 'package:football_ai_capture/src/theme/zero_mark.dart';
 import 'package:football_ai_capture/src/theme/zero_metrics.dart';
@@ -110,6 +111,8 @@ class _CapturePageState extends State<CapturePage> {
               legacyMatch: () async => (await SharedPreferences.getInstance()).getString(matchStateKey),
               replicaSink: _api.sendReplica,
               term: () => _session.rigTerm,
+              // El cronómetro en el reloj del soporte y su dominio (ADR 0023 §4).
+              time: RigTimeSource(_api.rigClockSnapshot),
             );
 
   /// Lo que enseña el panel local del estado del soporte (IOS-64).

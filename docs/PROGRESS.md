@@ -650,6 +650,20 @@ hubs), ya con esta expectativa.
 
 ---
 
+## 2026-10-04 · El cronómetro en el reloj del soporte y su dominio (ADR 0023 §4; IOS-13/60/82)
+
+- Nativo: RigClockDomain — el `clock_domain` se crea al azar ([a-z0-9]{16}) y se guarda
+  con la hora de arranque del sistema (kern.boottime): sobrevive a reiniciar la app y
+  cambia si se reinicia el móvil. El esclavo adopta el del maestro al aceptar su pizarra.
+  Pigeon `rigClockSnapshot()` ({rig_ns, domain}: el host del maestro, o el host más el
+  desfase estimado en el esclavo) y `adoptClockDomain`.
+- Dart: `RigTimeSource` — una instantánea del nativo y un Stopwatch, rehecha cada 30 s
+  sin retroceder nunca; MasterHost la refresca antes de abrir el partido.
+- **Medido en el iPhone 17**: con el reloj arrancado desde el Mac por la API, tras
+  REINICIAR LA APP el cronómetro sigue en marcha (52,6 s, `clock_restored: false`, otro
+  `boot`). Con el Stopwatch de antes volvía parado.
+- Tests: rig_time_test (avanza, no retrocede al rehacer la instantánea).
+
 ## 2026-10-04 · IOS-82 — la pizarra replicada en el esclavo · 🚧 falta el VPS (IOS-65) y la prueba con dos iPhone
 
 **Hecho**

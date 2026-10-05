@@ -768,7 +768,11 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
 
   @override
   void onReplica(String json) {
-    replicaStore?.accept(json);
+    final ReplicaStore? store = replicaStore;
+    if (store != null && store.accept(json)) {
+      // El esclavo adopta el reloj del maestro: si se promueve, sigue en el mismo dominio.
+      unawaited(_api.adoptClockDomain(store.latest!.clockDomain));
+    }
   }
 
   @override

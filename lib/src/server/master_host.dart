@@ -20,6 +20,7 @@ import 'package:football_ai_capture/src/server/control_token.dart';
 import 'package:football_ai_capture/src/server/match_engine.dart';
 import 'package:football_ai_capture/src/server/match_migration.dart';
 import 'package:football_ai_capture/src/server/replica.dart';
+import 'package:football_ai_capture/src/server/rig_time.dart';
 
 /// La carpeta Documents de la app en iOS: el temporal es `<contenedor>/tmp`, así que su
 /// padre es el contenedor. Sin depender de HOME ni de path_provider.
@@ -151,6 +152,12 @@ class MasterHost extends ChangeNotifier {
     }
     await stepDown();
     try {
+      final MatchTimeSource reloj = _time;
+      if (reloj is RigTimeSource) {
+        // El reloj del soporte al día antes de abrir: el cronómetro sigue en marcha si el
+        // dominio es el del partido guardado (un reinicio de la app, un relevo).
+        await reloj.refresh();
+      }
       await _migrateIfNeeded(matchId);
       final MatchEngine engine = MatchEngine.open(
         file: File('${directory.path}/$matchFileName'),

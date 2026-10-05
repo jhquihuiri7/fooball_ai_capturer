@@ -1273,3 +1273,45 @@ final class ThumbHub {
         store("program", jpeg)
     }
 }
+
+// MARK: - El dominio del reloj del soporte (ADR 0023 §4, IOS-13/IOS-82)
+
+// `clock_domain` nombra un reloj del soporte continuo. El maestro que arranca la
+// referencia desde su reloj de host lo crea al azar; sobrevive a reiniciar la APP (se
+// guarda junto a la hora de arranque del SISTEMA, y mientras esa no cambie el reloj de
+// host es el mismo) y cambia si se reinicia el dispositivo. El esclavo adopta el del
+// maestro con la pizarra (IOS-82) y lo conserva si se promueve: su recta del reloj sigue
+// extrapolando desde su host, sin salto.
+
+enum RigClockDomain {
+    private static let keyDomain = "zero.clockDomain"
+    private static let keyBoot = "zero.clockDomainBoot"
+    private static let alphabet = Array("abcdefghijklmnopqrstuvwxyz0123456789")
+
+    /// Segundos de la hora de arranque del sistema (kern.boottime).
+    static func bootTimeS() -> Int {
+        var tv = timeval()
+        var size = MemoryLayout<timeval>.size
+        var mib: [Int32] = [CTL_KERN, KERN_BOOTTIME]
+        guard sysctl(&mib, 2, &tv, &size, nil, 0) == 0 else { return 0 }
+        return Int(tv.tv_sec)
+    }
+
+    /// El dominio vigente: el guardado si es de este arranque del sistema; si no, uno nuevo.
+    static func current() -> String {
+        let d = UserDefaults.standard
+        if let guardado = d.string(forKey: keyDomain), d.integer(forKey: keyBoot) == bootTimeS() {
+            return guardado
+        }
+        let nuevo = "r" + String((0..<15).map { _ in alphabet.randomElement()! })
+        adopt(nuevo)
+        return nuevo
+    }
+
+    /// Adopta el dominio del maestro (lo trae la pizarra). Solo si es válido.
+    static func adopt(_ domain: String) {
+        guard domain.range(of: "^[a-z0-9]{8,32}$", options: .regularExpression) != nil else { return }
+        UserDefaults.standard.set(domain, forKey: keyDomain)
+        UserDefaults.standard.set(bootTimeS(), forKey: keyBoot)
+    }
+}
