@@ -52,10 +52,15 @@ lanza() {  # $1 dispositivo, $2 lado, $3 json extra
 }
 
 recoge() {  # $1 dispositivo, $2 nombre
-  for d in bench calib; do
-    mkdir -p "$SALIDA/$2/$d"
-    xcrun devicectl device copy from --device "$1" --domain-type appDataContainer \
-      --domain-identifier $APP --source "Documents/$d" --destination "$SALIDA/$2/$d" >/dev/null 2>&1 || true
+  # Solo lo de esta pasada: los informes (.json), el último programa (.ts) y la
+  # calibración. Copiar la carpeta entera arrastra los vídeos de pasadas viejas.
+  mkdir -p "$SALIDA/$2/bench" "$SALIDA/$2/calib"
+  local lista; lista=$(xcrun devicectl device info files --device "$1" --domain-type appDataContainer \
+    --domain-identifier $APP 2>/dev/null | awk '{print $1}')
+  local ts; ts=$(echo "$lista" | grep -E '^Documents/bench/program-split-[0-9]+\.ts$' | sort | tail -1)
+  for f in $(echo "$lista" | grep -E '^Documents/(bench/[^/]+\.json|calib/.+)$') $ts; do
+    xcrun devicectl device copy from --device "$1" --domain-type appDataContainer --domain-identifier $APP \
+      --source "$f" --destination "$SALIDA/$2/${f#Documents/}" >/dev/null 2>&1 || true
   done
 }
 

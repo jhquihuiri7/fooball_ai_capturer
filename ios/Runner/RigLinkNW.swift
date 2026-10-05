@@ -1037,9 +1037,11 @@ final class SplitBench {
         }
         session.send(views: history.message())
 
-        // Con el esclavo caído no se espera su parte (IOS-81).
-        let espera = master.peerDown ? 0 : LinkConstants.partMaxWaitMs
-        let t = rejilla(now - espera)
+        // El programa va siempre al mismo retraso, con el esclavo o sin él (IOS-81): sin
+        // esperar, el instante «ahora» aún no tiene fotograma propio (salía SIN SEÑAL) y
+        // el programa saltaba 100 ms adelante y atrás al caer y volver el par. Con el par
+        // caído, lo que cambia es que MasterProgramStage no espera sus partes.
+        let t = rejilla(now - LinkConstants.partMaxWaitMs)
         guard t != lastProgramT else { return }
         lastProgramT = t
         let inicio = DispatchTime.now().uptimeNanoseconds
