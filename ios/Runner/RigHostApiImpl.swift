@@ -6,10 +6,48 @@
 import Flutter
 import Foundation
 import Metal
+import RigCore
 import RigMedia
 
 /// El gráfico del programa del móvil (IOS-47): uno, a tamaño de programa, que llena
 /// Dart por `setOverlay` y lee la composición del maestro.
+/// La franja de anuncios del móvil (IOS-48): la llena Dart (o el banco) y la lee la
+/// composición del maestro.
+enum AdHub {
+    static let store: AdStore? = MTLCreateSystemDefaultDevice().map {
+        AdStore(device: $0, width: OverlayHub.programWidth, height: OverlaySpec.stripHeight)
+    }
+    static let rotation: AdRotation? = store.map { AdRotation(store: $0) }
+
+    /// El instante del soporte en el maestro (su reloj de host).
+    static func nowRigMs() -> Int64 { RigLink.hostNowNs() / 1_000_000 }
+
+    /// Carga la lista: los anuncios de Documents/ads/<dir> y sus vueltas.
+    static func apply(json: String) throws {
+        guard let store, let rotation,
+              let raiz = try? FileManager.default.url(for: .documentDirectory, in: .userDomainMask,
+                                                      appropriateFor: nil, create: true)
+                  .appendingPathComponent("ads", isDirectory: true),
+              let datos = json.data(using: .utf8),
+              let doc = try JSONSerialization.jsonObject(with: datos) as? [String: Any]
+        else {
+            throw PigeonError(code: "ads", message: "lista de anuncios ilegible", details: nil)
+        }
+        for ad in doc["ads"] as? [[String: Any]] ?? [] {
+            guard let nombre = ad["name"] as? String, let dir = ad["dir"] as? String,
+                  !dir.contains("..")
+            else { continue }
+            try store.loadDirectory(raiz.appendingPathComponent(dir), name: nombre,
+                                    fps: (ad["fps"] as? Int) ?? 30)
+        }
+        let slots = try (doc["slots"] as? [[String: Any]] ?? []).compactMap { slot -> AdSlot? in
+            guard let nombre = slot["name"] as? String, let clip = store.clip(named: nombre) else { return nil }
+            return try AdSlot(ad: clip, loops: (slot["loops"] as? Int) ?? 1)
+        }
+        rotation.set(playlist: AdPlaylist(slots: slots), atRigMs: nowRigMs())
+    }
+}
+
 enum OverlayHub {
     static let programWidth = 1920
     static let programHeight = 1080
@@ -60,6 +98,20 @@ final class RigHostApiImpl: NSObject, RigHostApi {
             rect: .init(x: Int(x), y: Int(y), width: Int(width), height: Int(height)),
             generation: Int(generation)
         )
+    }
+
+    func setAdPlaylist(json: String) throws -> String {
+        do {
+            try AdHub.apply(json: json)
+            return ""
+        } catch {
+            return "\(error)"
+        }
+    }
+
+    func setAdOverride(name: String, loops: Int64) throws {
+        let clip = name.isEmpty ? nil : AdHub.store?.clip(named: name)
+        AdHub.rotation?.set(override: clip, loops: max(1, Int(loops)), atRigMs: AdHub.nowRigMs())
     }
 
     func clearOverlay(layer: Int64) throws {

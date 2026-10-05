@@ -36,6 +36,14 @@ abstract class RigHostApi {
 
   /// Quita una capa del gráfico.
   void clearOverlay(int layer);
+
+  /// La rotación de la franja (IOS-48), en JSON: `{"ads": [{"name", "dir", "fps"}],
+  /// "slots": [{"name", "loops"}]}`. `dir` es un directorio de PNG RGBA de 1920×108
+  /// dentro de `Documents/ads/`. Arranca en este instante. Devuelve "" o el error.
+  String setAdPlaylist(String json);
+
+  /// Un anuncio ya cargado que se cuela desde ahora `loops` vueltas; nombre vacío lo quita.
+  void setAdOverride(String name, int loops);
 }
 
 @FlutterApi()

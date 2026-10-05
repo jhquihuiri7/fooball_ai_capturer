@@ -22,7 +22,7 @@ final class MasterProgramStageTests: XCTestCase {
 
     private final class ComposicionFalsa: ProgramComposing {
         var llamadas: [(master: Bool, slave: Bool, view: ViewCommand)] = []
-        func compose(master: CVPixelBuffer?, slave: CVPixelBuffer?, view: ViewCommand, into destination: CVPixelBuffer) throws {
+        func compose(master: CVPixelBuffer?, slave: CVPixelBuffer?, view: ViewCommand, atRigMs: Int64, into destination: CVPixelBuffer) throws {
             llamadas.append((master != nil, slave != nil, view))
         }
     }

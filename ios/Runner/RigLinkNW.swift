@@ -787,10 +787,18 @@ final class SplitBench {
                     let c = try MetalProgramComposer(context: ctx, masterSide: side,
                                                      width: Self.programWidth, height: Self.programHeight)
                     c.overlay = OverlayHub.shared  // el marcador de Dart (IOS-47)
+                    c.ads = AdHub.rotation         // la franja (IOS-48)
                     return c
                 }(),
                 masterPool: pool
             )
+            // IOS-48: con RIG_ADS=<fichero JSON en Documents/ads>, la lista del banco.
+            if let fichero = env["RIG_ADS"],
+               let raiz = try? FileManager.default.url(for: .documentDirectory, in: .userDomainMask,
+                                                       appropriateFor: nil, create: true),
+               let json = try? String(contentsOf: raiz.appendingPathComponent("ads/\(fichero)"), encoding: .utf8) {
+                do { try AdHub.apply(json: json) } catch { NSLog("[split] anuncios: %@", "\(error)") }
+            }
             m.masterFrame = { ms in
                 guard let lease = ring.acquire(nearest: ms, maxDistanceMs: Self.frameMatchMs) else { return nil }
                 return (lease.buffer, { ring.release(lease) })

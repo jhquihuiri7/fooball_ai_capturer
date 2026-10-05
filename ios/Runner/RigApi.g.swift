@@ -98,6 +98,12 @@ protocol RigHostApi {
   func setOverlay(rgba: FlutterStandardTypedData, width: Int64, height: Int64, x: Int64, y: Int64, layer: Int64, generation: Int64) throws
   /// Quita una capa del gráfico.
   func clearOverlay(layer: Int64) throws
+  /// La rotación de la franja (IOS-48), en JSON: `{"ads": [{"name", "dir", "fps"}],
+  /// "slots": [{"name", "loops"}]}`. `dir` es un directorio de PNG RGBA de 1920×108
+  /// dentro de `Documents/ads/`. Arranca en este instante. Devuelve "" o el error.
+  func setAdPlaylist(json: String) throws -> String
+  /// Un anuncio ya cargado que se cuela desde ahora `loops` vueltas; nombre vacío lo quita.
+  func setAdOverride(name: String, loops: Int64) throws
 }
 
 /// Generated setup class from Pigeon to handle messages through the `binaryMessenger`.
@@ -170,6 +176,41 @@ class RigHostApiSetup {
       }
     } else {
       clearOverlayChannel.setMessageHandler(nil)
+    }
+    /// La rotación de la franja (IOS-48), en JSON: `{"ads": [{"name", "dir", "fps"}],
+    /// "slots": [{"name", "loops"}]}`. `dir` es un directorio de PNG RGBA de 1920×108
+    /// dentro de `Documents/ads/`. Arranca en este instante. Devuelve "" o el error.
+    let setAdPlaylistChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.RigHostApi.setAdPlaylist\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      setAdPlaylistChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let jsonArg = args[0] as! String
+        do {
+          let result = try api.setAdPlaylist(json: jsonArg)
+          reply(wrapResult(result))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      setAdPlaylistChannel.setMessageHandler(nil)
+    }
+    /// Un anuncio ya cargado que se cuela desde ahora `loops` vueltas; nombre vacío lo quita.
+    let setAdOverrideChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.RigHostApi.setAdOverride\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      setAdOverrideChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let nameArg = args[0] as! String
+        let loopsArg = args[1] as! Int64
+        do {
+          try api.setAdOverride(name: nameArg, loops: loopsArg)
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      setAdOverrideChannel.setMessageHandler(nil)
     }
   }
 }

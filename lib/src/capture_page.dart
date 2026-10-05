@@ -93,7 +93,7 @@ class _CapturePageState extends State<CapturePage> {
       widget.session != null || widget.standalone || widget.linkOnly
           ? null
           : MasterHost(
-              directory: Directory('${Platform.environment['HOME']}/Documents/$matchDirectoryName'),
+              directory: Directory('${appDocumentsPath()}/$matchDirectoryName'),
               controlSecret: _api.controlSecret,
               announceMatch: _api.setMatchId,
               peerAddress: _api.linkPeerAddress,

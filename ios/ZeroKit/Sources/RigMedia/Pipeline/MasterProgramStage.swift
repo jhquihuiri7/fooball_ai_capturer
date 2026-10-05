@@ -22,17 +22,20 @@ import RigCore
 
 /// Compone el programa de un instante; ComposeProgramKernel lo cumple con Metal.
 public protocol ProgramComposing: AnyObject {
+    /// `atRigMs`: el instante del programa, que elige el fotograma de la franja.
     func compose(
-        master: CVPixelBuffer?, slave: CVPixelBuffer?, view: ViewCommand,
+        master: CVPixelBuffer?, slave: CVPixelBuffer?, view: ViewCommand, atRigMs: Int64,
         into destination: CVPixelBuffer
     ) throws
 }
 
-/// La composición con el kernel de IOS-41, con el gráfico de Dart si lo hay (IOS-47); la
-/// franja llega con IOS-48.
+/// La composición con el kernel de IOS-41, con el gráfico de Dart (IOS-47) y la franja
+/// de anuncios (IOS-48) si los hay.
 public final class MetalProgramComposer: ProgramComposing {
     /// El gráfico que manda Dart (marcador, alineación, SIN SEÑAL).
     public var overlay: OverlayStore?
+    /// La franja de anuncios (IOS-48).
+    public var ads: AdRotation?
 
     private let context: MetalContext
     private let kernel: ComposeProgramKernel
@@ -49,7 +52,7 @@ public final class MetalProgramComposer: ProgramComposing {
     }
 
     public func compose(
-        master: CVPixelBuffer?, slave: CVPixelBuffer?, view: ViewCommand,
+        master: CVPixelBuffer?, slave: CVPixelBuffer?, view: ViewCommand, atRigMs: Int64,
         into destination: CVPixelBuffer
     ) throws {
         let vista = try RectilinearView(
@@ -64,7 +67,8 @@ public final class MetalProgramComposer: ProgramComposing {
         try kernel.encode(
             master: master, masterSide: masterSide, slave: slave, view: vista,
             seamYawRad: view.seamYawRad, featherRad: view.featherRad,
-            graphic: grafico, strip: nil, destination: destination, commandBuffer: buffer
+            graphic: grafico, strip: ads?.strip(atRigMs: atRigMs)?.0,
+            destination: destination, commandBuffer: buffer
         )
         buffer.commit()
         buffer.waitUntilCompleted()
@@ -239,7 +243,7 @@ public final class MasterProgramStage {
                 try renderer.render(source: propio, view: vista, into: mitad)
             }
             try composer.compose(
-                master: conMaestro ? mitad : nil, slave: parte, view: vista, into: programa
+                master: conMaestro ? mitad : nil, slave: parte, view: vista, atRigMs: t, into: programa
             )
             onProgram?(programa, t)
         } catch {

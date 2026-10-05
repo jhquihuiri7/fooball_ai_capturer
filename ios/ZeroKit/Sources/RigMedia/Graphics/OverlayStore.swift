@@ -1,8 +1,10 @@
 // El gráfico del programa, de Dart a Metal (IOS-47).
 //
-// Dart rasteriza cada capa (marcador, alineación, SIN SEÑAL) cuando cambia, la recorta a
-// la caja con contenido y la manda con su posición. Aquí:
-// - cada capa se guarda en CPU con su caja;
+// Dart rasteriza cada capa (marcador, alineación, SIN SEÑAL) cuando cambia y manda SOLO
+// el rectángulo que cambió respecto a lo último que mandó (un parche): con el reloj en
+// marcha, las cifras del reloj. Aquí:
+// - cada capa es un búfer RGBA a tamaño de programa, reservado la primera vez que se usa,
+//   donde se pega cada parche;
 // - un búfer RGBA a tamaño de programa, preasignado, tiene las capas ya apiladas (alfa
 //   SIN premultiplicar, «over» de abajo arriba: marcador, alineación, SIN SEÑAL); un
 //   cambio solo recompone el rectángulo sucio (la caja vieja y la nueva);
@@ -49,7 +51,8 @@ public final class OverlayStore {
 
     private struct Layer {
         var rgba: [UInt8]
-        var rect: Rect
+        /// Dónde ha habido algo desde el último borrado: lo que hay que limpiar al quitarla.
+        var bounds: Rect
         var generation: Int
     }
 
@@ -95,22 +98,33 @@ public final class OverlayStore {
         return !layers.isEmpty
     }
 
-    /// Pone (o cambia) una capa: RGBA sin premultiplicar de `rect.width × rect.height` en
-    /// `rect`. Una generación que no sube se ignora (llegó tarde). Asíncrono.
+    /// Pega un parche en una capa: RGBA sin premultiplicar de `rect.width × rect.height` en
+    /// `rect` del programa (sustituye esos píxeles, transparentes incluidos). Una generación
+    /// que no sube se ignora (llegó tarde). Asíncrono.
     public func set(_ layer: OverlayLayer, rgba: [UInt8], rect: Rect, generation: Int,
                     completion: (() -> Void)? = nil) {
         queue.async { [self] in
             defer { completion?() }
-            guard rgba.count == rect.width * rect.height * 4 else { return }
+            let r = rect.clipped(width: width, height: height)
+            guard rgba.count == rect.width * rect.height * 4, !r.isEmpty else { return }
             lock.lock()
-            let vieja = layers[layer]
-            if let vieja, generation <= vieja.generation {
+            var capa = layers[layer] ?? Layer(
+                rgba: [UInt8](repeating: 0, count: width * height * 4), bounds: .empty, generation: 0
+            )
+            guard generation > capa.generation else {
                 lock.unlock()
                 return
             }
-            layers[layer] = Layer(rgba: rgba, rect: rect, generation: generation)
+            for y in r.y..<(r.y + r.height) {
+                let desde = ((y - rect.y) * rect.width + (r.x - rect.x)) * 4
+                let hacia = (y * width + r.x) * 4
+                capa.rgba.replaceSubrange(hacia..<(hacia + r.width * 4), with: rgba[desde..<(desde + r.width * 4)])
+            }
+            capa.bounds = capa.bounds.union(r)
+            capa.generation = generation
+            layers[layer] = capa
             lock.unlock()
-            apply(dirty: rect.union(vieja?.rect ?? .empty))
+            apply(dirty: r)
         }
     }
 
@@ -121,7 +135,7 @@ public final class OverlayStore {
             lock.lock()
             let vieja = layers.removeValue(forKey: layer)
             lock.unlock()
-            if let vieja { apply(dirty: vieja.rect) }
+            if let vieja { apply(dirty: vieja.bounds) }
         }
     }
 
@@ -179,30 +193,29 @@ public final class OverlayStore {
         }
     }
 
-    /// Apila las capas en el búfer de CPU dentro de `r`: «over» con alfa sin premultiplicar.
+    /// Apila las capas en el búfer de CPU dentro de `r`: «over» con alfa sin premultiplicar,
+    /// en enteros (×255) para no pasar por coma flotante en cada píxel.
     private func recompose(_ r: Rect, _ pila: [Layer]) {
         guard !r.isEmpty else { return }
         for y in r.y..<(r.y + r.height) {
-            let fila = y * width * 4
             for x in r.x..<(r.x + r.width) {
-                var cr = 0.0, cg = 0.0, cb = 0.0, ca = 0.0  // premultiplicado durante la mezcla
+                let o = (y * width + x) * 4
+                // Color premultiplicado y alfa, los dos en escala 0…255·255.
+                var pr = 0, pg = 0, pb = 0, pa = 0
                 for capa in pila {
-                    let lx = x - capa.rect.x, ly = y - capa.rect.y
-                    guard lx >= 0, ly >= 0, lx < capa.rect.width, ly < capa.rect.height else { continue }
-                    let i = (ly * capa.rect.width + lx) * 4
-                    let a = Double(capa.rgba[i + 3]) / 255
+                    let a = Int(capa.rgba[o + 3])
                     guard a > 0 else { continue }
-                    cr = Double(capa.rgba[i]) * a + cr * (1 - a)
-                    cg = Double(capa.rgba[i + 1]) * a + cg * (1 - a)
-                    cb = Double(capa.rgba[i + 2]) * a + cb * (1 - a)
-                    ca = a + ca * (1 - a)
+                    let resto = 255 - a
+                    pr = Int(capa.rgba[o]) * a + pr * resto / 255
+                    pg = Int(capa.rgba[o + 1]) * a + pg * resto / 255
+                    pb = Int(capa.rgba[o + 2]) * a + pb * resto / 255
+                    pa = a * 255 + pa * resto / 255
                 }
-                let o = fila + x * 4
-                if ca > 0 {
-                    composite[o] = UInt8((cr / ca).rounded())
-                    composite[o + 1] = UInt8((cg / ca).rounded())
-                    composite[o + 2] = UInt8((cb / ca).rounded())
-                    composite[o + 3] = UInt8((ca * 255).rounded())
+                if pa > 0 {
+                    composite[o] = UInt8(min(255, (pr * 255 + pa / 2) / pa))
+                    composite[o + 1] = UInt8(min(255, (pg * 255 + pa / 2) / pa))
+                    composite[o + 2] = UInt8(min(255, (pb * 255 + pa / 2) / pa))
+                    composite[o + 3] = UInt8(min(255, (pa + 127) / 255))
                 } else {
                     composite[o] = 0; composite[o + 1] = 0; composite[o + 2] = 0; composite[o + 3] = 0
                 }

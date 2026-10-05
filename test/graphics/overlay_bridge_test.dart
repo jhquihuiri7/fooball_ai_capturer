@@ -40,6 +40,15 @@ void main() {
     expect(cropToContent(_frame(20, 10, 1, <(int, int)>[])), isNull);
   });
 
+  test('solo cruza lo que cambió, transparentes incluidos', () {
+    final OverlayFrame a = _frame(20, 10, 1, <(int, int)>[(3, 2), (15, 8)]);
+    final OverlayFrame b = _frame(20, 10, 2, <(int, int)>[(3, 2), (16, 8)]);
+    final CroppedOverlay c = changedRegion(a.rgba, b)!;
+    expect((c.x, c.y, c.width, c.height), (15, 8, 2, 1));
+    expect(c.rgba.sublist(0, 4), <int>[0, 0, 0, 0], reason: 'el píxel que se fue, transparente');
+    expect(changedRegion(a.rgba, a), isNull);
+  });
+
   test('una generación ya mandada no vuelve a cruzar; vacía es quitar', () async {
     final _Sink sink = _Sink();
     final OverlayBridge b = OverlayBridge(sink);
@@ -49,7 +58,7 @@ void main() {
     await b.publish(OverlayLayerId.lineup, _frame(20, 10, 1, <(int, int)>[]));
     await b.clear(OverlayLayerId.scoreboard);
     await b.clear(OverlayLayerId.scoreboard);
-    expect(sink.calls, <String>['set 0 1,1 1x1 g1', 'set 0 2,1 1x1 g2', 'clear 1', 'clear 0']);
+    expect(sink.calls, <String>['set 0 1,1 1x1 g1', 'set 0 1,1 2x1 g2', 'clear 0']);
     expect(b.published, 2);
   });
 }

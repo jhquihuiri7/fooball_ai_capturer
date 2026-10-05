@@ -650,6 +650,45 @@ hubs), ya con esta expectativa.
 
 ---
 
+## 2026-10-04 · IOS-48 — franja de anuncios en el maestro · 🚧 falta la pasada de 10 min con overrides
+
+**Hecho**
+- `RigCore/Ads/AdPlaylist.swift`: réplica de cycle_ns, ad_at y _frame_at de
+  tools/ad_strip.py (AdClip, AdSlot, AdOverride, AdCue, AdPlaylist), en tiempo y en
+  enteros. Cuadra con los 12 dorados de ad_strip.json (rotación, bucles, 25 y 30 fps
+  mezclados, tiempo negativo y los cinco casos de override).
+- `RigMedia/Graphics/AdStore.swift`: carga como load_ad (fotogramas RGBA deduplicados
+  por SHA-256, premultiplicado con el redondeo de la referencia y alfa inversa, en
+  texturas del alto de la franja, 1920×108), rechaza opacos, cadencias que no son 25 o
+  30 y lo que no cabe. **Decisión mínima**: AD_MEMORY_BUDGET no existía; queda en
+  192 MiB (~115 fotogramas distintos), con un error que dice cuánto ocupa y cuánto queda.
+  Carga directorios de PNG (el master de Remotion). AdRotation elige la franja por el
+  reloj del soporte, con override.
+- ProgramComposing recibe el instante del programa; MetalProgramComposer pasa la franja
+  al kernel. Pigeon `setAdPlaylist(json)` y `setAdOverride(name, loops)`; AdHub en el
+  Runner; el banco carga una lista con RIG_ADS.
+- Tests: AdPlaylistTests (dorados), AdStoreTests (4: deduplicado y premultiplicado,
+  rechazos y presupuesto, PNG, rotación con override).
+
+**Medido en el iPhone 17**: un anuncio de prueba con alfa sale compuesto sobre la barra
+de la franja en el .ts del programa, sin un fallo de composición.
+
+## 2026-10-04 · IOS-47 (cont.) y IOS-62: parches y la API desde un tercer dispositivo
+
+- La subida del gráfico tardaba 22 ms: la capa del marcador lleva arriba el marcador y
+  abajo la barra, y su caja era el fotograma entero (8 MB por Pigeon y 2 M píxeles en
+  coma flotante cada segundo). Ahora Dart manda solo el rectángulo que cambió respecto
+  a lo último enviado (un parche, transparentes incluidos) y el nativo pega el parche en
+  su copia de la capa y recompone en enteros. **Medido: 0,019 ms la última subida, 71 en
+  ~75 s, una por segundo con el reloj en marcha.**
+- El maestro guardaba el partido fuera de Documents (HOME no es el contenedor en iOS):
+  `appDocumentsPath()` lo toma del padre del temporal de la app.
+- **IOS-62 por la LAN, con el Mac de tercer dispositivo**: un token firmado en Python
+  (tools/control_token.py) con el secreto derivado del soporte abre la API Dart del
+  iPhone: GET del partido, `match/clock start`, un gol (200) y el mismo gol con el
+  marcador viejo (409 «home tiene 1 goles, no 0»). El gol sale en el marcador del
+  programa a los 2 s.
+
 ## 2026-10-04 · IOS-47 — puente del gráfico a Metal · 🚧 falta el banco de 10 min
 
 **Hecho**

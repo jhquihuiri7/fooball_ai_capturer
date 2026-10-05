@@ -18,6 +18,10 @@ import 'package:football_ai_capture/src/server/api_server.dart';
 import 'package:football_ai_capture/src/server/control_token.dart';
 import 'package:football_ai_capture/src/server/match_engine.dart';
 
+/// La carpeta Documents de la app en iOS: el temporal es `<contenedor>/tmp`, así que su
+/// padre es el contenedor. Sin depender de HOME ni de path_provider.
+String appDocumentsPath() => '${Directory.systemTemp.parent.path}/Documents';
+
 /// Nombre del fichero del partido en la carpeta del maestro.
 const String matchFileName = 'match.json';
 

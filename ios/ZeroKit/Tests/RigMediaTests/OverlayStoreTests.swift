@@ -55,9 +55,12 @@ final class OverlayStoreTests: XCTestCase {
         XCTAssertEqual(pixel(t, 10, 5), [255, 0, 0, 255])
         s.endFrame()
 
-        // Moverla deja limpia la caja vieja.
-        sync { s.set(.scoreboard, rgba: liso(4, 2, [0, 255, 0, 255]), rect: .init(x: 40, y: 20, width: 4, height: 2),
+        // Un parche transparente borra lo que había en su caja (lo que manda Dart cuando
+        // algo desaparece), y uno nuevo pinta en otra parte.
+        sync { s.set(.scoreboard, rgba: liso(4, 2, [0, 0, 0, 0]), rect: .init(x: 10, y: 5, width: 4, height: 2),
                      generation: 2, completion: $0) }
+        sync { s.set(.scoreboard, rgba: liso(4, 2, [0, 255, 0, 255]), rect: .init(x: 40, y: 20, width: 4, height: 2),
+                     generation: 3, completion: $0) }
         t = try XCTUnwrap(s.beginFrame())
         XCTAssertEqual(pixel(t, 10, 5), [0, 0, 0, 0])
         XCTAssertEqual(pixel(t, 40, 20), [0, 255, 0, 255])
@@ -67,7 +70,7 @@ final class OverlayStoreTests: XCTestCase {
         sync { s.clear(.lineup, completion: $0) }
         sync { s.clear(.scoreboard, completion: $0) }
         XCTAssertNil(s.beginFrame())
-        XCTAssertEqual(s.uploads, 5, "la generación vieja no sube")
+        XCTAssertEqual(s.uploads, 6, "la generación vieja no sube")
     }
 
     func testLaTexturaEnUsoNoSeCambiaHastaQueSeSuelta() throws {
