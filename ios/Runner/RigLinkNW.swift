@@ -699,6 +699,9 @@ final class SplitBench {
     private let muxer = TsMuxer(audio: nil)
     private var tsFile: FileHandle?
     private var tsURL: URL?
+    // IOS-57: la copia local del programa en .mov (con el audio del micro si lo hay).
+    private var recorder: ProgramRecorder?
+    var audioFormat: () -> CMAudioFormatDescription? = { nil }
     private var finished = false
 
     // Medidas
@@ -718,6 +721,11 @@ final class SplitBench {
 
     private func number(_ key: String, _ def: Double) -> Double {
         env[key].flatMap(Double.init) ?? def
+    }
+
+    /// Una trama AAC del micro (con RIG_AUDIO=1): a la copia local del programa.
+    func audio(_ trama: AacFrame) {
+        queue.async { [weak self] in try? self?.recorder?.append(audio: trama) }
     }
 
     func start() {
@@ -997,6 +1005,10 @@ final class SplitBench {
             }
         }
         while let f = enc.pop() {
+            if recorder == nil, let fd = f.formatDescription, let url = tsURL?.deletingPathExtension().appendingPathExtension("mov") {
+                recorder = try? ProgramRecorder(url: url, videoFormat: fd, audioFormat: audioFormat())
+            }
+            try? recorder?.append(video: f)
             var avcc = f.data
             if f.isKeyframe, let fd = f.formatDescription {
                 avcc = H264ParameterSets.avccNals(from: fd) + avcc
@@ -1016,6 +1028,8 @@ final class SplitBench {
         programEncoder?.flush()
         drainProgram()
         e0?.flush()
+        let espera = DispatchSemaphore(value: 0)
+        if let r = recorder { r.finish { _ in espera.signal() }; _ = espera.wait(timeout: .now() + 5) }
         try? tsFile?.close()
         guard session.isMaster || slave != nil else { return }
         func pct(_ xs: [Double], _ q: Double) -> Double {
@@ -1045,6 +1059,8 @@ final class SplitBench {
             "idr_requests": ms.idrRequests,
             "without_master_frame": ms.withoutMasterFrame,
             "compose_failures": ms.composeFailures,
+            "mov_video_frames": recorder?.videoFrames ?? 0,
+            "mov_audio_frames": recorder?.audioFrames ?? 0,
             "e0_written": e0?.written ?? 0,
             "e0_dropped": e0?.dropped ?? 0,
             "overlay_uploads": OverlayHub.shared?.uploads ?? 0,

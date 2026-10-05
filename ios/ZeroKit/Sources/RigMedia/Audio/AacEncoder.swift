@@ -83,6 +83,30 @@ public final class AacEncoder {
         return queue.pop()
     }
 
+    /// La configuración del AAC (el ESDS, «magic cookie») y su formato, para escribirlo en
+    /// un contenedor sin recodificar (ProgramRecorder, IOS-57).
+    public var formatDescription: CMAudioFormatDescription? {
+        var asbd = output.streamDescription.pointee
+        let cookie = converter.magicCookie
+        var desc: CMAudioFormatDescription?
+        let status: OSStatus
+        if let cookie {
+            status = cookie.withUnsafeBytes { raw in
+                CMAudioFormatDescriptionCreate(
+                    allocator: nil, asbd: &asbd, layoutSize: 0, layout: nil,
+                    magicCookieSize: cookie.count, magicCookie: raw.baseAddress, extensions: nil,
+                    formatDescriptionOut: &desc
+                )
+            }
+        } else {
+            status = CMAudioFormatDescriptionCreate(
+                allocator: nil, asbd: &asbd, layoutSize: 0, layout: nil, magicCookieSize: 0, magicCookie: nil,
+                extensions: nil, formatDescriptionOut: &desc
+            )
+        }
+        return status == noErr ? desc : nil
+    }
+
     public var dropped: Int {
         lock.lock(); defer { lock.unlock() }
         return queue.dropped

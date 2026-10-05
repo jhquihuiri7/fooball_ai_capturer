@@ -233,6 +233,8 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
                     session: nw.session, side: role == .left ? .left : .right,
                     pipeline: { [weak self] in self?.engine.rigPipeline }
                 )
+                s.audioFormat = { [weak self] in self?.engine.audioFormatDescription }
+                engine.onAacFrame = { [weak s] trama in s?.audio(trama) }
                 s.start()
                 split = s
             }

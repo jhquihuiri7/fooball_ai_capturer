@@ -25,6 +25,12 @@ public final class AudioCapture: NSObject, AVCaptureAudioDataOutputSampleBufferD
     public private(set) var gaps = 0
     private var lastEndMs: Double?
 
+    /// El formato del AAC (con su ESDS), cuando ya ha llegado audio.
+    public var formatDescription: CMAudioFormatDescription? {
+        lock.lock(); defer { lock.unlock() }
+        return encoder?.formatDescription
+    }
+
     public init(rigMsOf: @escaping (CMTime) -> Double) {
         self.rigMsOf = rigMsOf
     }

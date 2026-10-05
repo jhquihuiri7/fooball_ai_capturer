@@ -650,6 +650,26 @@ hubs), ya con esta expectativa.
 
 ---
 
+## 2026-10-04 · IOS-57 — copias locales: el programa con audio · 🚧 falta el audio en la 4K y la política de disco
+
+**Hecho**
+- `RigMedia/Video/ProgramRecorder.swift`: AVAssetWriter en passthrough (outputSettings
+  nil y la descripción de formato como pista) con el H.264 y el AAC del programa, en
+  .mov; los instantes cuentan desde el primer fotograma; el AAC entra crudo (sin ADTS)
+  con su ESDS. AacEncoder expone la `formatDescription` con la magic cookie del
+  convertidor; AudioCapture, la suya.
+- Banco program-split: el programa también en `program-split-<t>.mov`, con el audio del
+  micro si RIG_AUDIO=1 (CaptureEngine `onAacFrame`).
+- Tests: ProgramRecorderTests (2 s de H.264 y AAC de verdad → .mov que AVFoundation lee
+  con sus dos pistas y 2,0 s).
+
+**Medido en el iPhone 17** (maestro con el banco y RIG_AUDIO=1, 40 s): .mov con H.264
+1920×1080 y AAC 48 kHz, 33,6 s, 1000 fotogramas y 1564 tramas de audio (las que tocan a
+46,9 por segundo).
+
+**Queda fuera**: la pista de audio en la grabación HEVC 4K de CaptureEngine, la 4K
+encendida por defecto con PHONE_DISK_RESERVE_GB y el borrado tras la ingesta (ML-08).
+
 ## 2026-10-04 · IOS-87 — un solo partido en el maestro: migración y plantillas · 🚧 falta el MasterBoard de la pantalla
 
 **Hecho**

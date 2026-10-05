@@ -279,7 +279,12 @@ final class CaptureEngine: NSObject {
         audio = captura
     }
 
+    /// Las tramas AAC del micro, además del fichero: el banco las mete en el programa.
+    var onAacFrame: ((AacFrame) -> Void)?
+    var audioFormatDescription: CMAudioFormatDescription? { audio?.formatDescription }
+
     private func writeAudio(_ trama: AacFrame) {
+        onAacFrame?(trama)
         if audioFile == nil {
             let base = try? FileManager.default.url(for: .documentDirectory, in: .userDomainMask,
                                                     appropriateFor: nil, create: true)
