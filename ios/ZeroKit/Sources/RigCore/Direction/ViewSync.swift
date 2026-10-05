@@ -143,7 +143,8 @@ public enum ProgramFrame: Equatable, Sendable {
 /// tic T + PART_MAX_WAIT_MS.
 public final class ProgramSync {
     private let halfFrameMs: Double
-    public let maxWaitMs: Int64
+    /// Lo que se espera la parte; 0 con el esclavo caído (IOS-81).
+    public var maxWaitMs: Int64
     private let capacity: Int
     private var parts: [PartInfo] = []
     public private(set) var oneLensFrames = 0

@@ -650,6 +650,30 @@ hubs), ya con esta expectativa.
 
 ---
 
+## 2026-10-04 · IOS-81 — latido, detección de caída y una lente · 🚧 falta SPK-06 con dos iPhone
+
+**Hecho**
+- `RigCore/Runtime/PeerHealth.swift`: up/suspect/down por el latido; el enlace está
+  arriba solo si se oye en los dos sentidos (el latido trae el último seq de medios que
+  el otro oyó de mí, y el plazo corre desde CUÁNDO mandé ese seq). Caído tras
+  HEARTBEAT_LOSS_MS (500 ms), dudoso a la mitad, y al cerrarse el control. Heartbeat:
+  rol, term, escalera, estado (cámara, grabación, parte) y el seq, en 11 B.
+- RigLinkSession: latido a LINK_HEARTBEAT_HZ (10 Hz) por medios, `health` y
+  `onPeerState`; apunta cada seq de medios enviado y el último oído.
+- En el maestro con el esclavo caído: DirectorService.setSingleLens (los límites de la
+  lente que queda), MasterProgramStage.peerDown (ProgramSync deja de esperar la parte)
+  y el banco compone sin enlace. Al volver, las dos lentes.
+- Tests: PeerHealthTests (caída y vuelta en los tiempos del ADR, un solo sentido no está
+  arriba, el latido va y vuelve) y en la sesión: **un corte en un solo sentido lo ven
+  los dos en <1 s**.
+
+**Medido en el iPhone 17** (maestro; el Mac de esclavo se va a mitad): el maestro lo ve
+caído y **el programa no se para**: 1048 fotogramas, 0 fallos, tic p5 29,5 fps.
+Antes de este arreglo, el programa se paraba al caer el esclavo (el tic exigía el enlace).
+
+**Queda fuera**: la vuelta relajando los límites en 2 s, el temporizador de promoción
+del esclavo (IOS-83) y SPK-06 con los dos iPhone.
+
 ## 2026-10-04 · IOS-57 — copias locales: el programa con audio · 🚧 falta el audio en la 4K y la política de disco
 
 **Hecho**

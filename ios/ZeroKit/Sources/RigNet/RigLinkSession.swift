@@ -110,6 +110,20 @@ public final class RigLinkSession {
     public var onNoPart: ((NoPartPacket) -> Void)?
     /// El esclavo debe forzar un IDR: el maestro tiene un hueco en `part_seq`.
     public var onIdrRequest: ((UInt32) -> Void)?
+    // MARK: - El latido (IOS-81, ADR 0023 §6)
+
+    /// La salud del otro: arriba solo si se oye en los dos sentidos.
+    public let health = PeerHealth()
+    /// Cada cambio de salud del otro (en la cola de la sesión).
+    public var onPeerState: ((PeerState) -> Void)?
+    /// Lo que este móvil cuenta de sí en su latido.
+    public var ladderLevel: UInt8 = 0
+    public var cameraOk = true
+    public var recording = false
+    public var sendingParts = false
+    private var lastHeardMediaSeq: UInt32 = 0
+    private var heartbeatTimer: DispatchSourceTimer?
+
     /// El maestro recibe las detecciones del esclavo de un instante de la rejilla
     /// (IOS-73): instante, ms de inferencia y cajas nativas.
     public var onDetections: ((Int64, Double, [PlayerDetection]) -> Void)?
@@ -169,6 +183,7 @@ public final class RigLinkSession {
         transport.onState = { [weak self] estado in
             self?.queue.async { self?.transportChanged(estado) }
         }
+        health.onChange = { [weak self] e in self?.onPeerState?(e) }
     }
 
     // MARK: - Ciclo de vida
@@ -177,11 +192,39 @@ public final class RigLinkSession {
         queue.async { [self] in
             state = .searching
             transport.start()
+            startHeartbeat()
         }
+    }
+
+    private func startHeartbeat() {
+        heartbeatTimer?.cancel()
+        let t = DispatchSource.makeTimerSource(queue: queue)
+        let periodo = 1.0 / LinkConstants.heartbeatHz
+        t.schedule(deadline: .now() + periodo, repeating: periodo, leeway: .milliseconds(5))
+        t.setEventHandler { [weak self] in self?.heartbeat() }
+        heartbeatTimer = t
+        t.resume()
+    }
+
+    /// Un latido: se manda (si hay sesión) y se mira cómo está el otro.
+    private func heartbeat() {
+        let ahora = hostNowNs() / 1_000_000
+        if case .connected = state {
+            seqMedia &+= 1
+            let hb = Heartbeat(
+                isMaster: isMaster, term: UInt32(clamping: term), ladderLevel: ladderLevel, cameraOk: cameraOk,
+                recording: recording, sendingParts: sendingParts, lastHeardSeq: lastHeardMediaSeq
+            )
+            send(type: .heartbeat, payload: hb.encode(), seq: seqMedia, channel: .media)
+        }
+        health.tick(nowMs: ahora)
     }
 
     public func stop() {
         queue.async { [self] in
+            heartbeatTimer?.cancel()
+            heartbeatTimer = nil
+            health.controlClosed()
             pingGeneration += 1
             transport.stop()
             resetSession()
@@ -205,9 +248,11 @@ public final class RigLinkSession {
         case .connected:
             sendHello()
         case .listening, .connecting:
+            health.controlClosed()
             resetSession()
             if state != .off { state = .searching }
         case .failed, .idle:
+            health.controlClosed()
             resetSession()
         }
     }
@@ -474,6 +519,9 @@ public final class RigLinkSession {
         if channel == .media, !replay.accept(frame.seq) {
             return
         }
+        if channel == .media {
+            lastHeardMediaSeq = frame.seq
+        }
         switch frame.type {
         case .clockPing:
             guard isMaster else { return }
@@ -513,6 +561,9 @@ public final class RigLinkSession {
         case .idrRequest:
             guard !isMaster, let seq = IdrRequestWire.decode(frame.payload) else { return }
             onIdrRequest?(seq)
+        case .heartbeat:
+            guard let hb = Heartbeat.decode(frame.payload) else { return }
+            health.heard(hb, nowMs: llegada / 1_000_000)
         case .detections:
             guard isMaster, let (ms, cajas) = DetectionsPayload.decode(frame.payload) else { return }
             onDetections?(Int64(frame.rigMs), Double(ms), cajas.compactMap(\.detection))
@@ -590,6 +641,9 @@ public final class RigLinkSession {
         if !preSession {
             guard let sessionKey else { return }
             frame.tag = LinkAuth.tag(key: sessionKey.key, frame: frame)
+        }
+        if channel == .media {
+            health.sent(seq: seq, nowMs: hostNowNs() / 1_000_000)
         }
         transport.send(frame, on: channel)
     }

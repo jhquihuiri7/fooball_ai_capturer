@@ -107,6 +107,17 @@ public final class MasterProgramStage {
     private var decoded: [Int64: CVPixelBuffer] = [:]
     public private(set) var stats = Stats()
 
+    /// El esclavo está caído (IOS-81): no se espera su parte; cada instante se compone en
+    /// cuanto toca, de una lente.
+    public var peerDown = false {
+        didSet {
+            lock.lock()
+            sync.maxWaitMs = peerDown ? 0 : waitWithPeer
+            lock.unlock()
+        }
+    }
+    private var waitWithPeer: Int64 = LinkConstants.partMaxWaitMs
+
     /// El fotograma propio más cercano a un instante, del FrameRing (IOS-09). Devuelve el
     /// búfer y una función para soltarlo.
     public var masterFrame: ((Int64) -> (CVPixelBuffer, () -> Void)?)?
@@ -128,6 +139,7 @@ public final class MasterProgramStage {
         maxWaitMs: Int64 = LinkConstants.partMaxWaitMs
     ) {
         self.masterSide = masterSide
+        waitWithPeer = maxWaitMs
         sync = ProgramSync(frameDurationMs: frameDurationMs, maxWaitMs: maxWaitMs)
         self.decoder = decoder
         self.renderer = renderer

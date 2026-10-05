@@ -686,6 +686,8 @@ final class SplitBench {
     /// IOS-75: el registro N0 del maestro (Documents/n0/<partido>-<lado>.jsonl).
     private var e0: E0Logger?
     private var e0Ticks = 0
+    /// Los cambios de salud del esclavo, para el informe (IOS-81).
+    private var peerStates: [String] = []
     /// Una vista de cada 4 tics del programa: los 7,5 Hz del registro.
     static let e0ViewEvery = 4
     // IOS-38: el igualado de color, medido cada `colorEveryMs`.
@@ -740,6 +742,16 @@ final class SplitBench {
             self?.master?.receive(part: parte, arrivalRigMs: Self.nowMs())
         }
         session.onNoPart = { [weak self] nada in self?.master?.receive(noPart: nada) }
+        // IOS-81: con el esclavo caído, una lente y sin esperar su parte; al volver, las dos.
+        session.onPeerState = { [weak self] estado in
+            self?.queue.async {
+                guard let self, self.session.isMaster else { return }
+                self.peerStates.append("\(Self.nowMs()):\(estado.rawValue)")
+                let caido = estado == .down
+                self.master?.peerDown = caido
+                self.director?.setSingleLens(caido ? self.side : nil)
+            }
+        }
         session.onColorMeans = { [weak self] bgr in
             self?.queue.async { self?.slaveMeans = bgr }
         }
@@ -946,7 +958,9 @@ final class SplitBench {
         if case .connected = session.state, setUpIfNeeded() {
             colorTick(now: Self.nowMs())
         }
-        guard case .connected = session.state, session.isMaster, setUpIfNeeded(), let master else {
+        // El maestro compone SIEMPRE, con enlace o sin él (IOS-81: el programa no se
+        // para porque caiga el esclavo); las vistas solo salen si hay sesión.
+        guard session.isMaster, setUpIfNeeded(), let master else {
             return
         }
         let ahora = DispatchTime.now().uptimeNanoseconds
@@ -967,7 +981,9 @@ final class SplitBench {
         }
         session.send(views: history.message())
 
-        let t = rejilla(now - LinkConstants.partMaxWaitMs)
+        // Con el esclavo caído no se espera su parte (IOS-81).
+        let espera = master.peerDown ? 0 : LinkConstants.partMaxWaitMs
+        let t = rejilla(now - espera)
         guard t != lastProgramT else { return }
         lastProgramT = t
         let inicio = DispatchTime.now().uptimeNanoseconds
@@ -1061,6 +1077,7 @@ final class SplitBench {
             "compose_failures": ms.composeFailures,
             "mov_video_frames": recorder?.videoFrames ?? 0,
             "mov_audio_frames": recorder?.audioFrames ?? 0,
+            "peer_states": peerStates,
             "e0_written": e0?.written ?? 0,
             "e0_dropped": e0?.dropped ?? 0,
             "overlay_uploads": OverlayHub.shared?.uploads ?? 0,

@@ -61,6 +61,13 @@ public final class DirectorService {
         lock.lock(); loop.gains = gains; lock.unlock()
     }
 
+    /// El otro móvil cayó (o volvió): a los límites de la lente que queda, o a las dos
+    /// (IOS-81). No lanza: si la lente sola no da límites, se queda como estaba.
+    public func setSingleLens(_ side: CameraSide?) {
+        lock.lock(); defer { lock.unlock() }
+        try? loop.setSingleLens(side)
+    }
+
     public func markSituation() {
         lock.lock(); loop.markSituation(); lock.unlock()
     }

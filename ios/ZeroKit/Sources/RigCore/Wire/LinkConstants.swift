@@ -28,6 +28,13 @@ public enum LinkConstants {
     /// fotograma salga de una lente.
     public static let partMaxWaitMs: Int64 = 100
 
+    /// Latidos por segundo en los dos sentidos, por medios (LINK_HEARTBEAT_HZ, ADR 0023 §11).
+    public static let heartbeatHz = 10.0
+
+    /// Milisegundos sin un latido bueno tras los que el otro está caído
+    /// (HEARTBEAT_LOSS_MS, objetivo hasta SPK-06). A la mitad pasa a «dudoso».
+    public static let heartbeatLossMs: Int64 = 500
+
     /// Datagramas que el emisor suelta de golpe antes de esperar (IOS-52, ADR 0023 §5):
     /// un IDR de cientos de KB en ráfaga desbordaría el búfer del receptor. 16 × 1200 B
     /// son 19 KB por golpe.

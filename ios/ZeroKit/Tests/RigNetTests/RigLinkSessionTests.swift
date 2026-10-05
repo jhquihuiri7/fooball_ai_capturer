@@ -157,6 +157,23 @@ final class RigLinkSessionTests: XCTestCase {
         waitUntil { left.state == .conflict && right.state == .conflict }
     }
 
+    // MARK: - El latido (IOS-81)
+
+    func testUnCorteEnUnSoloSentidoLoVenLosDos() {
+        let (left, right, cableLeft, _) = makePair()
+        let real = { Int64(DispatchTime.now().uptimeNanoseconds) }
+        left.hostNowNs = real
+        right.hostNowNs = real
+        left.start()
+        right.start()
+        waitUntil { left.health.state == .up && right.health.state == .up }
+        // Lo que manda el izquierdo ya no llega; lo del derecho, sí.
+        let inicio = Date()
+        cableLeft.peer = nil
+        waitUntil(3) { left.health.state == .down && right.health.state == .down }
+        XCTAssertLessThan(Date().timeIntervalSince(inicio), 1.0, "los dos lo ven en ~0,5 s")
+    }
+
     // MARK: - El render repartido (IOS-52)
 
     func testVistasPartesNoPartEIdrRequestVanCadaUnoEnSuSentido() throws {
