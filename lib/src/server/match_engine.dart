@@ -13,6 +13,7 @@ import 'dart:math';
 
 import 'package:football_ai_capture/src/constants.dart';
 import 'package:football_ai_capture/src/match_state.dart';
+import 'package:football_ai_capture/src/server/lineups.dart';
 import 'package:football_ai_capture/src/server/match_record.dart';
 
 /// Tiempo monótono en ms y el reloj al que pertenece (ADR 0023 §4).
@@ -37,6 +38,22 @@ class StopwatchTimeSource implements MatchTimeSource {
 
   @override
   int nowMs() => _watch.elapsedMilliseconds;
+}
+
+/// Las alineaciones guardadas y, si el fichero no se pudo leer, por qué. Un fichero roto
+/// no deja el maestro sin arrancar: se aparta a `.roto` (para no pisarlo al guardar) y
+/// se empieza sin alineaciones.
+(LineupBook, String?) _loadLineups(File file) {
+  try {
+    return (LineupBook.load(file), null);
+  } on LineupError catch (error) {
+    try {
+      file.renameSync('${file.path}.roto');
+    } on FileSystemException {
+      // Si no se puede apartar, el siguiente guardado lo sustituye.
+    }
+    return (LineupBook(file: file), error.message);
+  }
 }
 
 String _hex(Random random, int bytes) =>
@@ -98,11 +115,14 @@ class OrderError implements Exception {
 }
 
 class MatchEngine {
-  MatchEngine._(this._file, this._time, this.clock, this.matchId, this.boot);
+  MatchEngine._(this._file, this._time, this.clock, this.matchId, this.boot, (LineupBook, String?) lineups)
+    : lineups = lineups.$1,
+      lineupsError = lineups.$2;
 
   /// Abre el partido guardado en `file`, o empieza uno nuevo si no hay fichero.
   /// Con el mismo `clock_domain` el cronómetro sigue en marcha; con otro vuelve
-  /// parado y con `clock_restored` (ADR 0023).
+  /// parado y con `clock_restored` (ADR 0023). Las alineaciones van aparte, en
+  /// `lineups.json` junto a `file` (el mismo formato que `--lineups` del panel).
   factory MatchEngine.open({
     required File file,
     required MatchTimeSource time,
@@ -119,6 +139,7 @@ class MatchEngine {
       reloj,
       guardado?.matchId ?? 'm_${_hex(azar, 6)}',
       _hex(azar, 8),
+      _loadLineups(File('${file.parent.path}/$lineupsFileName')),
     );
     if (guardado == null) {
       engine
@@ -145,6 +166,12 @@ class MatchEngine {
   final MatchTimeSource _time;
   final MatchClock clock;
   final String matchId;
+
+  /// Las dos alineaciones y cuál está al aire (IOS-61).
+  final LineupBook lineups;
+
+  /// Por qué no se pudieron leer las alineaciones guardadas, si no se pudieron.
+  final String? lineupsError;
 
   /// Identificador de este arranque: cambia en cada uno.
   final String boot;
@@ -187,6 +214,8 @@ class MatchEngine {
           _score(body);
         case 'match/clock':
           _clock(body);
+        case 'match/lineup':
+          _lineup(body);
         case 'clips/mark':
           final void Function()? marca = onClipMark;
           if (marca == null) {
@@ -292,6 +321,54 @@ class MatchEngine {
     }
   }
 
+  /// Formación, tarjeta al aire o las dos (`_order_lineup`). Las plantillas se escriben
+  /// en el editor ([saveLineup]); desde el mando solo se recolocan.
+  void _lineup(Map<String, Object?> body) {
+    final MatchTeam equipo = _team(body);
+    final Object? formacion = body['formation'];
+    final Object? alAire = body['on_air'];
+    if (formacion == null && alAire == null) {
+      throw OrderError(400, 'falta formation u on_air');
+    }
+    if (formacion != null && formacion is! String) {
+      throw OrderError(400, 'formation tiene que ser un texto, p. ej. 4-4-2');
+    }
+    if (alAire != null && alAire is! bool) {
+      throw OrderError(400, 'on_air tiene que ser true o false');
+    }
+    final Team? guardado = lineups.teams[equipo];
+    if (guardado == null) {
+      throw OrderError(409, '${equipo.name} no tiene alineacion guardada');
+    }
+    if (formacion is String) {
+      try {
+        lineups.set(equipo, relineup(guardado, formacion));
+      } on LineupError catch (error) {
+        throw OrderError(400, error.message);
+      }
+    }
+    if (alAire == true) {
+      lineups.setOnAir(equipo);
+    } else if (alAire == false && lineups.onAirSide == equipo) {
+      // Ocultar la propia, nunca la del otro equipo que haya salido después.
+      lineups.setOnAir(null);
+    }
+  }
+
+  /// Guarda la alineación de un equipo desde el editor (`/api/lineup` del panel). Su
+  /// nombre pasa también al marcador. [LineupError] si no se acepta.
+  Team saveLineup(MatchTeam side, String name, String formation, String roster, {String coach = ''}) {
+    final Team equipo = buildTeam(name, formation, roster, coach: coach);
+    lineups.set(side, equipo);
+    if (side == MatchTeam.home) {
+      home = equipo.name;
+    } else {
+      away = equipo.name;
+    }
+    _changed();
+    return equipo;
+  }
+
   void _changed() {
     rev += 1;
     _save();
@@ -330,25 +407,28 @@ class MatchEngine {
     }
   }
 
-  /// El `MatchStateDTO` del ADR 0017, el mismo que lee `PanelMatch.fromJson`. Las
-  /// alineaciones llegan con IOS-61; `scopes` lo pone la API según el token (IOS-62).
+  /// El `MatchStateDTO` del ADR 0017, el mismo que lee `PanelMatch.fromJson`; `scopes`
+  /// lo pone la API según el token (IOS-62).
   Map<String, Object?> toJson({Set<String> scopes = const <String>{panelScopeMatch}}) {
-    Map<String, Object?> equipo(String nombre, int goles) => <String, Object?>{
-      'name': nombre,
-      'goals': goles,
-      'formation': null,
-      'players': 0,
-    };
+    Map<String, Object?> equipo(MatchTeam lado, String nombre, int goles) {
+      final Team? alineacion = lineups.teams[lado];
+      return <String, Object?>{
+        'name': nombre,
+        'goals': goles,
+        'formation': alineacion?.formation,
+        'players': alineacion?.players ?? 0,
+      };
+    }
     return <String, Object?>{
       'match_id': matchId,
       'boot': boot,
       'rev': rev,
-      'home': equipo(home, homeGoals),
-      'away': equipo(away, awayGoals),
+      'home': equipo(MatchTeam.home, home, homeGoals),
+      'away': equipo(MatchTeam.away, away, awayGoals),
       'clock_ms': clock.elapsedMs,
       'clock_running': clock.running,
       'clock_restored': clock.restored,
-      'lineup_on_air': null,
+      'lineup_on_air': lineups.onAirSide?.name,
       'streaming': streaming,
       'can_stream': canStream,
       'formations': matchFormations,

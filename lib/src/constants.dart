@@ -221,6 +221,9 @@ const List<String> matchFormations = <String>[
   '4-4-2', '4-3-3', '4-2-3-1', '4-1-4-1', '3-5-2', '3-4-3', '5-3-2', '5-4-1',
 ];
 
+/// Las alineaciones del partido, junto al fichero del partido (`--lineups` del panel).
+const String lineupsFileName = 'lineups.json';
+
 /// Ámbito del token que deja tocar el partido (`SCOPE_MATCH`).
 const String panelScopeMatch = 'match';
 

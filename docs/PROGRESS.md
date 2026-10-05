@@ -650,6 +650,25 @@ hubs), ya con esta expectativa.
 
 ---
 
+## 2026-10-04 · IOS-61 — alineaciones en el maestro · ✅
+
+**Hecho**
+- `lib/src/server/lineups.dart`: porte de tools/lineup.py en lo que usa la API
+  (parseFormation, parseRoster con BOM, CRLF, cabecera de CSV y columnas sobrantes,
+  buildTeam, rosterText, `relineup` para recolocar por formación, Team validado al
+  construirlo y LineupBook con set/toggle/setOnAir/summary y guardado atómico). Los
+  límites, con su nombre de Python; los nombres se cuentan por caracteres como en Python.
+  RosterPlayer, para no chocar con el Player de la pantalla local.
+- MatchEngine: la orden `match/lineup` como `_order_lineup` (400/409, recolocar, sacar al
+  aire, ocultar la propia sin tocar la del rival), `saveLineup` (el editor; el nombre
+  pasa al marcador) y el DTO con formation, players y lineup_on_air. Las alineaciones
+  van en `lineups.json` junto al partido; un fichero roto se aparta a `.roto`, el maestro
+  arranca sin ellas y lo dice en `lineupsError`.
+- Tests (17): los 6 dorados de lineups.json (5 build_team y la traza on_air con su
+  summary), la lista, las formaciones, el disco y la orden en el motor.
+
+**Queda fuera**: la ruta del editor (`/api/lineup`) la sirve la API del mando (IOS-62).
+
 ## 2026-10-04 · IOS-63 — token de mando y QR en el maestro · ✅
 
 **Hecho**
