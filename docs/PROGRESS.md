@@ -12,6 +12,38 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-04 · IOS-57 — copias locales: la 4K con audio y la política de disco · ✅
+
+**Hecho** (cierra lo que quedó fuera en la entrada 🚧 de abajo)
+- La grabación HEVC 4K gana una pista AAC (48 kHz, mono, 128 kbit/s): AudioCapture
+  pasa el PCM del micro (`onSampleBuffer`), y CaptureEngine lo mete en el escritor en su
+  cola, con el mismo desfase al soporte que el vídeo (`RigMedia/Video/SampleRetime`, que
+  desplaza todas las entradas de tiempos). Antes del primer fotograma, o si la pista va
+  por detrás, se tira: nunca se encola. Sin micro, la 4K sale como antes.
+- `RigCore/Runtime/RecordingPolicy`: PHONE_DISK_RESERVE_GB = 40. Por debajo, la 4K no
+  arranca (`startRecording` devuelve "") y la emisión sigue; Dart lo avisa
+  (`noLocalRecordingProblem`). Ya no se borran las grabaciones anteriores al empezar
+  (`removeRecordings` queda para el borrado a mano; la ingesta, ML-08, borrará al
+  confirmar).
+- Dart: `saveVideo` va encendida por defecto si quedan ≥40 GB (`defaultSaveVideo`,
+  `phoneDiskReserveBytes`), siguiendo al disco que dice el nativo hasta que el operador
+  o la orden del maestro la eligen.
+- La escalera nunca cierra el escritor: solo PARAR, una interrupción o un segmento nuevo.
+- Tests: RecordingPolicyTests, SampleRetimeTests, dos de CaptureSession (por defecto
+  según el disco; sin reserva, emite y avisa); RecordingCleanupTests renombrado al
+  borrado a mano.
+
+**Medido en el iPhone 17** (STANDALONE, AUTO_RECORD_S=20, RIG_AUDIO=1): .mov con HEVC
+3840×2160, 20,0 s y 598 fotogramas, más AAC 48 kHz mono de 19,97 s (936 tramas,
+empieza 76 ms después del primer fotograma); se decodifica sin errores; volumen medio
+−22 dB y pico −0,6 dB. La grabación anterior del móvil sigue ahí.
+
+**Fuera**: el micro sigue detrás de RIG_AUDIO=1 hasta aceptar el permiso en los dos
+móviles (IOS-54). RunnerTests no enlaza en simulador por la librería SRT (anterior a
+esto); el código compila.
+
+**Siguiente paso**: el MasterBoard de IOS-87.
+
 ## 2026-10-04 · IOS-84 — compás propio del programa y SIN SEÑAL · ✅
 
 **Hecho**

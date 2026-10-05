@@ -18,6 +18,8 @@ public final class AudioCapture: NSObject, AVCaptureAudioDataOutputSampleBufferD
 
     /// Una trama AAC con ADTS, lista para el mux o el fichero.
     public var onFrame: ((AacFrame) -> Void)?
+    /// El PCM tal cual llega del micro, para la pista de audio de la 4K (IOS-57).
+    public var onSampleBuffer: ((CMSampleBuffer) -> Void)?
 
     public private(set) var buffersIn = 0
     public private(set) var failures = 0
@@ -38,6 +40,7 @@ public final class AudioCapture: NSObject, AVCaptureAudioDataOutputSampleBufferD
     public func captureOutput(
         _ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection
     ) {
+        onSampleBuffer?(sampleBuffer)
         guard let pcm = Self.pcm(of: sampleBuffer) else {
             lock.lock(); failures += 1; lock.unlock()
             return

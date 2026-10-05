@@ -69,8 +69,8 @@ final class AdaptiveBitRateTests: XCTestCase {
 }
 
 final class RecordingCleanupTests: XCTestCase {
-    /// El móvil se llenaba: a 45 Mbit/s cada minuto son ~340 MB y nadie borraba nada.
-    func testOnlyTheNewRecordingSurvivesAStart() throws {
+    /// El borrado a mano (IOS-57: ya no se borra al empezar): solo los `.mov`.
+    func testManualCleanupRemovesOnlyRecordings() throws {
         let manager = FileManager.default
         let carpeta = manager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try manager.createDirectory(at: carpeta, withIntermediateDirectories: true)

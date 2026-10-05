@@ -17,6 +17,7 @@ CaptureStatus fakeStatus({
   String streamDetail = '',
   int streamBitrateBps = 0,
   String recordingFile = '',
+  int freeDiskBytes = 64000000000,
   int recordingSegment = 0,
 }) {
   return CaptureStatus(
@@ -36,7 +37,7 @@ CaptureStatus fakeStatus({
     intrinsicsAvailable: true,
     thermalState: ThermalState.nominal,
     batteryLevel: 0.9,
-    freeDiskBytes: 64000000000,
+    freeDiskBytes: freeDiskBytes,
     droppedFrames: 0,
     timecodeFailures: 0,
     recordingFile: recordingFile,
@@ -56,10 +57,14 @@ class FakeCaptureApi extends CaptureHostApi {
     CaptureStatus? status,
     this.phases = const <int>[0],
     this.failStart = false,
+    this.diskBelowReserve = false,
   }) : applied = status ?? fakeStatus();
 
   /// Simula que el nativo no puede abrir el archivo.
   final bool failStart;
+
+  /// IOS-57: el nativo no abre la 4K sin la reserva de disco; la emisión sigue.
+  final bool diskBelowReserve;
 
   /// IOS-07: cada llamada a setScreenDim, en orden. true = atenuada.
   final List<bool> screenDims = <bool>[];
@@ -150,7 +155,7 @@ class FakeCaptureApi extends CaptureHostApi {
       throw Exception('disco lleno');
     }
     // Sin guardar no hay fichero: el nativo devuelve vacío.
-    if (!saveVideo) {
+    if (!saveVideo || diskBelowReserve) {
       return '';
     }
     return '${recordingDirectory.isEmpty ? 'Documents' : recordingDirectory}/left-1.mov';

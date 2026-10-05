@@ -26,6 +26,9 @@ import 'package:football_ai_capture/src/server/master_host.dart';
 import 'package:football_ai_capture/src/server/replica.dart';
 import 'package:football_ai_capture/src/stream_url.dart';
 
+/// Lo que dice la pantalla si se pidió la 4K y el nativo no la abrió (IOS-57).
+const String noLocalRecordingProblem = 'sin 4K local: quedan menos de 40 GB libres; la emisión sigue';
+
 /// Cómo va la subida de la grabación al panel para calibrar.
 enum CalibrationUpload { ninguna, subiendo, subida, fallo }
 
@@ -628,14 +631,19 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
 
   bool _toggling = false;
 
-  /// Guardar el vídeo en el móvil además de emitirlo.
+  /// Guardar la 4K en el móvil además de emitir (IOS-57).
   ///
-  /// Apagado por defecto: un partido son ~40 GB por móvil a 45 Mbit/s y llena el
-  /// teléfono en dos. Se enciende cuando hace falta el respaldo en local, por ejemplo si
-  /// la red del campo no es de fiar y se prefiere volver con el partido en diferido.
+  /// Encendida por defecto si quedan [phoneDiskReserveBytes] libres (un partido son
+  /// ~39 GB a 45 Mbit/s): es de donde sale el diferido. Mientras nadie la toque, sigue
+  /// al disco que dice el nativo; el operador, o la orden del maestro, mandan después.
   bool saveVideo = false;
+  bool _saveVideoChosen = false;
+
+  /// Lo que se pone por defecto con este disco libre.
+  static bool defaultSaveVideo(int freeDiskBytes) => freeDiskBytes >= phoneDiskReserveBytes;
 
   void setSaveVideo(bool value) {
+    _saveVideoChosen = true;
     if (saveVideo == value) {
       return;
     }
@@ -669,6 +677,8 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
       final bool guardar = save ?? saveVideo;
       final String file = await _api.start(srtUrl ?? streamUrl, recordingDirectory, guardar);
       recordingFile = file.isEmpty ? null : file;
+      // El nativo no abre la 4K sin la reserva de disco, y la emisión sigue: se avisa.
+      final String? sin4k = guardar && file.isEmpty ? noLocalRecordingProblem : null;
       // Con el soporte montado, el izquierdo manda: poner a grabar los dos a mano es
       // donde más fácil es dejarse uno sin grabar o empezarlos con medio minuto de
       // diferencia. Va después de arrancar la propia: si esta falla, no se manda nada.
@@ -676,7 +686,7 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
       _recordingClock
         ..reset()
         ..start();
-      _set(SessionPhase.grabando);
+      _set(SessionPhase.grabando, problem: sin4k);
     } on Exception catch (error) {
       // Grabar puede fallar (disco lleno, archivo no creado) sin que la cámara deje de
       // valer: se queda lista y se dice por qué.
@@ -712,6 +722,7 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
       case RigCommand.recordAndSave:
         final bool guardar = command == RigCommand.recordAndSave;
         saveVideo = guardar;
+        _saveVideoChosen = true;
         if (!recording) {
           unawaited(toggleRecording(save: guardar));
         }
@@ -750,6 +761,9 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
   @override
   void onStatus(CaptureStatus latest) {
     status = latest;
+    if (!_saveVideoChosen && !recording) {
+      saveVideo = defaultSaveVideo(latest.freeDiskBytes);
+    }
     notifyListeners();
   }
 

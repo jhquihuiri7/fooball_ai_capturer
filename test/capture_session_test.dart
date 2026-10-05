@@ -509,6 +509,27 @@ void main() {
       expect(session.recordingFileName, isNull, reason: 'pero no graba');
     });
 
+    test('IOS-57: la 4K va encendida por defecto si queda la reserva, hasta que se elige', () {
+      final CaptureSession session = CaptureSession(role: CameraRole.left, api: FakeCaptureApi());
+      session.onStatus(fakeStatus(freeDiskBytes: 64000000000));
+      expect(session.saveVideo, isTrue);
+      session.onStatus(fakeStatus(freeDiskBytes: 39000000000));
+      expect(session.saveVideo, isFalse, reason: 'menos de 40 GB');
+      session.setSaveVideo(true);
+      session.onStatus(fakeStatus(freeDiskBytes: 39000000000));
+      expect(session.saveVideo, isTrue, reason: 'lo que elige el operador manda');
+      expect(CaptureSession.defaultSaveVideo(phoneDiskReserveBytes), isTrue);
+    });
+
+    test('IOS-57: sin reserva de disco no hay 4K, la emisión sigue y se avisa', () async {
+      final CaptureSession session =
+          CaptureSession(role: CameraRole.left, api: FakeCaptureApi(diskBelowReserve: true));
+      await session.toggleRecording(save: true);
+      expect(session.recording, isTrue);
+      expect(session.recordingFileName, isNull);
+      expect(session.problem, noLocalRecordingProblem);
+    });
+
     test('el interruptor de guardar manda también en el otro móvil', () async {
       final FakeCaptureApi api = FakeCaptureApi();
       final CaptureSession session =

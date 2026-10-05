@@ -284,3 +284,8 @@ const String panelScopeMatch = 'match';
 
 /// Dónde se guarda «Este móvil dirige» (IOS-80).
 const String prefersMasterKey = 'zero.prefersMaster';
+
+/// PHONE_DISK_RESERVE_GB (IOS-57) en bytes: lo que tiene que quedar libre para que la
+/// 4K local vaya encendida por defecto y arranque. Copia de `RecordingPolicy` en RigCore,
+/// donde el nativo la hace cumplir.
+const int phoneDiskReserveBytes = 40 * 1000 * 1000 * 1000;

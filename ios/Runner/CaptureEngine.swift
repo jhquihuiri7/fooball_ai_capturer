@@ -53,6 +53,8 @@ final class CaptureEngine: NSObject {
 
     private var writer: AVAssetWriter?
     private var writerInput: AVAssetWriterInput?
+    /// La pista de audio de la 4K (IOS-57), si hay micro: el PCM se codifica en AAC.
+    private var audioWriterInput: AVAssetWriterInput?
     private var writerStarted = false
 
     /// Lo que hace falta para reabrir la grabación en un segmento nuevo tras un corte:
@@ -275,6 +277,7 @@ final class CaptureEngine: NSObject {
             return Double(ns + offset) / 1e6
         }
         captura.onFrame = { [weak self] trama in self?.writeAudio(trama) }
+        captura.onSampleBuffer = { [weak self] pcm in self?.queue.async { self?.appendAudio(pcm) } }
         audioOutput.setSampleBufferDelegate(captura, queue: audioQueue)
         audio = captura
     }
@@ -349,15 +352,18 @@ final class CaptureEngine: NSObject {
     // MARK: - Grabación
 
     func startRecording(directory: String) throws -> String {
+        // IOS-57: la 4K no arranca sin la reserva de disco, y la emisión sigue sin ella
+        // (devuelve "" y Dart lo avisa). Las grabaciones anteriores ya no se borran al
+        // empezar: las borra la ingesta (ML-08) al confirmarlas, o el operador a mano.
+        let libre = Self.freeDiskBytes()
+        guard RecordingPolicy.allowsLocalRecording(freeBytes: libre) else {
+            NSLog("[grabacion] sin 4K: quedan %lld bytes libres, menos que la reserva", libre)
+            recordingWanted = false
+            return ""
+        }
         recordingWanted = true
         recordingDirectory = directory
         recordingSegment = 1
-        // Antes de abrir la nueva, fuera las anteriores: en el móvil solo se guarda la
-        // última. A 45 Mbit/s son ~340 MB por minuto y nadie las borraba, así que unas
-        // pocas pruebas llenaban el teléfono. Se borra al **empezar** otra, no al parar,
-        // para que la última siga entera hasta que se decida grabar de nuevo: es la que
-        // se sube al panel para calibrar.
-        Self.removeRecordings(in: directory)
         if nv12Dumper != nil {
             queue.async { [self] in
                 dumpRunFrames = 0
@@ -368,8 +374,8 @@ final class CaptureEngine: NSObject {
         return try openSegment()
     }
 
-    /// Borra los `.mov` de la carpeta de grabaciones. No toca nada más: ahí solo escribe
-    /// esta app, y los segmentos de la grabación en curso aún no existen.
+    /// Borra los `.mov` de la carpeta de grabaciones, a mano. No toca nada más: ahí solo
+    /// escribe esta app.
     static func removeRecordings(in directory: String) {
         let manager = FileManager.default
         guard let names = try? manager.contentsOfDirectory(atPath: directory) else { return }
@@ -418,6 +424,20 @@ final class CaptureEngine: NSObject {
         if writer.canAdd(input) {
             writer.add(input)
         }
+        var audioInput: AVAssetWriterInput?
+        if audio != nil {
+            let a = AVAssetWriterInput(mediaType: .audio, outputSettings: [
+                AVFormatIDKey: kAudioFormatMPEG4AAC,
+                AVSampleRateKey: AudioConstants.sampleRate,
+                AVNumberOfChannelsKey: Self.recordingAudioChannels,
+                AVEncoderBitRateKey: AudioConstants.aacBitrateBps,
+            ])
+            a.expectsMediaDataInRealTime = true
+            if writer.canAdd(a) {
+                writer.add(a)
+                audioInput = a
+            }
+        }
 
         queue.async { [weak self] in
             guard let self else { return }
@@ -425,6 +445,7 @@ final class CaptureEngine: NSObject {
             self.closeWriter()
             self.writer = writer
             self.writerInput = input
+            self.audioWriterInput = audioInput
             self.writerStarted = false
         }
         return url.path
@@ -534,6 +555,7 @@ final class CaptureEngine: NSObject {
         if writer.status == .writing {
             if writerStarted {
                 writerInput?.markAsFinished()
+                audioWriterInput?.markAsFinished()
                 writer.finishWriting {}
             } else {
                 writer.cancelWriting()
@@ -541,7 +563,27 @@ final class CaptureEngine: NSObject {
         }
         self.writer = nil
         writerInput = nil
+        audioWriterInput = nil
         writerStarted = false
+    }
+
+    /// Canales de la pista de audio de la 4K: el micro del iPhone es mono.
+    private static let recordingAudioChannels = 1
+
+    /// El PCM del micro a la pista de audio de la 4K, en la cola de captura y con el
+    /// mismo desfase al soporte que el vídeo. Antes del primer fotograma no hay sesión
+    /// abierta y se tira; si la pista va por detrás, también: nunca se encola.
+    private func appendAudio(_ pcm: CMSampleBuffer) {
+        guard writerStarted, let writer, writer.status == .writing, let input = audioWriterInput,
+              input.isReadyForMoreMediaData
+        else { return }
+        let ns = CMTimeConvertScale(
+            CMSampleBufferGetPresentationTimeStamp(pcm), timescale: 1_000_000_000, method: .default
+        ).value
+        let desfase = rigClock?.offsetAt(ns: ns) ?? clockOffsetNs
+        if let copia = SampleRetime.shifted(pcm, byNs: desfase) {
+            input.append(copia)
+        }
     }
 
     /// Empieza a emitir al servidor. Independiente de la grabación: si esto falla, el
