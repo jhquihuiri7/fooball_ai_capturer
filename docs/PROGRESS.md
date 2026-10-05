@@ -650,6 +650,23 @@ hubs), ya con esta expectativa.
 
 ---
 
+## 2026-10-05 · Plan para los dos iPhone (H3)
+
+`tools/banco_dos_moviles.sh` lo hace desatendido: compila con el rol de cada móvil
+(AUTO_ROLE), instala, mata procesos viejos de la app, lanza los dos con el secreto
+desde un fichero (no se imprime) y recoge Documents/bench y Documents/calib de cada uno
+en `bench/dos-moviles-<fecha>/`.
+
+1. `tools/banco_dos_moviles.sh split <secreto> 600`: el cosido de 10 min (IOS-43/44:
+   dos lentes, fps, latencia, IDR), el color (IOS-38: ganancias en el informe), la
+   pareja de calibración a los 30 s (IOS-70: Δ izquierda-derecha), el marcador y la
+   franja en el programa (IOS-47/48) y, con el panel, la miniatura del esclavo (IOS-64).
+2. `tools/banco_dos_moviles.sh link90 <secreto> 5400`: SPK-02 por Wi-Fi, 90 min de
+   partes a 0/10/30 Mbit/s cada 5 min (decide UDP o TCP; ya se sabe que por Wi-Fi de
+   punto de acceso caben ~15 Mbit/s).
+3. Con los dos en marcha, desde el Mac: la API del mando (IOS-62) y el panel (IOS-64)
+   por la LAN, con un token derivado del partido.
+
 ## 2026-10-04 · IOS-64 — panel local en la LAN con miniaturas · 🚧 falta con dos iPhone y el coste de CPU
 
 **Hecho**
