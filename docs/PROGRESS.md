@@ -650,6 +650,31 @@ hubs), ya con esta expectativa.
 
 ---
 
+## 2026-10-04 · IOS-22 — ejecutor Core ML con salidas preasignadas y manifiesto · 🚧 falta el modelo de ML-16 y medirlo en el iPhone
+
+**Hecho**
+- `RigMedia/ML/ModelManifest.swift`: el manifiesto de los modelos del móvil (espejo del
+  bloque coreml de la ficha): fichero, SHA-256, min_ios ≥18, entrada (nombre, forma,
+  color, normalización), salidas con su significado, clases, postproceso y formato de
+  caja. Rechaza con el campo que falla (p. ej., logits con 3 clases y `classes` con 1);
+  `check(against:)` compara con la descripción del modelo cargado (entrada, tamaño,
+  formas de salida).
+- `RigMedia/ML/CoreMLRunner.swift`: .cpuAndNeuralEngine con la pista de forma fija,
+  comprobación contra el manifiesto, calentado, `outputBackings` preasignados por
+  carril, cola serie con carriles de prioridad (balón antes que jugadores; una petición
+  por carril, la nueva sustituye a la vieja y se cuenta), signposts e histograma por
+  carril.
+- `tools/make_test_model.py`: el modelo mínimo de los tests (MIL de coremltools, sin
+  torch; 12 KB), con forma de DETR y salidas deterministas. `tools/fetch_models.sh`: baja
+  los .mlpackage.zip del manifiesto y comprueba el SHA-256.
+- Tests: CoreMLRunnerTests (el manifiesto que no cuadra, por clases y por tamaño, se
+  rechaza con un error legible; la predicción en sus búferes con los valores esperados;
+  los carriles).
+
+**Queda fuera**: el modelo de verdad llega con ML-16 (bloqueado por el dueño); el
+registro de ios/Runner/Models en el proyecto del Runner y las cifras en el iPhone
+(calentado <10 s, p50/p99, Allocations plano) van con él.
+
 ## 2026-10-05 · Plan para los dos iPhone (H3)
 
 `tools/banco_dos_moviles.sh` lo hace desatendido: compila con el rol de cada móvil
