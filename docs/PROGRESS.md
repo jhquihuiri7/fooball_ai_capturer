@@ -650,6 +650,27 @@ hubs), ya con esta expectativa.
 
 ---
 
+## 2026-10-04 · IOS-44 — el programa del maestro: recepción, decodificación y composición · 🚧 falta el banco program-split en dos iPhone
+
+**Hecho**
+- `RigMedia/Pipeline/MasterProgramStage.swift`: las partes pasan por PartReceiver (solo
+  cadenas enteras al decodificador; ante un hueco, `onIdrRequest` con el part_seq), se
+  decodifican (VideoDecoder, IOS-51) y se apuntan en ProgramSync con la vista que traen.
+  En cada tic, dos lentes —la mitad del maestro pintada con la vista DE LA PARTE y con
+  su fotograma más cercano al instante de la parte (`masterFrame`, del FrameRing)— o una
+  lente con la vista del maestro si la parte no llegó. Un encuadre que cae entero en el
+  esclavo no pinta la mitad del maestro. Contadores de dos y una lente, partes, IDR y
+  fallos; Mbit/s, jitter y pérdidas de las partes.
+- MetalProgramComposer: ComposeProgramKernel (IOS-41) con la costura y el fundido de
+  la vista; sin gráfico ni franja hasta IOS-47/48.
+- Tests (4) con partes de verdad (SlavePartStage + VideoToolbox) y render y composición
+  falsos: dos lentes con la vista de la parte y el fotograma de su instante, una lente
+  sin parte, hueco → IDR pedido y nada decodificado hasta él, y el encuadre solo del
+  esclavo.
+
+**Queda fuera**: el banco program-split (barrido que cruza la costura 10 min, fps,
+latencia añadida y desgarros) en los dos iPhone.
+
 ## 2026-10-04 · IOS-43 — la parte del esclavo: render, codificación y envío · 🚧 falta medirla en dos iPhone
 
 **Hecho**
