@@ -309,6 +309,13 @@ final class CaptureEngine: NSObject {
         }
     }
 
+    /// El banco de IOS-84 para y reanuda la cámara a propósito (como una interrupción).
+    func setCameraRunningForBench(_ on: Bool) {
+        queue.async { [self] in
+            if on { if !session.isRunning { session.startRunning() } } else { session.stopRunning() }
+        }
+    }
+
     func startRunning() {
         queue.async { [weak self] in
             guard let self, !self.session.isRunning else { return }

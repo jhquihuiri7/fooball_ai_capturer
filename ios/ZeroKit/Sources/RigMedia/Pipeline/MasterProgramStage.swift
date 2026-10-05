@@ -128,6 +128,13 @@ public final class MasterProgramStage {
     /// El programa de un instante, listo para el codificador del programa.
     public var onProgram: ((CVPixelBuffer, Int64) -> Void)?
 
+    /// Cada cambio de fuente del programa (IOS-84): quien tiene el gráfico enseña SIN
+    /// SEÑAL al llegar a `.noSignal`.
+    public var onSourceChange: ((ProgramSource) -> Void)?
+    public private(set) var sources = ProgramSourceStats()
+    /// El último programa con imagen, para repetirlo hasta PROGRAM_HOLD_MS.
+    private var lastProgram: CVPixelBuffer?
+
     /// `masterPool`: NV12 del tamaño del programa, para pintar la mitad del maestro.
     public init(
         masterSide: CameraSide,
@@ -233,13 +240,23 @@ public final class MasterProgramStage {
             lock.unlock()
         }
 
-        guard let (propio, soltar) = masterFrame?(instantePropio) else {
-            lock.lock()
-            stats.withoutMasterFrame += 1
-            lock.unlock()
+        let propioLease = masterFrame?(instantePropio)
+        defer { propioLease?.1() }
+        lock.lock()
+        let fuente = ProgramClock.choose(
+            masterFrame: propioLease != nil, slavePart: parte != nil, instantMs: t,
+            lastRealFrameMs: sources.lastRealFrameMs
+        )
+        let anterior = sources.current
+        sources.record(fuente, instantMs: t)
+        if propioLease == nil { stats.withoutMasterFrame += 1 }
+        lock.unlock()
+        if fuente != anterior { onSourceChange?(fuente) }
+
+        if fuente == .hold, let ultimo = lastProgram {
+            onProgram?(ultimo, t)
             return decision
         }
-        defer { soltar() }
         var mitad: CVPixelBuffer?
         var programa: CVPixelBuffer?
         CVPixelBufferPoolCreatePixelBuffer(nil, masterPool, &mitad)
@@ -248,15 +265,18 @@ public final class MasterProgramStage {
             guard let mitad, let programa else {
                 throw ReprojectKernelError.pipeline("el pool del programa no da búferes")
             }
-            // Solo se pinta la mitad propia si la vista la pide: un encuadre que cae
-            // entero en el esclavo no lleva nada del maestro.
-            let conMaestro = parte == nil || vista.sides.contains(masterSide)
-            if conMaestro {
+            // Solo se pinta la mitad propia si hay fotograma y la vista la pide (o es lo
+            // único que hay): un encuadre que cae entero en el esclavo no lleva nada suyo.
+            var conMaestro = false
+            if let (propio, _) = propioLease, parte == nil || vista.sides.contains(masterSide) {
                 try renderer.render(source: propio, view: vista, into: mitad)
+                conMaestro = true
             }
+            // SIN SEÑAL: ni maestro ni parte; sale el gráfico (con la tarjeta) sobre negro.
             try composer.compose(
                 master: conMaestro ? mitad : nil, slave: parte, view: vista, atRigMs: t, into: programa
             )
+            if fuente != .noSignal { lastProgram = programa }
             onProgram?(programa, t)
         } catch {
             lock.lock()

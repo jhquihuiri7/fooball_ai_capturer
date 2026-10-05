@@ -252,6 +252,7 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
                     pipeline: { [weak self] in self?.engine.rigPipeline }
                 )
                 s.audioFormat = { [weak self] in self?.engine.audioFormatDescription }
+                s.cameraSwitch = { [weak self] on in self?.engine.setCameraRunningForBench(on) }
                 engine.onAacFrame = { [weak s] trama in s?.audio(trama) }
                 s.start()
                 split = s

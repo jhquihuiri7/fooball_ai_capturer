@@ -130,6 +130,25 @@ final class RigLinkSessionTests: XCTestCase {
         waitUntil { lock.lock(); defer { lock.unlock() }; return ordenes == [.record] }
     }
 
+    func testSinParCadaUnoActuaConSuPreferenciaYLoAvisa() {
+        let (left, right, _, _) = makePair()
+        for s in [left, right] { s.claimedRole = .slave }
+        left.prefersMaster = true
+        right.prefersMaster = false
+        let lock = NSLock()
+        nonisolated(unsafe) var roles: [String: RigRole] = [:]
+        left.onRole = { r, _, _ in lock.lock(); roles["izq"] = roles["izq"] ?? r; lock.unlock() }
+        right.onRole = { r, _, _ in lock.lock(); roles["der"] = roles["der"] ?? r; lock.unlock() }
+        left.start()
+        right.start()
+        waitUntil { lock.lock(); defer { lock.unlock() }; return roles.count == 2 }
+        XCTAssertEqual(roles["izq"], .master, "el que prefiere dirigir compone desde el arranque")
+        XCTAssertEqual(roles["der"], .slave)
+        waitUntil { self.isConnected(left) && self.isConnected(right) }
+        XCTAssertTrue(left.isMaster)
+        XCTAssertFalse(right.isMaster)
+    }
+
     func testDosMaestrosDelMismoTermSeResuelvenSinQuedarseConDos() {
         let (left, right, _, _) = makePair()
         for s in [left, right] {

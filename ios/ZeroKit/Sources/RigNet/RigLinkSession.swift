@@ -193,6 +193,13 @@ public final class RigLinkSession {
 
     public func start() {
         queue.async { [self] in
+            // Sin par todavía, el móvil actúa ya con su rol (ADR 0023 §7): si no trae
+            // partido, decide la preferencia. Así el maestro que arranca solo compone,
+            // pinta el gráfico y sirve el mando sin esperar al esclavo (IOS-84). Al
+            // conectar, la negociación puede cambiarlo.
+            if claimedRole == .slave, matchId == nil, prefersMaster { claimedRole = .master }
+            rigRole = claimedRole
+            onRole?(rigRole, term, matchId)
             state = .searching
             transport.start()
             startHeartbeat()

@@ -35,6 +35,7 @@ class ProgramGraphics {
   final CardRaster _cards;
   bool _busy = false;
   bool _again = false;
+  bool _slateSent = false;
 
   ScoreboardState scoreboardState() => ScoreboardState(
     competition: competition,
@@ -56,6 +57,12 @@ class ProgramGraphics {
     }
     _busy = true;
     try {
+      if (!_slateSent) {
+        // SIN SEÑAL se sube una vez y queda oculta en nativo: la enseña el programa
+        // cuando no queda ninguna cámara (IOS-84), sin esperar a Dart.
+        await bridge.publish(OverlayLayerId.slate, await _cards.slate());
+        _slateSent = true;
+      }
       do {
         _again = false;
         await bridge.publish(OverlayLayerId.scoreboard, await _scoreboard.render(scoreboardState()));

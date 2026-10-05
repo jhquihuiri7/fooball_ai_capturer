@@ -73,6 +73,26 @@ final class OverlayStoreTests: XCTestCase {
         XCTAssertEqual(s.uploads, 6, "la generación vieja no sube")
     }
 
+    func testSinSenalEstaOcultaHastaQueSeEnsena() throws {
+        let s = try store()
+        sync { s.set(.slate, rgba: liso(2, 2, [1, 2, 3, 255]), rect: .init(x: 0, y: 0, width: 2, height: 2),
+                     generation: 1, completion: $0) }
+        XCTAssertNil(s.beginFrame(), "cargada pero oculta")
+        sync { s.setVisible(.slate, true, completion: $0) }
+        let t = try XCTUnwrap(s.beginFrame())
+        XCTAssertEqual(pixel(t, 0, 0), [1, 2, 3, 255])
+        s.endFrame()
+        // El marcador va ENCIMA de SIN SEÑAL.
+        sync { s.set(.scoreboard, rgba: liso(1, 1, [9, 9, 9, 255]), rect: .init(x: 0, y: 0, width: 1, height: 1),
+                     generation: 1, completion: $0) }
+        let t2 = try XCTUnwrap(s.beginFrame())
+        XCTAssertEqual(pixel(t2, 0, 0), [9, 9, 9, 255])
+        s.endFrame()
+        sync { s.clear(.scoreboard, completion: $0) }
+        sync { s.setVisible(.slate, false, completion: $0) }
+        XCTAssertNil(s.beginFrame())
+    }
+
     func testLaTexturaEnUsoNoSeCambiaHastaQueSeSuelta() throws {
         let s = try store()
         sync { s.set(.scoreboard, rgba: liso(1, 1, [9, 9, 9, 255]), rect: .init(x: 0, y: 0, width: 1, height: 1),

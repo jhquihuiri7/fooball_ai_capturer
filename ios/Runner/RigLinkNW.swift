@@ -704,6 +704,10 @@ final class SplitBench {
     // IOS-57: la copia local del programa en .mov (con el audio del micro si lo hay).
     private var recorder: ProgramRecorder?
     var audioFormat: () -> CMAudioFormatDescription? = { nil }
+    /// Para y reanuda la cámara (IOS-84: RIG_SPLIT_CAM_OFF_S / RIG_SPLIT_CAM_ON_S).
+    var cameraSwitch: ((Bool) -> Void)?
+    private var cameraOffDone = false
+    private var cameraOnDone = false
     private var finished = false
 
     // Medidas
@@ -832,6 +836,8 @@ final class SplitBench {
                 return (lease.buffer, { ring.release(lease) })
             }
             m.onIdrRequest = { [weak self] seq in self?.session.requestIdr(partSeq: seq) }
+            // IOS-84: sin ninguna cámara, la tarjeta SIN SEÑAL (la sube Dart, oculta).
+            m.onSourceChange = { fuente in OverlayHub.shared?.setVisible(.slate, fuente == .noSignal) }
             if env["RIG_SPLIT_DIRECTOR"] == "1" {
                 let loop = try DirectorLoop(
                     rig: modelo, canvas: CylindricalCanvas.fit(modelo, pitchLimitsRad: (-0.5, 0.1)),
@@ -951,9 +957,18 @@ final class SplitBench {
 
     private func tick() {
         guard !finished else { return }
-        if Double(DispatchTime.now().uptimeNanoseconds - startNs) / 1e9 > durationS {
+        let transcurrido = Double(DispatchTime.now().uptimeNanoseconds - startNs) / 1e9
+        if transcurrido > durationS {
             finish()
             return
+        }
+        if let off = env["RIG_SPLIT_CAM_OFF_S"].flatMap(Double.init), transcurrido >= off, !cameraOffDone {
+            cameraOffDone = true
+            cameraSwitch?(false)
+        }
+        if let on = env["RIG_SPLIT_CAM_ON_S"].flatMap(Double.init), transcurrido >= on, !cameraOnDone {
+            cameraOnDone = true
+            cameraSwitch?(true)
         }
         if case .connected = session.state, setUpIfNeeded() {
             colorTick(now: Self.nowMs())
@@ -968,9 +983,9 @@ final class SplitBench {
         lastTickNs = ahora
 
         let now = Self.nowMs()
-        let paso = 1000 / Self.fps
-        // La rejilla del programa: instantes k · 33,3 ms.
-        let rejilla = { (ms: Int64) in Int64((Double(ms) / paso).rounded(.down) * paso) }
+        // La rejilla del programa: instantes k · 33,3 ms (ProgramClock, IOS-84).
+        let reloj = ProgramClock(frameDurationMs: 1000 / Self.fps)
+        let rejilla = { (ms: Int64) in reloj.gridInstant(atOrBefore: ms) }
         if let director {
             director.setGains(matcher.gains)
             if let (_, hist) = try? director.tick(targetRigMs: rejilla(now + Self.viewLeadMs)) {
@@ -1078,6 +1093,7 @@ final class SplitBench {
             "mov_video_frames": recorder?.videoFrames ?? 0,
             "mov_audio_frames": recorder?.audioFrames ?? 0,
             "peer_states": peerStates,
+            "program_sources": master?.sources.counts ?? [:],
             "e0_written": e0?.written ?? 0,
             "e0_dropped": e0?.dropped ?? 0,
             "overlay_uploads": OverlayHub.shared?.uploads ?? 0,

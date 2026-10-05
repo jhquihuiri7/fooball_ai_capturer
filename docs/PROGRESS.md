@@ -12,6 +12,35 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-04 · IOS-84 — compás propio del programa y SIN SEÑAL · ✅
+
+**Hecho**
+- `RigCore/Runtime/ProgramClock.swift`: la rejilla de 30 fps del programa (con épsilon
+  en los bordes) y la elección de fuente por tic: dos lentes, solo maestro, solo
+  esclavo, `hold` del último programa durante PROGRAM_HOLD_MS (500 ms) y SIN SEÑAL.
+  ProgramClockTests.
+- MasterProgramStage elige la fuente con ProgramClock, cuenta `sources` y avisa con
+  `onSourceChange`. El programa no depende de la cámara ni del enlace.
+- OverlayStore: capas ocultas (`setVisible`); SIN SEÑAL se sube una vez desde Dart
+  (ProgramGraphics) y queda oculta en nativo hasta que no queda ninguna cámara.
+  Orden de apilado propio (`OverlayLayer.stackOrder`): SIN SEÑAL debajo del marcador
+  y la alineación encima de todo.
+- RigLinkSession: sin par todavía, el móvil actúa ya con su rol (ADR 0023 §7: sin
+  partido, decide la preferencia) y lo avisa a Dart. Antes, el maestro que arrancaba
+  solo componía, pero sin gráfico ni mando hasta que llegaba el esclavo.
+- Banco: RIG_SPLIT_CAM_OFF_S / RIG_SPLIT_CAM_ON_S paran y reanudan la cámara del
+  maestro; el informe trae `program_sources`.
+
+**Medido en el iPhone 17, solo** (30 s, cámara parada a 10 s y reanudada a 18 s):
+899 fotogramas, 0 fallos de composición, tic p5 29,6 fps; masterOnly 653, hold 15,
+noSignal 231. SIN SEÑAL con marcador a 10,5 s y vuelta a la cámara ≈0,2 s después de
+reanudarla; el cronómetro sigue. Con el Mac de esclavo (40 s): igual, 1199 fotogramas.
+
+**Fuera**: el corte con los dos iPhone (cámara del esclavo caída) va con el banco de
+mañana (`tools/banco_dos_moviles.sh split`).
+
+**Siguiente paso**: lo que se pueda con un iPhone; los bancos de dos, mañana.
+
 ## 2026-10-04 · IOS-53 — multiplexor MPEG-TS propio (H.264 con SEI y AAC en ADTS) · ✅
 
 **Hecho**

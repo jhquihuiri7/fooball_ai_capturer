@@ -122,6 +122,39 @@ final class MasterProgramStageTests: XCTestCase {
         XCTAssertEqual(stage.stats.oneLensFrames, 1)
     }
 
+    func testSinCamarasRepiteYDespuesSinSenal() throws {
+        let (stage, _, comp, _) = try maestro()
+        var salidas: [Int64] = []
+        var fuentes: [ProgramSource] = []
+        stage.onProgram = { _, t in salidas.append(t) }
+        stage.onSourceChange = { fuentes.append($0) }
+        let mia = vista(1000, id: 1)
+        stage.tick(programRigMs: 1000, nowRigMs: 1100, masterView: mia)  // con cámara
+        stage.masterFrame = { _ in nil }                                   // la cámara se para
+        for k in 1...30 {
+            let t = 1000 + Int64(k * 33)
+            stage.tick(programRigMs: t, nowRigMs: t + 100, masterView: vista(t, id: UInt32(k)))
+        }
+        XCTAssertEqual(fuentes, [.masterOnly, .hold, .noSignal])
+        XCTAssertEqual(salidas.count, 31, "el programa no se para")
+        XCTAssertEqual(stage.sources.counts["hold"], 15, "medio segundo repitiendo")
+        XCTAssertEqual(comp.llamadas.last?.master, false)
+        XCTAssertEqual(comp.llamadas.last?.slave, false, "SIN SEÑAL: solo el gráfico")
+    }
+
+    func testSoloLaParteDelEsclavo() throws {
+        let ps = try partes(3)
+        let (stage, render, comp, _) = try maestro()
+        stage.masterFrame = { _ in nil }
+        ps.forEach { stage.receive(part: $0, arrivalRigMs: $0.frameRigMs + 10) }
+        esperaDecodificadas(stage, 3)
+        let t = ps[1].frameRigMs
+        stage.tick(programRigMs: t, nowRigMs: t + 100, masterView: vista(t, id: 9))
+        XCTAssertEqual(stage.sources.current, .slaveOnly)
+        XCTAssertTrue(render.vistas.isEmpty)
+        XCTAssertEqual(comp.llamadas.last?.slave, true)
+    }
+
     func testUnHuecoPideIdrYNoDecodificaHastaEl() throws {
         let ps = try partes(6)
         XCTAssertTrue(ps[0].isKey)

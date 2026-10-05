@@ -53,7 +53,7 @@ void main() {
 
       await g.refresh();
       await g.refresh();
-      expect(sink.calls, <String>['set 0'], reason: 'sin cambios no se vuelve a mandar');
+      expect(sink.calls, <String>['set 2', 'set 0'], reason: 'SIN SEÑAL una vez; sin cambios no se repite');
 
       m.apply('match/goal', <String, Object?>{'team': 'home', 'delta': 1, 'expect': 0});
       await g.refresh();

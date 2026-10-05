@@ -6,7 +6,7 @@
 // - cada capa es un búfer RGBA a tamaño de programa, reservado la primera vez que se usa,
 //   donde se pega cada parche;
 // - un búfer RGBA a tamaño de programa, preasignado, tiene las capas ya apiladas (alfa
-//   SIN premultiplicar, «over» de abajo arriba: marcador, alineación, SIN SEÑAL); un
+//   SIN premultiplicar, «over» de abajo arriba: SIN SEÑAL, marcador, alineación); un
 //   cambio solo recompone el rectángulo sucio (la caja vieja y la nueva);
 // - dos texturas a tamaño de programa, preasignadas: se sube a la de atrás lo sucio
 //   (más lo que le faltaba de la vez anterior) y se cambia de golpe. Quien compone toma
@@ -21,6 +21,11 @@ public enum OverlayLayer: Int, CaseIterable, Sendable {
     case scoreboard = 0
     case lineup = 1
     case slate = 2
+
+    /// De abajo arriba: SIN SEÑAL debajo del marcador (sale «con el marcador», IOS-84) y
+    /// la alineación encima de todo (tapa el marcador, como en el panel). Los números
+    /// crudos son los de Pigeon, no el orden.
+    public static let stackOrder: [OverlayLayer] = [.slate, .scoreboard, .lineup]
 }
 
 public final class OverlayStore {
@@ -64,6 +69,9 @@ public final class OverlayStore {
     /// Lo que la textura de atrás aún no tiene de los cambios anteriores.
     private var pendingForBack = Rect.empty
     private var layers: [OverlayLayer: Layer] = [:]
+    /// Las capas ocultas (están cargadas pero no se componen). SIN SEÑAL empieza oculta:
+    /// Dart la sube al empezar y la enseña el programa cuando no queda cámara (IOS-84).
+    private var hidden: Set<OverlayLayer> = [.slate]
     private var composite: [UInt8]
     private let lock = NSLock()
     private let queue = DispatchQueue(label: "io.footballai.zero.overlay", qos: .userInitiated)
@@ -139,11 +147,24 @@ public final class OverlayStore {
         }
     }
 
+    /// Enseña u oculta una capa ya cargada. Asíncrono.
+    public func setVisible(_ layer: OverlayLayer, _ visible: Bool, completion: (() -> Void)? = nil) {
+        queue.async { [self] in
+            defer { completion?() }
+            lock.lock()
+            let cambia = visible == hidden.contains(layer)
+            if visible { hidden.remove(layer) } else { hidden.insert(layer) }
+            let caja = layers[layer]?.bounds
+            lock.unlock()
+            if cambia, let caja { apply(dirty: caja) }
+        }
+    }
+
     /// La textura activa para este fotograma; nil si no hay gráfico. Hay que soltarla
     /// con `endFrame` cuando el command buffer haya terminado.
     public func beginFrame() -> MTLTexture? {
         lock.lock(); defer { lock.unlock() }
-        guard !layers.isEmpty else { return nil }
+        guard layers.keys.contains(where: { !hidden.contains($0) }) else { return nil }
         inUse = true
         return textures[active]
     }
@@ -158,7 +179,7 @@ public final class OverlayStore {
         let inicio = DispatchTime.now().uptimeNanoseconds
         let dirty = bruto.clipped(width: width, height: height)
         lock.lock()
-        let pila = OverlayLayer.allCases.compactMap { layers[$0] }
+        let pila = OverlayLayer.stackOrder.filter { !hidden.contains($0) }.compactMap { layers[$0] }
         lock.unlock()
         recompose(dirty, pila)
 
