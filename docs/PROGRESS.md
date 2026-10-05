@@ -29,6 +29,33 @@ PROPUESTO) sigue siendo del propietario.
 **Siguiente paso**: la ficha de CenterNet-MNv4 con pesos propios y su cableado en
 `CoreMLPlayerDetector`.
 
+## 2026-10-05 · Carga combinada con el detector del plan B en el iPhone 17 (SPK-54, parcial)
+
+El banco split gana `RIG_DETECT=<paquete>` (`DetectLoad`). Compila el modelo de
+`Documents/bench-resources` y, cada 4 tics (7,5 Hz), lo pasa por Vision sobre el último
+fotograma de la cámara del maestro, escalado a 1920x576 con scaleFill. No es la franja de
+Metal, pero el coste del escalado es del mismo orden. Una petición a la vez: si sigue
+ocupado, se salta y se cuenta.
+
+**Medido** (iPhone 17 solo; 300 s; cámara 4K, programa, micro, franja de anuncios, N0 y
+CenterNet-MNv4 con pesos sembrados, todo a la vez):
+
+| Qué | Resultado |
+|---|---|
+| Programa | 8980 fotogramas, 0 fallos de composición, tic p5 29,61 / p50 30,00, latencia añadida p95 119 ms |
+| Detector | 2245 pasadas (7,48 Hz), 0 saltadas, 0 fallos; p50 22,6 ms, p90 24,7, p99 26,4 (escalado de Vision incluido; el modelo solo, 8 ms); compilar y cargar 0,4 s |
+| CPU | 34,8 % de un núcleo, frente al 17 % sin detector |
+| Memoria | Plana en ~515 MB del minuto 1 al 5 |
+| Audio y N0 | 14 046 tramas de audio continuas; N0 con 0 descartes |
+
+**Lectura**: el detector del plan B cabe junto a todo lo demás sin tocar el programa. La
+térmica de 30 min con refrigeración (SPK-54 entera) y con el modelo entrenado sigue
+pendiente.
+
+**Nota**: un primer intento de 10 min se quedó parado a los 2 min, sin informe de fallo:
+iOS suspendió la app (pantalla bloqueada o el teléfono en uso). La pasada de 5 min se
+repitió entera.
+
 ## 2026-10-05 · IOS-64 — el coste de CPU del panel local, medido · ✅
 
 El informe del banco gana `cpu_pct_one_core`: los segundos de CPU del proceso entero

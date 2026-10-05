@@ -11,12 +11,14 @@
 // se inyecta en banco. Sin secreto no hay enlace: se falla claro en vez de inventar uno.
 
 import CoreMedia
+import CoreML
 import Foundation
 import Network
 import RigCore
 import RigMedia
 import RigNet
 import UIKit
+import Vision
 
 /// Lo que `CaptureHostApiImpl` necesita de un enlace. Lo cumplen el Multipeer de hoy y
 /// el nuevo sobre Network, para que el interruptor sea elegir una clase y nada más.
@@ -735,6 +737,9 @@ final class SplitBench {
     private var adOverridesDone: [[String: Any]] = []
     /// La huella del proceso una vez por minuto, en MB: que no crezca (IOS-47/48).
     private var footprintMb: [Double] = []
+    /// La carga del detector de jugadores en el maestro (RIG_DETECT=<paquete>).
+    private lazy var detect: DetectLoad? = env["RIG_DETECT"].flatMap { DetectLoad(package: $0) }
+    private var detectTicks = 0
     /// IOS-64: la CPU del proceso al arrancar el banco, para su coste medio en el informe.
     private let cpuStartS = SplitBench.processCpuSeconds()
     private var cameraOnDone = false
@@ -1072,6 +1077,11 @@ final class SplitBench {
             lastAdCueT = t
             adCues.append([t, cue.ad.name, cue.frame])
         }
+        detectTicks += 1
+        if detectTicks % Self.detectEveryTicks == 0, let d = detect, let ring = pipelineProvider()?.ring,
+           let ultimo = ring.availableRigMs().last, let lease = ring.acquire(nearest: ultimo, maxDistanceMs: 0) {
+            d.offer(lease.buffer) { ring.release(lease) }
+        }
         if master.tick(programRigMs: t, nowRigMs: now, masterView: vistaPropia) != nil {
             composeLatencyMs.append(Double(now - t) + Double(DispatchTime.now().uptimeNanoseconds - inicio) / 1e6)
         }
@@ -1079,6 +1089,8 @@ final class SplitBench {
     }
 
     private static let footprintEveryS = 60.0
+    /// Una detección cada 4 tics del programa: 7,5 Hz (PLAYER_TARGET_HZ).
+    private static let detectEveryTicks = 4
 
     /// `phys_footprint` del proceso, lo que mira jetsam, en MB.
     /// Segundos de CPU del proceso (usuario + sistema, todos los hilos), de getrusage.
@@ -1208,6 +1220,7 @@ final class SplitBench {
             "ad_bytes": AdHub.store?.usedBytes ?? 0,
             "ad_budget_bytes": AdHub.store?.budgetBytes ?? 0,
             "footprint_mb": footprintMb,
+            "detect": detect?.report() ?? [:],
             // El coste medio de la app entera durante el banco, en % de UN núcleo
             // (100 = un núcleo lleno; el iPhone 17 tiene 6).
             "cpu_pct_one_core": 100 * (Self.processCpuSeconds() - cpuStartS)
@@ -1452,5 +1465,74 @@ enum RigClockDomain {
         guard domain.range(of: "^[a-z0-9]{8,32}$", options: .regularExpression) != nil else { return }
         UserDefaults.standard.set(domain, forKey: keyDomain)
         UserDefaults.standard.set(bootTimeS(), forKey: keyBoot)
+    }
+}
+
+
+// MARK: - La carga del detector en el banco (SPK-54, parcial)
+
+// El modelo de jugadores en el maestro mientras compone el programa: Vision recorta y escala el
+// fotograma de la cámara a la entrada del modelo (scaleFill: no es la franja de verdad, que sale
+// de Metal, pero el coste del escalado es del mismo orden). Una sola petición a la vez: si el
+// modelo sigue ocupado, el fotograma se salta y se cuenta; nunca se encola (CLAUDE.md §2).
+final class DetectLoad {
+    private let request: VNCoreMLRequest
+    private let queue = DispatchQueue(label: "io.footballai.zero.split.detect", qos: .userInitiated)
+    private let lock = NSLock()
+    private var busy = false
+    private var runs = 0
+    private var skipped = 0
+    private var failures = 0
+    private var latenciasMs: [Double] = []
+    private let compileMs: Double
+
+    init?(package: String) {
+        guard let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+        let url = docs.appendingPathComponent("bench-resources/\(package)")
+        let t0 = DispatchTime.now().uptimeNanoseconds
+        do {
+            let compilado = try MLModel.compileModel(at: url)
+            let config = MLModelConfiguration()
+            config.computeUnits = .cpuAndNeuralEngine
+            let modelo = try VNCoreMLModel(for: MLModel(contentsOf: compilado, configuration: config))
+            request = VNCoreMLRequest(model: modelo)
+            request.imageCropAndScaleOption = .scaleFill
+        } catch {
+            NSLog("[split] detector %@: %@", package, "\(error)")
+            return nil
+        }
+        compileMs = Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6
+    }
+
+    func offer(_ buffer: CVPixelBuffer, release: @escaping () -> Void) {
+        lock.lock()
+        if busy {
+            skipped += 1
+            lock.unlock()
+            release()
+            return
+        }
+        busy = true
+        lock.unlock()
+        queue.async { [self] in
+            let t0 = DispatchTime.now().uptimeNanoseconds
+            let ok = (try? VNImageRequestHandler(cvPixelBuffer: buffer, options: [:]).perform([request])) != nil
+            let ms = Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6
+            release()
+            lock.lock()
+            if ok { runs += 1; latenciasMs.append(ms) } else { failures += 1 }
+            busy = false
+            lock.unlock()
+        }
+    }
+
+    func report() -> [String: Any] {
+        lock.lock(); defer { lock.unlock() }
+        let o = latenciasMs.sorted()
+        func p(_ q: Double) -> Double { o.isEmpty ? 0 : o[min(o.count - 1, Int(q * Double(o.count)))] }
+        return ["runs": runs, "skipped": skipped, "failures": failures, "compile_load_ms": compileMs,
+                "p50_ms": p(0.5), "p90_ms": p(0.9), "p99_ms": p(0.99)]
     }
 }
