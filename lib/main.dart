@@ -33,6 +33,10 @@ export 'package:football_ai_capture/src/zero_shell.dart' show ZeroShell;
 const String _autoRole = String.fromEnvironment('AUTO_ROLE');
 const bool _linkOnly = bool.fromEnvironment('LINK_ONLY');
 
+/// «Este móvil dirige» con AUTO_ROLE (IOS-80): `true` o `false`; vacío, el de siempre (el
+/// izquierdo). Para el banco del rol desacoplado del lado.
+const String _prefersMaster = String.fromEnvironment('PREFERS_MASTER');
+
 /// Grabación de prueba sin tocar la pantalla (IOS-15): con AUTO_ROLE, un solo móvil
 /// (STANDALONE) y AUTO_RECORD_S, empieza a grabar guardando el vídeo en cuanto la
 /// cámara está lista y para sola a los AUTO_RECORD_S segundos. 0 = no graba.
@@ -79,6 +83,7 @@ class CaptureApp extends StatelessWidget {
               linkOnly: _linkOnly,
               standalone: _standalone,
               autoRecordSeconds: _autoRecordS,
+              prefersMaster: _prefersMaster.isEmpty ? null : _prefersMaster == 'true',
             ),
     );
   }

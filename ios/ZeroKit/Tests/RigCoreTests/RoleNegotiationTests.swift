@@ -49,6 +49,21 @@ final class RoleNegotiationTests: XCTestCase {
         XCTAssertEqual(der, .conflict)
     }
 
+    func testDosMaestrosProvisionalesSeResuelvenPorPreferencia() {
+        // Los dos arrancaron solos con «Este móvil dirige», cada uno con su partido y term 0
+        // (visto con los dos iPhone): manda el izquierdo, con el partido de este.
+        let (izq, der) = ambos(
+            claim(.left, .master, 0, "m-izq", prefers: true), claim(.right, .master, 0, "m-der", prefers: true)
+        )
+        XCTAssertEqual(izq, .resolved(role: .master, term: 1, matchId: "m-izq", error: nil))
+        XCTAssertEqual(der, .resolved(role: .slave, term: 1, matchId: "m-izq", error: nil))
+        // Un maestro de verdad (term ≥1) frente a uno provisional: manda el de verdad.
+        XCTAssertEqual(
+            RoleNegotiation.negotiate(mine: claim(.left, .master, 1, "a"), theirs: claim(.right, .master, 0, "b")),
+            .resolved(role: .master, term: 1, matchId: "a", error: nil)
+        )
+    }
+
     func testUnEsclavoSinPartidoAdoptaElDelMaestro() {
         let (izq, der) = ambos(claim(.left, .master, 7, "m9"), claim(.right, .slave, 0, nil, prefers: true))
         XCTAssertEqual(izq, .resolved(role: .master, term: 7, matchId: "m9", error: nil))

@@ -42,8 +42,11 @@ public enum RoleOutcome: Equatable, Sendable {
 
 public enum RoleNegotiation {
     public static func negotiate(mine: RoleClaim, theirs: RoleClaim) -> RoleOutcome {
-        let yoMaestro = mine.role == .master && mine.matchId != nil
-        let elMaestro = theirs.role == .master && theirs.matchId != nil
+        // Un maestro con term 0 es provisional: arrancó solo y nunca negoció (ADR 0023 §7:
+        // el term de un maestro es ≥1). No cuenta como maestro de un partido; si no, dos
+        // móviles que prefieren dirigir y arrancan a la vez quedan en conflicto.
+        let yoMaestro = mine.role == .master && mine.matchId != nil && mine.term > 0
+        let elMaestro = theirs.role == .master && theirs.matchId != nil && theirs.term > 0
 
         // Dos maestros de partidos distintos: conflicto, a elegir a mano.
         if yoMaestro, elMaestro, mine.matchId != theirs.matchId {
