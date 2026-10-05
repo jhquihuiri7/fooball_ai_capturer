@@ -104,6 +104,10 @@ class PanelControl extends ChangeNotifier {
   final HttpClient _client;
   final math.Random _random;
 
+  /// A cuál de `pairing.panels` se habla. Ante un corte o un 5xx se pasa a la
+  /// siguiente: tras un relevo, el que dirige es el otro móvil (ADR 0023).
+  int _target = 0;
+
   PanelMatch? _match;
   PanelLink _link = PanelLink.connecting;
   String? _problem;
@@ -218,7 +222,7 @@ class PanelControl extends ChangeNotifier {
       try {
         final _Reply reply = await _send(
           'GET',
-          pairing.endpoint('match', since == null ? null : {'since': since}),
+          pairing.endpointAt(_target, 'match', since == null ? null : {'since': since}),
           timeout: longPollTimeout,
         );
         if (reply.status == HttpStatus.ok) {
@@ -231,11 +235,15 @@ class PanelControl extends ChangeNotifier {
         }
         // 503: demasiados mandos esperando. Se pregunta de cero, sin esperar turno.
         fromScratch = reply.status == HttpStatus.serviceUnavailable;
+        if (reply.status >= HttpStatus.internalServerError) {
+          _target++;
+        }
         _lost(reply.detail ?? 'el panel contestó ${reply.status}');
       } on FormatException catch (error) {
         // Contesta, pero no se le entiende: un panel de otra versión.
         _lost('el panel habla otra versión: ${error.message}');
       } on Exception {
+        _target++;
         _lost('sin conexión con el panel');
       }
       if (!_disposed) {
@@ -254,7 +262,7 @@ class PanelControl extends ChangeNotifier {
       try {
         final _Reply reply = await _send(
           'POST',
-          pairing.endpoint(route),
+          pairing.endpointAt(_target, route),
           body: body,
           idempotencyKey: key,
           timeout: requestTimeout,
@@ -275,7 +283,7 @@ class PanelControl extends ChangeNotifier {
             _unpaired(reply);
             return CommandResult(CommandOutcome.unpaired, reply.detail);
           case >= HttpStatus.internalServerError:
-            break; // el panel no pudo ahora: se reintenta como un corte
+            _target++; // el panel no pudo ahora: se reintenta como un corte
           default:
             return CommandResult(CommandOutcome.rejected, reply.detail);
         }
@@ -286,7 +294,8 @@ class PanelControl extends ChangeNotifier {
         );
       } on Exception {
         // Sin respuesta: puede que llegara y se perdiera la vuelta. La misma clave hace
-        // que reintentar sea seguro.
+        // que reintentar sea seguro, también en otra dirección del mismo partido.
+        _target++;
       }
       if (trying.elapsed + retryDelay > retryWindow) {
         break;

@@ -38,6 +38,12 @@ dependencies:
   # El marcador y las alineaciones sobreviven a cerrar la app en el descanso.
   shared_preferences: ^2.3.3
 
+  # HMAC-SHA256 del token de mando (IOS-63), el mismo de tools/control_token.py.
+  crypto: ^3.0.7
+
+  # La matriz del QR Mando que enseña el maestro (IOS-63); se pinta con un CustomPainter.
+  qr: ^4.0.0
+
 dev_dependencies:
   # Viene con flutter_test, pero declararlo calla el aviso de dependencia implicita.
   fake_async: ^1.3.1

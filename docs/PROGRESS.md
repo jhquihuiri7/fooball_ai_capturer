@@ -650,6 +650,31 @@ hubs), ya con esta expectativa.
 
 ---
 
+## 2026-10-04 · IOS-63 — token de mando y QR en el maestro · ✅
+
+**Hecho**
+- `lib/src/server/control_token.dart`: porte de tools/control_token.py, byte a byte
+  (claims m/r/s/e/g, JSON compacto con lo no ASCII escapado como `json.dumps`,
+  base64url sin relleno, HMAC-SHA256, comparación en tiempo constante, los mismos
+  401/410 y mensajes). `deriveControlSecret`: el secreto del mando por partido,
+  HMAC-SHA256(S, "zero-control-v1 " ‖ match_id) en base64url (ADR 0023 §3); no se guarda
+  ni viaja, así que la tarjeta («se guarda en el Keychain») queda superada por el ADR.
+- `lib/src/server/control_pairing.dart`: el texto del QR Mando con el token y las
+  direcciones del maestro, del otro móvil y del VPS (punto abierto aceptado del ADR
+  0023). PanelPairing gana `alternates` (fragmento `alt`, separadas por espacios) y
+  `compose`; PanelControl pasa a la siguiente ante un corte o un 5xx.
+- `lib/src/widgets/qr_view.dart`: el QR pintado con un CustomPainter (paquete qr).
+- Decisión mínima: `masterApiPort` = 8090, el mismo del panel del Mac, porque un mando
+  no distingue a quién habla. Paquetes crypto y qr (BSD-3) en DEPENDENCIES.md.
+- Tests (21): los 11 dorados de control_token.json (emitir y verificar), el secreto
+  derivado contra un vector de Python, tildes, token del soporte con generación, el QR
+  con tres direcciones y el relevo del mando a la alternativa con la primera caída.
+
+**Queda fuera**: enseñar el QR en la pantalla del maestro llega con la API del mando
+(IOS-62), que es la que lo atiende. El secreto del soporte S sigue viniendo de
+RIG_LINK_SECRET hasta IOS-97; la derivación en nativo (para que S no pase a Dart) se
+hará allí por Pigeon.
+
 ## 2026-10-04 · IOS-80 — rol maestro/esclavo desacoplado del lado · 🚧 falta la prueba con dos iPhone
 
 **Hecho**

@@ -329,6 +329,24 @@ void main() {
     expect(control.silence, greaterThan(Duration.zero));
   });
 
+  test('con el primero caído, prueba la alternativa del QR (relevo, IOS-63)', () async {
+    // Un puerto que nadie escucha: el viejo maestro, que ya no dirige.
+    final ServerSocket muerto = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+    final int puertoMuerto = muerto.port;
+    await muerto.close();
+    final PanelPairing conAlternativa = PanelPairing.parse(PanelPairing.compose(
+      <Uri>[Uri.parse('http://127.0.0.1:$puertoMuerto'), panel.pairing.panel],
+      _token,
+    ))!;
+    control.dispose();
+    control = mando(pairing: conAlternativa);
+
+    control.start();
+
+    await _until(() => control.link == PanelLink.online);
+    expect(control.match!.home.goals, panel.home);
+  });
+
   test('un QR de otro partido corta el enlace y lo dice', () async {
     panel.forceStatus = HttpStatus.gone;
 

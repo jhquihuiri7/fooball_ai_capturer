@@ -142,6 +142,21 @@ const Duration calibrationRequestTimeout = Duration(minutes: 3);
 /// (`PAIRING_FRAGMENT` en `tools/control_token.py`).
 const String pairingFragmentKey = 'mando';
 
+/// Las otras direcciones del mismo partido en el QR Mando del maestro, separadas por
+/// espacios (IOS-63, ADR 0023): la IP del otro móvil y la URL del VPS.
+const String pairingAlternatesKey = 'alt';
+
+/// Puerto de la API del mando en el maestro (`MASTER_API_PORT`, IOS-62/63). El mismo que
+/// el panel del Mac de la cancha: un mando no distingue a quién habla.
+const int masterApiPort = localPanelPort;
+
+/// Lo que precede al `match_id` al derivar el secreto del mando (ADR 0023 §3).
+const String controlSecretContext = 'zero-control-v1 ';
+
+/// Lo que vale un token de mando desde que se enseña el QR (`CONTROL_TOKEN_TTL_S`): el
+/// día de partido con su montaje.
+const Duration controlTokenTtl = Duration(hours: 12);
+
 /// Donde vive la API del mando en el panel (`API_V1_PREFIX`).
 const String panelApiPrefix = '/api/v1/';
 
