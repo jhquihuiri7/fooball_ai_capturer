@@ -1,0 +1,42 @@
+{
+  "counters" : {
+    "centernet-mnv4/ane_cost_pct_x100" : 8312,
+    "centernet-mnv4/compile_ms" : 66,
+    "centernet-mnv4/load_ms" : 484,
+    "centernet-mnv4/ops_off_ane" : 370,
+    "centernet-mnv4/ops_total" : 474,
+    "centernet-mnv4/predictions" : 500,
+    "yolox-tiny/ane_cost_pct_x100" : 6785,
+    "yolox-tiny/compile_ms" : 77,
+    "yolox-tiny/load_ms" : 852,
+    "yolox-tiny/ops_off_ane" : 656,
+    "yolox-tiny/ops_total" : 861,
+    "yolox-tiny/predictions" : 500
+  },
+  "device" : "iPhone18,3",
+  "duration_s" : 21.475939989089966,
+  "name" : "model-bench",
+  "params" : {
+    "models" : "centernet-mnv4,yolox-tiny"
+  },
+  "stages_ms" : {
+    "centernet-mnv4/predict" : {
+      "p50_ms" : 8,
+      "p90_ms" : 8,
+      "p99_ms" : 8
+    },
+    "yolox-tiny/predict" : {
+      "p50_ms" : 33,
+      "p90_ms" : 33,
+      "p99_ms" : 50
+    }
+  },
+  "started_epoch_s" : 1791234120,
+  "system_version" : "Version 26.6.1 (Build 23G83)",
+  "thermal" : [
+    "fair",
+    "fair",
+    "fair",
+    "fair"
+  ]
+}
