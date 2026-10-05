@@ -12,6 +12,35 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-05 · SPK-02 — 90 min de enlace entre los dos iPhone por la Wi-Fi del router · 🚧 falta Ethernet
+
+Banco link-90: partes sintéticas a 30 fps con el perfil 0, 10 y 30 Mbit/s cada 5 min, por
+UDP con espaciado (16 datagramas cada 2 ms). El control va por TCP con latidos a 10 Hz y
+reloj. El banco deja ahora un informe parcial cada 5 min (`link-bench-<lado>-parcial.json`).
+
+| Qué | Resultado |
+|---|---|
+| Conexión | 1 en 90 min, 0 cortes, 0 tramas inválidas |
+| Órdenes del maestro | 2698 de 2698 |
+| PTS al esclavo | 2628 de 2700 (97 %), ida y vuelta p50 16 ms |
+| Reloj | Incertidumbre de 2,2 ms |
+| RTT del control | p50 14 ms · p90 125 · p99 330 (con los tramos saturados) |
+| Partes a 10 Mbit/s | 2,4-3,9 % perdidas por escalón |
+| Partes a 30 Mbit/s | ~50 % perdidas por escalón (en total, 30 552 de 108 001) |
+
+**Lectura**: por la Wi-Fi del router, entre dos iPhone, caben ~10 Mbit/s de partes y aun así
+con pérdidas. Las partes pasan dos veces por el aire, así que la capacidad útil es la
+mitad que entre el iPhone y el Mac, donde se medía un 0,22 % a 15 Mbit/s. No cumple ni el
+éxito por Ethernet ni el de punto de acceso.
+
+El criterio de abandono habla de «ningún medio», y falta Ethernet, así que no se aplica.
+La decisión UDP/TCP del ADR 0023 §5 se toma con los hubs. El control, en cambio, aguanta
+la saturación sin un corte.
+
+**Siguiente paso**
+- el mismo banco con los hubs USB-C+Ethernet (IOS-11);
+- Wi-Fi Aware va en SPK-08.
+
 ## 2026-10-05 · Primera sesión con los dos iPhone: IOS-80 e IOS-81 ✅, y lo medido para IOS-44/62/64/70/82
 
 iPhone 17 (izquierdo) e iPhone 16 Pro (derecho) por Wi-Fi, con las cámaras tapadas (la
