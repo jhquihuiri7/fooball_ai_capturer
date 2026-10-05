@@ -1100,6 +1100,107 @@ class CaptureHostApi {
     ;
   }
 
+  /// El secreto del mando del partido `matchId`: HMAC-SHA256(S, "zero-control-v1 " ‖
+  /// match_id) en base64url (ADR 0023 §3). Lo deriva el nativo, así que el secreto del
+  /// soporte S no pasa nunca a Dart. Vacío si este móvil no tiene S.
+  Future<String> controlSecret(String matchId) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.CaptureHostApi.controlSecret$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[matchId]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as String;
+  }
+
+  /// El partido que dirige este móvil (IOS-62): va en el hello de las conexiones
+  /// siguientes, para que el otro lo adopte. Sin enlace de Network no hace nada.
+  Future<void> setMatchId(String matchId) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.CaptureHostApi.setMatchId$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[matchId]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
+  /// La IP del otro móvil por el enlace, o vacío. La lleva el QR Mando (IOS-63).
+  Future<String> linkPeerAddress() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.CaptureHostApi.linkPeerAddress$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as String;
+  }
+
+  /// El PIN del operador que abre la API del mando con los tres ámbitos (ADR 0017,
+  /// enmienda §3). En el Keychain, como el emparejamiento. Vacío si no hay.
+  Future<String> loadOperatorPin() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.CaptureHostApi.loadOperatorPin$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as String;
+  }
+
+  Future<void> saveOperatorPin(String pin) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.CaptureHostApi.saveOperatorPin$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[pin]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
   /// PTS recientes del maestro, en tiempo del soporte, pedidos por el enlace (TASK A4).
   /// Solo tiene sentido en el derecho. Vacío si el maestro no contesta a tiempo.
   Future<List<int>> masterRecentPtsNs() async {
@@ -1153,8 +1254,9 @@ abstract class CaptureFlutterApi {
   /// Llegó una orden del maestro. Solo la recibe el esclavo.
   void onPeerCommand(RigCommand command);
 
-  /// El enlace negoció quién manda (IOS-80): el rol y el term con los que sigue.
-  void onRigRole(RigRole role, int term);
+  /// El enlace negoció quién manda (IOS-80): el rol, el term y el partido (o null, si
+  /// ninguno de los dos traía) con los que sigue.
+  void onRigRole(RigRole role, int term, String? matchId);
 
   static void setUp(CaptureFlutterApi? api, {
     BinaryMessenger? binaryMessenger, 
@@ -1346,8 +1448,9 @@ abstract class CaptureFlutterApi {
           final List<Object?> args = message! as List<Object?>;
           final RigRole arg_role = args[0]! as RigRole;
           final int arg_term = args[1]! as int;
+          final String? arg_matchId = args[2] as String?;
           try {
-            api.onRigRole(arg_role, arg_term);
+            api.onRigRole(arg_role, arg_term, arg_matchId);
             return wrapResponse(empty: true);
           } on PlatformException catch (e) {
             return wrapResponse(error: e);

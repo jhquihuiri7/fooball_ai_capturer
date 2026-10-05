@@ -91,7 +91,7 @@ void main() {
       await session.prepare();
       expect(api.lastPrefersMaster, isTrue);
       expect(session.isRigMaster, isFalse, reason: 'sin negociar, el izquierdo');
-      session.onRigRole(RigRole.master, 3);
+      session.onRigRole(RigRole.master, 3, 'm_1');
       expect(session.isRigMaster, isTrue, reason: 'el derecho puede dirigir');
       expect(session.isClockMaster, isTrue, reason: 'el maestro del reloj es el del soporte');
       expect(session.rigTerm, 3);
@@ -102,7 +102,7 @@ void main() {
       final CaptureSession session = CaptureSession(role: CameraRole.left, api: api);
       await session.prepare();
       expect(api.lastPrefersMaster, isTrue);
-      session.onRigRole(RigRole.slave, 2);
+      session.onRigRole(RigRole.slave, 2, null);
       expect(session.isRigMaster, isFalse, reason: 'el izquierdo puede quedar de esclavo');
       session.onLinkStateChanged(LinkState.conflict, '');
       expect(session.linkLabel, contains('conflicto'));

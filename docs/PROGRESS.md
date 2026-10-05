@@ -650,7 +650,7 @@ hubs), ya con esta expectativa.
 
 ---
 
-## 2026-10-04 · IOS-62 — API /api/v1 del mando servida por el maestro · 🚧 falta cablearla en la app y la prueba en la LAN
+## 2026-10-04 · IOS-62 — API /api/v1 del mando servida por el maestro · 🚧 falta la prueba en la LAN con dos iPhone
 
 **Hecho**
 - `lib/src/server/api_server.dart`: MasterApi, sin sockets (ApiRequest → ApiResponse,
@@ -673,9 +673,25 @@ hubs), ya con esta expectativa.
   aplicada una vez, la espera larga despierta en ≤100 ms, 503 a la novena, 401/410,
   `rig` que no se gana con token, 404/415/400, stream sin túnel 503 y 504 sin respuesta.
 
-**Queda fuera**: arrancar el servidor cuando el móvil pasa a maestro, el secreto
-derivado por Pigeon (S no sale de nativo), el PIN en el Keychain y el QR en pantalla
-(siguiente commit); la prueba con un tercer iPhone en la LAN.
+**Cableado en la app (mismo día)**
+- `lib/src/server/master_host.dart`: MasterHost abre el partido en Documents/partido y
+  sirve la API cuando el enlace dice que este móvil dirige (`onRigRole` trae ahora el
+  `match_id`); si el enlace no traía partido, empieza uno y lo anuncia al enlace
+  (`setMatchId`, va en el hello siguiente). Otro partido del enlace aparta el guardado a
+  `match-<id>.json`. Al pasar a esclavo o cerrar la pantalla, cierra.
+- Pigeon: `controlSecret(matchId)` (lo deriva el nativo con LinkAuth.controlSecret; S
+  no pasa a Dart), `setMatchId`, `linkPeerAddress` (la IP del otro por la conexión de
+  control, NWLinkTransport.peerHost) y el PIN del operador en el Keychain
+  (`loadOperatorPin`/`saveOperatorPin`; KeychainText generaliza el del emparejamiento).
+- Pantalla de captura: botón «QR MANDO» solo en el que sirve el mando, con el QR (este
+  móvil, el otro y el VPS si lo hay), «puede emitir» y el PIN (6 cifras o más).
+- Tests (5) de MasterHost: arranque y anuncio del partido, QR verificable con el
+  secreto derivado, partido nuevo que aparta el viejo, sin S sirve solo con PIN, y
+  CaptureSession que arranca y para el servidor con el rol.
+
+**Queda fuera**: la prueba con dos iPhone (el Mac hace de tercer dispositivo con curl y
+la app Zero como mando). El cronómetro del maestro usa un Stopwatch hasta que el reloj
+del soporte de IOS-13 se exponga a Dart con su `clock_domain`.
 
 ## 2026-10-04 · IOS-61 — alineaciones en el maestro · ✅
 

@@ -74,6 +74,26 @@ public final class NWLinkTransport: LinkTransport {
     private var lastMediaArrival: Date?
     public private(set) var mediaLocalPort: UInt16 = 0
 
+    /// La IP del otro móvil por la conexión de control, o nil sin conexión. La lleva el
+    /// QR Mando como alternativa, para que el mando siga tras un relevo (IOS-63).
+    public var peerHost: String? {
+        queue.sync {
+            guard case let .hostPort(host, _)? = connection?.currentPath?.remoteEndpoint else {
+                return nil
+            }
+            switch host {
+            case let .ipv4(ip):
+                return "\(ip)"
+            case let .ipv6(ip):
+                return "[\("\(ip)".split(separator: "%").first ?? "")]"
+            case let .name(nombre, _):
+                return nombre
+            @unknown default:
+                return nil
+            }
+        }
+    }
+
     /// `interfaceType` por defecto: Ethernet por el hub (ADR 0023). `.wifi` para el
     /// banco sin cables y `nil` para el loopback de los tests.
     public init(mode: Mode, interfaceType: NWInterface.InterfaceType? = .wiredEthernet) {

@@ -217,6 +217,27 @@ class FakeCaptureApi extends CaptureHostApi {
   @override
   Future<void> stopLink() async => stopLinkCalls++;
 
+  /// El secreto del mando que devolvería el nativo; vacío = sin secreto del soporte.
+  String controlSecretValue = '';
+  String? announcedMatchId;
+  String peerAddress = '';
+  String operatorPin = '';
+
+  @override
+  Future<String> controlSecret(String matchId) async => controlSecretValue;
+
+  @override
+  Future<void> setMatchId(String matchId) async => announcedMatchId = matchId;
+
+  @override
+  Future<String> linkPeerAddress() async => peerAddress;
+
+  @override
+  Future<String> loadOperatorPin() async => operatorPin;
+
+  @override
+  Future<void> saveOperatorPin(String pin) async => operatorPin = pin;
+
   @override
   Future<List<int>> masterRecentPtsNs() async => masterPts;
 }

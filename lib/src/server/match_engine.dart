@@ -41,6 +41,17 @@ class StopwatchTimeSource implements MatchTimeSource {
   int nowMs() => _watch.elapsedMilliseconds;
 }
 
+/// Aparta el partido `id` y sus alineaciones con su nombre: un partido viejo no se
+/// borra nunca, pero tampoco se mezcla con el nuevo.
+void _archive(File file, String id) {
+  for (final File f in <File>[file, File('${file.parent.path}/$lineupsFileName')]) {
+    if (f.existsSync()) {
+      final String nombre = f.uri.pathSegments.last.replaceFirst('.json', '');
+      f.renameSync('${f.parent.path}/$nombre-$id.json');
+    }
+  }
+}
+
 /// Las alineaciones guardadas y, si el fichero no se pudo leer, por qué. Un fichero roto
 /// no deja el maestro sin arrancar: se aparta a `.roto` (para no pisarlo al guardar) y
 /// se empieza sin alineaciones.
@@ -124,21 +135,29 @@ class MatchEngine {
   /// Con el mismo `clock_domain` el cronómetro sigue en marcha; con otro vuelve
   /// parado y con `clock_restored` (ADR 0023). Las alineaciones van aparte, en
   /// `lineups.json` junto a `file` (el mismo formato que `--lineups` del panel).
+  ///
+  /// `matchId` es el partido que trae el enlace (IOS-80): si el guardado es otro, se
+  /// aparta (`match-<id>.json`, con sus alineaciones) y se empieza este de cero.
   factory MatchEngine.open({
     required File file,
     required MatchTimeSource time,
+    String? matchId,
     String home = 'LOCAL',
     String away = 'VISITANTE',
     Random? random,
   }) {
     final Random azar = random ?? Random.secure();
     final MatchClock reloj = MatchClock(time);
-    final MatchRecord? guardado = loadRecord(file);
+    MatchRecord? guardado = loadRecord(file);
+    if (guardado != null && matchId != null && guardado.matchId != matchId) {
+      _archive(file, guardado.matchId);
+      guardado = null;
+    }
     final MatchEngine engine = MatchEngine._(
       file,
       time,
       reloj,
-      guardado?.matchId ?? 'm_${_hex(azar, 6)}',
+      guardado?.matchId ?? matchId ?? 'm_${_hex(azar, 6)}',
       _hex(azar, 8),
       _loadLineups(File('${file.parent.path}/$lineupsFileName')),
     );

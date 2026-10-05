@@ -375,6 +375,24 @@ abstract class CaptureHostApi {
 
   void stopLink();
 
+  /// El secreto del mando del partido `matchId`: HMAC-SHA256(S, "zero-control-v1 " ‖
+  /// match_id) en base64url (ADR 0023 §3). Lo deriva el nativo, así que el secreto del
+  /// soporte S no pasa nunca a Dart. Vacío si este móvil no tiene S.
+  String controlSecret(String matchId);
+
+  /// El partido que dirige este móvil (IOS-62): va en el hello de las conexiones
+  /// siguientes, para que el otro lo adopte. Sin enlace de Network no hace nada.
+  void setMatchId(String matchId);
+
+  /// La IP del otro móvil por el enlace, o vacío. La lleva el QR Mando (IOS-63).
+  String linkPeerAddress();
+
+  /// El PIN del operador que abre la API del mando con los tres ámbitos (ADR 0017,
+  /// enmienda §3). En el Keychain, como el emparejamiento. Vacío si no hay.
+  String loadOperatorPin();
+
+  void saveOperatorPin(String pin);
+
   /// PTS recientes del maestro, en tiempo del soporte, pedidos por el enlace (TASK A4).
   /// Solo tiene sentido en el derecho. Vacío si el maestro no contesta a tiempo.
   @async
@@ -411,6 +429,7 @@ abstract class CaptureFlutterApi {
   /// Llegó una orden del maestro. Solo la recibe el esclavo.
   void onPeerCommand(RigCommand command);
 
-  /// El enlace negoció quién manda (IOS-80): el rol y el term con los que sigue.
-  void onRigRole(RigRole role, int term);
+  /// El enlace negoció quién manda (IOS-80): el rol, el term y el partido (o null, si
+  /// ninguno de los dos traía) con los que sigue.
+  void onRigRole(RigRole role, int term, String? matchId);
 }

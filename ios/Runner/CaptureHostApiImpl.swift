@@ -133,15 +133,41 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
     // MARK: - Emparejamiento con el panel como mando (ADR 0017 de football-ai)
 
     func loadPanelPairing() throws -> String {
-        try PanelPairingKeychain.read() ?? ""
+        try KeychainText.panelPairing.read() ?? ""
     }
 
     func savePanelPairing(pairing: String) throws {
-        try PanelPairingKeychain.write(pairing)
+        try KeychainText.panelPairing.write(pairing)
     }
 
     func clearPanelPairing() throws {
-        try PanelPairingKeychain.delete()
+        try KeychainText.panelPairing.delete()
+    }
+
+    // MARK: - La API del mando en el maestro (IOS-62, IOS-63)
+
+    func controlSecret(matchId: String) throws -> String {
+        RigLinkNW.controlSecret(matchId: matchId) ?? ""
+    }
+
+    func setMatchId(matchId: String) throws {
+        (link as? RigLinkNW)?.matchId = matchId
+    }
+
+    func linkPeerAddress() throws -> String {
+        (link as? RigLinkNW)?.peerHost ?? ""
+    }
+
+    func loadOperatorPin() throws -> String {
+        try KeychainText.operatorPin.read() ?? ""
+    }
+
+    func saveOperatorPin(pin: String) throws {
+        if pin.isEmpty {
+            try KeychainText.operatorPin.delete()
+        } else {
+            try KeychainText.operatorPin.write(pin)
+        }
     }
 
     // MARK: - Enlace entre móviles (TASK A3, A4)
@@ -162,9 +188,11 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
             }
             let nw = RigLinkNW(role: role, secret: secreto, prefersMaster: prefersMaster)
             // IOS-80: el rol negociado sube a Dart, que deja de suponer que manda el izquierdo.
-            nw.onRigRole = { [weak self] rol, term in
+            nw.onRigRole = { [weak self] rol, term, partido in
                 Task { @MainActor in
-                    try? await self?.flutter.onRigRole(role: rol == .master ? .master : .slave, term: Int64(term))
+                    try? await self?.flutter.onRigRole(
+                        role: rol == .master ? .master : .slave, term: Int64(term), matchId: partido
+                    )
                 }
             }
             // IOS-13: la cámara lee el reloj nativo por fotograma, sin pasar por
@@ -337,20 +365,30 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
     }
 }
 
-/// El texto del QR «Mando», en el Keychain (ADR 0017 de football-ai).
+/// Un texto en el Keychain: el QR «Mando» (ADR 0017 de football-ai) o el PIN del
+/// operador (IOS-62).
 ///
-/// `ThisDeviceOnly`: el token mueve el marcador de un partido y no puede irse en la copia
-/// de seguridad a otro iPhone. `AfterFirstUnlock`: se lee con la pantalla bloqueada tras
+/// `ThisDeviceOnly`: los dos mueven el marcador de un partido y no pueden irse en la copia
+/// de seguridad a otro iPhone. `AfterFirstUnlock`: se leen con la pantalla bloqueada tras
 /// el primer desbloqueo, que es como vive el móvil en la banda. Ojo: el Keychain
-/// sobrevive a desinstalar la app; para olvidar el panel está `clearPanelPairing`.
-private enum PanelPairingKeychain {
-    private static let base: [String: Any] = [
-        kSecClass as String: kSecClassGenericPassword,
-        kSecAttrService as String: "football-ai.mando",
-        kSecAttrAccount as String: "panel",
-    ]
+/// sobrevive a desinstalar la app; para olvidarlos están `clearPanelPairing` y
+/// `saveOperatorPin("")`.
+private struct KeychainText {
+    static let panelPairing = KeychainText(account: "panel", what: "el emparejamiento con el panel")
+    static let operatorPin = KeychainText(account: "pin-operador", what: "el PIN del operador")
 
-    static func read() throws -> String? {
+    let account: String
+    let what: String
+
+    private var base: [String: Any] {
+        [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "football-ai.mando",
+            kSecAttrAccount as String: account,
+        ]
+    }
+
+    func read() throws -> String? {
         var query = base
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
@@ -365,8 +403,8 @@ private enum PanelPairingKeychain {
         return String(data: data, encoding: .utf8)
     }
 
-    static func write(_ pairing: String) throws {
-        let data = Data(pairing.utf8)
+    func write(_ text: String) throws {
+        let data = Data(text.utf8)
         var status = SecItemUpdate(
             base as CFDictionary,
             [kSecValueData as String: data] as CFDictionary
@@ -382,17 +420,17 @@ private enum PanelPairingKeychain {
         }
     }
 
-    static func delete() throws {
+    func delete() throws {
         let status = SecItemDelete(base as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw failure(status, "borrar")
         }
     }
 
-    private static func failure(_ status: OSStatus, _ action: String) -> PigeonError {
+    private func failure(_ status: OSStatus, _ action: String) -> PigeonError {
         PigeonError(
             code: "keychain",
-            message: "no se pudo \(action) el emparejamiento con el panel (\(status))",
+            message: "no se pudo \(action) \(what) (\(status))",
             details: nil
         )
     }

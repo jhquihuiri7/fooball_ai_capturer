@@ -255,6 +255,9 @@ const Duration apiCommandTimeout = Duration(seconds: 5);
 /// alineación ~1 KiB; con más es un error o un abuso.
 const int apiMaxBodyBytes = 64 * 1024;
 
+/// La carpeta del partido del maestro dentro de Documents (IOS-62).
+const String matchDirectoryName = 'partido';
+
 /// Las alineaciones del partido, junto al fichero del partido (`--lineups` del panel).
 const String lineupsFileName = 'lineups.json';
 

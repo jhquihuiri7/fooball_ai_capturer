@@ -22,6 +22,7 @@ import 'package:football_ai_capture/src/constants.dart';
 import 'package:football_ai_capture/src/exposure_phase.dart';
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
 import 'package:football_ai_capture/src/rig_clock.dart';
+import 'package:football_ai_capture/src/server/master_host.dart';
 import 'package:football_ai_capture/src/stream_url.dart';
 
 /// Cómo va la subida de la grabación al panel para calibrar.
@@ -76,6 +77,7 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
     this.linkOnly = false,
     this.uploader = _defaultUploader,
     bool? prefersMaster,
+    this.masterHost,
   })  : prefersMaster = prefersMaster ?? role == CameraRole.left,
         _api = api ?? CaptureHostApi(),
         _clock = clock ?? RigClock() {
@@ -155,6 +157,12 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
   /// que no negocia y deja de maestro al izquierdo).
   RigRole? rigRole;
   int rigTerm = 0;
+
+  /// El partido que negoció el enlace, si alguno de los dos traía.
+  String? rigMatchId;
+
+  /// El servidor del mando, si esta pantalla lo levanta al dirigir (IOS-62).
+  final MasterHost? masterHost;
 
   /// Quién manda en el soporte: el negociado si lo hay; si no, el izquierdo.
   bool get isRigMaster => rigRole == null ? role == CameraRole.left : rigRole == RigRole.master;
@@ -741,9 +749,15 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
   }
 
   @override
-  void onRigRole(RigRole role, int term) {
+  void onRigRole(RigRole role, int term, String? matchId) {
     rigRole = role;
     rigTerm = term;
+    rigMatchId = matchId;
+    // El que dirige sirve el mando en la LAN (IOS-62); el que deja de dirigir, cierra.
+    final MasterHost? host = masterHost;
+    if (host != null) {
+      unawaited(role == RigRole.master ? host.becomeMaster(matchId) : host.stepDown());
+    }
     notifyListeners();
   }
 
@@ -878,6 +892,7 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
       _linkOwner = null;
       unawaited(_api.stopLink());
     }
+    unawaited(masterHost?.stepDown());
     unawaited(_clockSubscription?.cancel());
     super.dispose();
   }

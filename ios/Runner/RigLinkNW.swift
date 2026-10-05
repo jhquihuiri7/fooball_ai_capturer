@@ -45,6 +45,16 @@ final class RigLinkNW: PeerLinking {
     var onCommand: ((RigCommand) -> Void)?
 
     private let session: RigLinkSession
+    private let transport: NWLinkTransport
+
+    /// La IP del otro móvil, o nil sin enlace (IOS-63).
+    var peerHost: String? { transport.peerHost }
+
+    /// El partido que dirige este móvil: va en el hello de las siguientes conexiones.
+    var matchId: String? {
+        get { session.matchId }
+        set { session.matchId = newValue }
+    }
 
     /// El reloj nativo de la sesión (IOS-13): CaptureEngine lo lee por fotograma.
     var clock: RigClock { session.clock }
@@ -74,8 +84,15 @@ final class RigLinkNW: PeerLinking {
         return secreto
     }
 
-    /// El rol que negoció el enlace (IOS-80), con su term.
-    var onRigRole: ((RigCore.RigRole, Int) -> Void)?
+    /// El secreto del mando del partido (ADR 0023 §3), derivado aquí para que S no salga
+    /// de nativo. nil sin secreto del soporte.
+    static func controlSecret(matchId: String) -> String? {
+        guard let secreto = benchSecret() else { return nil }
+        return LinkAuth.controlSecret(secret: secreto, matchId: matchId)
+    }
+
+    /// El rol que negoció el enlace (IOS-80), con su term y su partido.
+    var onRigRole: ((RigCore.RigRole, Int, String?) -> Void)?
 
     init(role: CameraRole, secret: Data, prefersMaster: Bool) {
         let side: RigLinkSession.Side = role == .left ? .left : .right
@@ -90,6 +107,7 @@ final class RigLinkNW: PeerLinking {
         } else {
             transport = NWLinkTransport(mode: .browse, interfaceType: Self.interfaceType())
         }
+        self.transport = transport
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
         session = RigLinkSession(
             transport: transport,
@@ -103,7 +121,7 @@ final class RigLinkNW: PeerLinking {
         // partido y el term llegan con la pizarra (IOS-82).
         session.claimedRole = .slave
         session.prefersMaster = prefersMaster
-        session.onRole = { [weak self] rol, term, _ in self?.onRigRole?(rol, term) }
+        session.onRole = { [weak self] rol, term, partido in self?.onRigRole?(rol, term, partido) }
         session.recentPts = { [weak self] in self?.recentPts?() ?? [] }
         session.currentLook = { [weak self] in self?.currentLook?() }
         session.onLook = { [weak self] look in self?.onLook?(look) }

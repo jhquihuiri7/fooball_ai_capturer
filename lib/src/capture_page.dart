@@ -16,6 +16,7 @@
 library;
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 
@@ -23,6 +24,8 @@ import 'package:football_ai_capture/src/capture_labels.dart';
 import 'package:football_ai_capture/src/capture_session.dart';
 import 'package:football_ai_capture/src/constants.dart';
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
+import 'package:football_ai_capture/src/mando_qr_sheet.dart';
+import 'package:football_ai_capture/src/server/master_host.dart';
 import 'package:football_ai_capture/src/theme/zero_colors.dart';
 import 'package:football_ai_capture/src/theme/zero_mark.dart';
 import 'package:football_ai_capture/src/theme/zero_metrics.dart';
@@ -81,6 +84,21 @@ class _CapturePageState extends State<CapturePage> {
   /// quitarlo entonces dejaba a la nueva sin enlace ni reloj hasta reiniciar la app.
   static CaptureSession? _receiver;
 
+  final CaptureHostApi _api = CaptureHostApi();
+
+  /// El servidor del mando (IOS-62): solo en el soporte de verdad, no en el banco ni con
+  /// un solo móvil ni con una sesión de test.
+  late final MasterHost? _host =
+      widget.session != null || widget.standalone || widget.linkOnly
+          ? null
+          : MasterHost(
+              directory: Directory('${Platform.environment['HOME']}/Documents/$matchDirectoryName'),
+              controlSecret: _api.controlSecret,
+              announceMatch: _api.setMatchId,
+              peerAddress: _api.linkPeerAddress,
+              operatorPin: _api.loadOperatorPin,
+            );
+
   late final CaptureSession _session =
       widget.session ??
       CaptureSession(
@@ -89,6 +107,7 @@ class _CapturePageState extends State<CapturePage> {
         serverHost: widget.serverHost,
         linkOnly: widget.linkOnly,
         prefersMaster: widget.prefersMaster,
+        masterHost: _host,
       );
 
   /// Refresco del estado nativo. Además de traer batería, calor y frames perdidos,
@@ -128,6 +147,7 @@ class _CapturePageState extends State<CapturePage> {
     if (widget.session == null) {
       _session.dispose();
     }
+    _host?.dispose();
     super.dispose();
   }
 
@@ -219,6 +239,7 @@ class _CapturePageState extends State<CapturePage> {
                   _SaveVideoRow(session: _session),
                   _RecordingBanner(readout: r),
                   _CalibrationUploadButton(session: _session),
+                  if (_host != null) MandoQrButton(host: _host, savePin: _api.saveOperatorPin),
                   if (trouble.isNotEmpty) ...<Widget>[
                     const SizedBox(height: ZeroMetrics.cardGap),
                     _TroubleCard(readings: trouble),

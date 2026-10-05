@@ -786,6 +786,19 @@ protocol CaptureHostApi {
   /// `prefersMaster` es «Este móvil dirige»: solo decide al empezar un partido.
   func startLink(role: CameraRole, prefersMaster: Bool) throws
   func stopLink() throws
+  /// El secreto del mando del partido `matchId`: HMAC-SHA256(S, "zero-control-v1 " ‖
+  /// match_id) en base64url (ADR 0023 §3). Lo deriva el nativo, así que el secreto del
+  /// soporte S no pasa nunca a Dart. Vacío si este móvil no tiene S.
+  func controlSecret(matchId: String) throws -> String
+  /// El partido que dirige este móvil (IOS-62): va en el hello de las conexiones
+  /// siguientes, para que el otro lo adopte. Sin enlace de Network no hace nada.
+  func setMatchId(matchId: String) throws
+  /// La IP del otro móvil por el enlace, o vacío. La lleva el QR Mando (IOS-63).
+  func linkPeerAddress() throws -> String
+  /// El PIN del operador que abre la API del mando con los tres ámbitos (ADR 0017,
+  /// enmienda §3). En el Keychain, como el emparejamiento. Vacío si no hay.
+  func loadOperatorPin() throws -> String
+  func saveOperatorPin(pin: String) throws
   /// PTS recientes del maestro, en tiempo del soporte, pedidos por el enlace (TASK A4).
   /// Solo tiene sentido en el derecho. Vacío si el maestro no contesta a tiempo.
   func masterRecentPtsNs() async throws -> [Int64]
@@ -1177,6 +1190,85 @@ class CaptureHostApiSetup {
     } else {
       stopLinkChannel.setMessageHandler(nil)
     }
+    /// El secreto del mando del partido `matchId`: HMAC-SHA256(S, "zero-control-v1 " ‖
+    /// match_id) en base64url (ADR 0023 §3). Lo deriva el nativo, así que el secreto del
+    /// soporte S no pasa nunca a Dart. Vacío si este móvil no tiene S.
+    let controlSecretChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.controlSecret\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      controlSecretChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let matchIdArg = args[0] as! String
+        do {
+          let result = try api.controlSecret(matchId: matchIdArg)
+          reply(wrapResult(result))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      controlSecretChannel.setMessageHandler(nil)
+    }
+    /// El partido que dirige este móvil (IOS-62): va en el hello de las conexiones
+    /// siguientes, para que el otro lo adopte. Sin enlace de Network no hace nada.
+    let setMatchIdChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.setMatchId\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      setMatchIdChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let matchIdArg = args[0] as! String
+        do {
+          try api.setMatchId(matchId: matchIdArg)
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      setMatchIdChannel.setMessageHandler(nil)
+    }
+    /// La IP del otro móvil por el enlace, o vacío. La lleva el QR Mando (IOS-63).
+    let linkPeerAddressChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.linkPeerAddress\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      linkPeerAddressChannel.setMessageHandler { _, reply in
+        do {
+          let result = try api.linkPeerAddress()
+          reply(wrapResult(result))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      linkPeerAddressChannel.setMessageHandler(nil)
+    }
+    /// El PIN del operador que abre la API del mando con los tres ámbitos (ADR 0017,
+    /// enmienda §3). En el Keychain, como el emparejamiento. Vacío si no hay.
+    let loadOperatorPinChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.loadOperatorPin\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      loadOperatorPinChannel.setMessageHandler { _, reply in
+        do {
+          let result = try api.loadOperatorPin()
+          reply(wrapResult(result))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      loadOperatorPinChannel.setMessageHandler(nil)
+    }
+    let saveOperatorPinChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.saveOperatorPin\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      saveOperatorPinChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let pinArg = args[0] as! String
+        do {
+          try api.saveOperatorPin(pin: pinArg)
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      saveOperatorPinChannel.setMessageHandler(nil)
+    }
     /// PTS recientes del maestro, en tiempo del soporte, pedidos por el enlace (TASK A4).
     /// Solo tiene sentido en el derecho. Vacío si el maestro no contesta a tiempo.
     let masterRecentPtsNsChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.masterRecentPtsNs\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
@@ -1220,8 +1312,9 @@ protocol CaptureFlutterApiProtocol {
   @MainActor func onClockEstimate(offsetNs offsetNsArg: Int64, driftPpm driftPpmArg: Double, samples samplesArg: Int64, uncertaintyNs uncertaintyNsArg: Int64) async throws
   /// Llegó una orden del maestro. Solo la recibe el esclavo.
   @MainActor func onPeerCommand(command commandArg: RigCommand) async throws
-  /// El enlace negoció quién manda (IOS-80): el rol y el term con los que sigue.
-  @MainActor func onRigRole(role roleArg: RigRole, term termArg: Int64) async throws
+  /// El enlace negoció quién manda (IOS-80): el rol, el term y el partido (o null, si
+  /// ninguno de los dos traía) con los que sigue.
+  @MainActor func onRigRole(role roleArg: RigRole, term termArg: Int64, matchId matchIdArg: String?) async throws
 }
 class CaptureFlutterApi: CaptureFlutterApiProtocol {
   private let binaryMessenger: FlutterBinaryMessenger
@@ -1404,12 +1497,13 @@ class CaptureFlutterApi: CaptureFlutterApiProtocol {
       }
     }
   }
-  /// El enlace negoció quién manda (IOS-80): el rol y el term con los que sigue.
-  @MainActor func onRigRole(role roleArg: RigRole, term termArg: Int64) async throws {
+  /// El enlace negoció quién manda (IOS-80): el rol, el term y el partido (o null, si
+  /// ninguno de los dos traía) con los que sigue.
+  @MainActor func onRigRole(role roleArg: RigRole, term termArg: Int64, matchId matchIdArg: String?) async throws {
     return try await withCheckedThrowingContinuation { continuation in
       let channelName: String = "dev.flutter.pigeon.football_ai_capture.CaptureFlutterApi.onRigRole\(messageChannelSuffix)"
       let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
-      channel.sendMessage([roleArg, termArg] as [Any?]) { response in
+      channel.sendMessage([roleArg, termArg, matchIdArg] as [Any?]) { response in
         guard let listResponse = response as? [Any?] else {
           continuation.resume(throwing: createConnectionError(withChannelName: channelName))
           return
