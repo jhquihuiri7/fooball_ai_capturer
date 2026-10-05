@@ -12,6 +12,19 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-05 · IOS-75 — los 10 min del N0 validados · 🚧 faltan las detecciones (modelo)
+
+El N0 del maestro en la pasada split de 10 min con los dos iPhone
+(`Documents/n0/banco-1791220803-left.jsonl`) pasa `read_match_log` de la referencia sin
+un error:
+- 4499 registros `view` en 599,7 s, con un paso medio de 133,3 ms (7,5 Hz) y 0 huecos de
+  más de 200 ms;
+- el informe del banco da `e0_written` 4499 y `e0_dropped` 0.
+
+Cumple la aceptación (10 min, 0 errores, 0 descartes) para lo que hoy se escribe. Las
+cajas `det` llegan con el detector: el plan B, CenterNet-MNv4, está medido a 8 ms en el ANE
+(ADR 0020) y espera la decisión de REF-33.
+
 ## 2026-10-05 · IOS-44 — el tic del programa sin el disco · medido
 
 El .ts se escribía en la cola del temporizador de 30 Hz; ahora va a una cola de escritura
