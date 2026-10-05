@@ -45,9 +45,21 @@ class StateReplica {
   final Map<String, Object?> lineups;
   final List<Map<String, Object?>> idempotency;
 
-  /// Más fresca que `other` por (term, seq) (ADR 0023 §7).
-  bool fresherThan(StateReplica? other) =>
-      other == null || term > other.term || (term == other.term && seq > other.seq);
+  /// Más fresca que `other` (ADR 0023 §7): por term y, dentro del mismo term, por `seq`
+  /// si es el mismo arranque del maestro. Un maestro que reinicia la app vuelve a empezar
+  /// `seq` en 1 con el mismo term: entre arranques manda el `rig_ms`, que en el mismo
+  /// dominio de reloj sigue corriendo; con otro dominio no hay con qué comparar y gana la
+  /// que llega (lo contrario dejaba al esclavo con el marcador viejo hasta superar el
+  /// `seq` de antes).
+  bool fresherThan(StateReplica? other) {
+    if (other == null || term != other.term) {
+      return other == null || term > other.term;
+    }
+    if (boot == other.boot) {
+      return seq > other.seq;
+    }
+    return clockDomain != other.clockDomain || rigMs > other.rigMs;
+  }
 
   Map<String, Object?> toJson() => <String, Object?>{
     'version': replicaVersion,

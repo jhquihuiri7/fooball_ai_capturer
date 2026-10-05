@@ -65,6 +65,21 @@ void main() {
     expect(ReplicaStore(f).latest!.term, 2, reason: 'sobrevive a reiniciar');
   });
 
+  test('un maestro que reinicia la app (mismo term, seq desde 1) sigue mandando', () {
+    String r({required String boot, required int seq, required int rigMs, String domain = 'd'}) => StateReplica(
+      matchId: 'm', term: 1, seq: seq, rigMs: rigMs, clockDomain: domain, boot: boot, rev: seq,
+      match: MatchRecord(matchId: 'm', home: 'A', away: 'B', homeGoals: 0, awayGoals: 0,
+          accumulatedMs: 0, running: false, startedRigMs: null, clockDomain: domain),
+      lineups: const <String, Object?>{}, idempotency: const <Map<String, Object?>>[],
+    ).encode();
+    final ReplicaStore s = ReplicaStore(File('${dir.path}/replica.json'));
+    expect(s.accept(r(boot: 'a', seq: 80, rigMs: 400000)), isTrue);
+    expect(s.accept(r(boot: 'b', seq: 1, rigMs: 900000)), isTrue, reason: 'otro arranque, más tarde en el reloj');
+    expect(s.accept(r(boot: 'a', seq: 81, rigMs: 400100)), isFalse, reason: 'el arranque viejo, antes en el reloj');
+    expect(s.accept(r(boot: 'b', seq: 2, rigMs: 900033)), isTrue);
+    expect(s.accept(r(boot: 'c', seq: 1, rigMs: 5, domain: 'otro')), isTrue, reason: 'otro dominio: gana la que llega');
+  });
+
   test('el maestro la manda al cambiar el partido', () async {
     final List<String> enviadas = <String>[];
     final MasterHost h = MasterHost(

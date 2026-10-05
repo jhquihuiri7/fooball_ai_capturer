@@ -9,6 +9,7 @@ library;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:football_ai_capture/src/constants.dart';
@@ -116,7 +117,6 @@ class MasterHost extends ChangeNotifier {
   Timer? _replicaTick;
   int _replicaSeq = 0;
   MasterApi? _api;
-  final Stopwatch _replicaClock = Stopwatch()..start();
 
   /// Réplicas mandadas.
   int replicasSent = 0;
@@ -244,9 +244,11 @@ class MasterHost extends ChangeNotifier {
     _replicaSeq += 1;
     final StateReplica r = StateReplica.fromEngine(
       engine,
-      term: term?.call() ?? 1,
+      // El term es ≥1 (ADR 0023 §7): el maestro que arranca solo aún no ha negociado.
+      term: max(1, term?.call() ?? 1),
       seq: _replicaSeq,
-      rigMs: _replicaClock.elapsedMilliseconds,
+      // En el reloj del soporte: ordena las réplicas entre arranques del maestro.
+      rigMs: _time.nowMs(),
       clockDomain: engine.record().clockDomain,
       idempotency: _api?.idempotency,
     );
