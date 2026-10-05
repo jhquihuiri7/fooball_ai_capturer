@@ -110,6 +110,9 @@ public final class RigLinkSession {
     public var onNoPart: ((NoPartPacket) -> Void)?
     /// El esclavo debe forzar un IDR: el maestro tiene un hueco en `part_seq`.
     public var onIdrRequest: ((UInt32) -> Void)?
+    /// El maestro recibe las detecciones del esclavo de un instante de la rejilla
+    /// (IOS-73): instante, ms de inferencia y cajas nativas.
+    public var onDetections: ((Int64, Double, [PlayerDetection]) -> Void)?
     /// El maestro recibe la miniatura JPEG de la cámara del esclavo (IOS-64).
     public var onThumb: ((Data) -> Void)?
     /// El maestro recibe la media BGR del solape del esclavo (IOS-38).
@@ -396,6 +399,19 @@ public final class RigLinkSession {
         }
     }
 
+    /// El esclavo manda sus detecciones del instante `targetRigMs` (IOS-25/73), por medios.
+    public func send(detections: [PlayerDetection], targetRigMs: Int64, inferMs: Double) {
+        queue.async { [self] in
+            guard !isMaster, case .connected = state else { return }
+            seqMedia &+= 1
+            let payload = DetectionsPayload.encode(
+                inferMs: UInt16(clamping: Int(inferMs.rounded())), detections: detections.map(WireDetection.init)
+            )
+            send(type: .detections, payload: payload, seq: seqMedia, channel: .media,
+                 rigMs: UInt64(max(0, targetRigMs)))
+        }
+    }
+
     /// El esclavo manda la miniatura de su cámara (IOS-64), a 1 Hz, por control: ~30 KB
     /// que no pueden llegar a trozos.
     public func send(thumb jpeg: Data) {
@@ -497,6 +513,9 @@ public final class RigLinkSession {
         case .idrRequest:
             guard !isMaster, let seq = IdrRequestWire.decode(frame.payload) else { return }
             onIdrRequest?(seq)
+        case .detections:
+            guard isMaster, let (ms, cajas) = DetectionsPayload.decode(frame.payload) else { return }
+            onDetections?(Int64(frame.rigMs), Double(ms), cajas.compactMap(\.detection))
         case .thumb:
             guard isMaster, !frame.payload.isEmpty else { return }
             onThumb?(frame.payload)

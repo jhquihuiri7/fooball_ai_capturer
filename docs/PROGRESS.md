@@ -650,6 +650,33 @@ hubs), ya con esta expectativa.
 
 ---
 
+## 2026-10-04 · IOS-73 — DirectorService, y el canal de medios que se quedaba mudo · 🚧 falta con dos iPhone y el modelo
+
+**Hecho**
+- `RigMedia/Pipeline/DirectorService.swift`: las detecciones propias y las del esclavo
+  se emparejan por su instante de la rejilla (DetectionPairer; los dos usan los mismos
+  t_k, así que el desfase es cero) → DirectorLoop → en cada tic el ViewCommand y las
+  últimas vistas para el mensaje `view`. Órdenes del operador: modo, IA, ganancias y
+  plano de situación.
+- `detections` por el enlace: RigLinkSession `send(detections:targetRigMs:inferMs:)` en
+  el esclavo y `onDetections` en el maestro (WireDetection ↔ PlayerDetection, clase por
+  el índice de PlayerClass y score a 1/255).
+- Banco program-split: con RIG_SPLIT_DIRECTOR=1 dirige el DirectorService (las
+  ganancias del color entran en sus vistas); el soporte nominal usa DEFAULT_RIG_* de la
+  referencia.
+- Tests: DirectorServiceTests (15 s de un grupo que solo ve la cámara derecha: la
+  cámara virtual va hacia él; todas las parejas con desfase 0; en plano abierto no
+  persigue y salen huérfanos de un lado), las detecciones por la sesión.
+
+**Arreglo del enlace (IOS-16)**: con el Mac de esclavo, unas pasadas recibían 600–2600
+vistas y otras NINGUNA. Por UDP, el que escucha solo conoce al otro cuando le llega un
+datagrama, y el que busca tomaba el primer anuncio de medios de Bonjour, que tras
+reiniciar la app es el viejo de la caché: los dos quedaban sordos sin saberlo.
+NWLinkTransport, en el lado que busca: lo recién anunciado va primero, al abrir manda
+un sondeo y un vigilante cambia de anuncio si con el control conectado no llega nada
+por medios en 3 s (`mediaRotations`). **Medido: 4 de 4 pasadas con vistas (583–690 en
+25 s), con 1-2 cambios cada una.**
+
 ## 2026-10-04 · IOS-25 — etapa de detección con cadencia anclada al reloj del soporte · 🚧 falta el modelo y el banco players-30min
 
 **Hecho**

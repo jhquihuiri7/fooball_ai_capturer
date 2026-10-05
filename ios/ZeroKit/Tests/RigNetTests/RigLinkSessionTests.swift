@@ -198,6 +198,16 @@ final class RigLinkSessionTests: XCTestCase {
         XCTAssertEqual(partes.first, parte)
         XCTAssertEqual(nadas.first, NoPartPacket(frameRigMs: 1034, viewId: 6))
         lock.unlock()
+        // IOS-73: las detecciones del esclavo, con su instante.
+        nonisolated(unsafe) var detec: (Int64, [PlayerDetection])?
+        left.onDetections = { t, _, d in lock.lock(); detec = (t, d); lock.unlock() }
+        right.send(detections: [PlayerDetection(x1: 10, y1: 20, x2: 30, y2: 80, playerClass: .referee, score: 0.8)],
+                   targetRigMs: 4000, inferMs: 12)
+        waitUntil { lock.lock(); defer { lock.unlock() }; return detec?.0 == 4000 }
+        lock.lock()
+        XCTAssertEqual(detec?.1.first?.playerClass, .referee)
+        XCTAssertEqual(detec?.1.first?.score ?? 0, 0.8, accuracy: 1.0 / 255)
+        lock.unlock()
         // IOS-64: la miniatura del esclavo.
         nonisolated(unsafe) var miniatura = Data()
         left.onThumb = { d in lock.lock(); miniatura = d; lock.unlock() }

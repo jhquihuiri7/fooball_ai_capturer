@@ -642,9 +642,10 @@ final class LinkPartsLoad {
 //   RIG_SPLIT_SWEEP_DEG     amplitud del barrido en yaw (30)
 //   RIG_SPLIT_SWEEP_S       periodo del barrido (20)
 //   RIG_SPLIT_HFOV_DEG      el encuadre (60)
-//   RIG_NOMINAL_YAW_DEG     sin Documents/rig.json, la apertura nominal de cada cámara (35)
+//   RIG_SPLIT_DIRECTOR      1: dirige el DirectorService (IOS-73) con las detecciones
+//   RIG_NOMINAL_YAW_DEG     sin Documents/rig.json, la apertura de cada cámara (DEFAULT_RIG_YAW_DEG)
 //   RIG_NOMINAL_HFOV_DEG    y su HFOV (106, la ultra gran angular)
-//   RIG_NOMINAL_PITCH_DEG   y su pitch (-8)
+//   RIG_NOMINAL_PITCH_DEG   y su pitch (DEFAULT_RIG_PITCH_DEG)
 
 final class SplitBench {
     static func enabled(_ entorno: [String: String] = ProcessInfo.processInfo.environment) -> Bool {
@@ -680,6 +681,8 @@ final class SplitBench {
     private var master: MasterProgramStage?
     private var programEncoder: VideoEncoder?
     private let history = ViewHistory()
+    /// IOS-73: con RIG_SPLIT_DIRECTOR=1 dirige el director de verdad y no el barrido.
+    private var director: DirectorService?
     // IOS-38: el igualado de color, medido cada `colorEveryMs`.
     private var overlap: OverlapMeans?
     private let matcher = ColorMatcher()
@@ -804,6 +807,19 @@ final class SplitBench {
                 return (lease.buffer, { ring.release(lease) })
             }
             m.onIdrRequest = { [weak self] seq in self?.session.requestIdr(partSeq: seq) }
+            if env["RIG_SPLIT_DIRECTOR"] == "1" {
+                let loop = try DirectorLoop(
+                    rig: modelo, canvas: CylindricalCanvas.fit(modelo, pitchLimitsRad: (-0.5, 0.1)),
+                    width: Self.programWidth, height: Self.programHeight, plan: ShotPlan.at(),
+                    frameDurationMs: 1000 / Self.fps
+                )
+                let d = DirectorService(loop: loop)
+                let otroLado: CameraSide = side == .left ? .right : .left
+                session.onDetections = { [weak d] t, _, cajas in
+                    d?.receive(side: otroLado, targetRigMs: t, detections: cajas)
+                }
+                director = d
+            }
             m.onProgram = { [weak self] buffer, t in self?.program(buffer, t: t) }
             master = m
             programEncoder = try VideoEncoder(
@@ -828,8 +844,9 @@ final class SplitBench {
         let grados = { (k: String, d: Double) in (env[k].flatMap(Double.init) ?? d) * .pi / 180 }
         let intr = try CameraIntrinsics.fromHfov(width: width, height: height,
                                                  hfovRad: grados("RIG_NOMINAL_HFOV_DEG", 106))
-        let yaw = grados("RIG_NOMINAL_YAW_DEG", 35)
-        let pitch = grados("RIG_NOMINAL_PITCH_DEG", -8)
+        // Las de partida de la referencia (DEFAULT_RIG_*): la calibración las corrige.
+        let yaw = grados("RIG_NOMINAL_YAW_DEG", RigConstants.defaultRigYawDeg)
+        let pitch = grados("RIG_NOMINAL_PITCH_DEG", RigConstants.defaultRigPitchDeg)
         return (RigModel(
             left: RigCamera(intrinsics: intr, pose: CameraPose(yawRad: -yaw, pitchRad: pitch)),
             right: RigCamera(intrinsics: intr, pose: CameraPose(yawRad: yaw, pitchRad: pitch))
@@ -915,14 +932,22 @@ final class SplitBench {
         let paso = 1000 / Self.fps
         // La rejilla del programa: instantes k · 33,3 ms.
         let rejilla = { (ms: Int64) in Int64((Double(ms) / paso).rounded(.down) * paso) }
-        history.append(scriptedView(rejilla(now + Self.viewLeadMs)))
+        if let director {
+            director.setGains(matcher.gains)
+            if let (_, hist) = try? director.tick(targetRigMs: rejilla(now + Self.viewLeadMs)) {
+                hist.forEach { if history.view(at: $0.targetRigMs) == nil { history.append(ViewWire.quantized($0)) } }
+            }
+        } else {
+            history.append(scriptedView(rejilla(now + Self.viewLeadMs)))
+        }
         session.send(views: history.message())
 
         let t = rejilla(now - LinkConstants.partMaxWaitMs)
         guard t != lastProgramT else { return }
         lastProgramT = t
         let inicio = DispatchTime.now().uptimeNanoseconds
-        if master.tick(programRigMs: t, nowRigMs: now, masterView: scriptedView(t)) != nil {
+        let vistaPropia = history.view(at: t) ?? scriptedView(t)
+        if master.tick(programRigMs: t, nowRigMs: now, masterView: vistaPropia) != nil {
             composeLatencyMs.append(Double(now - t) + Double(DispatchTime.now().uptimeNanoseconds - inicio) / 1e6)
         }
         drainProgram()

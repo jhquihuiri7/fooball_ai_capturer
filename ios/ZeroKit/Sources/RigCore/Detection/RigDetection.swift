@@ -97,3 +97,27 @@ extension RigModel {
         }
     }
 }
+
+// MARK: - Las detecciones en el cable (IOS-73)
+
+extension WireDetection {
+    /// La clase en el cable: el índice en PlayerClass.allCases (player, goalkeeper, referee).
+    public init(_ d: PlayerDetection) {
+        func px(_ v: Double) -> UInt16 { UInt16(clamping: Int(v.rounded())) }
+        self.init(
+            x1: px(d.x1), y1: px(d.y1), x2: px(d.x2), y2: px(d.y2),
+            classId: UInt8(PlayerClass.allCases.firstIndex(of: d.playerClass) ?? 0),
+            score: UInt8(clamping: Int((d.score * 255).rounded()))
+        )
+    }
+
+    /// De vuelta: a píxel entero y score a 1/255, que es lo que necesitan la fusión y
+    /// el director. nil si la clase no existe.
+    public var detection: PlayerDetection? {
+        guard Int(classId) < PlayerClass.allCases.count else { return nil }
+        return PlayerDetection(
+            x1: Double(x1), y1: Double(y1), x2: Double(x2), y2: Double(y2),
+            playerClass: PlayerClass.allCases[Int(classId)], score: Double(score) / 255
+        )
+    }
+}

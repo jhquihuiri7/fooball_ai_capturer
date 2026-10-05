@@ -98,6 +98,7 @@ final class LinkPeerTests: XCTestCase {
             "max_mbps": maxMbps,
             "media_loss_gaps": transporte.stats.mediaLossGaps,
             "media_stalls_over_100ms": transporte.stats.mediaStallsOver100Ms,
+            "media_rotations": transporte.mediaRotations,
         ]
         lock.unlock()
         let json = try JSONSerialization.data(withJSONObject: informe, options: [.sortedKeys, .prettyPrinted])

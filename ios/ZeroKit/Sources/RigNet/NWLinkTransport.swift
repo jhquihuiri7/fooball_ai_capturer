@@ -35,6 +35,11 @@ public final class NWLinkTransport: LinkTransport {
     /// Un hueco entre llegadas de medios mayor que esto es un parón (ADR 0023 §6).
     static let mediaStallMs: Double = 100
 
+    /// Segundos sin un datagrama de medios, con el control conectado, tras los que el
+    /// lado que busca prueba otro anuncio de medios: el primero puede ser uno viejo de la
+    /// caché de Bonjour (un proceso anterior) y por UDP nada avisa de que no hay nadie.
+    static let mediaWatchdogS: Double = 3
+
     /// Espera creciente de la reconexión, con el tope de 2 s de la decisión 3.
     static let reconnectDelaysS: [Double] = [0.25, 0.5, 1.0, 2.0]
 
@@ -68,6 +73,12 @@ public final class NWLinkTransport: LinkTransport {
     private var mediaListener: NWListener?
     private var mediaBrowser: NWBrowser?
     private var mediaConnection: NWConnection?
+    // El lado que busca: los anuncios de medios vistos, el que se prueba y desde cuándo.
+    private var mediaCandidates: [NWEndpoint] = []
+    private var mediaCandidateIndex = 0
+    private var mediaOpenedAt: Date?
+    private var mediaWatchdog: DispatchSourceTimer?
+    public private(set) var mediaRotations = 0
     private var reassembler = Reassembler()
     private var mediaSeq: UInt32 = 0
     private var lastMediaSeq: UInt32?
@@ -117,6 +128,7 @@ public final class NWLinkTransport: LinkTransport {
             startPathMonitor()
             open()
             openMedia()
+            startMediaWatchdog()
         }
     }
 
@@ -135,6 +147,9 @@ public final class NWLinkTransport: LinkTransport {
             mediaListener = nil
             mediaBrowser?.cancel()
             mediaBrowser = nil
+            mediaWatchdog?.cancel()
+            mediaWatchdog = nil
+            mediaCandidates = []
             pathMonitor?.cancel()
             pathMonitor = nil
             state = .idle
@@ -442,6 +457,7 @@ public final class NWLinkTransport: LinkTransport {
         }
     }
 
+
     private func openMediaListener(service: NWListener.Service?, port: UInt16?) {
         do {
             let listener: NWListener
@@ -475,23 +491,73 @@ public final class NWLinkTransport: LinkTransport {
             for: .bonjourWithTXTRecord(type: Self.mediaServiceType, domain: nil),
             using: mediaParameters()
         )
-        browser.browseResultsChangedHandler = { [weak self] results, _ in
-            guard let self, self.mediaConnection == nil, let primero = results.first else { return }
-            self.openMediaConnection(to: primero.endpoint)
+        browser.browseResultsChangedHandler = { [weak self] results, cambios in
+            guard let self else { return }
+            // Lo recién aparecido primero: el anuncio viejo de la caché suele ser el que
+            // ya estaba.
+            let nuevos = cambios.compactMap { cambio -> NWEndpoint? in
+                if case let .added(r) = cambio { return r.endpoint }
+                return nil
+            }
+            let resto = results.map(\.endpoint).filter { e in !nuevos.contains(where: { $0 == e }) }
+            self.mediaCandidates = nuevos.reversed() + resto
+            if self.mediaConnection == nil || !nuevos.isEmpty, !self.mediaCandidates.isEmpty {
+                self.mediaCandidateIndex = 0
+                self.openMediaConnection(to: self.mediaCandidates[0])
+            }
         }
         mediaBrowser = browser
         browser.start(queue: queue)
     }
 
     private func openMediaConnection(to endpoint: NWEndpoint) {
+        mediaConnection?.cancel()
         let conexion = NWConnection(to: endpoint, using: mediaParameters())
         mediaConnection = conexion
+        mediaOpenedAt = Date()
         conexion.stateUpdateHandler = { [weak self] estado in
             if case .ready = estado {
                 self?.receiveMedia(on: conexion)
+                // Un sondeo: por UDP, el que escucha solo conoce al otro cuando le llega
+                // algo. El reensamblador del otro lo cuenta como basura y lo tira.
+                conexion.send(content: Data([0]), completion: .contentProcessed { _ in })
             }
         }
         conexion.start(queue: queue)
+    }
+
+    /// El lado que busca (o conecta) vigila que por medios llegue algo; si no, prueba el
+    /// siguiente anuncio.
+    private func startMediaWatchdog() {
+        switch mode {
+        case .browse, .connect: break
+        default: return
+        }
+        let t = DispatchSource.makeTimerSource(queue: queue)
+        t.schedule(deadline: .now() + Self.mediaWatchdogS, repeating: Self.mediaWatchdogS / 2)
+        t.setEventHandler { [weak self] in self?.checkMedia() }
+        mediaWatchdog = t
+        t.resume()
+    }
+
+    private func checkMedia() {
+        guard !stopped, state == .connected, let abierta = mediaOpenedAt else { return }
+        let ultima = max(lastMediaArrival ?? .distantPast, abierta)
+        guard Date().timeIntervalSince(ultima) > Self.mediaWatchdogS else { return }
+        mediaRotations += 1
+        switch mode {
+        case .browse:
+            guard !mediaCandidates.isEmpty else { return }
+            mediaCandidateIndex = (mediaCandidateIndex + 1) % mediaCandidates.count
+            log.info("medios mudos: se prueba el anuncio \(self.mediaCandidateIndex)")
+            openMediaConnection(to: mediaCandidates[mediaCandidateIndex])
+        case let .connect(host, port):
+            openMediaConnection(to: NWEndpoint.hostPort(
+                host: NWEndpoint.Host(host), port: NWEndpoint.Port(rawValue: port + 1)!
+            ))
+        default:
+            break
+        }
     }
 
     private func receiveMedia(on connection: NWConnection) {
