@@ -175,10 +175,14 @@ public enum Postprocess {
 }
 
 /// El decodificador de jugadores (IOS-23): réplica de PlayerDetector.detect sin el
-/// backend, congelada en detectors.json.
+/// backend, congelada en detectors.json. Tres caminos, como la referencia: `detr`
+/// (logits y cajas), `nms` (lo mismo y NMS por clase) y `heatmap` (CenterNet-MNv4, el
+/// plan B medido del ADR 0020: picos del mapa, offset y tamaño a `heatmapStride`).
 public struct PlayerDecoder: Sendable {
-    public enum Postprocessing: String, Sendable { case detr, nms }
-    public enum BoxFormat: String, Sendable { case cxcywhNorm = "cxcywh_norm", xyxyInputPx = "xyxy_input_px" }
+    public enum Postprocessing: String, Sendable { case detr, nms, heatmap }
+    public enum BoxFormat: String, Sendable {
+        case cxcywhNorm = "cxcywh_norm", xyxyInputPx = "xyxy_input_px", heatmapStride = "heatmap_stride"
+    }
 
     /// Las clases del modelo en su orden (la ficha), con nil para lo que no se emite.
     public let classes: [PlayerClass?]
@@ -187,17 +191,28 @@ public struct PlayerDecoder: Sendable {
     public let postprocess: Postprocessing
     public let boxFormat: BoxFormat
     public let nmsIou: Double?
+    /// Celdas → píxeles de la entrada del camino heatmap (la ficha); nil en los demás.
+    public let heatmapStride: Int?
 
     public init(
         classNames: [String], confThreshold: Double = DetectionSpec.playerConfThreshold,
         maxDetections: Int = DetectionSpec.playerMaxDetections, postprocess: Postprocessing = .detr,
-        boxFormat: BoxFormat = .cxcywhNorm, nmsIou: Double? = nil
+        boxFormat: BoxFormat = .cxcywhNorm, nmsIou: Double? = nil, heatmapStride: Int? = nil
     ) throws {
         guard !classNames.isEmpty else {
             throw RigError.message("el decodificador necesita los nombres de clase del modelo")
         }
         guard (postprocess == .nms) == (nmsIou != nil) else {
             throw RigError.message("`nms_iou` es obligatorio con postprocess nms y solo con él")
+        }
+        guard (postprocess == .heatmap) == (boxFormat == .heatmapStride) else {
+            throw RigError.message("box_format `heatmap_stride` va con postprocess heatmap y solo con él")
+        }
+        guard (postprocess == .heatmap) == (heatmapStride != nil) else {
+            throw RigError.message("`heatmap_stride` es obligatorio con postprocess heatmap y solo con él")
+        }
+        if let heatmapStride, heatmapStride <= 0 {
+            throw RigError.message("`heatmap_stride` tiene que ser un entero positivo y es \(heatmapStride)")
         }
         // `person` es el jugador del modelo COCO provisional (ADR 0020, ML-16); el resto de
         // COCO se descarta. Igual que `_EMITTED` de la referencia.
@@ -207,6 +222,7 @@ public struct PlayerDecoder: Sendable {
         self.postprocess = postprocess
         self.boxFormat = boxFormat
         self.nmsIou = nmsIou
+        self.heatmapStride = heatmapStride
     }
 
     /// `logits` [Q][C] y `boxes` [Q][4] tal cual salen del modelo; `onPitch` dice si un
@@ -215,6 +231,9 @@ public struct PlayerDecoder: Sendable {
         logits: [[Float]], boxes: [[Float]], layout: InputLayout,
         onPitch: ((Int, Int) -> Bool)? = nil, pitchSize: (width: Int, height: Int)? = nil
     ) throws -> [PlayerDetection] {
+        guard postprocess != .heatmap else {
+            throw RigError.message("postprocess heatmap: las salidas van por decodeHeatmap")
+        }
         guard logits.first.map({ $0.count == classes.count }) ?? true else {
             throw RigError.message("el modelo declara \(logits.first!.count) clases y su ficha lista \(classes.count)")
         }
@@ -234,9 +253,49 @@ public struct PlayerDecoder: Sendable {
             w: layout.regions.map { $0.dstX + $0.dstW }.max()!,
             h: layout.regions.map { $0.dstY + $0.dstH }.max()!
         )
-        var c = boxFormat == .cxcywhNorm
+        let c = boxFormat == .cxcywhNorm
             ? Postprocess.decodeCxcywhLayout(elegidas, layout: layout, inputW: entrada.w, inputH: entrada.h)
             : Postprocess.decodeXyxyInputPx(elegidas, layout: layout)
+        return finish(c, sc, cls, layout: layout, onPitch: onPitch, pitchSize: pitchSize)
+    }
+
+    /// El camino CenterNet (`_detect_heatmap`): `heatmap` [C][H][W] ya activado por clase,
+    /// `offset` [2][H][W] con dx, dy en fracciones de celda y `size` [2][H][W] con ancho y
+    /// alto en celdas (el lote ya quitado). Los `maxDetections` mejores picos sobre el
+    /// umbral (estricto, la regla de los picos) y después fuera las clases que no se
+    /// emiten; las cajas, a float en píxeles de la entrada como una cabeza xyxy_input_px.
+    public func decodeHeatmap(
+        heatmap: [[[Float]]], offset: [[[Float]]], size: [[[Float]]], layout: InputLayout,
+        onPitch: ((Int, Int) -> Bool)? = nil, pitchSize: (width: Int, height: Int)? = nil
+    ) throws -> [PlayerDetection] {
+        guard postprocess == .heatmap, let paso = heatmapStride else {
+            throw RigError.message("decodeHeatmap pide postprocess heatmap")
+        }
+        guard heatmap.count == classes.count else {
+            throw RigError.message("el heatmap trae \(heatmap.count) clases en sus canales y la ficha lista \(classes.count)")
+        }
+        let picos = Postprocess.heatmapPeaks(heatmap, k: maxDetections, threshold: confThreshold)
+            .filter { classes[$0.klass] != nil }
+        guard !picos.isEmpty else { return [] }
+        let centros = Postprocess.refineOffset(offset, rows: picos.map(\.row), cols: picos.map(\.col), stride: paso)
+        let cajas: [[Float]] = zip(picos, centros).map { p, ctr in
+            let hw = Double(size[0][p.row][p.col]) * Double(paso) * 0.5
+            let hh = Double(size[1][p.row][p.col]) * Double(paso) * 0.5
+            return [Float(ctr.x - hw), Float(ctr.y - hh), Float(ctr.x + hw), Float(ctr.y + hh)]
+        }
+        return finish(
+            Postprocess.decodeXyxyInputPx(cajas, layout: layout), picos.map(\.score), picos.map(\.klass),
+            layout: layout, onPitch: onPitch, pitchSize: pitchSize
+        )
+    }
+
+    /// Lo común a los tres caminos, ya en nativo (`_finish`): la junta del mosaico, la
+    /// máscara por los pies y el orden (o la NMS) con el tope.
+    private func finish(
+        _ cajas: [(x1: Float, y1: Float, x2: Float, y2: Float)], _ scores: [Float], _ clases: [Int],
+        layout: InputLayout, onPitch: ((Int, Int) -> Bool)?, pitchSize: (width: Int, height: Int)?
+    ) -> [PlayerDetection] {
+        var c = cajas, sc = scores, cls = clases
         if layout.regions.count > 1 {
             (c, sc, cls) = Self.mergeSeam(layout, c, sc, cls)
         }

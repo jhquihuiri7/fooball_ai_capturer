@@ -12,6 +12,23 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-05 · PlayerDecoder con el camino heatmap del plan B (ADR 0020) · ✅
+
+Aditivo: `detr` y `nms` no cambian. `PlayerDecoder` gana `postprocess: .heatmap` con
+`boxFormat: .heatmapStride` y `heatmapStride` (obligatorio con heatmap y solo con él), y
+`decodeHeatmap(heatmap:offset:size:…)` para las tres salidas de CenterNet-MNv4: picos con
+`Postprocess.heatmapPeaks`, centros con `refineOffset`, tamaño en celdas × paso, y desde
+ahí lo mismo que `xyxy_input_px` (vuelta a nativo, junta, máscara por los pies, orden).
+Los tres casos `heatmap_*` nuevos de detectors.json (football-ai 7000268) cuadran con la
+tolerancia del dorado; los 18 de antes siguen igual.
+
+Fuera: `CoreMLPlayerDetector` sigue pidiendo logits y cajas; cablear el camino heatmap
+llega con la ficha de CenterNet en el registro. La decisión formal de REF-33 (ADR 0020
+PROPUESTO) sigue siendo del propietario.
+
+**Siguiente paso**: la ficha de CenterNet-MNv4 con pesos propios y su cableado en
+`CoreMLPlayerDetector`.
+
 ## 2026-10-05 · IOS-64 — el coste de CPU del panel local, medido · ✅
 
 El informe del banco gana `cpu_pct_one_core`: los segundos de CPU del proceso entero

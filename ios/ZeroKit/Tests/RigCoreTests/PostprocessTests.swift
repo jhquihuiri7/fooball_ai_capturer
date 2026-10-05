@@ -20,6 +20,15 @@ final class PostprocessTests: XCTestCase {
         return x.shape[0] == 0 ? [] : stride(from: 0, to: d.count, by: ancho).map { Array(d[$0..<($0 + ancho)]) }
     }
 
+    /// Un tensor [1][C][H][W] (o [C][H][W]) como [C][H][W]: el lote, si lo hay, es 1.
+    private func mapa(_ v: GoldenValue, _ k: String) throws -> [[[Float]]] {
+        let x = try t(v, k)
+        let forma = Array(x.shape.suffix(3))
+        let d = try x.doubles().map(Float.init)
+        let (cc, hh, ww) = (forma[0], forma[1], forma[2])
+        return (0..<cc).map { c in (0..<hh).map { y in Array(d[((c * hh + y) * ww)..<((c * hh + y) * ww + ww)]) } }
+    }
+
     private func esquinas(_ c: [(x1: Float, y1: Float, x2: Float, y2: Float)]) -> GoldenValue {
         .object([
             "x1": .tensor(f32: c.map(\.x1), shape: [c.count]), "y1": .tensor(f32: c.map(\.y1), shape: [c.count]),
@@ -99,19 +108,20 @@ final class PostprocessTests: XCTestCase {
 
     func testElDetectorDePuntaAPunta() throws {
         let doc = try Golden.loadDocument(named: "detectors.json")
-        var corridos = 0
+        var corridos = 0, heatmaps = 0
         for caso in doc.cases where caso.fn == "PlayerDetector.detect" {
             corridos += 1
             let i = caso.inputs
             guard case let .array(nombres) = try i.field("classes") else { throw GoldenError.message("classes") }
             let iou = try? i.number("nms_iou")
+            let paso = (try? i.number("heatmap_stride")).map { Int($0) }
             let dec = try PlayerDecoder(
                 classNames: nombres.compactMap { if case let .string(s) = $0 { return s } else { return nil } },
                 confThreshold: (try? i.number("conf_threshold")) ?? DetectionSpec.playerConfThreshold,
                 maxDetections: (try? i.number("max_detections")).map { Int($0) } ?? DetectionSpec.playerMaxDetections,
-                postprocess: iou == nil ? .detr : .nms,
+                postprocess: paso != nil ? .heatmap : iou == nil ? .detr : .nms,
                 boxFormat: PlayerDecoder.BoxFormat(rawValue: try i.string("box_format"))!,
-                nmsIou: iou
+                nmsIou: iou, heatmapStride: paso
             )
             var onPitch: ((Int, Int) -> Bool)?
             var tam: (width: Int, height: Int)?
@@ -120,10 +130,20 @@ final class PostprocessTests: XCTestCase {
                 tam = (Int(m["width"]!.numberValue!), Int(m["height"]!.numberValue!))
                 onPitch = { x, y in x >= r[0] && x < r[2] && y >= r[1] && y < r[3] }
             }
-            let dets = try dec.decode(
-                logits: try filas(i, "logits"), boxes: try filas(i, "boxes"),
-                layout: try BandGeometryTests.layout(i.field("layout")), onPitch: onPitch, pitchSize: tam
-            )
+            let layout = try BandGeometryTests.layout(i.field("layout"))
+            let dets: [PlayerDetection]
+            if paso != nil {
+                heatmaps += 1
+                dets = try dec.decodeHeatmap(
+                    heatmap: try mapa(i, "heatmap"), offset: try mapa(i, "offset"), size: try mapa(i, "size"),
+                    layout: layout, onPitch: onPitch, pitchSize: tam
+                )
+            } else {
+                dets = try dec.decode(
+                    logits: try filas(i, "logits"), boxes: try filas(i, "boxes"),
+                    layout: layout, onPitch: onPitch, pitchSize: tam
+                )
+            }
             let actual: GoldenValue = .object([
                 "boxes": .tensor(f64: dets.flatMap { [$0.x1, $0.y1, $0.x2, $0.y2] }, shape: [dets.count, 4]),
                 "classes": .array(dets.map { .string($0.playerClass.rawValue) }),
@@ -134,6 +154,21 @@ final class PostprocessTests: XCTestCase {
             }
         }
         XCTAssertGreaterThanOrEqual(corridos, 15)
+        XCTAssertGreaterThanOrEqual(heatmaps, 3, "los casos del plan B CenterNet (ADR 0020)")
+    }
+
+    func testElHeatmapExigeSuPasoYSuFormato() {
+        let nombres = ["goalkeeper", "player", "referee"]
+        XCTAssertThrowsError(try PlayerDecoder(classNames: nombres, postprocess: .heatmap, boxFormat: .heatmapStride))
+        XCTAssertThrowsError(try PlayerDecoder(
+            classNames: nombres, postprocess: .heatmap, boxFormat: .heatmapStride, heatmapStride: 0
+        ))
+        XCTAssertThrowsError(try PlayerDecoder(classNames: nombres, postprocess: .heatmap, heatmapStride: 4))
+        XCTAssertThrowsError(try PlayerDecoder(classNames: nombres, boxFormat: .heatmapStride))
+        XCTAssertThrowsError(try PlayerDecoder(classNames: nombres, heatmapStride: 4))
+        XCTAssertNoThrow(try PlayerDecoder(
+            classNames: nombres, postprocess: .heatmap, boxFormat: .heatmapStride, heatmapStride: 4
+        ))
     }
 
     func testTrescientasQueriesSonBaratas() throws {
