@@ -509,6 +509,77 @@
       }
     },
     {
+      "name": "coco_provisional_person_es_jugador",
+      "fn": "PlayerDetector.detect",
+      "inputs": {
+        "classes": [
+          "person",
+          "bicycle",
+          "car",
+          "sports ball"
+        ],
+        "layout": {
+          "regions": [
+            {
+              "dst": [
+                0,
+                0,
+                1920,
+                1080
+              ],
+              "src": [
+                0.0,
+                0.0,
+                1920.0,
+                1080.0
+              ]
+            }
+          ]
+        },
+        "logits": {
+          "dtype": "f32",
+          "shape": [
+            3,
+            4
+          ],
+          "b64": "VJ8MQAAAEMEAABDBAAAQwQAAEMEAABDBAAAQwbBxPEAAABDBAAAQwRhysT8AABDB"
+        },
+        "boxes": {
+          "dtype": "f32",
+          "shape": [
+            3,
+            4
+          ],
+          "b64": "VVX1PtFeAj+rqqo8L6G9PauqAD9oLwE/q6qqOya0FzxVVdU95DgOPlVV1T0vob09"
+        },
+        "box_format": "cxcywh_norm"
+      },
+      "expected": {
+        "boxes": {
+          "dtype": "f64",
+          "shape": [
+            1,
+            4
+          ],
+          "b64": "AAAAAAAgjEAAAAAgAEB/QAAAAAAAYI1AAAAAAADAgkA="
+        },
+        "classes": [
+          "player"
+        ],
+        "scores": {
+          "dtype": "f64",
+          "shape": [
+            1
+          ],
+          "b64": "AAAAwMzM7D8="
+        }
+      },
+      "tol": {
+        "abs": 0.001,
+        "rel": 0.0
+      }
+    },
+    {
       "name": "franja_vuelve_a_nativo",
       "fn": "PlayerDetector.detect",
       "inputs": {

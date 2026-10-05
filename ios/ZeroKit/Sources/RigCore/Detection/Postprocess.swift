@@ -199,7 +199,9 @@ public struct PlayerDecoder: Sendable {
         guard (postprocess == .nms) == (nmsIou != nil) else {
             throw RigError.message("`nms_iou` es obligatorio con postprocess nms y solo con él")
         }
-        classes = classNames.map { PlayerClass(rawValue: $0) }
+        // `person` es el jugador del modelo COCO provisional (ADR 0020, ML-16); el resto de
+        // COCO se descarta. Igual que `_EMITTED` de la referencia.
+        classes = classNames.map { $0 == "person" ? .player : PlayerClass(rawValue: $0) }
         self.confThreshold = confThreshold
         self.maxDetections = maxDetections
         self.postprocess = postprocess

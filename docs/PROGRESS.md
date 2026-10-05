@@ -650,6 +650,27 @@ hubs), ya con esta expectativa.
 
 ---
 
+## 2026-10-04 · IOS-25 — etapa de detección con cadencia anclada al reloj del soporte · 🚧 falta el modelo y el banco players-30min
+
+**Hecho**
+- `RigCore/Runtime/DetectionCadence.swift`: la rejilla t_k = k / hz en ms del soporte.
+- `RigMedia/Pipeline/PlayerDetectionStage.swift`: por fotograma que entra al anillo, al
+  pasar t_k toma el fotograma más cercano (≤½ fotograma) y lanza la cadena; una sola
+  detección en vuelo (la siguiente se descarta y se cuenta); `setCadence` para la
+  cadencia común del maestro; `onDetections` → CameraDetections {lado, t_k, instante
+  del fotograma, cajas, ms de inferencia}.
+- CoreMLPlayerDetector: la cadena de verdad — DetectorInputBuilder (IOS-21) →
+  CoreMLRunner por el carril de jugadores (IOS-22) → PlayerDecoder con el layout de
+  band.json (IOS-23); toma nombres de salidas, clases y postproceso del manifiesto.
+- IOS-23 (cont.): `person` → `player` para el modelo COCO provisional (ADR 0020), en la
+  referencia y en la réplica a la vez, con un caso dorado nuevo (18 en detectors.json).
+- Tests: la rejilla, **diez segundos de dos cámaras con fases a 5 ms: los mismos t_k sin
+  hablarse, fotogramas a ≤17 ms del instante y a ≤6 ms entre ellos, 7,5 Hz**, y el
+  descarte con una detección en vuelo.
+
+**Queda fuera**: el modelo de ML-16 (bloqueado por el dueño) y las cifras de 30 min en
+el iPhone; mandar las detecciones del esclavo por el enlace va con IOS-73.
+
 ## 2026-10-04 · IOS-22 — ejecutor Core ML con salidas preasignadas y manifiesto · 🚧 falta el modelo de ML-16 y medirlo en el iPhone
 
 **Hecho**
