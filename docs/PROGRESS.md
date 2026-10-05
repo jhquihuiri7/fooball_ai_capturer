@@ -12,6 +12,43 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-05 · Primera sesión con los dos iPhone: IOS-80 e IOS-81 ✅, y lo medido para IOS-44/62/64/70/82
+
+iPhone 17 (izquierdo) e iPhone 16 Pro (derecho) por Wi-Fi, con las cámaras tapadas (la
+imagen sale negra: el cosido y el color no se pueden juzgar a ojo).
+
+**Tres fallos que solo salían con dos móviles, arreglados**
+- IOS-81: con el esclavo caído, el banco componía el instante «ahora», que aún no tenía
+  fotograma propio, y salía SIN SEÑAL a ratos. Además, el programa saltaba 100 ms al
+  caer y volver el par. Ahora va siempre al mismo retraso.
+- IOS-82: un maestro que reinicia la app vuelve a `seq` 1 con el mismo term, y el
+  esclavo rechazaba sus réplicas (se quedaba en rev 0). Entre arranques ordena ahora el
+  `rig_ms` de la réplica, que sale del reloj del soporte; el term es al menos 1.
+- IOS-80: dos móviles que prefieren dirigir arrancaban cada uno como maestro con su
+  partido y quedaban en conflicto. Un maestro con term 0 es provisional y no cuenta como
+  maestro de un partido: se resuelve por preferencia (empate: el izquierdo).
+
+**Medido**
+
+| Prueba | Resultado |
+|---|---|
+| Split 10 min (IOS-44) | 17 999 fotogramas, 0 fallos de composición; tic p5 29,43 fps (pide ≥29,5); latencia añadida p50 111 / p95 114 ms (≤120 ✅); partes 13 761 recibidas y 4 perdidas (0,03 %), jitter 7 ms, 4 IDR; un solo `suspect` momentáneo; memoria plana (~460 MB el maestro, ~380 MB el esclavo); 602 subidas del marcador y 600 cues de la franja |
+| Caída del esclavo 60 s (IOS-81) ✅ | 7199 fotogramas en 240 s, 0 SIN SEÑAL, 0 sin fotograma propio; `down` 27 ms después del `suspect`; las partes vuelven ~1-2 s después de relanzar el esclavo |
+| Rol (IOS-80) ✅ | El derecho dirige y compone 4500 fotogramas en 150 s con 3418 partes y 0 perdidas; con los dos prefiriendo dirigir, manda el izquierdo (2082 partes, 0 fallos) |
+| Par de calibración (IOS-70) | 5 de 5 pares a 7-8 ms entre móviles (≤16 ✅; el objetivo ≤5 pide el sorteo de fase), JPEG de 0,9 MB e intrínsecas |
+| API desde el Mac (IOS-62) | Gol 200 y el mismo gol repetido 409; la réplica llega al esclavo con el marcador nuevo (term 1, seq 9) |
+| Panel (IOS-64) | Página en 26 ms; miniaturas: izquierda 23 ms, derecha (por el enlace) 36 ms, programa 22 ms; estado con `link connected`. Falta el coste de CPU |
+
+**Fuera**
+- IOS-38: necesita una escena iluminada y +1/3 EV en el esclavo.
+- IOS-43 e IOS-52: necesitan Ethernet.
+- IOS-44: el p5 del tic se queda en 29,43.
+- El esclavo provisional compone 1-3 s antes de negociar.
+
+**Siguiente paso**
+- con luz: IOS-38 y el cosido a ojo;
+- SPK-02: el enlace de 90 min.
+
 ## 2026-10-04 · IOS-47 e IOS-48 — la pasada de 10 min del gráfico y la franja · ✅ · IOS-54 sigue 🚧
 
 **Hecho**
