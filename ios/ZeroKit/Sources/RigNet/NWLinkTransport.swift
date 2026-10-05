@@ -74,6 +74,10 @@ public final class NWLinkTransport: LinkTransport {
     private var lastMediaArrival: Date?
     public private(set) var mediaLocalPort: UInt16 = 0
 
+    // IOS-52: el espaciado de los fragmentos de las tramas grandes (las partes).
+    private var paced: [Data] = []
+    private var pacing = false
+
     /// La IP del otro móvil por la conexión de control, o nil sin conexión. La lleva el
     /// QR Mando como alternativa, para que el mando siga tras un relevo (IOS-63).
     public var peerHost: String? {
@@ -149,10 +153,39 @@ public final class NWLinkTransport: LinkTransport {
                 let datagramas = Fragmenter.fragment(
                     frame: frame.encode(), session: frame.session, seq: mediaSeq
                 )
-                for datagrama in datagramas {
-                    mediaConnection.send(content: datagrama, completion: .contentProcessed { _ in })
+                if datagramas.count == 1 {
+                    // Latidos, reloj y vistas: un datagrama, sin esperar detrás de un IDR.
+                    mediaConnection.send(content: datagramas[0], completion: .contentProcessed { _ in })
+                } else {
+                    guard paced.count + datagramas.count <= LinkConstants.pacingMaxQueuedDatagrams else {
+                        stats.mediaPacerDrops += 1
+                        return
+                    }
+                    paced.append(contentsOf: datagramas)
+                    if !pacing { drainPaced() }
                 }
                 stats.framesSent += 1
+            }
+        }
+    }
+
+    /// Suelta un golpe de datagramas y, si quedan, vuelve en `pacingIntervalMs`. En la
+    /// cola del transporte.
+    private func drainPaced() {
+        guard let mediaConnection, !stopped else {
+            paced.removeAll()
+            pacing = false
+            return
+        }
+        let n = min(LinkConstants.pacingBurstDatagrams, paced.count)
+        for datagrama in paced.prefix(n) {
+            mediaConnection.send(content: datagrama, completion: .contentProcessed { _ in })
+        }
+        paced.removeFirst(n)
+        pacing = !paced.isEmpty
+        if pacing {
+            queue.asyncAfter(deadline: .now() + .milliseconds(LinkConstants.pacingIntervalMs)) { [weak self] in
+                self?.drainPaced()
             }
         }
     }

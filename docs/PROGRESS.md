@@ -650,6 +650,36 @@ hubs), ya con esta expectativa.
 
 ---
 
+## 2026-10-04 · IOS-52 — transporte de las partes por el enlace · 🚧 falta la pasada de 30 min con dos iPhone
+
+**Hecho**
+- `RigCore/Wire/PartPacket.swift`: el binario de medios del ADR 0023 §5. ViewWire (la
+  vista con los ángulos y las ganancias en f32, `sides` en un byte; `quantized` da la
+  vista tal y como la ve el otro móvil, para que las dos mitades pinten con los mismos
+  f32), el mensaje `view` con las VIEW_HISTORY últimas, PartPacket (part_seq ‖ vista ‖
+  AVCC; captura en `rig_ms`, IDR y extrapolada en `flags`), NoPartPacket e
+  IdrRequestWire.
+- `RigCore/Wire/PartFlow.swift`: PartSendQueue (2 partes; si tira una, tira las P hasta
+  el IDR que fuerza el codificador al ver `needsIdr`; la petición del maestro vacía las P
+  en cola y respeta un IDR ya encolado) y PartReceiver (orden, huecos de part_seq, nada
+  al decodificador hasta un IDR y `idr_request` con cada parte tirada; Mbit/s de la
+  última ventana y jitter RFC 3550).
+- RigLinkSession: `send(views:)` (maestro, medios), `send(part:)` y `send(noPart:)`
+  (esclavo, medios), `requestIdr(partSeq:)` (maestro, control) y sus `on…`; cada uno
+  solo en su sentido.
+- NWLinkTransport: las tramas de más de un datagrama salen espaciadas, 16 datagramas
+  cada 2 ms (~77 Mbit/s de pico), con la cola acotada a 2048 datagramas y lo que no cabe
+  contado (`mediaPacerDrops`). Las de un datagrama (latidos, reloj, vistas) no esperan
+  detrás de un IDR.
+- Tests (13): PartPacketTests (5), PartFlowTests (6, entre ellos **diez minutos
+  simulados con 1 % de pérdidas y 0–50 ms de jitter: ninguna P llega al decodificador
+  sin su anterior y cada petición se atiende con un IDR en ≤2 fotogramas**), la sesión
+  con los cuatro mensajes y tres IDR de 300 KB por el loopback UDP, enteros y espaciados.
+
+**Queda fuera**: la segunda aceptación (0 pérdidas a 30 Mbit/s durante 30 min entre
+dos iPhone) va con el banco de SPK-02 por Wi-Fi mañana; el criterio UDP/TCP lo decide
+SPK-02.
+
 ## 2026-10-04 · IOS-62 — API /api/v1 del mando servida por el maestro · 🚧 falta la prueba en la LAN con dos iPhone
 
 **Hecho**

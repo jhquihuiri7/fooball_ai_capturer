@@ -27,4 +27,17 @@ public enum LinkConstants {
     /// retardo del programa queda fijo, y una parte que no llegó a tiempo hace que ese
     /// fotograma salga de una lente.
     public static let partMaxWaitMs: Int64 = 100
+
+    /// Datagramas que el emisor suelta de golpe antes de esperar (IOS-52, ADR 0023 §5):
+    /// un IDR de cientos de KB en ráfaga desbordaría el búfer del receptor. 16 × 1200 B
+    /// son 19 KB por golpe.
+    public static let pacingBurstDatagrams = 16
+
+    /// Espera entre golpes, en ms: 19 KB cada 2 ms son ~77 Mbit/s de pico, holgados para
+    /// 30 Mbit/s de media y por debajo de lo que traga una Wi-Fi o el hub.
+    public static let pacingIntervalMs = 2
+
+    /// Datagramas en espera como mucho (~2,4 MB, dos IDR gordos): la cola va acotada y
+    /// una trama que no cabe se tira entera y se cuenta.
+    public static let pacingMaxQueuedDatagrams = 2048
 }

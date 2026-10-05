@@ -64,6 +64,50 @@ final class MediaChannelTests: XCTestCase {
         wait(for: [llegada], timeout: 5)
     }
 
+    /// IOS-52: tres IDR de 300 KB seguidos salen espaciados (en golpes de
+    /// LINK_PACING_BURST) y llegan enteros y en orden por el loopback.
+    func testIdrGordosEspaciadosLleganEnteros() throws {
+        let (escucha, conecta) = try makePair()
+        defer {
+            escucha.stop()
+            conecta.stop()
+        }
+        // Calentar el canal con una trama pequeña.
+        nonisolated(unsafe) var recibidas: [LinkFrame] = []
+        let lock = NSLock()
+        escucha.onFrame = { f, _ in lock.lock(); recibidas.append(f); lock.unlock() }
+        var intentos = 0
+        while escucha.stats.mediaFramesReceived == 0, intentos < 50 {
+            conecta.send(LinkFrame(type: .heartbeat, session: 4, seq: 0, rigMs: 1, payload: Data([1]), tag: tag), on: .media)
+            intentos += 1
+            usleep(100_000)
+        }
+        lock.lock(); recibidas.removeAll(); lock.unlock()
+
+        let grandes = (1...3).map { i in
+            LinkFrame(
+                type: .part, flags: [.idr], session: 4, seq: UInt32(i), rigMs: UInt64(i),
+                payload: Data((0..<300_000).map { UInt8(truncatingIfNeeded: $0 &+ i) }), tag: tag
+            )
+        }
+        let inicio = Date()
+        grandes.forEach { conecta.send($0, on: .media) }
+        let tope = Date().addingTimeInterval(5)
+        while Date() < tope {
+            lock.lock(); let n = recibidas.count; lock.unlock()
+            if n >= 3 { break }
+            usleep(5_000)
+        }
+        let duracion = Date().timeIntervalSince(inicio)
+        lock.lock()
+        XCTAssertEqual(recibidas, grandes)
+        lock.unlock()
+        // 3 × 250 datagramas en golpes de 16 cada 2 ms: unos 94 ms; nunca de golpe.
+        let golpes = Double((3 * 250 + LinkConstants.pacingBurstDatagrams - 1) / LinkConstants.pacingBurstDatagrams)
+        XCTAssertGreaterThan(duracion, (golpes - 1) * Double(LinkConstants.pacingIntervalMs) / 1000 * 0.8)
+        XCTAssertEqual(conecta.stats.mediaPacerDrops, 0)
+    }
+
     func testSeqGapsAndStallsAreCounted() throws {
         let (escucha, conecta) = try makePair()
         defer {

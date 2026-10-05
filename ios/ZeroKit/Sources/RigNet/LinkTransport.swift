@@ -30,6 +30,8 @@ public struct LinkTransportStats: Equatable, Sendable {
     public var mediaLossGaps = 0
     /// Llegadas de medios separadas por más de 100 ms de la anterior.
     public var mediaStallsOver100Ms = 0
+    /// Tramas de medios tiradas al emitir porque la cola del espaciado estaba llena.
+    public var mediaPacerDrops = 0
 
     public init() {}
 }

@@ -99,6 +99,18 @@ public final class RigLinkSession {
     /// Cada negociación resuelta: rol, term y partido con los que sigue este móvil.
     public var onRole: ((RigRole, Int, String?) -> Void)?
 
+    // MARK: - El render repartido (IOS-52, ADR 0023 §5)
+
+    /// El esclavo recibe las últimas vistas del maestro (VIEW_HISTORY), de la más vieja
+    /// a la más nueva.
+    public var onViews: (([ViewCommand]) -> Void)?
+    /// El maestro recibe una parte, con su hora de llegada en el reloj de host (ns).
+    public var onPart: ((PartPacket, Int64) -> Void)?
+    /// El maestro sabe que el esclavo no pinta nada en ese instante.
+    public var onNoPart: ((NoPartPacket) -> Void)?
+    /// El esclavo debe forzar un IDR: el maestro tiene un hueco en `part_seq`.
+    public var onIdrRequest: ((UInt32) -> Void)?
+
     public private(set) var state: State = .off {
         didSet { if oldValue != state { onState?(state) } }
     }
@@ -348,6 +360,44 @@ public final class RigLinkSession {
         }
     }
 
+    /// El maestro manda las últimas vistas (las del director, IOS-42/IOS-73).
+    public func send(views: [ViewCommand]) {
+        queue.async { [self] in
+            guard isMaster, case .connected = state else { return }
+            seqMedia &+= 1
+            send(type: .view, payload: ViewWire.encodeHistory(views), seq: seqMedia, channel: .media)
+        }
+    }
+
+    /// El esclavo manda su parte codificada (IOS-43).
+    public func send(part: PartPacket) {
+        queue.async { [self] in
+            guard !isMaster, case .connected = state else { return }
+            seqMedia &+= 1
+            let trama = part.frame()
+            send(type: .part, payload: trama.payload, seq: seqMedia, channel: .media,
+                 flags: trama.flags, rigMs: trama.rigMs)
+        }
+    }
+
+    /// El esclavo dice que esta vista no necesita su lado.
+    public func send(noPart: NoPartPacket) {
+        queue.async { [self] in
+            guard !isMaster, case .connected = state else { return }
+            seqMedia &+= 1
+            let trama = noPart.frame()
+            send(type: .noPart, payload: trama.payload, seq: seqMedia, channel: .media, rigMs: trama.rigMs)
+        }
+    }
+
+    /// El maestro pide un IDR, por control, con el part_seq del hueco.
+    public func requestIdr(partSeq: UInt32) {
+        queue.async { [self] in
+            guard isMaster, case .connected = state else { return }
+            send(type: .idrRequest, payload: IdrRequestWire.encode(partSeq: partSeq), seq: nextControlSeq())
+        }
+    }
+
     // MARK: - Recepción
 
     private func handle(frame: LinkFrame, on channel: LinkChannel) {
@@ -396,6 +446,18 @@ public final class RigLinkSession {
             }
         case .legacy:
             handleLegacy(frame.payload)
+        case .view:
+            guard !isMaster, let vistas = ViewWire.decodeHistory(frame.payload) else { return }
+            onViews?(vistas)
+        case .part:
+            guard isMaster, let parte = PartPacket.decode(frame) else { return }
+            onPart?(parte, llegada)
+        case .noPart:
+            guard isMaster, let nada = NoPartPacket.decode(frame) else { return }
+            onNoPart?(nada)
+        case .idrRequest:
+            guard !isMaster, let seq = IdrRequestWire.decode(frame.payload) else { return }
+            onIdrRequest?(seq)
         default:
             break
         }
@@ -441,13 +503,16 @@ public final class RigLinkSession {
         payload: Data,
         seq: UInt32 = 0,
         channel: LinkChannel = .control,
-        preSession: Bool = false
+        preSession: Bool = false,
+        flags: LinkFrame.Flags = [],
+        rigMs: UInt64 = 0
     ) {
         var frame = LinkFrame(
             type: type,
+            flags: flags,
             session: preSession ? 0 : sessionId,
             seq: seq,
-            rigMs: 0,
+            rigMs: rigMs,
             payload: payload,
             tag: Data()
         )

@@ -157,6 +157,52 @@ final class RigLinkSessionTests: XCTestCase {
         waitUntil { left.state == .conflict && right.state == .conflict }
     }
 
+    // MARK: - El render repartido (IOS-52)
+
+    func testVistasPartesNoPartEIdrRequestVanCadaUnoEnSuSentido() throws {
+        let (left, right, cableLeft, _) = makePair()
+        let lock = NSLock()
+        nonisolated(unsafe) var vistas: [[ViewCommand]] = []
+        nonisolated(unsafe) var partes: [PartPacket] = []
+        nonisolated(unsafe) var nadas: [NoPartPacket] = []
+        nonisolated(unsafe) var peticiones: [UInt32] = []
+        right.onViews = { v in lock.lock(); vistas.append(v); lock.unlock() }
+        left.onPart = { p, _ in lock.lock(); partes.append(p); lock.unlock() }
+        left.onNoPart = { n in lock.lock(); nadas.append(n); lock.unlock() }
+        right.onIdrRequest = { s in lock.lock(); peticiones.append(s); lock.unlock() }
+        left.start()
+        right.start()
+        waitUntil { self.isConnected(left) && self.isConnected(right) }
+
+        let vista = ViewWire.quantized(ViewCommand(
+            targetRigMs: 1000, viewId: 5, yawRad: 0.2, pitchRad: 0, hfovRad: 1.1,
+            sides: [.left, .right], seamYawRad: 0, featherRad: 0.02, gains: .unity
+        ))
+        let parte = PartPacket(
+            partSeq: 9, frameRigMs: 1001, view: vista, extrapolated: true, isKey: true,
+            accessUnit: Data(repeating: 7, count: 3000)
+        )
+        left.send(views: [vista])
+        right.send(part: parte)
+        right.send(noPart: NoPartPacket(frameRigMs: 1034, viewId: 6))
+        left.requestIdr(partSeq: 10)
+        // Al revés no sale nada: el esclavo no manda vistas ni el maestro partes.
+        right.send(views: [vista])
+        left.send(part: parte)
+        waitUntil {
+            lock.lock(); defer { lock.unlock() }
+            return vistas.count == 1 && partes.count == 1 && nadas.count == 1 && peticiones == [10]
+        }
+        lock.lock()
+        XCTAssertEqual(vistas.first, [vista])
+        XCTAssertEqual(partes.first, parte)
+        XCTAssertEqual(nadas.first, NoPartPacket(frameRigMs: 1034, viewId: 6))
+        lock.unlock()
+        let enviada = try XCTUnwrap(cableLeft.sentFrames(of: .idrRequest).first)
+        XCTAssertEqual(IdrRequestWire.decode(enviada.payload), 10)
+        XCTAssertTrue(cableLeft.sentFrames(of: .part).isEmpty)
+    }
+
     // MARK: - Apretón
 
     func testTheSameSecretConnectsBothSides() {
