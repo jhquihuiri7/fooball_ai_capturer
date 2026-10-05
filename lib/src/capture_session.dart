@@ -75,7 +75,9 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
     this.phaseSettle = phaseSettleDelay,
     this.linkOnly = false,
     this.uploader = _defaultUploader,
-  })  : _api = api ?? CaptureHostApi(),
+    bool? prefersMaster,
+  })  : prefersMaster = prefersMaster ?? role == CameraRole.left,
+        _api = api ?? CaptureHostApi(),
         _clock = clock ?? RigClock() {
     if (clockSamples != null) {
       _clockSubscription = clockSamples.listen(_onClockSample);
@@ -146,7 +148,19 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
 
   /// El izquierdo es el maestro: su hora es la del soporte por definición (ADR 0012,
   /// decisión 2), así que no espera reloj de nadie. El derecho mide su desfase contra él.
-  bool get isClockMaster => role == CameraRole.left;
+  /// «Este móvil dirige» (IOS-80): solo decide al empezar un partido.
+  final bool prefersMaster;
+
+  /// El rol que negoció el enlace, o null si todavía no hay (o el enlace de Multipeer,
+  /// que no negocia y deja de maestro al izquierdo).
+  RigRole? rigRole;
+  int rigTerm = 0;
+
+  /// Quién manda en el soporte: el negociado si lo hay; si no, el izquierdo.
+  bool get isRigMaster => rigRole == null ? role == CameraRole.left : rigRole == RigRole.master;
+
+  /// El maestro del reloj es el maestro del soporte (IOS-80).
+  bool get isClockMaster => isRigMaster;
 
   int? exposurePhaseNs;
   int phaseAttempt = 0;
@@ -446,9 +460,11 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
       case LinkState.off:
         return standalone ? 'apagado: un solo móvil' : 'apagado';
       case LinkState.searching:
-        return isClockMaster ? 'esperando al móvil derecho…' : 'buscando al móvil izquierdo…';
+        return role == CameraRole.left ? 'esperando al móvil derecho…' : 'buscando al móvil izquierdo…';
       case LinkState.connected:
         return 'conectado con $linkPeer';
+      case LinkState.conflict:
+        return 'conflicto: los dos dirigen partidos distintos';
     }
   }
 
@@ -725,6 +741,13 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
   }
 
   @override
+  void onRigRole(RigRole role, int term) {
+    rigRole = role;
+    rigTerm = term;
+    notifyListeners();
+  }
+
+  @override
   void onLinkStateChanged(LinkState state, String peerName) {
     linkState = state;
     linkPeer = peerName;
@@ -829,7 +852,7 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
       return false;
     }
     _linkOwner = this;
-    await _api.startLink(role);
+    await _api.startLink(role, prefersMaster);
     return true;
   }
 

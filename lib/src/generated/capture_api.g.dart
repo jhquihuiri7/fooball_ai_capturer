@@ -161,7 +161,16 @@ enum LinkState {
   /// Anunciándose (izquierdo) o buscando al izquierdo (derecho).
   searching,
   /// Los dos móviles se ven. Por aquí viajan el reloj y los PTS del maestro.
-  connected;
+  connected,
+  /// Los dos dirigen partidos distintos (ADR 0023 §7): sin órdenes ni partes hasta que
+  /// se elija a mano cuál manda.
+  conflict;
+}
+
+/// Quién manda en el soporte (IOS-80). Ya no es el lado: lo negocia el enlace por term.
+enum RigRole {
+  master,
+  slave;
 }
 
 /// Estado de la emisión al servidor (TASK A5).
@@ -545,17 +554,20 @@ class _PigeonCodec extends StandardMessageCodec {
     }    else if (value is LinkState) {
       buffer.putUint8(133);
       writeValue(buffer, value.index);
-    }    else if (value is StreamState) {
+    }    else if (value is RigRole) {
       buffer.putUint8(134);
       writeValue(buffer, value.index);
-    }    else if (value is CaptureSettings) {
+    }    else if (value is StreamState) {
       buffer.putUint8(135);
-      writeValue(buffer, value.encode());
-    }    else if (value is CaptureStatus) {
+      writeValue(buffer, value.index);
+    }    else if (value is CaptureSettings) {
       buffer.putUint8(136);
       writeValue(buffer, value.encode());
-    }    else if (value is ClockSample) {
+    }    else if (value is CaptureStatus) {
       buffer.putUint8(137);
+      writeValue(buffer, value.encode());
+    }    else if (value is ClockSample) {
+      buffer.putUint8(138);
       writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
@@ -582,12 +594,15 @@ class _PigeonCodec extends StandardMessageCodec {
         return value == null ? null : LinkState.values[value];
       case 134:
         final value = readValue(buffer) as int?;
-        return value == null ? null : StreamState.values[value];
+        return value == null ? null : RigRole.values[value];
       case 135:
-        return CaptureSettings.decode(readValue(buffer)!);
+        final value = readValue(buffer) as int?;
+        return value == null ? null : StreamState.values[value];
       case 136:
-        return CaptureStatus.decode(readValue(buffer)!);
+        return CaptureSettings.decode(readValue(buffer)!);
       case 137:
+        return CaptureStatus.decode(readValue(buffer)!);
+      case 138:
         return ClockSample.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
@@ -1048,14 +1063,15 @@ class CaptureHostApi {
   /// El izquierdo se anuncia y es el maestro del reloj; el derecho lo busca, se conecta
   /// y le pregunta la hora. Los cuatro sellos de cada pregunta se toman en nativo, con
   /// el mismo reloj que los frames, y llegan a Dart por `onClockStamps`.
-  Future<void> startLink(CameraRole role) async {
+  /// `prefersMaster` es «Este móvil dirige»: solo decide al empezar un partido.
+  Future<void> startLink(CameraRole role, bool prefersMaster) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.CaptureHostApi.startLink$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[role]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[role, prefersMaster]);
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     _extractReplyValueOrThrow(
@@ -1134,8 +1150,11 @@ abstract class CaptureFlutterApi {
   /// Pigeon: esto es para la pantalla y para salir de esperandoReloj.
   void onClockEstimate(int offsetNs, double driftPpm, int samples, int uncertaintyNs);
 
-  /// Llegó una orden del móvil izquierdo. Solo la recibe el derecho.
+  /// Llegó una orden del maestro. Solo la recibe el esclavo.
   void onPeerCommand(RigCommand command);
+
+  /// El enlace negoció quién manda (IOS-80): el rol y el term con los que sigue.
+  void onRigRole(RigRole role, int term);
 
   static void setUp(CaptureFlutterApi? api, {
     BinaryMessenger? binaryMessenger, 
@@ -1307,6 +1326,28 @@ abstract class CaptureFlutterApi {
           final RigCommand arg_command = args[0]! as RigCommand;
           try {
             api.onPeerCommand(arg_command);
+            return wrapResponse(empty: true);
+          } on PlatformException catch (e) {
+            return wrapResponse(error: e);
+          }          catch (e) {
+            return wrapResponse(error: PlatformException(code: 'error', message: e.toString()));
+          }
+        });
+      }
+    }
+    {
+      final pigeonVar_channel = BasicMessageChannel<Object?>(
+          'dev.flutter.pigeon.football_ai_capture.CaptureFlutterApi.onRigRole$messageChannelSuffix', pigeonChannelCodec,
+          binaryMessenger: binaryMessenger);
+      if (api == null) {
+        pigeonVar_channel.setMessageHandler(null);
+      } else {
+        pigeonVar_channel.setMessageHandler((Object? message) async {
+          final List<Object?> args = message! as List<Object?>;
+          final RigRole arg_role = args[0]! as RigRole;
+          final int arg_term = args[1]! as int;
+          try {
+            api.onRigRole(arg_role, arg_term);
             return wrapResponse(empty: true);
           } on PlatformException catch (e) {
             return wrapResponse(error: e);

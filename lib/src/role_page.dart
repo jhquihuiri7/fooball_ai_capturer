@@ -11,7 +11,9 @@ library;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:football_ai_capture/src/constants.dart';
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
 import 'package:football_ai_capture/src/mando_page.dart';
 import 'package:football_ai_capture/src/panel_pairing.dart';
@@ -46,6 +48,12 @@ class _RolePageState extends State<RolePage> {
 
   CameraRole _role = CameraRole.left;
 
+  /// «Este móvil dirige» (IOS-80). Se guarda; si nunca se tocó, dirige el izquierdo.
+  /// Solo decide al empezar un partido: durante el partido, cambiar de maestro es un
+  /// relevo.
+  bool? _prefersMaster;
+  bool get _directs => _prefersMaster ?? _role == CameraRole.left;
+
   /// Apagado por defecto: encenderlo en un partido es grabar dos vídeos que no parean.
   bool _standalone = false;
 
@@ -59,6 +67,30 @@ class _RolePageState extends State<RolePage> {
   void initState() {
     super.initState();
     unawaited(_loadServer());
+    unawaited(_loadPreference());
+  }
+
+  Future<void> _loadPreference() async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final bool? guardada = prefs.getBool(prefersMasterKey);
+      if (guardada != null && mounted) {
+        setState(() => _prefersMaster = guardada);
+      }
+    } on Exception {
+      // Sin almacenamiento (tests): manda el valor por defecto.
+    }
+  }
+
+  Future<void> _toggleDirects() async {
+    final bool nuevo = !_directs;
+    setState(() => _prefersMaster = nuevo);
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(prefersMasterKey, nuevo);
+    } on Exception {
+      // Si no se guarda, vale para esta vez.
+    }
   }
 
   @override
@@ -163,7 +195,12 @@ class _RolePageState extends State<RolePage> {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) =>
-            ZeroShell(role: _role, standalone: _standalone, serverHost: _server.text.trim()),
+            ZeroShell(
+              role: _role,
+              standalone: _standalone,
+              serverHost: _server.text.trim(),
+              prefersMaster: _directs,
+            ),
       ),
     );
   }
@@ -301,6 +338,14 @@ class _RolePageState extends State<RolePage> {
                       onFind: () => unawaited(_discoverServer()),
                       onScan: () => unawaited(_scanServer()),
                       onProtocol: _setProtocol,
+                    ),
+                    const SizedBox(height: ZeroMetrics.innerGap),
+                    _StandaloneRow(
+                      value: _directs,
+                      onChanged: () => unawaited(_toggleDirects()),
+                      title: 'Este móvil dirige',
+                      subtitle: 'Al empezar un partido, este manda el soporte.',
+                      danger: false,
                     ),
                     const SizedBox(height: ZeroMetrics.innerGap),
                     _StandaloneRow(
@@ -601,10 +646,21 @@ class _ServerCard extends StatelessWidget {
 /// encenderlo sin querer en un partido de verdad es volver con dos vídeos que no parean
 /// y no enterarse hasta que el servidor los rechace.
 class _StandaloneRow extends StatelessWidget {
-  const _StandaloneRow({required this.value, required this.onChanged});
+  const _StandaloneRow({
+    required this.value,
+    required this.onChanged,
+    this.title = 'Un solo móvil, sin reloj',
+    this.subtitle = 'Lo grabado así no parea con el otro.',
+    this.danger = true,
+  });
 
   final bool value;
   final VoidCallback onChanged;
+  final String title;
+  final String subtitle;
+
+  /// En rojo cuando encenderlo es un riesgo (un solo móvil); neutro si es una opción.
+  final bool danger;
 
   @override
   Widget build(BuildContext context) {
@@ -612,15 +668,15 @@ class _StandaloneRow extends StatelessWidget {
     // el interruptor se anuncia pero no se puede accionar con VoiceOver o TalkBack.
     return Semantics(
       toggled: value,
-      label: 'Un solo móvil, sin reloj',
+      label: title,
       onTap: onChanged,
       excludeSemantics: true,
       child: ZeroTappable(
         onTap: onChanged,
         borderRadius: BorderRadius.circular(ZeroMetrics.cardRadius),
         decoration: BoxDecoration(
-          color: value ? ZeroColors.dangerRow : ZeroColors.surface,
-          border: Border.all(color: value ? ZeroColors.dangerBorder : ZeroColors.border),
+          color: value && danger ? ZeroColors.dangerRow : ZeroColors.surface,
+          border: Border.all(color: value && danger ? ZeroColors.dangerBorder : ZeroColors.border),
           borderRadius: BorderRadius.circular(ZeroMetrics.cardRadius),
         ),
         child: Container(
@@ -632,7 +688,7 @@ class _StandaloneRow extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      'Un solo móvil, sin reloj',
+                      title,
                       style: ZeroType.plex(
                         size: 15,
                         weight: FontWeight.w600,
@@ -642,7 +698,7 @@ class _StandaloneRow extends StatelessWidget {
                     ),
                     const SizedBox(height: 5),
                     Text(
-                      'Lo grabado así no parea con el otro.',
+                      subtitle,
                       style: ZeroType.plex(
                         size: 12,
                         weight: FontWeight.w400,
@@ -654,7 +710,7 @@ class _StandaloneRow extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 14),
-              _Switch(value: value),
+              _Switch(value: value, danger: danger),
             ],
           ),
         ),
@@ -664,9 +720,10 @@ class _StandaloneRow extends StatelessWidget {
 }
 
 class _Switch extends StatelessWidget {
-  const _Switch({required this.value});
+  const _Switch({required this.value, this.danger = true});
 
   final bool value;
+  final bool danger;
 
   @override
   Widget build(BuildContext context) {
@@ -674,7 +731,7 @@ class _Switch extends StatelessWidget {
       width: 52,
       height: 32,
       decoration: BoxDecoration(
-        color: value ? ZeroColors.danger : ZeroColors.switchTrack,
+        color: value ? (danger ? ZeroColors.danger : ZeroColors.accent) : ZeroColors.switchTrack,
         borderRadius: BorderRadius.circular(999),
       ),
       child: AnimatedAlign(

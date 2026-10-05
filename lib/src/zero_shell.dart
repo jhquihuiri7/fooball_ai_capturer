@@ -26,6 +26,7 @@ class ZeroShell extends StatefulWidget {
     this.serverHost = '',
     this.linkOnly = false,
     this.autoRecordSeconds = 0,
+    this.prefersMaster,
     this.session,
     this.match,
     super.key,
@@ -44,6 +45,9 @@ class ZeroShell extends StatefulWidget {
 
   /// Grabación de prueba automática, en segundos (ver `CapturePage.autoRecordSeconds`).
   final int autoRecordSeconds;
+
+  /// «Este móvil dirige» (IOS-80); null = el izquierdo.
+  final bool? prefersMaster;
 
   /// Inyectables para los tests: sin esto habría que hablar con la cámara de verdad y
   /// con el almacenamiento del móvil.
@@ -92,6 +96,7 @@ class _ZeroShellState extends State<ZeroShell> {
             serverHost: widget.serverHost,
             linkOnly: widget.linkOnly,
             autoRecordSeconds: widget.autoRecordSeconds,
+            prefersMaster: widget.prefersMaster,
           ),
           MatchPage(match: _match, destinations: widget.serverHost.trim().isEmpty ? 0 : 1),
         ],

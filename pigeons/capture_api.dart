@@ -71,6 +71,16 @@ enum LinkState {
 
   /// Los dos móviles se ven. Por aquí viajan el reloj y los PTS del maestro.
   connected,
+
+  /// Los dos dirigen partidos distintos (ADR 0023 §7): sin órdenes ni partes hasta que
+  /// se elija a mano cuál manda.
+  conflict,
+}
+
+/// Quién manda en el soporte (IOS-80). Ya no es el lado: lo negocia el enlace por term.
+enum RigRole {
+  master,
+  slave,
 }
 
 /// Estado de la emisión al servidor (TASK A5).
@@ -360,7 +370,8 @@ abstract class CaptureHostApi {
   /// El izquierdo se anuncia y es el maestro del reloj; el derecho lo busca, se conecta
   /// y le pregunta la hora. Los cuatro sellos de cada pregunta se toman en nativo, con
   /// el mismo reloj que los frames, y llegan a Dart por `onClockStamps`.
-  void startLink(CameraRole role);
+  /// `prefersMaster` es «Este móvil dirige»: solo decide al empezar un partido.
+  void startLink(CameraRole role, bool prefersMaster);
 
   void stopLink();
 
@@ -397,6 +408,9 @@ abstract class CaptureFlutterApi {
   /// Pigeon: esto es para la pantalla y para salir de esperandoReloj.
   void onClockEstimate(int offsetNs, double driftPpm, int samples, int uncertaintyNs);
 
-  /// Llegó una orden del móvil izquierdo. Solo la recibe el derecho.
+  /// Llegó una orden del maestro. Solo la recibe el esclavo.
   void onPeerCommand(RigCommand command);
+
+  /// El enlace negoció quién manda (IOS-80): el rol y el term con los que sigue.
+  void onRigRole(RigRole role, int term);
 }

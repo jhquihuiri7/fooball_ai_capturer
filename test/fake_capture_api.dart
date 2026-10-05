@@ -205,8 +205,11 @@ class FakeCaptureApi extends CaptureHostApi {
   @override
   Future<void> clearPanelPairing() async => panelPairing = '';
 
+  bool? lastPrefersMaster;
+
   @override
-  Future<void> startLink(CameraRole role) async {
+  Future<void> startLink(CameraRole role, bool prefersMaster) async {
+    lastPrefersMaster = prefersMaster;
     startLinkCalls++;
     linkRole = role;
   }

@@ -208,3 +208,6 @@ const List<String> matchFormations = <String>[
 
 /// Ámbito del token que deja tocar el partido (`SCOPE_MATCH`).
 const String panelScopeMatch = 'match';
+
+/// Dónde se guarda «Este móvil dirige» (IOS-80).
+const String prefersMasterKey = 'zero.prefersMaster';

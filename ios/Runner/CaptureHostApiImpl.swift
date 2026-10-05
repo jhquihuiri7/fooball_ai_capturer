@@ -146,7 +146,7 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
 
     // MARK: - Enlace entre móviles (TASK A3, A4)
 
-    func startLink(role: CameraRole) throws {
+    func startLink(role: CameraRole, prefersMaster: Bool) throws {
         link?.stop()
         let link: PeerLinking
         if Self.useMultipeer {
@@ -160,7 +160,13 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
                     details: nil
                 )
             }
-            let nw = RigLinkNW(role: role, secret: secreto)
+            let nw = RigLinkNW(role: role, secret: secreto, prefersMaster: prefersMaster)
+            // IOS-80: el rol negociado sube a Dart, que deja de suponer que manda el izquierdo.
+            nw.onRigRole = { [weak self] rol, term in
+                Task { @MainActor in
+                    try? await self?.flutter.onRigRole(role: rol == .master ? .master : .slave, term: Int64(term))
+                }
+            }
             // IOS-13: la cámara lee el reloj nativo por fotograma, sin pasar por
             // Pigeon; a Dart solo le llega la estimación, para la pantalla y la fase.
             engine.rigClock = nw.clock

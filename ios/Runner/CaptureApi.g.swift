@@ -243,6 +243,15 @@ enum LinkState: Int, CaseIterable {
   case searching = 1
   /// Los dos móviles se ven. Por aquí viajan el reloj y los PTS del maestro.
   case connected = 2
+  /// Los dos dirigen partidos distintos (ADR 0023 §7): sin órdenes ni partes hasta que
+  /// se elija a mano cuál manda.
+  case conflict = 3
+}
+
+/// Quién manda en el soporte (IOS-80). Ya no es el lado: lo negocia el enlace por term.
+enum RigRole: Int, CaseIterable {
+  case master = 0
+  case slave = 1
 }
 
 /// Estado de la emisión al servidor (TASK A5).
@@ -612,14 +621,20 @@ private class CaptureApiPigeonCodecReader: FlutterStandardReader {
     case 134:
       let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
       if let enumResultAsInt = enumResultAsInt {
-        return StreamState(rawValue: enumResultAsInt)
+        return RigRole(rawValue: enumResultAsInt)
       }
       return nil
     case 135:
-      return CaptureSettings.fromList(self.readValue() as! [Any?])
+      let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
+      if let enumResultAsInt = enumResultAsInt {
+        return StreamState(rawValue: enumResultAsInt)
+      }
+      return nil
     case 136:
-      return CaptureStatus.fromList(self.readValue() as! [Any?])
+      return CaptureSettings.fromList(self.readValue() as! [Any?])
     case 137:
+      return CaptureStatus.fromList(self.readValue() as! [Any?])
+    case 138:
       return ClockSample.fromList(self.readValue() as! [Any?])
     default:
       return super.readValue(ofType: type)
@@ -644,17 +659,20 @@ private class CaptureApiPigeonCodecWriter: FlutterStandardWriter {
     } else if let value = value as? LinkState {
       super.writeByte(133)
       super.writeValue(value.rawValue)
-    } else if let value = value as? StreamState {
+    } else if let value = value as? RigRole {
       super.writeByte(134)
       super.writeValue(value.rawValue)
-    } else if let value = value as? CaptureSettings {
+    } else if let value = value as? StreamState {
       super.writeByte(135)
-      super.writeValue(value.toList())
-    } else if let value = value as? CaptureStatus {
+      super.writeValue(value.rawValue)
+    } else if let value = value as? CaptureSettings {
       super.writeByte(136)
       super.writeValue(value.toList())
-    } else if let value = value as? ClockSample {
+    } else if let value = value as? CaptureStatus {
       super.writeByte(137)
+      super.writeValue(value.toList())
+    } else if let value = value as? ClockSample {
+      super.writeByte(138)
       super.writeValue(value.toList())
     } else {
       super.writeValue(value)
@@ -765,7 +783,8 @@ protocol CaptureHostApi {
   /// El izquierdo se anuncia y es el maestro del reloj; el derecho lo busca, se conecta
   /// y le pregunta la hora. Los cuatro sellos de cada pregunta se toman en nativo, con
   /// el mismo reloj que los frames, y llegan a Dart por `onClockStamps`.
-  func startLink(role: CameraRole) throws
+  /// `prefersMaster` es «Este móvil dirige»: solo decide al empezar un partido.
+  func startLink(role: CameraRole, prefersMaster: Bool) throws
   func stopLink() throws
   /// PTS recientes del maestro, en tiempo del soporte, pedidos por el enlace (TASK A4).
   /// Solo tiene sentido en el derecho. Vacío si el maestro no contesta a tiempo.
@@ -1128,13 +1147,15 @@ class CaptureHostApiSetup {
     /// El izquierdo se anuncia y es el maestro del reloj; el derecho lo busca, se conecta
     /// y le pregunta la hora. Los cuatro sellos de cada pregunta se toman en nativo, con
     /// el mismo reloj que los frames, y llegan a Dart por `onClockStamps`.
+    /// `prefersMaster` es «Este móvil dirige»: solo decide al empezar un partido.
     let startLinkChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.startLink\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       startLinkChannel.setMessageHandler { message, reply in
         let args = message as! [Any?]
         let roleArg = args[0] as! CameraRole
+        let prefersMasterArg = args[1] as! Bool
         do {
-          try api.startLink(role: roleArg)
+          try api.startLink(role: roleArg, prefersMaster: prefersMasterArg)
           reply(wrapResult(nil))
         } catch {
           reply(wrapError(error))
@@ -1197,8 +1218,10 @@ protocol CaptureFlutterApiProtocol {
   /// sobre Network. El desfase ya se aplica por fotograma en nativo, sin pasar por
   /// Pigeon: esto es para la pantalla y para salir de esperandoReloj.
   @MainActor func onClockEstimate(offsetNs offsetNsArg: Int64, driftPpm driftPpmArg: Double, samples samplesArg: Int64, uncertaintyNs uncertaintyNsArg: Int64) async throws
-  /// Llegó una orden del móvil izquierdo. Solo la recibe el derecho.
+  /// Llegó una orden del maestro. Solo la recibe el esclavo.
   @MainActor func onPeerCommand(command commandArg: RigCommand) async throws
+  /// El enlace negoció quién manda (IOS-80): el rol y el term con los que sigue.
+  @MainActor func onRigRole(role roleArg: RigRole, term termArg: Int64) async throws
 }
 class CaptureFlutterApi: CaptureFlutterApiProtocol {
   private let binaryMessenger: FlutterBinaryMessenger
@@ -1360,12 +1383,33 @@ class CaptureFlutterApi: CaptureFlutterApiProtocol {
       }
     }
   }
-  /// Llegó una orden del móvil izquierdo. Solo la recibe el derecho.
+  /// Llegó una orden del maestro. Solo la recibe el esclavo.
   @MainActor func onPeerCommand(command commandArg: RigCommand) async throws {
     return try await withCheckedThrowingContinuation { continuation in
       let channelName: String = "dev.flutter.pigeon.football_ai_capture.CaptureFlutterApi.onPeerCommand\(messageChannelSuffix)"
       let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
       channel.sendMessage([commandArg] as [Any?]) { response in
+        guard let listResponse = response as? [Any?] else {
+          continuation.resume(throwing: createConnectionError(withChannelName: channelName))
+          return
+        }
+        if listResponse.count > 1 {
+          let code: String = listResponse[0] as! String
+          let message: String? = nilOrValue(listResponse[1])
+          let details: String? = nilOrValue(listResponse[2])
+          continuation.resume(throwing: PigeonError(code: code, message: message, details: details))
+        } else {
+          continuation.resume()
+        }
+      }
+    }
+  }
+  /// El enlace negoció quién manda (IOS-80): el rol y el term con los que sigue.
+  @MainActor func onRigRole(role roleArg: RigRole, term termArg: Int64) async throws {
+    return try await withCheckedThrowingContinuation { continuation in
+      let channelName: String = "dev.flutter.pigeon.football_ai_capture.CaptureFlutterApi.onRigRole\(messageChannelSuffix)"
+      let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
+      channel.sendMessage([roleArg, termArg] as [Any?]) { response in
         guard let listResponse = response as? [Any?] else {
           continuation.resume(throwing: createConnectionError(withChannelName: channelName))
           return

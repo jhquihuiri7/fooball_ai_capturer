@@ -45,6 +45,7 @@ class CapturePage extends StatefulWidget {
     this.serverHost = '',
     this.linkOnly = false,
     this.autoRecordSeconds = 0,
+    this.prefersMaster,
     super.key,
   });
 
@@ -66,6 +67,9 @@ class CapturePage extends StatefulWidget {
   /// grabar guardando el vídeo, y para sola pasados estos segundos. Modo banco.
   final int autoRecordSeconds;
 
+  /// «Este móvil dirige» (IOS-80); null = el izquierdo.
+  final bool? prefersMaster;
+
   @override
   State<CapturePage> createState() => _CapturePageState();
 }
@@ -84,6 +88,7 @@ class _CapturePageState extends State<CapturePage> {
         standalone: widget.standalone,
         serverHost: widget.serverHost,
         linkOnly: widget.linkOnly,
+        prefersMaster: widget.prefersMaster,
       );
 
   /// Refresco del estado nativo. Además de traer batería, calor y frames perdidos,

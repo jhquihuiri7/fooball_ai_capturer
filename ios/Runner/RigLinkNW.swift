@@ -74,7 +74,10 @@ final class RigLinkNW: PeerLinking {
         return secreto
     }
 
-    init(role: CameraRole, secret: Data) {
+    /// El rol que negoció el enlace (IOS-80), con su term.
+    var onRigRole: ((RigCore.RigRole, Int) -> Void)?
+
+    init(role: CameraRole, secret: Data, prefersMaster: Bool) {
         let side: RigLinkSession.Side = role == .left ? .left : .right
         // Escucha el izquierdo y conecta el derecho (ADR 0023): el anuncio lleva el lado
         // y la huella del secreto en la TXT, para no invitar a un soporte ajeno.
@@ -96,6 +99,11 @@ final class RigLinkNW: PeerLinking {
             appVersion: version ?? "0"
         )
         session.hostNowNs = { RigLink.hostNowNs() }
+        // Sin partido todavía, nadie trae rol: decide la preferencia (ADR 0023 §7). El
+        // partido y el term llegan con la pizarra (IOS-82).
+        session.claimedRole = .slave
+        session.prefersMaster = prefersMaster
+        session.onRole = { [weak self] rol, term, _ in self?.onRigRole?(rol, term) }
         session.recentPts = { [weak self] in self?.recentPts?() ?? [] }
         session.currentLook = { [weak self] in self?.currentLook?() }
         session.onLook = { [weak self] look in self?.onLook?(look) }
@@ -117,6 +125,8 @@ final class RigLinkNW: PeerLinking {
                 // motivo en el log hasta que la UI lo estrene.
                 NSLog("[enlace] rechazado: %@", motivo)
                 self?.onState?(.off, "")
+            case .conflict:
+                self?.onState?(.conflict, "")
             case .off:
                 self?.onState?(.off, "")
             }
@@ -162,6 +172,7 @@ final class RigLinkNW: PeerLinking {
 //   RIG_LINK_BENCH_S    segundos que dura (por defecto 60)
 //   RIG_LINK_CUT_AT_S   segundo en que el izquierdo corta el enlace 1 s, como quien
 //                       desenchufa el cable (0 = no corta; por defecto 20)
+//   RIG_LINK_PREFERS_MASTER  1/0: «este móvil dirige» (IOS-80); por defecto el izquierdo
 //
 // Mide lo que pide la aceptación: cuánto tarda en quedar autenticado desde el arranque
 // (en cualquier orden), cuánto tarda en volver tras el corte, el RTT de cada ping del
@@ -200,8 +211,13 @@ enum LinkBench {
             appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
         )
         sesion.hostNowNs = { RigLink.hostNowNs() }
+        // IOS-80: sin partido, nadie trae rol; decide la preferencia.
+        sesion.claimedRole = .slave
+        sesion.prefersMaster = entorno["RIG_LINK_PREFERS_MASTER"].map { $0 == "1" } ?? (lado == .left)
 
         let cerrojo = NSLock()
+        var rolNegociado = ""
+        var termNegociado = 0
         var conectadoMs: Double?
         var conexiones = 0
         var rechazos: [String] = []
@@ -241,6 +257,11 @@ enum LinkBench {
         }
         // El maestro contesta con unos PTS sintéticos: aquí no hay cámara.
         sesion.recentPts = { [1_000_000, 34_333_333, 67_666_666] }
+        sesion.onRole = { rol, term, _ in
+            cerrojo.lock(); defer { cerrojo.unlock() }
+            rolNegociado = rol.rawValue
+            termNegociado = term
+        }
         sesion.onCommand = { _ in
             cerrojo.lock(); defer { cerrojo.unlock() }
             ordenesRecibidas += 1
@@ -299,7 +320,8 @@ enum LinkBench {
                 sesion.start()
             }
             if (s + 1) % probeEveryS == 0 {
-                if lado == .left {
+                // Manda órdenes el maestro negociado; pide los PTS el esclavo (IOS-80).
+                if sesion.isMaster {
                     sesion.send(command: .stop)
                     cerrojo.lock(); if conectado { ordenesEnviadas += 1 }; cerrojo.unlock()
                 } else {
@@ -336,6 +358,8 @@ enum LinkBench {
                 "peer": par,
                 "internet_path": ruta,
                 "rejections": rechazos.joined(separator: " | "),
+                "rig_role": rolNegociado,
+                "prefers_master": sesion.prefersMaster ? "1" : "0",
             ],
             thermal: [],
             stagesMs: [:],
@@ -344,6 +368,7 @@ enum LinkBench {
                 "connections": conexiones,
                 "connect_ms": Int((conectadoMs ?? -1).rounded()),
                 "rtt_samples": rtts.count,
+                "rig_term": termNegociado,
                 "reconnect_ms": vueltasMs.isEmpty ? -1 : Int(vueltasMs.max()!.rounded()),
                 "outages": vueltasMs.count,
                 "t_listening_ms": Int(hitos["t_listening_ms"] ?? -1),

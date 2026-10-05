@@ -148,6 +148,8 @@ class CaptureReadout {
         return session.isClockMaster ? ZeroTone.neutral : ZeroTone.bad;
       case LinkState.off:
         return ZeroTone.neutral;
+      case LinkState.conflict:
+        return ZeroTone.bad;
     }
   }
 

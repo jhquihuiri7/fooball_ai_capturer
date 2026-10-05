@@ -650,6 +650,31 @@ hubs), ya con esta expectativa.
 
 ---
 
+## 2026-10-04 · IOS-80 — rol maestro/esclavo desacoplado del lado · 🚧 falta la prueba con dos iPhone
+
+**Hecho**
+- `RigCore/Wire/RoleNegotiation.swift`, lógica pura (ADR 0023 §7): el term menor
+  adopta el mayor y deja de mandar; mismo term y dos maestros, manda el izquierdo (y se
+  registra); sin maestro, la preferencia toma max + 1 y el partido es el del que pasa
+  a dirigir; dos maestros de partidos distintos, conflicto. RoleNegotiationTests (8)
+  recorre más de 4000 combinaciones: o conflicto en los dos, o UN maestro con el mismo
+  term y partido. Encontró un fallo (cada lado se quedaba con su propio partido al
+  empezar sin maestro), corregido.
+- `RigLinkSession`: el hello lleva rol, term, partido y `prefers_master` (opcional, un
+  hello viejo sigue valiendo); tras el auth cada lado negocia. Reloj, órdenes, color y
+  PTS siguen al rol negociado, no al lado; estado `.conflict`. RigLinkSessionTests: el
+  derecho de maestro (el izquierdo pregunta la hora y recibe las órdenes), dos
+  maestros del mismo term y el conflicto.
+- Pigeon: `RigRole`, `LinkState.conflict`, `startLink(role, prefersMaster)` y
+  `onRigRole(role, term)`. RigLinkNW entra sin partido y decide la preferencia.
+- Dart: `CaptureSession.isRigMaster` (el maestro del reloj es el del soporte; sin
+  negociar, el izquierdo, como con Multipeer), RolePage «Este móvil dirige» guardado en
+  el móvil (por defecto, el izquierdo), y la etiqueta del conflicto. 255 tests.
+- link-bench ya sigue al rol negociado (RIG_LINK_PREFERS_MASTER) y lo informa.
+
+**Falta para ✅**: en dos iPhone, con el derecho de maestro todo funciona sin
+reiniciar, y dos que se declaran maestro se resuelven (con link-bench).
+
 ## 2026-10-04 · IOS-60 — estado del partido con autoridad en el maestro (Dart) · ✅
 
 **Hecho**

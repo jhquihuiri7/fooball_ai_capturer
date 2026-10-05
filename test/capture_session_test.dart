@@ -85,6 +85,29 @@ void main() {
       expect(session.canRecord, isFalse);
     });
 
+    test('IOS-80: la preferencia viaja al enlace y el rol negociado manda', () async {
+      final FakeCaptureApi api = FakeCaptureApi();
+      final CaptureSession session = CaptureSession(role: CameraRole.right, api: api, prefersMaster: true);
+      await session.prepare();
+      expect(api.lastPrefersMaster, isTrue);
+      expect(session.isRigMaster, isFalse, reason: 'sin negociar, el izquierdo');
+      session.onRigRole(RigRole.master, 3);
+      expect(session.isRigMaster, isTrue, reason: 'el derecho puede dirigir');
+      expect(session.isClockMaster, isTrue, reason: 'el maestro del reloj es el del soporte');
+      expect(session.rigTerm, 3);
+    });
+
+    test('IOS-80: por defecto dirige el izquierdo, y el conflicto se dice', () async {
+      final FakeCaptureApi api = FakeCaptureApi();
+      final CaptureSession session = CaptureSession(role: CameraRole.left, api: api);
+      await session.prepare();
+      expect(api.lastPrefersMaster, isTrue);
+      session.onRigRole(RigRole.slave, 2);
+      expect(session.isRigMaster, isFalse, reason: 'el izquierdo puede quedar de esclavo');
+      session.onLinkStateChanged(LinkState.conflict, '');
+      expect(session.linkLabel, contains('conflicto'));
+    });
+
     test('el izquierdo es el maestro del reloj: queda listo sin esperar a nadie', () async {
       // Su hora es la del soporte por definición. Si el derecho no llega nunca, media
       // cancha es mejor que ninguna.
