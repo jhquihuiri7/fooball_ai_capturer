@@ -680,7 +680,13 @@ final class SplitBench {
     private var master: MasterProgramStage?
     private var programEncoder: VideoEncoder?
     private let history = ViewHistory()
-    private var viewId: UInt32 = 0
+    // IOS-38: el igualado de color, medido cada `colorEveryMs`.
+    private var overlap: OverlapMeans?
+    private let matcher = ColorMatcher()
+    private var lastColorMs: Int64 = 0
+    private var slaveMeans: [Double]?
+    private var colorObservations = 0
+    static let colorEveryMs: Int64 = 2000
     private var lastProgramT: Int64?
     private let muxer = TsMuxer(audio: nil)
     private var tsFile: FileHandle?
@@ -718,6 +724,9 @@ final class SplitBench {
             self?.master?.receive(part: parte, arrivalRigMs: Self.nowMs())
         }
         session.onNoPart = { [weak self] nada in self?.master?.receive(noPart: nada) }
+        session.onColorMeans = { [weak self] bgr in
+            self?.queue.async { self?.slaveMeans = bgr }
+        }
     }
 
     func stop() {
@@ -740,6 +749,8 @@ final class SplitBench {
             rig = modelo
             rigSource = fuente
             context = ctx
+            overlap = OverlapMeans(rig: modelo, side: side, width: ring.width, height: ring.height,
+                                   mountedUpsideDown: side == .left)
 
             // Esclavo: su parte.
             let enc = try VideoEncoder(
@@ -844,8 +855,32 @@ final class SplitBench {
         return ViewWire.quantized(ViewCommand(
             targetRigMs: t, viewId: UInt32(truncatingIfNeeded: t / 33), yawRad: yaw, pitchRad: pitch,
             hfovRad: hfov, sides: lados, seamYawRad: costura,
-            featherRad: RigConstants.panoramaFeatherRad, gains: .unity
+            featherRad: RigConstants.panoramaFeatherRad, gains: matcher.gains
         ))
+    }
+
+    /// La media del solape de la cámara propia, del último fotograma del anillo.
+    private func ownMeans() -> [Double]? {
+        guard let ring = pipelineProvider()?.ring, let overlap,
+              let ultimo = ring.availableRigMs().last,
+              let lease = ring.acquire(nearest: ultimo, maxDistanceMs: 0)
+        else { return nil }
+        defer { ring.release(lease) }
+        return overlap.measure(lease.buffer)
+    }
+
+    /// Cada `colorEveryMs`: el esclavo manda su media; el maestro iguala con la suya.
+    private func colorTick(now: Int64) {
+        guard now - lastColorMs >= Self.colorEveryMs, let mias = ownMeans() else { return }
+        lastColorMs = now
+        if session.isMaster {
+            guard let suyas = slaveMeans else { return }
+            let (izq, der) = side == .left ? (mias, suyas) : (suyas, mias)
+            matcher.observe(meanLeft: izq, meanRight: der)
+            colorObservations += 1
+        } else {
+            session.send(colorMeans: mias)
+        }
     }
 
     private func tick() {
@@ -854,8 +889,10 @@ final class SplitBench {
             finish()
             return
         }
+        if case .connected = session.state, setUpIfNeeded() {
+            colorTick(now: Self.nowMs())
+        }
         guard case .connected = session.state, session.isMaster, setUpIfNeeded(), let master else {
-            _ = setUpIfNeeded()
             return
         }
         let ahora = DispatchTime.now().uptimeNanoseconds
@@ -946,6 +983,9 @@ final class SplitBench {
             "idr_requests": ms.idrRequests,
             "without_master_frame": ms.withoutMasterFrame,
             "compose_failures": ms.composeFailures,
+            "color_observations": colorObservations,
+            "color_gains_left": matcher.gains.left,
+            "color_gains_right": matcher.gains.right,
             "tick_fps_p5": pct(fpsTicks, 0.05),
             "tick_fps_p50": pct(fpsTicks, 0.5),
             "added_latency_ms_p50": pct(composeLatencyMs, 0.5),

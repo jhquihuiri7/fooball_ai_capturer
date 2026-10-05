@@ -650,6 +650,28 @@ hubs), ya con esta expectativa.
 
 ---
 
+## 2026-10-04 · IOS-38 — igualado de color en el solape · 🚧 falta la prueba de +1/3 EV en dos iPhone
+
+**Hecho**
+- REF: se exporta la familia PANORAMA_COLOR_MATCH_ a RigConstants.
+- `RigCore/Direction/ColorMatcher.swift`: réplica de PanoramaStitcher.observe_color
+  (raíz del cociente BGR, tope PANORAMA_COLOR_MATCH_MAX_GAIN, nivel mínimo, suavizado
+  0,25). Cuadra con los 5 dorados `observe_color` de color.json.
+- `RigMedia/Capture/OverlapMeans.swift`: la media BGR de la cámara propia dentro del
+  solape. Las muestras (paso 8) se eligen una vez con RigModel (los píxeles que la otra
+  cámara también ve, con el giro de la montura); la medida lee el NV12 y pasa a BGR
+  BT.709. **Desviación de la tarjeta:** en CPU y no en Metal, porque a 0,5 Hz son
+  ~130 000 lecturas en 4K y un kernel no compensa; se anota aquí.
+- `color_means` por medios (ColorMeansWire, 3 × f32) del esclavo al maestro.
+- Banco program-split: cada 2 s el esclavo manda su media y el maestro iguala con la
+  suya; las ganancias viajan en cada vista y salen en el informe.
+- Tests: ColorMatcherTests (dorados y el tope), OverlapMeansTests (dónde cae el solape
+  en cada cámara, girada o no, y la media de un NV12 liso), la sesión.
+
+**Queda fuera**: la medida de los dorados `color_match` (el camino por el lienzo
+entero de la referencia) no se replica: aquí se mide en el búfer de cada cámara. La
+aceptación (+1/3 EV en el esclavo, la costura baja de 2 % en ≤10 s) va con los dos iPhone.
+
 ## 2026-10-04 · IOS-70 — pareja de fotogramas sincronizados para calibrar · 🚧 falta la pareja con dos iPhone
 
 **Hecho**

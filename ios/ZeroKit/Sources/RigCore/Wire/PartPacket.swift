@@ -209,3 +209,26 @@ public enum IdrRequestWire {
         return reader.read(UInt32.self)
     }
 }
+
+/// `color_means`, por medios (IOS-38): la media BGR del solape del esclavo, en f32.
+public enum ColorMeansWire {
+    public static func encode(bgr: [Double]) -> Data {
+        precondition(bgr.count == 3, "tres canales BGR")
+        var data = Data()
+        bgr.forEach { data.appendBigEndian(Float($0).bitPattern) }
+        return data
+    }
+
+    public static func decode(_ payload: Data) -> [Double]? {
+        guard payload.count == 12 else { return nil }
+        var reader = BigEndianReader(data: payload)
+        var bgr: [Double] = []
+        for _ in 0..<3 {
+            guard let bits = reader.read(UInt32.self) else { return nil }
+            let v = Double(Float(bitPattern: bits))
+            guard v.isFinite, v >= 0 else { return nil }
+            bgr.append(v)
+        }
+        return bgr
+    }
+}

@@ -110,6 +110,8 @@ public final class RigLinkSession {
     public var onNoPart: ((NoPartPacket) -> Void)?
     /// El esclavo debe forzar un IDR: el maestro tiene un hueco en `part_seq`.
     public var onIdrRequest: ((UInt32) -> Void)?
+    /// El maestro recibe la media BGR del solape del esclavo (IOS-38).
+    public var onColorMeans: (([Double]) -> Void)?
     /// El esclavo debe guardar los fotogramas de estos instantes para calibrar (IOS-70).
     public var onCalibrationCapture: (([Int64]) -> Void)?
 
@@ -392,6 +394,15 @@ public final class RigLinkSession {
         }
     }
 
+    /// El esclavo manda la media BGR de su solape (IOS-38), a 0,5 Hz.
+    public func send(colorMeans bgr: [Double]) {
+        queue.async { [self] in
+            guard !isMaster, case .connected = state else { return }
+            seqMedia &+= 1
+            send(type: .colorMeans, payload: ColorMeansWire.encode(bgr: bgr), seq: seqMedia, channel: .media)
+        }
+    }
+
     /// El maestro pide al esclavo los fotogramas de estos instantes (IOS-70): `command`
     /// por control, en JSON, con `kind: calibration_capture` (ADR 0023 §1).
     public func send(calibrationCapture targets: [Int64]) {
@@ -475,6 +486,9 @@ public final class RigLinkSession {
         case .idrRequest:
             guard !isMaster, let seq = IdrRequestWire.decode(frame.payload) else { return }
             onIdrRequest?(seq)
+        case .colorMeans:
+            guard isMaster, let bgr = ColorMeansWire.decode(frame.payload) else { return }
+            onColorMeans?(bgr)
         case .command:
             guard !isMaster,
                   let orden = try? JSONSerialization.jsonObject(with: frame.payload) as? [String: Any],

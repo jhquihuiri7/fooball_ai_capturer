@@ -272,6 +272,34 @@ public enum RigConstants {
     /// (Python: `PANORAMA_BLIND_MARGIN_PX`.)
     public static let panoramaBlindMarginPx: Int = 2
 
+    /// Uno de cada cuántos píxeles del solape, en cada eje, se mide para igualar el color de
+    /// las dos cámaras. La media de una franja de cientos de miles de píxeles no cambia por mirar
+    /// uno de cada 64, y medir deja de costar.
+    /// (Python: `PANORAMA_COLOR_MATCH_STRIDE`.)
+    public static let panoramaColorMatchStride: Int = 8
+
+    /// Tope de la ganancia por canal (y de su inversa). Dos móviles que midieron la luz por
+    /// separado difieren en fracciones de paso; más de 1.6x no es una diferencia de ajuste sino
+    /// una cámara tapada o mirando a otro sitio, y «corregirla» quemaría la otra mitad.
+    /// (Python: `PANORAMA_COLOR_MATCH_MAX_GAIN`.)
+    public static let panoramaColorMatchMaxGain: Double = 1.6
+
+    /// Peso de cada medida nueva en la ganancia (media exponencial). Con la exposición y el
+    /// balance bloqueados en los móviles la diferencia es constante, así que se puede ir
+    /// despacio: lo que se quiere filtrar es el jugador que cruza el solape.
+    /// (Python: `PANORAMA_COLOR_MATCH_SMOOTHING`.)
+    public static let panoramaColorMatchSmoothing: Double = 0.25
+
+    /// Nivel medio (0-255) por debajo del cual un canal no se usa para medir: en negro, el
+    /// cociente entre las dos cámaras es ruido dividido por ruido.
+    /// (Python: `PANORAMA_COLOR_MATCH_MIN_LEVEL`.)
+    public static let panoramaColorMatchMinLevel: Double = 12.0
+
+    /// Píxeles medidos mínimos en el solape. Con menos, las cámaras casi no se pisan y no hay
+    /// de dónde sacar una media fiable.
+    /// (Python: `PANORAMA_COLOR_MATCH_MIN_PIXELS`.)
+    public static let panoramaColorMatchMinPixels: Int = 64
+
     /// Radianes (~2°). Ancho de la franja en la que las dos cámaras se mezclan en la costura.
     ///
     /// Es un compromiso entre dos defectos que no se pueden eliminar a la vez. Una franja ancha

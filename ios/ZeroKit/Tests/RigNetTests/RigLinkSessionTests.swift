@@ -198,6 +198,11 @@ final class RigLinkSessionTests: XCTestCase {
         XCTAssertEqual(partes.first, parte)
         XCTAssertEqual(nadas.first, NoPartPacket(frameRigMs: 1034, viewId: 6))
         lock.unlock()
+        // IOS-38: las medias del solape, del esclavo al maestro.
+        nonisolated(unsafe) var medias: [Double] = []
+        left.onColorMeans = { m in lock.lock(); medias = m; lock.unlock() }
+        right.send(colorMeans: [100, 120.5, 90])
+        waitUntil { lock.lock(); defer { lock.unlock() }; return medias == [100, 120.5, 90] }
         // IOS-70: la orden de calibrar, con sus destinos.
         nonisolated(unsafe) var destinos: [Int64] = []
         right.onCalibrationCapture = { d in lock.lock(); destinos = d; lock.unlock() }
