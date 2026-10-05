@@ -205,6 +205,8 @@ enum LinkBench {
     static let cutLengthS = 1.0
     /// Cada cuánto manda el maestro una orden y pide el esclavo los PTS.
     static let probeEveryS = 2
+    /// Cada cuánto deja el banco un informe parcial (se sobrescribe).
+    static let partialReportEveryS = 300
 
     static func run(progress: BenchRunner.Progress?) throws -> URL {
         let entorno = ProcessInfo.processInfo.environment
@@ -337,6 +339,84 @@ enum LinkBench {
         // SPK-02: con RIG_LINK_PARTS=1, partes sintéticas por el camino de las de verdad.
         let carga = entorno["RIG_LINK_PARTS"] == "1" ? LinkPartsLoad(session: sesion, environment: entorno) : nil
 
+        /// El informe: al terminar y, en las pasadas largas, uno parcial cada
+        /// `partialReportEveryS` (se sobrescribe), para no perderlo todo si se corta.
+        func escribe(duracion: Double, sufijo: String) throws -> URL {
+            let stats = transporte.stats
+            let deLaCarga = carga?.counters() ?? [:]
+            cerrojo.lock(); defer { cerrojo.unlock() }
+            let orden = rtts.sorted()
+            func p(_ q: Double) -> Double {
+                orden.isEmpty ? 0 : orden[min(orden.count - 1, Int(q * Double(orden.count)))]
+            }
+            var informe = BenchReport(
+                name: "link-bench",
+                device: BenchRunner.machine(),
+                systemVersion: ProcessInfo.processInfo.operatingSystemVersionString,
+                startedEpochS: Int64(Date().timeIntervalSince1970),
+                durationS: duracion,
+                params: [
+                    "side": lado.rawValue,
+                    "interface": entorno["RIG_LINK_INTERFACE"] ?? "ethernet",
+                    "peer": par,
+                    "internet_path": ruta,
+                    "rejections": rechazos.joined(separator: " | "),
+                    "rig_role": rolNegociado,
+                    "prefers_master": sesion.prefersMaster ? "1" : "0",
+                    "parts_profile": carga?.profileDescription ?? "",
+                    "pacing": "\(transporte.pacingBurstDatagrams) cada \(transporte.pacingIntervalUs) us",
+                ],
+                thermal: [],
+                stagesMs: [:],
+                counters: [
+                    "connected": conexiones > 0 ? 1 : 0,
+                    "connections": conexiones,
+                    "connect_ms": Int((conectadoMs ?? -1).rounded()),
+                    "rtt_samples": rtts.count,
+                    "rig_term": termNegociado,
+                    "reconnect_ms": vueltasMs.isEmpty ? -1 : Int(vueltasMs.max()!.rounded()),
+                    "outages": vueltasMs.count,
+                    "t_listening_ms": Int(hitos["t_listening_ms"] ?? -1),
+                    "t_connecting_ms": Int(hitos["t_connecting_ms"] ?? -1),
+                    "t_tcp_ms": Int(hitos["t_tcp_ms"] ?? -1),
+                    "t_hello_ms": Int(hitos["t_hello_ms"] ?? -1),
+                    "t_auth_ms": Int(hitos["t_auth_ms"] ?? -1),
+                    "commands_sent": ordenesEnviadas,
+                    "commands_received": ordenesRecibidas,
+                    "pts_requests": ptsPedidos,
+                    "pts_answered": ptsRespondidos,
+                    "clock_estimates": estimaciones,
+                    "clock_uncertainty_us": Int(incertidumbreNs / 1000),
+                    "reconnects": stats.reconnects,
+                    "frames_sent": stats.framesSent,
+                    "frames_received": stats.framesReceived,
+                    "invalid_frames": stats.invalidFrames,
+                    "media_frames_received": stats.mediaFramesReceived,
+                    "media_loss_gaps": stats.mediaLossGaps,
+                    "media_stalls_over_100ms": stats.mediaStallsOver100Ms,
+                    "media_pacer_drops": stats.mediaPacerDrops,
+                ].merging(deLaCarga) { a, _ in a }
+            )
+            if !rtts.isEmpty {
+                informe.stagesMs["link/rtt"] = BenchReport.StageSummary(p50Ms: p(0.5), p90Ms: p(0.9), p99Ms: p(0.99))
+            }
+            if !ptsMs.isEmpty {
+                let o = ptsMs.sorted()
+                informe.stagesMs["link/pts_roundtrip"] = BenchReport.StageSummary(
+                    p50Ms: o[o.count / 2], p90Ms: o[min(o.count - 1, o.count * 9 / 10)], p99Ms: o[o.count - 1]
+                )
+            }
+            let base = try FileManager.default
+                .url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+                .appendingPathComponent("bench", isDirectory: true)
+            try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+            let destino = base.appendingPathComponent("link-bench-\(lado.rawValue)-\(sufijo).json")
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys, .prettyPrinted, .withoutEscapingSlashes]
+            try encoder.encode(informe).write(to: destino, options: .atomic)
+            return destino
+        }
+
         sesion.start()
         carga?.run()
         let pasos = max(1, Int(duracion))
@@ -366,84 +446,14 @@ enum LinkBench {
                     }
                 }
             }
+            if (s + 1) % Self.partialReportEveryS == 0, s + 1 < pasos {
+                _ = try? escribe(duracion: Double(s + 1), sufijo: "parcial")
+            }
             progress?(Double(s + 1) / Double(pasos), "enlace \(lado.rawValue): \(conexiones > 0 ? "conectado" : "buscando")")
         }
         carga?.stop()
-        let stats = transporte.stats
-        let deLaCarga = carga?.counters() ?? [:]
         sesion.stop()
-
-        cerrojo.lock(); defer { cerrojo.unlock() }
-        let orden = rtts.sorted()
-        func p(_ q: Double) -> Double {
-            orden.isEmpty ? 0 : orden[min(orden.count - 1, Int(q * Double(orden.count)))]
-        }
-        var informe = BenchReport(
-            name: "link-bench",
-            device: BenchRunner.machine(),
-            systemVersion: ProcessInfo.processInfo.operatingSystemVersionString,
-            startedEpochS: Int64(Date().timeIntervalSince1970),
-            durationS: duracion,
-            params: [
-                "side": lado.rawValue,
-                "interface": entorno["RIG_LINK_INTERFACE"] ?? "ethernet",
-                "peer": par,
-                "internet_path": ruta,
-                "rejections": rechazos.joined(separator: " | "),
-                "rig_role": rolNegociado,
-                "prefers_master": sesion.prefersMaster ? "1" : "0",
-                "parts_profile": carga?.profileDescription ?? "",
-                "pacing": "\(transporte.pacingBurstDatagrams) cada \(transporte.pacingIntervalUs) us",
-            ],
-            thermal: [],
-            stagesMs: [:],
-            counters: [
-                "connected": conexiones > 0 ? 1 : 0,
-                "connections": conexiones,
-                "connect_ms": Int((conectadoMs ?? -1).rounded()),
-                "rtt_samples": rtts.count,
-                "rig_term": termNegociado,
-                "reconnect_ms": vueltasMs.isEmpty ? -1 : Int(vueltasMs.max()!.rounded()),
-                "outages": vueltasMs.count,
-                "t_listening_ms": Int(hitos["t_listening_ms"] ?? -1),
-                "t_connecting_ms": Int(hitos["t_connecting_ms"] ?? -1),
-                "t_tcp_ms": Int(hitos["t_tcp_ms"] ?? -1),
-                "t_hello_ms": Int(hitos["t_hello_ms"] ?? -1),
-                "t_auth_ms": Int(hitos["t_auth_ms"] ?? -1),
-                "commands_sent": ordenesEnviadas,
-                "commands_received": ordenesRecibidas,
-                "pts_requests": ptsPedidos,
-                "pts_answered": ptsRespondidos,
-                "clock_estimates": estimaciones,
-                "clock_uncertainty_us": Int(incertidumbreNs / 1000),
-                "reconnects": stats.reconnects,
-                "frames_sent": stats.framesSent,
-                "frames_received": stats.framesReceived,
-                "invalid_frames": stats.invalidFrames,
-                "media_frames_received": stats.mediaFramesReceived,
-                "media_loss_gaps": stats.mediaLossGaps,
-                "media_stalls_over_100ms": stats.mediaStallsOver100Ms,
-                "media_pacer_drops": stats.mediaPacerDrops,
-            ].merging(deLaCarga) { a, _ in a }
-        )
-        if !rtts.isEmpty {
-            informe.stagesMs["link/rtt"] = BenchReport.StageSummary(p50Ms: p(0.5), p90Ms: p(0.9), p99Ms: p(0.99))
-        }
-        if !ptsMs.isEmpty {
-            let o = ptsMs.sorted()
-            informe.stagesMs["link/pts_roundtrip"] = BenchReport.StageSummary(
-                p50Ms: o[o.count / 2], p90Ms: o[min(o.count - 1, o.count * 9 / 10)], p99Ms: o[o.count - 1]
-            )
-        }
-        let base = try FileManager.default
-            .url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-            .appendingPathComponent("bench", isDirectory: true)
-        try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
-        let destino = base.appendingPathComponent("link-bench-\(lado.rawValue)-\(informe.startedEpochS).json")
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .prettyPrinted, .withoutEscapingSlashes]
-        try encoder.encode(informe).write(to: destino, options: .atomic)
-        return destino
+        return try escribe(duracion: duracion, sufijo: "\(Int64(Date().timeIntervalSince1970))")
     }
 }
 
