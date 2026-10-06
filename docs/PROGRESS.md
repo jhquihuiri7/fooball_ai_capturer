@@ -53,7 +53,14 @@ enlace está caído). Con los dos iPhone (maestro muerto a los 90 s, relevo a lo
 vuelta a los 170):
 - el promovido compone **con su propia cámara**: 4199 fotogramas `masterOnly`, 0 fallos;
 - en una pasada, el maestro de antes volvió y quedó de esclavo: 2 s provisional y luego
-  1529 partes enviadas; en otra no llegó a conectarse en los 67 s que tenía.
+  1529 partes enviadas; en otra no llegó a conectarse en los 67 s que tenía;
+- **con 150 s tras la vuelta, el ciclo sale entero**:
+  - el derecho, promovido, compone 5999 fotogramas en 200 s con 0 fallos;
+  - el izquierdo vuelve de esclavo y le manda 3464 partes; llegan 3401, con 1 perdida.
+
+  Las partes no entran al programa (todo `masterOnly`): el barrido de prueba del banco gira
+  en torno a la cámara del maestro y, con el derecho dirigiendo, no cruza a la mitad
+  izquierda. Es una rareza del banco, no del producto.
 
 **Tres fallos encontrados por el camino, arreglados**:
 1. El promovido salía todo SIN SEÑAL. El banco tomaba la hora del host mientras el anillo
