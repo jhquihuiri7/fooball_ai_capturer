@@ -1035,6 +1035,7 @@ final class SplitBench {
         if case .connected = session.state, setUpIfNeeded() {
             colorTick(now: Self.nowMs())
         }
+        detectTick()
         // El maestro compone SIEMPRE, con enlace o sin él (IOS-81: el programa no se
         // para porque caiga el esclavo); las vistas solo salen si hay sesión.
         guard session.isMaster, setUpIfNeeded(), let master else {
@@ -1077,11 +1078,6 @@ final class SplitBench {
             lastAdCueT = t
             adCues.append([t, cue.ad.name, cue.frame])
         }
-        detectTicks += 1
-        if detectTicks % Self.detectEveryTicks == 0, let d = detect, let ring = pipelineProvider()?.ring,
-           let ultimo = ring.availableRigMs().last, let lease = ring.acquire(nearest: ultimo, maxDistanceMs: 0) {
-            d.offer(lease.buffer) { ring.release(lease) }
-        }
         if master.tick(programRigMs: t, nowRigMs: now, masterView: vistaPropia) != nil {
             composeLatencyMs.append(Double(now - t) + Double(DispatchTime.now().uptimeNanoseconds - inicio) / 1e6)
         }
@@ -1091,6 +1087,26 @@ final class SplitBench {
     private static let footprintEveryS = 60.0
     /// Una detección cada 4 tics del programa: 7,5 Hz (PLAYER_TARGET_HZ).
     private static let detectEveryTicks = 4
+
+    /// La detección a 7,5 Hz en los dos papeles (IOS-73): el esclavo manda sus cajas al
+    /// maestro; el maestro las da a su director (si dirige el DirectorService).
+    private func detectTick() {
+        detectTicks += 1
+        guard detectTicks % Self.detectEveryTicks == 0, let d = detect, let ring = pipelineProvider()?.ring,
+              let ultimo = ring.availableRigMs().last, let lease = ring.acquire(nearest: ultimo, maxDistanceMs: 0)
+        else { return }
+        if d.onDetections == nil {
+            d.onDetections = { [weak self] cajas, t, ms in
+                guard let self else { return }
+                if session.isMaster {
+                    director?.receive(side: side, targetRigMs: t, detections: cajas)
+                } else {
+                    session.send(detections: cajas, targetRigMs: t, inferMs: ms)
+                }
+            }
+        }
+        d.offer(lease.buffer, rigMs: ultimo) { ring.release(lease) }
+    }
 
     /// `phys_footprint` del proceso, lo que mira jetsam, en MB.
     /// Segundos de CPU del proceso (usuario + sistema, todos los hilos), de getrusage.
@@ -1469,22 +1485,34 @@ enum RigClockDomain {
 }
 
 
-// MARK: - La carga del detector en el banco (SPK-54, parcial)
+// MARK: - La carga del detector en el banco (SPK-54, parcial; IOS-73)
 
-// El modelo de jugadores en el maestro mientras compone el programa: Vision recorta y escala el
-// fotograma de la cámara a la entrada del modelo (scaleFill: no es la franja de verdad, que sale
-// de Metal, pero el coste del escalado es del mismo orden). Una sola petición a la vez: si el
-// modelo sigue ocupado, el fotograma se salta y se cuenta; nunca se encola (CLAUDE.md §2).
+// El modelo de jugadores mientras se compone el programa. Vision recorta la franja central
+// del fotograma de la cámara (todo el ancho y PLAYER_INPUT_HEIGHT / PLAYER_BAND_SCALE filas,
+// a escala ×0,5 en los dos ejes, como la franja de verdad) y la lleva a la entrada del modelo.
+// La salida heatmap del plan B se decodifica a cajas nativas con PlayerDecoder, y las cajas
+// salen por `onDetections`: el esclavo las manda al maestro por el enlace; el maestro, a su
+// director. Una sola petición a la vez: si el modelo sigue ocupado, el fotograma se salta y se
+// cuenta; nunca se encola (CLAUDE.md §2).
 final class DetectLoad {
+    /// Las clases y el paso del CenterNet-MNv4 del plan B (ADR 0020).
+    static let classes = ["goalkeeper", "player", "referee"]
+    static let heatmapStride = 4
+
+    var onDetections: (([PlayerDetection], Int64, Double) -> Void)?
     private let request: VNCoreMLRequest
+    private let decoder: PlayerDecoder
     private let queue = DispatchQueue(label: "io.footballai.zero.split.detect", qos: .userInitiated)
     private let lock = NSLock()
     private var busy = false
     private var runs = 0
     private var skipped = 0
     private var failures = 0
+    private var detections = 0
     private var latenciasMs: [Double] = []
+    private var decodeMs: [Double] = []
     private let compileMs: Double
+    private var layouts: [String: InputLayout] = [:]
 
     init?(package: String) {
         guard let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
@@ -1499,6 +1527,10 @@ final class DetectLoad {
             let modelo = try VNCoreMLModel(for: MLModel(contentsOf: compilado, configuration: config))
             request = VNCoreMLRequest(model: modelo)
             request.imageCropAndScaleOption = .scaleFill
+            decoder = try PlayerDecoder(
+                classNames: Self.classes, postprocess: .heatmap, boxFormat: .heatmapStride,
+                heatmapStride: Self.heatmapStride
+            )
         } catch {
             NSLog("[split] detector %@: %@", package, "\(error)")
             return nil
@@ -1506,7 +1538,21 @@ final class DetectLoad {
         compileMs = Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6
     }
 
-    func offer(_ buffer: CVPixelBuffer, release: @escaping () -> Void) {
+    /// La franja central del fotograma (`ancho`×`alto` nativos) y su layout a la entrada.
+    private func band(width: Int, height: Int) throws -> (CGRect, InputLayout) {
+        let filas = min(Double(height), Double(DetectionSpec.playerInputHeight) / DetectionSpec.playerBandScale)
+        let arriba = (Double(height) - filas) / 2
+        let clave = "\(width)x\(height)"
+        let layout = try layouts[clave] ?? InputLayout(regions: [InputRegion(
+            dstX: 0, dstY: 0, dstW: DetectionSpec.playerInputWidth, dstH: DetectionSpec.playerInputHeight,
+            srcX: 0, srcY: arriba, srcW: Double(width), srcH: filas
+        )])
+        layouts[clave] = layout
+        // Vision mide desde abajo a la izquierda, normalizado.
+        return (CGRect(x: 0, y: arriba / Double(height), width: 1, height: filas / Double(height)), layout)
+    }
+
+    func offer(_ buffer: CVPixelBuffer, rigMs: Int64, release: @escaping () -> Void) {
         lock.lock()
         if busy {
             skipped += 1
@@ -1518,21 +1564,52 @@ final class DetectLoad {
         lock.unlock()
         queue.async { [self] in
             let t0 = DispatchTime.now().uptimeNanoseconds
-            let ok = (try? VNImageRequestHandler(cvPixelBuffer: buffer, options: [:]).perform([request])) != nil
+            var cajas: [PlayerDetection]?
+            var msDecode = 0.0
+            do {
+                let (roi, layout) = try band(width: CVPixelBufferGetWidth(buffer), height: CVPixelBufferGetHeight(buffer))
+                request.regionOfInterest = roi
+                try VNImageRequestHandler(cvPixelBuffer: buffer, options: [:]).perform([request])
+                var arrays: [String: MLMultiArray] = [:]
+                for o in request.results as? [VNCoreMLFeatureValueObservation] ?? [] {
+                    arrays[o.featureName] = o.featureValue.multiArrayValue
+                }
+                let t1 = DispatchTime.now().uptimeNanoseconds
+                if let h = arrays["heatmap"], let off = arrays["offset"], let sz = arrays["size"] {
+                    cajas = try decoder.decodeHeatmap(
+                        heatmap: CoreMLPlayerDetector.planes(h), offset: CoreMLPlayerDetector.planes(off),
+                        size: CoreMLPlayerDetector.planes(sz), layout: layout
+                    )
+                }
+                msDecode = Double(DispatchTime.now().uptimeNanoseconds - t1) / 1e6
+            } catch {
+                cajas = nil
+            }
             let ms = Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6
             release()
             lock.lock()
-            if ok { runs += 1; latenciasMs.append(ms) } else { failures += 1 }
+            if let cajas {
+                runs += 1
+                detections += cajas.count
+                latenciasMs.append(ms)
+                decodeMs.append(msDecode)
+            } else {
+                failures += 1
+            }
             busy = false
             lock.unlock()
+            if let cajas { onDetections?(cajas, rigMs, ms) }
         }
     }
 
     func report() -> [String: Any] {
         lock.lock(); defer { lock.unlock() }
-        let o = latenciasMs.sorted()
-        func p(_ q: Double) -> Double { o.isEmpty ? 0 : o[min(o.count - 1, Int(q * Double(o.count)))] }
-        return ["runs": runs, "skipped": skipped, "failures": failures, "compile_load_ms": compileMs,
-                "p50_ms": p(0.5), "p90_ms": p(0.9), "p99_ms": p(0.99)]
+        func p(_ xs: [Double], _ q: Double) -> Double {
+            let o = xs.sorted()
+            return o.isEmpty ? 0 : o[min(o.count - 1, Int(q * Double(o.count)))]
+        }
+        return ["runs": runs, "skipped": skipped, "failures": failures, "detections": detections,
+                "compile_load_ms": compileMs, "p50_ms": p(latenciasMs, 0.5), "p90_ms": p(latenciasMs, 0.9),
+                "p99_ms": p(latenciasMs, 0.99), "decode_p50_ms": p(decodeMs, 0.5), "decode_p99_ms": p(decodeMs, 0.99)]
     }
 }

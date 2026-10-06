@@ -7,6 +7,7 @@
 # <fichero_secreto>: el secreto del soporte en base64, en un fichero (no se imprime nunca).
 # Los móviles, por variable de entorno o los de siempre:
 #   IZQ=<id devicectl del izquierdo>   DER=<id del derecho>
+# Más variables para los dos: BANCO_EXTRA='{"RIG_AUDIO": "1"}'.
 # Deja los informes en bench/dos-moviles-<fecha>/ (Documents/bench y Documents/calib de cada uno).
 set -euo pipefail
 
@@ -24,11 +25,13 @@ mkdir -p "$SALIDA"
 # El entorno de lanzamiento, en JSON, sin pasar el secreto por la línea de órdenes.
 entorno() {  # $1 lado, $2 json extra
   python3 - "$SECRETO" "$1" "$2" <<'PY'
-import json, sys
+import json, os, sys
 secreto, lado, extra = sys.argv[1:]
 e = {"RIG_LINK_MULTIPEER": "0", "RIG_LINK_SECRET": open(secreto).read().strip(),
      "RIG_LINK_INTERFACE": "wifi", "RIG_LINK_SIDE": lado}
 e.update(json.loads(extra))
+# BANCO_EXTRA: variables de entorno más, en JSON (p. ej. RIG_DETECT o RIG_AUDIO).
+e.update(json.loads(os.environ.get("BANCO_EXTRA", "{}")))
 print(json.dumps(e))
 PY
 }

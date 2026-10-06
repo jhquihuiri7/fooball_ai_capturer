@@ -209,7 +209,7 @@ public final class CoreMLPlayerDetector: PlayerDetecting {
     /// [1, C, H, W] → C planos de H filas de W Float (fp16 o fp32). TODO de rendimiento:
     /// reserva un plano anidado por inferencia; con el heatmap de 3x144x480 conviene pasar
     /// a búferes planos preasignados (CLAUDE.md §2) cuando entre el modelo de verdad.
-    static func planes(_ a: MLMultiArray) -> [[[Float]]] {
+    public static func planes(_ a: MLMultiArray) -> [[[Float]]] {
         let forma = a.shape.map(\.intValue)
         guard forma.count >= 3 else { return [] }
         let (c, h, w) = (forma[forma.count - 3], forma[forma.count - 2], forma[forma.count - 1])

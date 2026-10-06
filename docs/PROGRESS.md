@@ -29,6 +29,38 @@ PROPUESTO) sigue siendo del propietario.
 **Siguiente paso**: la ficha de CenterNet-MNv4 con pesos propios y su cableado en
 `CoreMLPlayerDetector`.
 
+## 2026-10-06 · Dos iPhone, 10 min con todo a la vez (IOS-44, IOS-70, SPK-54 parcial)
+
+iPhone 17 (maestro) e iPhone 16 Pro (esclavo) por Wi-Fi, con las cámaras tapadas. A la
+vez: programa, micro, franja, N0, el par de calibración a los 30 s y CenterNet-MNv4 en el
+maestro a 7,5 Hz (`BANCO_EXTRA` en `tools/banco_dos_moviles.sh`). Informes en
+`bench/dos-moviles-20261006-0745`.
+
+| Qué | Resultado |
+|---|---|
+| Programa | 17 962 fotogramas: 13 436 con las dos lentes, 4410 solo del maestro, 115 solo del esclavo; 0 fallos de composición |
+| Tic | p5 29,38 / p50 30,00 fps |
+| Latencia añadida | p50 131 / p95 135 ms (sin detector, el 5-oct: 111/114) |
+| Partes | 13 790 recibidas, **0 perdidas**, jitter 4,5 ms, 0 IDR, el par siempre `up` |
+| Detector | 4490 pasadas, 0 saltadas, p50 22 ms |
+| CPU | Maestro 40,8 % de un núcleo, esclavo 18,3 % |
+| Memoria | Plana: maestro ~543 MB, esclavo ~381 MB |
+| Audio y N0 | 28 108 tramas de audio; N0 con 4490 vistas y 0 descartes |
+| Par de calibración (IOS-70) | **2 ms entre móviles en las 5 parejas** (objetivo ≤5 ✅); JPEG ≤0,9 MB; con intrínsecas |
+
+**Lectura**:
+- **IOS-70** cumple también su objetivo.
+- **IOS-44**, con el detector encima, se pasa: p5 29,38 (pide ≥29,5) y p95 135 ms (pide
+  ≤120). El detector compite con la composición: Vision escala en la GPU que usa Metal.
+  Hay que llevar el recorte de la franja a Metal (IOS-21 ya lo hace en la cadena de
+  verdad) y volver a medir.
+- **IOS-38** no se puede: la imagen está negra (brillo <1 en las fotos de calibración).
+
+**Hecho además**: `DetectLoad` corre en los dos papeles. Recorta la franja central a
+escala ×0,5 con `regionOfInterest`, decodifica el heatmap a cajas nativas con
+PlayerDecoder y las entrega: el esclavo, al maestro por el enlace; el maestro, a su
+director (IOS-73). `CoreMLPlayerDetector.planes` pasa a ser público.
+
 ## 2026-10-05 · Carga combinada con el detector del plan B en el iPhone 17 (SPK-54, parcial)
 
 El banco split gana `RIG_DETECT=<paquete>` (`DetectLoad`). Compila el modelo de
