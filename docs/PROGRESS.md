@@ -29,6 +29,33 @@ PROPUESTO) sigue siendo del propietario.
 **Siguiente paso**: la ficha de CenterNet-MNv4 con pesos propios y su cableado en
 `CoreMLPlayerDetector`.
 
+## 2026-10-06 · Con imagen real: las partes a 12 Mbit/s saturan la Wi-Fi; a 8, no (IOS-43, IOS-52, SPK-02)
+
+Los dos iPhone boca arriba, viendo el techo, con micro, director y detección en los dos.
+Datos en `bench/dos-moviles-20261006-1147` y `-1159`.
+
+| | 10 min, partes a 12 Mbit/s | 5 min, partes a 8 Mbit/s |
+|---|---|---|
+| Caudal de partes | 11,4 Mbit/s | 7,7 Mbit/s |
+| Pérdidas | 133 (**0,75 %**) | 8 (**0,09 %**) |
+| Peticiones de IDR | 137 (una cada ~4 s) | 10 |
+| Cierre de un hueco | p50 80 / p99 115 ms | p50 75 / p99 85 ms |
+| Programa | 17 999 fotogramas, 0 fallos, latencia p95 111 ms | 8999, 0 fallos, p95 110 ms |
+| SIN SEÑAL | 65 fotogramas | 63 fotogramas |
+| Descartes del esclavo | 128 | 8 |
+
+**Lectura**:
+- Con la escena negra, las partes pesaban 1-2 Mbit/s y no apretaban. Con imagen real, 12
+  Mbit/s pasan de lo que da la Wi-Fi entre los dos móviles (~10, SPK-02): pierden el
+  0,75 % y piden un IDR cada 4 s. A 8 Mbit/s la pérdida baja ocho veces.
+- **Recomendación**: 8 Mbit/s por defecto para las partes por Wi-Fi, y 12 solo por
+  Ethernet. La decisión va en el ADR 0023 cuando se mida Ethernet.
+- Los ~2 s de SIN SEÑAL salen igual con las dos cifras: no son pérdidas, son el arranque.
+  El maestro compone una vista en la mitad del esclavo antes de que llegue la primera
+  parte.
+- Térmica: el esclavo pasa a serious en el primer minuto y el maestro a los 8 min.
+- En el esclavo, cámara → app p50 25 ms, y la parte sale con p50 60 ms.
+
 ## 2026-10-06 · IOS-38 — el igualado de color con luz, medido con los dos iPhone · 🚧
 
 El banco gana `RIG_SPLIT_EV` / `RIG_SPLIT_EV_AT_S`: el esclavo sube el ISO ×2^EV (con la
