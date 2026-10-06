@@ -650,7 +650,8 @@ final class LinkPartsLoad {
 //   Documents/bench/program-split-<t>.ts, con un informe JSON al terminar.
 //
 //   RIG_SPLIT_S             lo que dura (600 por defecto: los 10 min de IOS-44)
-//   RIG_SPLIT_PART_MBPS     bitrate de la parte (12: por Wi-Fi caben ~15, SPK-02)
+//   RIG_SPLIT_PART_MBPS     bitrate de la parte; sin él, LinkConstants según la interfaz
+//                           (8 por Wi-Fi, medido el 6-oct; 12 por Ethernet)
 //   RIG_SPLIT_SWEEP_DEG     amplitud del barrido en yaw (30)
 //   RIG_SPLIT_SWEEP_S       periodo del barrido (20)
 //   RIG_SPLIT_HFOV_DEG      el encuadre (60)
@@ -880,7 +881,10 @@ final class SplitBench {
             // Esclavo: su parte.
             let enc = try VideoEncoder(
                 width: Self.programWidth, height: Self.programHeight,
-                bitrateBps: Int(number("RIG_SPLIT_PART_MBPS", 12) * 1_000_000), viewId: side == .left ? 0 : 1
+                bitrateBps: env["RIG_SPLIT_PART_MBPS"].flatMap(Double.init).map { Int($0 * 1_000_000) }
+                    ?? (env["RIG_LINK_INTERFACE"] == "wifi"
+                        ? LinkConstants.partBitrateWifiBps : LinkConstants.partBitrateEthernetBps),
+                viewId: side == .left ? 0 : 1
             )
             let s = SlavePartStage(
                 side: side,

@@ -28,6 +28,15 @@ public enum LinkConstants {
     /// fotograma salga de una lente.
     public static let partMaxWaitMs: Int64 = 100
 
+    /// Bits por segundo de la parte del esclavo por Wi-Fi. Medido el 2026-10-06 con los dos
+    /// iPhone e imagen real: a 12 Mbit/s se perdía el 0,75 % de las partes (un IDR cada
+    /// ~4 s); a 8, el 0,09 %. La Wi-Fi entre los dos móviles da ~10 Mbit/s útiles (SPK-02).
+    public static let partBitrateWifiBps = 8_000_000
+
+    /// Bits por segundo de la parte por Ethernet: provisional hasta medir con los hubs
+    /// (SPK-02). Por cable caben 30 Mbit/s; 12 es lo que se usaba en el banco.
+    public static let partBitrateEthernetBps = 12_000_000
+
     /// Latidos por segundo en los dos sentidos, por medios (LINK_HEARTBEAT_HZ, ADR 0023 §11).
     public static let heartbeatHz = 10.0
 
