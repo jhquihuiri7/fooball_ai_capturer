@@ -1254,6 +1254,11 @@ final class SplitBench {
             "one_lens_frames": ms.oneLensFrames,
             "parts_received": ms.partsReceived,
             "parts_decoded": ms.partsDecoded,
+            // IOS-43: la edad de la parte al llegar; IOS-52: lo que tarda en cerrarse un hueco.
+            "part_age_ms": master.map { m in ["p50": m.partAge.percentile(0.5), "p95": m.partAge.percentile(0.95),
+                                               "p99": m.partAge.percentile(0.99)] } ?? [:],
+            "idr_recovery_ms": master.map { m in ["count": m.idrRecovery.total, "p50": m.idrRecovery.percentile(0.5),
+                                                   "p99": m.idrRecovery.percentile(0.99)] } ?? [:],
             "parts_lost": link?.lost ?? 0,
             "parts_mbps": link?.mbps ?? 0,
             "parts_jitter_ms": link?.jitterMs ?? 0,

@@ -51,7 +51,7 @@ final class MasterProgramStageTests: XCTestCase {
     }
 
     /// El esclavo de verdad: n partes, una por fotograma, con la vista del instante.
-    private func partes(_ n: Int, desde t0: Int64 = 1000) throws -> [PartPacket] {
+    private func partes(_ n: Int, desde t0: Int64 = 1000, claveEn: Int? = nil) throws -> [PartPacket] {
         let enc = try VideoEncoder(width: ancho, height: alto, bitrateBps: 1_000_000, viewId: 1)
         let esclavo = SlavePartStage(
             side: .right, resolver: SlaveViewResolver(frameDurationMs: frameMs),
@@ -65,6 +65,7 @@ final class MasterProgramStageTests: XCTestCase {
             let t = t0 + Int64((Double(i) * frameMs).rounded())
             vistas.append(vista(t, id: UInt32(i), yaw: 0.1 + Double(i) * 0.01))
             esclavo.receive(views: Array(vistas.suffix(3)))
+            if i == claveEn { esclavo.requestIdr() }
             esclavo.process(frame: fuente, frameRigMs: t, ptsNs: t * 1_000_000)
         }
         enc.flush()
@@ -170,6 +171,23 @@ final class MasterProgramStageTests: XCTestCase {
         esperaDecodificadas(stage, 2)
         XCTAssertEqual(pedidas, [3, 4])
         XCTAssertEqual(stage.linkStats(nowRigMs: 0).lost, 1)
+    }
+
+    func testLaEdadDeLasPartesYLoQueTardaElIdr() throws {
+        // La 2 se pierde y la 5 es la clave que pide el maestro.
+        let ps = try partes(6, claveEn: 5)
+        XCTAssertTrue(ps[5].isKey)
+        let (stage, _, _, _) = try maestro()
+        for i in [0, 1, 3, 4] {
+            stage.receive(part: ps[i], arrivalRigMs: ps[i].frameRigMs + 40)
+        }
+        XCTAssertEqual(stage.partAge.total, 4)
+        XCTAssertEqual(stage.partAge.percentile(0.95), 40)
+        XCTAssertEqual(stage.idrRecovery.total, 0, "sin clave no se cierra el hueco")
+        // La clave llega 70 ms después de la primera petición (la de la 3).
+        stage.receive(part: ps[5], arrivalRigMs: ps[3].frameRigMs + 40 + 70)
+        XCTAssertEqual(stage.idrRecovery.total, 1)
+        XCTAssertEqual(stage.idrRecovery.percentile(0.5), 70)
     }
 
     func testUnEncuadreSoloDelEsclavoNoPintaLaMitadDelMaestro() throws {

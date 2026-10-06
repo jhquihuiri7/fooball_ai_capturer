@@ -106,6 +106,16 @@ public final class MasterProgramStage {
     private var viewsByRigMs: [Int64: ResolvedView] = [:]
     private var decoded: [Int64: CVPixelBuffer] = [:]
     public private(set) var stats = Stats()
+    /// IOS-43: la edad de cada parte al llegar (su llegada menos la captura del esclavo,
+    /// los dos en el reloj del soporte), en ms.
+    public private(set) var partAge = LatencyHistogram(boundsMs: MasterProgramStage.partAgeBoundsMs)
+    /// IOS-52: de la primera petición de IDR por un hueco a la llegada del fotograma clave
+    /// que lo cierra, en ms.
+    public private(set) var idrRecovery = LatencyHistogram(boundsMs: MasterProgramStage.partAgeBoundsMs)
+    private var idrAskedMs: Int64?
+    /// Cubos de 5 ms hasta 150 (la aceptación de IOS-43 es p95 ≤60) y gruesos después.
+    public static let partAgeBoundsMs: [Double] = stride(from: 5, through: 150, by: 5).map(Double.init)
+        + [200, 300, 500, 1000, 2000]
 
     /// El esclavo está caído (IOS-81): no se espera su parte; cada instante se compone en
     /// cuanto toca, de una lente.
@@ -158,7 +168,15 @@ public final class MasterProgramStage {
     public func receive(part: PartPacket, arrivalRigMs: Int64) {
         lock.lock()
         stats.partsReceived += 1
+        partAge.record(ms: Double(arrivalRigMs - part.frameRigMs))
         let decision = receiver.receive(part, arrivalMs: arrivalRigMs)
+        if case let .decode(p) = decision, p.isKey, let pedido = idrAskedMs {
+            idrRecovery.record(ms: Double(arrivalRigMs - pedido))
+            idrAskedMs = nil
+        }
+        if case .awaitingIdr = decision, idrAskedMs == nil {
+            idrAskedMs = arrivalRigMs
+        }
         lock.unlock()
         switch decision {
         case let .decode(p):

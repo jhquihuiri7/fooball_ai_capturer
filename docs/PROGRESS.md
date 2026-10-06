@@ -29,6 +29,32 @@ PROPUESTO) sigue siendo del propietario.
 **Siguiente paso**: la ficha de CenterNet-MNv4 con pesos propios y su cableado en
 `CoreMLPlayerDetector`.
 
+## 2026-10-06 · IOS-43 e IOS-52 — la edad de las partes y el cierre de un hueco, medidos con los dos iPhone
+
+MasterProgramStage gana dos histogramas, con su test (`testLaEdadDeLasPartesYLoQueTardaElIdr`):
+- `partAge`: la llegada de cada parte menos la captura del esclavo, en el reloj del
+  soporte, con cubos de 5 ms hasta 150;
+- `idrRecovery`: de la primera petición de IDR por un hueco a la llegada de la clave que
+  lo cierra.
+
+El informe del banco los da como `part_age_ms` e `idr_recovery_ms`.
+
+**Medido** (10 min, Wi-Fi, con micro, director y detección en los dos):
+
+| Qué | Resultado | Objetivo de la tarjeta |
+|---|---|---|
+| Edad de la parte | p50 70 / p95 90 / p99 105 ms | IOS-43: p95 ≤60 ms por Ethernet |
+| Cierre de un hueco | 1 hueco en 10 min, cerrado en 70 ms (unos 2 fotogramas) | IOS-52: ≤2 fotogramas tras la petición |
+| Partes | 17 933 recibidas, 1 perdida, jitter 6,2 ms | — |
+| Programa | 17 999 fotogramas: 17 147 con las dos lentes; latencia p95 111 ms | — |
+
+Por Wi-Fi la parte llega con 90 ms de p95, por encima de los 60 que IOS-43 pide por
+Ethernet. Aun así cabe en la espera de 100 ms del programa: solo se perdió 1 parte.
+Hay seis `suspect` momentáneos del par en los 10 min.
+
+**Siguiente paso**: desglosar los 70 ms (render, codificación, red) y medir por Ethernet
+con los hubs.
+
 ## 2026-10-06 · SPK-54 (parcial) — 30 min con los dos iPhone y todo encendido
 
 Maestro iPhone 17 y esclavo iPhone 16 Pro por Wi-Fi, con las cámaras tapadas y sin
