@@ -29,6 +29,29 @@ PROPUESTO) sigue siendo del propietario.
 **Siguiente paso**: la ficha de CenterNet-MNv4 con pesos propios y su cableado en
 `CoreMLPlayerDetector`.
 
+## 2026-10-06 · IOS-73 — el director con los dos iPhone y detección en los dos · ✅
+
+10 min con `RIG_SPLIT_DIRECTOR=1`: el DirectorService dirige con las cajas de los dos
+móviles. El esclavo manda las suyas por el enlace y el maestro usa las propias. Las cajas
+salen de CenterNet-MNv4 con pesos sembrados por Vision; con pesos al azar llegan al tope
+de 64 por fotograma, lo peor para el decodificador. Informes en
+`bench/dos-moviles-20261006-0759`.
+
+| Qué | Resultado |
+|---|---|
+| N0 | **4496 vistas a 7,5 Hz, 0 descartes** (la aceptación) |
+| Programa | 17 987 fotogramas: 17 662 con las dos lentes y 325 solo del maestro; 0 fallos; tic p5 29,41; latencia p95 120,4 ms |
+| Partes | 17 929 recibidas, 2 perdidas, 2 IDR |
+| Detector | 4497 pasadas en el maestro y 4496 en el esclavo, 0 saltadas; total p50 40 ms (decodificado p50 17,8 ms) |
+| CPU | Maestro 51 % de un núcleo, esclavo 42 % |
+
+La aceptación decía «con el modelo COCO»; ese era D-FINE-N, que no entra al ANE (SPK-51).
+Corre con el candidato del plan B (ADR 0020), a falta de que REF-33 lo firme.
+
+**Arreglo que sale de aquí**: el decodificado se llevaba 17,8 ms, casi la mitad del ciclo
+del detector, por copiar elemento a elemento a arrays anidados. `planes` copia ahora fila
+a fila desde el puntero. Medido en la pasada siguiente.
+
 ## 2026-10-06 · Dos iPhone, 10 min con todo a la vez (IOS-44, IOS-70, SPK-54 parcial)
 
 iPhone 17 (maestro) e iPhone 16 Pro (esclavo) por Wi-Fi, con las cámaras tapadas. A la
