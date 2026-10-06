@@ -29,6 +29,31 @@ PROPUESTO) sigue siendo del propietario.
 **Siguiente paso**: la ficha de CenterNet-MNv4 con pesos propios y su cableado en
 `CoreMLPlayerDetector`.
 
+## 2026-10-06 · SPK-54 (parcial) — 30 min con los dos iPhone y todo encendido
+
+Maestro iPhone 17 y esclavo iPhone 16 Pro por Wi-Fi, con las cámaras tapadas y sin
+refrigeración ni hubs. A la vez: programa compuesto y codificado, micro, director,
+CenterNet-MNv4 en los dos por la cadena de producción, N0 y par de calibración. El
+informe gana `thermal_by_minute` y `battery`. Datos en `bench/dos-moviles-20261006-0903`.
+
+| Qué | Maestro | Esclavo |
+|---|---|---|
+| Programa | 53 999 fotogramas en 1800 s: 40 207 con las dos lentes, 12 697 solo del esclavo, 1075 solo del maestro y 20 retenidos; 0 fallos; latencia añadida p50 108 / p95 111 ms; tic p5 29,38 | — |
+| Partes | 53 942 recibidas, 10 perdidas, 22 IDR | 53 952 enviadas, 8 descartadas, 0 fallos de render |
+| Enlace | Dos `suspect` y un `down` de 89 ms a los ~21 min, que vuelve solo | — |
+| Detector | 13 495 pasadas, 0 saltadas, p50 33 ms (inferencia 16,3) | 13 496 pasadas, 0 saltadas, p50 34 ms |
+| Térmica | nominal 6 min → **fair** el resto, sin pasar de ahí | **serious de principio a fin** |
+| CPU / memoria | 45,5 % de un núcleo / 486-509 MB, plana | 37,7 % / 223-226 MB, plana |
+| Audio / N0 | 84 374 tramas de 84 375; 13 499 vistas, 0 descartes | — |
+| Batería al acabar | 80 % | 80 % |
+
+**Lectura**: aguanta 30 min sin degradarse: ni fallos de composición ni saltos del detector,
+con la latencia estable y la memoria plana en los dos. El 16 Pro empezó ya en serious
+tras dos horas de bancos seguidos y no empeoró a critical.
+
+**Falta para cerrar SPK-54**: el modelo entrenado, los hubs con carga y refrigeración, y la
+cancha (el sol).
+
 ## 2026-10-06 · IOS-44 — la latencia añadida, estable bajo 120 ms con todo a la vez
 
 Con los dos iPhone, el director y CenterNet en los dos móviles por la cadena de

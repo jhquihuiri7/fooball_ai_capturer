@@ -736,6 +736,7 @@ final class SplitBench {
     private var adOverridesDone: [[String: Any]] = []
     /// La huella del proceso una vez por minuto, en MB: que no crezca (IOS-47/48).
     private var footprintMb: [Double] = []
+    private var thermalByMinute: [String] = []
     /// La carga del detector de jugadores en el maestro (RIG_DETECT=<paquete>).
     private lazy var detect: BenchDetector? = {
         guard let paquete = env["RIG_DETECT"] else { return nil }
@@ -1046,6 +1047,8 @@ final class SplitBench {
         scheduledAdOverrides(transcurrido: transcurrido)
         if transcurrido >= Double(footprintMb.count) * Self.footprintEveryS {
             footprintMb.append(Self.footprintMb())
+            // SPK-54: el estado térmico, una vez por minuto.
+            thermalByMinute.append(Self.thermalName(ProcessInfo.processInfo.thermalState))
         }
         if case .connected = session.state, setUpIfNeeded() {
             colorTick(now: Self.nowMs())
@@ -1138,6 +1141,16 @@ final class SplitBench {
         getrusage(RUSAGE_SELF, &uso)
         func s(_ t: timeval) -> Double { Double(t.tv_sec) + Double(t.tv_usec) / 1e6 }
         return s(uso.ru_utime) + s(uso.ru_stime)
+    }
+
+    static func thermalName(_ t: ProcessInfo.ThermalState) -> String {
+        switch t {
+        case .nominal: return "nominal"
+        case .fair: return "fair"
+        case .serious: return "serious"
+        case .critical: return "critical"
+        @unknown default: return "?"
+        }
     }
 
     static func footprintMb() -> Double {
@@ -1259,6 +1272,8 @@ final class SplitBench {
             "ad_bytes": AdHub.store?.usedBytes ?? 0,
             "ad_budget_bytes": AdHub.store?.budgetBytes ?? 0,
             "footprint_mb": footprintMb,
+            "thermal_by_minute": thermalByMinute,
+            "battery": Double(UIDevice.current.batteryLevel),
             "detect": detect?.report() ?? [:],
             // El coste medio de la app entera durante el banco, en % de UN núcleo
             // (100 = un núcleo lleno; el iPhone 17 tiene 6).
