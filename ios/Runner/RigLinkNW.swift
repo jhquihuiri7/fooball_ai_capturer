@@ -729,6 +729,7 @@ final class SplitBench {
     /// Para y reanuda la cámara (IOS-84: RIG_SPLIT_CAM_OFF_S / RIG_SPLIT_CAM_ON_S).
     var cameraSwitch: ((Bool) -> Void)?
     private var cameraOffDone = false
+    private var forceDone = false
     /// IOS-48: el cue de la franja una vez por segundo y los overrides programados
     /// (RIG_ADS_OVERRIDES="gol:2@30,gol:1@200": nombre, vueltas y segundo del banco).
     private var adCues: [[Any]] = []
@@ -788,7 +789,7 @@ final class SplitBench {
             for t in audioWaiting where t.rigMs >= Double(primero) - mediaTramaMs {
                 let crudo = t.adts.dropFirst(Adts.headerLength)
                 if let datos = try? muxer.muxAudio(aacRaw: Data(crudo), pts90k: Int64((t.rigMs * 90).rounded())) {
-                    writerQueue.async { ts.write(datos) }
+                    writerQueue.async { try? ts.write(contentsOf: datos) }
                     tsAudioFrames += 1
                 }
             }
@@ -808,7 +809,7 @@ final class SplitBench {
         // añadida crece hasta un fotograma entero, fijado al azar al arrancar (p50 de 107 a
         // 137 ms entre pasadas iguales). Con la fase alineada queda en la espera más el
         // margen.
-        let ahora = Self.nowMs()
+        let ahora = rigNowMs()
         let reloj = ProgramClock(frameDurationMs: 1000 / Self.fps)
         let siguiente = reloj.gridInstant(atOrBefore: ahora) + Int64((1000 / Self.fps).rounded(.up))
         let retrasoMs = Double(siguiente - ahora) + Self.tickPhaseMarginMs
@@ -820,14 +821,15 @@ final class SplitBench {
         session.onViews = { [weak self] vistas in self?.slave?.receive(views: vistas) }
         session.onIdrRequest = { [weak self] _ in self?.slave?.requestIdr() }
         session.onPart = { [weak self] parte, _ in
-            self?.master?.receive(part: parte, arrivalRigMs: Self.nowMs())
+            guard let self else { return }
+            master?.receive(part: parte, arrivalRigMs: rigNowMs())
         }
         session.onNoPart = { [weak self] nada in self?.master?.receive(noPart: nada) }
         // IOS-81: con el esclavo caído, una lente y sin esperar su parte; al volver, las dos.
         session.onPeerState = { [weak self] estado in
             self?.queue.async {
                 guard let self, self.session.isMaster else { return }
-                self.peerStates.append("\(Self.nowMs()):\(estado.rawValue)")
+                self.peerStates.append("\(self.rigNowMs()):\(estado.rawValue)")
                 let caido = estado == .down
                 self.master?.peerDown = caido
                 self.director?.setSingleLens(caido ? self.side : nil)
@@ -845,6 +847,15 @@ final class SplitBench {
     }
 
     static func nowMs() -> Int64 { RigLink.hostNowNs() / 1_000_000 }
+
+    /// El instante en el reloj del soporte: el host más el desfase del RigClock. En el
+    /// maestro de siempre el desfase es 0; en un esclavo promovido (IOS-85) no, y el anillo
+    /// de fotogramas está sellado en este reloj: con la hora de host, el promovido no
+    /// encontraba sus propios fotogramas y salía SIN SEÑAL.
+    func rigNowMs() -> Int64 {
+        let ns = RigLink.hostNowNs()
+        return (ns + session.clock.offsetAt(ns: ns)) / 1_000_000
+    }
 
     // MARK: - Montaje
 
@@ -1068,13 +1079,21 @@ final class SplitBench {
             cameraSwitch?(true)
         }
         scheduledAdOverrides(transcurrido: transcurrido)
+        // IOS-85: el operador pulsa «Este móvil dirige» en el esclavo con el enlace caído.
+        if let a = env["RIG_SPLIT_FORCE_AT_S"].flatMap(Double.init), transcurrido >= a, !forceDone,
+           !session.isMaster {
+            if case .connected = session.state {} else {
+                forceDone = true
+                session.forceMaster { t in NSLog("[split] relevo forzado: term %d", t ?? -1) }
+            }
+        }
         if transcurrido >= Double(footprintMb.count) * Self.footprintEveryS {
             footprintMb.append(Self.footprintMb())
             // SPK-54: el estado térmico, una vez por minuto.
             thermalByMinute.append(Self.thermalName(ProcessInfo.processInfo.thermalState))
         }
         if case .connected = session.state, setUpIfNeeded() {
-            colorTick(now: Self.nowMs())
+            colorTick(now: rigNowMs())
         }
         // El esclavo detecta aquí; el maestro, después de componer: preparar la franja y
         // mandarla al runner antes de componer retrasaba el programa (latencia p95 de 114 a
@@ -1089,7 +1108,7 @@ final class SplitBench {
         if let previo = lastTickNs { tickIntervalsMs.append(Double(ahora - previo) / 1e6) }
         lastTickNs = ahora
 
-        let now = Self.nowMs()
+        let now = rigNowMs()
         // La rejilla del programa: instantes k · 33,3 ms (ProgramClock, IOS-84).
         let reloj = ProgramClock(frameDurationMs: 1000 / Self.fps)
         let rejilla = { (ms: Int64) in reloj.gridInstant(atOrBefore: ms) }
@@ -1164,6 +1183,19 @@ final class SplitBench {
         getrusage(RUSAGE_SELF, &uso)
         func s(_ t: timeval) -> Double { Double(t.tv_sec) + Double(t.tv_usec) / 1e6 }
         return s(uso.ru_utime) + s(uso.ru_stime)
+    }
+
+    /// El informe sin números que JSON no admite: un percentil desbordado da infinito y
+    /// `JSONSerialization` aborta la app (le pasó al esclavo promovido el 6-oct). Lo no
+    /// finito pasa a -1.
+    static func jsonSafe(_ v: Any) -> Any {
+        switch v {
+        case let d as Double: return d.isFinite ? d : -1.0
+        case let f as Float: return f.isFinite ? Double(f) : -1.0
+        case let m as [String: Any]: return m.mapValues(jsonSafe)
+        case let a as [Any]: return a.map(jsonSafe)
+        default: return v
+        }
     }
 
     static func thermalName(_ t: ProcessInfo.ThermalState) -> String {
@@ -1245,7 +1277,7 @@ final class SplitBench {
             if firstVideoT == nil { firstVideoT = f.ptsNs / 1_000_000 }
             let paquetes = muxer.muxVideo(avcc: avcc, parameterSets: [], isKeyframe: f.isKeyframe,
                                           pts90k: pts, dts90k: pts)
-            if let ts = tsFile { writerQueue.async { ts.write(paquetes) } }
+            if let ts = tsFile, !finished { writerQueue.async { try? ts.write(contentsOf: paquetes) } }
         }
     }
 
@@ -1261,7 +1293,11 @@ final class SplitBench {
         let espera = DispatchSemaphore(value: 0)
         if let r = recorder { r.finish { _ in espera.signal() }; _ = espera.wait(timeout: .now() + 5) }
         // Después de lo que quede por escribir en su cola.
+        // `write(contentsOf:)` devuelve error en vez de abortar con una excepción de ObjC: lo
+        // que llegue a la cola después de cerrar (un tic o un trozo de audio que ya estaba en
+        // ella) se pierde sin tirar la app, como pasó el 6-oct.
         let ts = tsFile
+        tsFile = nil
         writerQueue.sync { try? ts?.close() }
         guard session.isMaster || slave != nil else { return }
         func pct(_ xs: [Double], _ q: Double) -> Double {
@@ -1270,7 +1306,7 @@ final class SplitBench {
         }
         let ms = master?.stats ?? .init()
         let ss = slave?.stats ?? .init()
-        let link = master?.linkStats(nowRigMs: Self.nowMs())
+        let link = master?.linkStats(nowRigMs: rigNowMs())
         let fpsTicks = tickIntervalsMs.map { 1000 / max($0, 0.001) }
         let informe: [String: Any] = [
             "name": "program-split",
@@ -1349,7 +1385,7 @@ final class SplitBench {
         guard let base = try? FileManager.default.url(for: .documentDirectory, in: .userDomainMask,
                                                       appropriateFor: nil, create: true)
             .appendingPathComponent("bench", isDirectory: true),
-            let json = try? JSONSerialization.data(withJSONObject: informe, options: [.sortedKeys, .prettyPrinted])
+            let json = try? JSONSerialization.data(withJSONObject: Self.jsonSafe(informe), options: [.sortedKeys, .prettyPrinted])
         else { return }
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
         try? json.write(to: base.appendingPathComponent(

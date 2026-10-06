@@ -45,6 +45,26 @@ aislado no sabe si cayó el maestro o si es él quien está solo. La promoción 
 exige el `welcome` del túnel y `master_status: lost` del hub durante ≥5 s; sin ellos, solo
 la fuerza el operador («Este móvil dirige»).
 
+**El relevo del operador, conectado (sin VPS)**: `RigLinkSession.forceMaster()`
+(«Este móvil dirige», con su test) hace que el esclavo tome el mando con `term + 1` y lo
+avise. Cuando vuelve el maestro de antes, con un term menor, la negociación lo deja de
+esclavo. El banco lo prueba con `RIG_SPLIT_FORCE_AT_S` (el esclavo fuerza el relevo si el
+enlace está caído). Con los dos iPhone (maestro muerto a los 90 s, relevo a los 100,
+vuelta a los 170):
+- el promovido compone **con su propia cámara**: 4199 fotogramas `masterOnly`, 0 fallos;
+- en una pasada, el maestro de antes volvió y quedó de esclavo: 2 s provisional y luego
+  1529 partes enviadas; en otra no llegó a conectarse en los 67 s que tenía.
+
+**Tres fallos encontrados por el camino, arreglados**:
+1. El promovido salía todo SIN SEÑAL. El banco tomaba la hora del host mientras el anillo
+   está sellado en el reloj del soporte, y el promovido tiene desfase. Ahora el instante
+   del programa y la llegada de las partes usan `rigNowMs()`.
+2. **La app del maestro se caía** al escribir en el .ts ya cerrado (10:13 y 10:25): lo que
+   quedaba en la cola de escritura tras `finish()`. Ahora usa `write(contentsOf:)`, que no
+   aborta, y `tsFile` se deja a nil al cerrar.
+3. **El promovido se caía al escribir el informe**: un percentil desbordado daba infinito
+   y `JSONSerialization` aborta. Ahora `jsonSafe` lo pasa a -1.
+
 `RoleElection` (IOS-83) está hecha y probada, pero aún **no está conectada** a
 RigLinkSession ni a la app. Eso es IOS-85, que depende del VPS (IOS-56, IOS-65, NUBE-14).
 Mientras tanto, en la cancha, si cae el maestro no hay programa hasta que vuelve o hasta

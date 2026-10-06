@@ -230,6 +230,24 @@ public final class RigLinkSession {
         health.tick(nowMs: ahora)
     }
 
+    /// «Este móvil dirige», confirmado por el operador (IOS-85, la parte que no necesita el
+    /// VPS; ADR 0023 §8): el esclavo toma el mando con `term + 1`. Cuando vuelva el maestro
+    /// de antes, la negociación por term lo deja de esclavo. El llamante guarda el term en
+    /// disco antes de anunciarlo (ADR 0023 §7). Devuelve el term nuevo, o nil si ya dirigía.
+    public func forceMaster(completion: ((Int?) -> Void)? = nil) {
+        queue.async { [self] in
+            guard !isMaster else {
+                completion?(nil)
+                return
+            }
+            term = max(term, 0) + 1
+            claimedRole = .master
+            rigRole = .master
+            onRole?(.master, term, matchId)
+            completion?(term)
+        }
+    }
+
     public func stop() {
         queue.async { [self] in
             heartbeatTimer?.cancel()

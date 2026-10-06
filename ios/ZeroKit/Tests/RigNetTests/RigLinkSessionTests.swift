@@ -149,6 +149,37 @@ final class RigLinkSessionTests: XCTestCase {
         XCTAssertFalse(right.isMaster)
     }
 
+    func testElOperadorFuerzaElRelevoEnElEsclavo() {
+        // La vuelta del maestro de antes con su term viejo la cubre RoleNegotiationTests
+        // (el term mayor manda); aquí, lo propio de forceMaster.
+        let (left, right, _, _) = makePair()
+        for s in [left, right] { s.matchId = "m1"; s.term = 1 }
+        left.claimedRole = .master
+        right.claimedRole = .slave
+        let lock = NSLock()
+        nonisolated(unsafe) var roles: [RigRole] = []
+        right.onRole = { r, _, _ in lock.lock(); roles.append(r); lock.unlock() }
+        left.start()
+        right.start()
+        waitUntil { self.isConnected(left) && self.isConnected(right) }
+        XCTAssertFalse(right.isMaster)
+        left.stop()  // cae el maestro
+        nonisolated(unsafe) var nuevo: Int?
+        right.forceMaster { t in lock.lock(); nuevo = t; lock.unlock() }
+        waitUntil { lock.lock(); defer { lock.unlock() }; return nuevo != nil }
+        XCTAssertEqual(nuevo, 2)
+        XCTAssertTrue(right.isMaster)
+        XCTAssertEqual(right.term, 2)
+        lock.lock()
+        XCTAssertEqual(roles.last, .master)
+        lock.unlock()
+        // Si ya dirige, no hace nada.
+        nonisolated(unsafe) var otra: Int? = 99
+        right.forceMaster { t in lock.lock(); otra = t; lock.unlock() }
+        waitUntil { lock.lock(); defer { lock.unlock() }; return otra == nil }
+        XCTAssertEqual(right.term, 2)
+    }
+
     func testDosMaestrosDelMismoTermSeResuelvenSinQuedarseConDos() {
         let (left, right, _, _) = makePair()
         for s in [left, right] {
