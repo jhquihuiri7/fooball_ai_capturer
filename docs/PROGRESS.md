@@ -52,8 +52,22 @@ Por Wi-Fi la parte llega con 90 ms de p95, por encima de los 60 que IOS-43 pide 
 Ethernet. Aun así cabe en la espera de 100 ms del programa: solo se perdió 1 parte.
 Hay seis `suspect` momentáneos del par en los 10 min.
 
-**Siguiente paso**: desglosar los 70 ms (render, codificación, red) y medir por Ethernet
-con los hubs.
+**Desglose** (5 min más; el esclavo apunta `slave_send_age_ms`, la edad de la parte al
+salir, pasando su hora al reloj del soporte con `RigClock.offsetAt`):
+
+| Tramo | p50 | p95 |
+|---|---|---|
+| Captura → la parte sale del esclavo | 70 ms | 75 ms |
+| Captura → la parte llega al maestro | 75 ms | 100 ms |
+
+**La red pone ~5 ms de mediana** (más en la cola, por la Wi-Fi). Los 70 ms están dentro
+del esclavo: la cámara entrega el fotograma a la app decenas de ms después de su PTS, y
+luego vienen el render y la codificación. Para bajar de 60 ms por Ethernet el trabajo
+está en el esclavo, no en el enlace. En esta pasada hubo 8 partes perdidas y 6 huecos
+cerrados en p50 65 ms (p99 300 ms).
+
+**Siguiente paso**: medir en el esclavo el tramo cámara → app y la codificación por
+separado; y la pasada por Ethernet con los hubs.
 
 ## 2026-10-06 · SPK-54 (parcial) — 30 min con los dos iPhone y todo encendido
 

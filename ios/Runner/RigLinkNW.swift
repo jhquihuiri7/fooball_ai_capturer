@@ -737,6 +737,7 @@ final class SplitBench {
     /// La huella del proceso una vez por minuto, en MB: que no crezca (IOS-47/48).
     private var footprintMb: [Double] = []
     private var thermalByMinute: [String] = []
+    private var sendAge = LatencyHistogram(boundsMs: MasterProgramStage.partAgeBoundsMs)
     /// La carga del detector de jugadores en el maestro (RIG_DETECT=<paquete>).
     private lazy var detect: BenchDetector? = {
         guard let paquete = env["RIG_DETECT"] else { return nil }
@@ -870,7 +871,17 @@ final class SplitBench {
                                                 width: Self.programWidth, height: Self.programHeight),
                 encoder: enc
             )
-            s.onPart = { [weak self] p in self?.session.send(part: p) }
+            s.onPart = { [weak self] p in
+                guard let self else { return }
+                // IOS-43: la edad de la parte al salir del esclavo (captura → render →
+                // codificado), en el reloj del soporte. La de llegada menos esta es la red.
+                let ns = RigLink.hostNowNs()
+                let rig = (ns + session.clock.offsetAt(ns: ns)) / 1_000_000
+                lock.lock()
+                sendAge.record(ms: Double(rig - p.frameRigMs))
+                lock.unlock()
+                session.send(part: p)
+            }
             s.onNoPart = { [weak self] n in self?.session.send(noPart: n) }
             slaveEncoder = enc
             slave = s
@@ -1257,6 +1268,10 @@ final class SplitBench {
             // IOS-43: la edad de la parte al llegar; IOS-52: lo que tarda en cerrarse un hueco.
             "part_age_ms": master.map { m in ["p50": m.partAge.percentile(0.5), "p95": m.partAge.percentile(0.95),
                                                "p99": m.partAge.percentile(0.99)] } ?? [:],
+            "slave_send_age_ms": slave == nil ? [:] : {
+                lock.lock(); defer { lock.unlock() }
+                return ["p50": sendAge.percentile(0.5), "p95": sendAge.percentile(0.95), "p99": sendAge.percentile(0.99)]
+            }(),
             "idr_recovery_ms": master.map { m in ["count": m.idrRecovery.total, "p50": m.idrRecovery.percentile(0.5),
                                                    "p99": m.idrRecovery.percentile(0.99)] } ?? [:],
             "parts_lost": link?.lost ?? 0,
