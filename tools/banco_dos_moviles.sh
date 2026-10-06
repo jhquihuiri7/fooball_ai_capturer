@@ -76,8 +76,8 @@ case "$MODO" in
   split)
     SEG=${SEG:-600}
     # Cada móvil, con su rol fijo: AUTO_ROLE salta la pantalla de elegir.
-    instala "$IZQ" "--dart-define=AUTO_ROLE=left"
-    instala "$DER" "--dart-define=AUTO_ROLE=right"
+    [ -n "${SIN_INSTALAR:-}" ] || instala "$IZQ" "--dart-define=AUTO_ROLE=left"
+    [ -n "${SIN_INSTALAR:-}" ] || instala "$DER" "--dart-define=AUTO_ROLE=right"
     mata "$IZQ"; mata "$DER"
     EXTRA="{\"RIG_SPLIT\": \"1\", \"RIG_SPLIT_S\": \"$SEG\", \"RIG_CALIB_AT_S\": \"30\", \"RIG_ADS\": \"bench.json\"}"
     lanza "$IZQ" left "$EXTRA"

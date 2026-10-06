@@ -730,6 +730,11 @@ final class SplitBench {
     var cameraSwitch: ((Bool) -> Void)?
     private var cameraOffDone = false
     private var forceDone = false
+    /// IOS-38: el desajuste de exposición del esclavo (RIG_SPLIT_EV a los RIG_SPLIT_EV_AT_S s).
+    var exposureBias: ((Double) -> Void)?
+    private var evDone = false
+    /// IOS-38: [segundo, diferencia de luminancia en bruto, con las ganancias] por observación.
+    private var colorSeries: [[Double]] = []
     /// IOS-48: el cue de la franja una vez por segundo y los overrides programados
     /// (RIG_ADS_OVERRIDES="gol:2@30,gol:1@200": nombre, vueltas y segundo del banco).
     private var adCues: [[Any]] = []
@@ -1058,6 +1063,13 @@ final class SplitBench {
             let (izq, der) = side == .left ? (mias, suyas) : (suyas, mias)
             matcher.observe(meanLeft: izq, meanRight: der)
             colorObservations += 1
+            // Luma de unas medias BGR (BT.601) y su diferencia relativa en el solape.
+            func luma(_ m: [Double]) -> Double { 0.114 * m[0] + 0.587 * m[1] + 0.299 * m[2] }
+            func dif(_ a: Double, _ b: Double) -> Double { abs(a - b) / max((a + b) / 2, 1e-6) }
+            let g = matcher.gains
+            let conIzq = zip(izq, g.left).map(*), conDer = zip(der, g.right).map(*)
+            colorSeries.append([Double(DispatchTime.now().uptimeNanoseconds - startNs) / 1e9,
+                                dif(luma(izq), luma(der)), dif(luma(conIzq), luma(conDer))])
         } else {
             session.send(colorMeans: mias)
         }
@@ -1079,6 +1091,11 @@ final class SplitBench {
             cameraSwitch?(true)
         }
         scheduledAdOverrides(transcurrido: transcurrido)
+        if let ev = env["RIG_SPLIT_EV"].flatMap(Double.init), let a = env["RIG_SPLIT_EV_AT_S"].flatMap(Double.init),
+           transcurrido >= a, !evDone, !session.isMaster {
+            evDone = true
+            exposureBias?(ev)
+        }
         // IOS-85: el operador pulsa «Este móvil dirige» en el esclavo con el enlace caído.
         if let a = env["RIG_SPLIT_FORCE_AT_S"].flatMap(Double.init), transcurrido >= a, !forceDone,
            !session.isMaster {
@@ -1350,6 +1367,7 @@ final class SplitBench {
             "ad_bytes": AdHub.store?.usedBytes ?? 0,
             "ad_budget_bytes": AdHub.store?.budgetBytes ?? 0,
             "footprint_mb": footprintMb,
+            "color_series": colorSeries,
             "thermal_by_minute": thermalByMinute,
             "battery": Double(UIDevice.current.batteryLevel),
             "detect": detect?.report() ?? [:],

@@ -29,6 +29,34 @@ PROPUESTO) sigue siendo del propietario.
 **Siguiente paso**: la ficha de CenterNet-MNv4 con pesos propios y su cableado en
 `CoreMLPlayerDetector`.
 
+## 2026-10-06 · IOS-38 — el igualado de color con luz, medido con los dos iPhone · 🚧
+
+El banco gana `RIG_SPLIT_EV` / `RIG_SPLIT_EV_AT_S`: el esclavo sube el ISO ×2^EV (con la
+misma obturación, sin parpadeo; `CaptureEngine.benchExposureBias`). El maestro apunta en
+`color_series`, por cada observación (cada 2 s), la diferencia relativa de luma (BT.601)
+del solape en bruto y con las ganancias.
+
+**Medido** (150 s; +1/3 EV en el esclavo a los 60 s; móviles boca arriba sobre una mesa,
+viendo el techo; `bench/dos-moviles-20261006-1137`):
+- **en bruto, el solape difiere un 40-50 % ya antes del desajuste**: sin el soporte
+  montado, las dos zonas de solape no ven lo mismo. La cifra de la aceptación pide el
+  soporte de verdad;
+- **al arrancar**, las ganancias llevan la diferencia del 30 % a menos del 2 % en unos
+  20 s, y la sostienen en ~0,3-2 %. Ganancias finales: izquierda 0,73/0,82/0,82, derecha
+  1,37/1,21/1,22 (BGR);
+- **tras +1/3 EV a los 60 s**, la diferencia con ganancias sube al 3,5 % y vuelve por
+  debajo del 2 % a los 76 s, unos **16 s** (la tarjeta pide ≤10 s). Es el suavizado de
+  PANORAMA_COLOR_MATCH_SMOOTHING con una observación cada 2 s.
+
+**Falta**: repetirlo montado en el soporte, mirando la misma escena. Si sigue en ~16 s,
+subir el suavizado o la cadencia de observación (0,5 Hz hoy), cambiando el dorado de
+color.
+
+**Nota**: una primera pasada salió entera SIN SEÑAL y sin partes, con el enlace cayendo
+cada 10 s, justo tras reinstalar los dos. La pasada siguiente, sin reinstalar, fue bien;
+apunta a un arranque fallido. El banco gana `SIN_INSTALAR=1` para no recompilar entre
+pasadas.
+
 ## 2026-10-06 · IOS-85 (la parte local) — el maestro cae y el esclavo NO se promueve, como dice el ADR
 
 Banco de 240 s con los dos iPhone: el maestro (izquierdo) muere a los 93 s y vuelve a los

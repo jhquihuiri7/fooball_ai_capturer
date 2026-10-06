@@ -312,6 +312,27 @@ final class CaptureEngine: NSObject {
         }
     }
 
+    /// El banco de IOS-38 desajusta a propósito la exposición del esclavo: el ISO por
+    /// 2^ev, con la misma obturación (la elegida sin parpadeo).
+    func benchExposureBias(ev: Double) {
+        queue.async { [self] in
+            guard let device, var applied else { return }
+            let f = device.activeFormat
+            let iso = min(max(applied.iso * Float(pow(2.0, ev)), f.minISO), f.maxISO)
+            do {
+                try device.lockForConfiguration()
+                device.setExposureModeCustom(duration: AVCaptureDevice.currentExposureDuration, iso: iso,
+                                             completionHandler: nil)
+                device.unlockForConfiguration()
+                applied.iso = iso
+                self.applied = applied
+                NSLog("[color] banco: ISO ×%.3f → %.0f", pow(2.0, ev), Double(iso))
+            } catch {
+                NSLog("[color] banco: no se pudo cambiar el ISO: %@", error.localizedDescription)
+            }
+        }
+    }
+
     /// El banco de IOS-84 para y reanuda la cámara a propósito (como una interrupción).
     func setCameraRunningForBench(_ on: Bool) {
         queue.async { [self] in
