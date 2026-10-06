@@ -738,6 +738,8 @@ final class SplitBench {
     private var footprintMb: [Double] = []
     private var thermalByMinute: [String] = []
     private var sendAge = LatencyHistogram(boundsMs: MasterProgramStage.partAgeBoundsMs)
+    private var cameraAge = LatencyHistogram(boundsMs: MasterProgramStage.partAgeBoundsMs)
+    private var slaveRender = LatencyHistogram()
     /// La carga del detector de jugadores en el maestro (RIG_DETECT=<paquete>).
     private lazy var detect: BenchDetector? = {
         guard let paquete = env["RIG_DETECT"] else { return nil }
@@ -986,9 +988,19 @@ final class SplitBench {
     private func slaveFrame(_ meta: RigPipeline.FrameMeta, ring: FrameRing) {
         guard !session.isMaster, case .connected = session.state, let slave else { return }
         let ms = meta.rigNs / 1_000_000
+        // IOS-43: la edad del fotograma al llegar a la app (el retraso de la cámara) y lo
+        // que tarda el render en volver (la codificación sigue, asíncrona).
+        let ns = RigLink.hostNowNs()
+        let ahora = (ns + session.clock.offsetAt(ns: ns)) / 1_000_000
         guard let lease = ring.acquire(nearest: ms, maxDistanceMs: 1) else { return }
+        let t0 = DispatchTime.now().uptimeNanoseconds
         slave.process(frame: lease.buffer, frameRigMs: ms, ptsNs: meta.ptsNs)
+        let renderMs = Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6
         ring.release(lease)
+        lock.lock()
+        cameraAge.record(ms: Double(ahora - ms))
+        slaveRender.record(ms: renderMs)
+        lock.unlock()
     }
 
     // MARK: - Maestro
@@ -1192,7 +1204,15 @@ final class SplitBench {
         }
     }
 
+    /// IOS-44: los intervalos entre fotogramas del programa al entrar al codificador, que
+    /// es la cadencia que de verdad sale (el tic solo mide el temporizador).
+    private var programIntervalsMs: [Double] = []
+    private var lastProgramNs: UInt64?
+
     private func program(_ buffer: CVPixelBuffer, t: Int64) {
+        let ahoraNs = DispatchTime.now().uptimeNanoseconds
+        if let previo = lastProgramNs { programIntervalsMs.append(Double(ahoraNs - previo) / 1e6) }
+        lastProgramNs = ahoraNs
         ThumbHub.shared.program(buffer)
         programEncoder?.encode(buffer, ptsNs: t * 1_000_000, rigMs: UInt64(max(0, t)))
         programFrames += 1
@@ -1270,7 +1290,9 @@ final class SplitBench {
                                                "p99": m.partAge.percentile(0.99)] } ?? [:],
             "slave_send_age_ms": slave == nil ? [:] : {
                 lock.lock(); defer { lock.unlock() }
-                return ["p50": sendAge.percentile(0.5), "p95": sendAge.percentile(0.95), "p99": sendAge.percentile(0.99)]
+                return ["p50": sendAge.percentile(0.5), "p95": sendAge.percentile(0.95), "p99": sendAge.percentile(0.99),
+                        "camera_age_p50": cameraAge.percentile(0.5), "camera_age_p95": cameraAge.percentile(0.95),
+                        "render_p50": slaveRender.percentile(0.5), "render_p95": slaveRender.percentile(0.95)]
             }(),
             "idr_recovery_ms": master.map { m in ["count": m.idrRecovery.total, "p50": m.idrRecovery.percentile(0.5),
                                                    "p99": m.idrRecovery.percentile(0.99)] } ?? [:],
@@ -1311,6 +1333,8 @@ final class SplitBench {
             "color_observations": colorObservations,
             "color_gains_left": matcher.gains.left,
             "color_gains_right": matcher.gains.right,
+            "program_fps_p5": pct(programIntervalsMs.map { 1000 / max($0, 0.001) }, 0.05),
+            "program_interval_ms_p99": pct(programIntervalsMs, 0.99),
             "tick_fps_p5": pct(fpsTicks, 0.05),
             "tick_fps_p50": pct(fpsTicks, 0.5),
             "added_latency_ms_p50": pct(composeLatencyMs, 0.5),

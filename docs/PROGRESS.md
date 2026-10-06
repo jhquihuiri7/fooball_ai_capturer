@@ -66,8 +66,17 @@ luego vienen el render y la codificación. Para bajar de 60 ms por Ethernet el t
 está en el esclavo, no en el enlace. En esta pasada hubo 8 partes perdidas y 6 huecos
 cerrados en p50 65 ms (p99 300 ms).
 
-**Siguiente paso**: medir en el esclavo el tramo cámara → app y la codificación por
-separado; y la pasada por Ethernet con los hubs.
+**Dentro del esclavo** (3 min más; `camera_age_*` y `render_*` en `slave_send_age_ms`):
+- cámara → app: p50 35 / p95 40 ms;
+- render en Metal: p50 5 / p95 8 ms;
+- codificación y su vuelta: el resto, unos 30 ms. El codificador ya va en baja latencia
+  (`EnableLowLatencyRateControl`, `RealTime`, sin reordenar fotogramas).
+
+Bajar de 60 ms exige recortar la codificación (por ejemplo, partes más pequeñas o un
+códec con menos retardo) o asumir los ~35 ms de la cámara. La red no es el cuello.
+
+**Siguiente paso**: la pasada por Ethernet con los hubs y, con ella, decidir el objetivo
+de IOS-43 sabiendo que la cámara ya pone 35 ms.
 
 ## 2026-10-06 · SPK-54 (parcial) — 30 min con los dos iPhone y todo encendido
 
@@ -121,6 +130,14 @@ arreglaron tres cosas:
 | **+ fase alineada** | **109 / 111 ms** ✅ | 29,41 | 0 | 2245 pasadas, 0 saltadas |
 
 El tic p5 se queda en 29,4 (pide ≥29,5): es el temporizador de 30 Hz con toda la carga.
+El compositor espera a la GPU de forma síncrona (`waitUntilCompleted`) dentro del tic.
+
+**La cadencia que de verdad sale** (`program_fps_p5`: intervalos entre fotogramas del
+programa al entrar al codificador; 5 min con los dos y todo encendido): p5 28,95 fps,
+intervalo p99 35,6 ms, y 8999 fotogramas en 300 s sin perder ni duplicar ninguno. El
+vaivén es de ±2 ms en la entrega, y los PTS van sellados con la rejilla exacta: el stream
+sale a 30 fps justos. Para que el p5 instantáneo pase de 29,5 haría falta componer fuera
+del tic (asíncrono), que queda como mejora.
 La CPU del maestro está en el 46 % de un núcleo y la del esclavo en el 37 %.
 
 **Pendiente**: un fallo del iPhone 16 Pro (08:17, SIGSEGV en un callback de NetService de
