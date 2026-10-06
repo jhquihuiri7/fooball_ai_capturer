@@ -29,6 +29,39 @@ PROPUESTO) sigue siendo del propietario.
 **Siguiente paso**: la ficha de CenterNet-MNv4 con pesos propios y su cableado en
 `CoreMLPlayerDetector`.
 
+## 2026-10-06 · IOS-44 — la latencia añadida, estable bajo 120 ms con todo a la vez
+
+Con los dos iPhone, el director y CenterNet en los dos móviles por la cadena de
+PRODUCCIÓN (`MetalDetectLoad`: franja en Metal con DetectorInputBuilder, CoreMLRunner y
+PlayerDecoder; `RIG_DETECT_CHAIN=vision` vuelve a la carga de Vision), se encontraron y
+arreglaron tres cosas:
+1. **El decodificado tardaba 17,8 ms** por copiar el heatmap elemento a elemento a arrays
+   anidados. `planes` copia ahora fila a fila desde el puntero: 0,1 ms en el Mac, frente a
+   3,3 ms del propio `decodeHeatmap`.
+2. **La detección del maestro iba antes de componer** y retrasaba el programa. Ahora va
+   después, y su trabajo de Metal sale de la cola del tic.
+3. **La fase del temporizador era aleatoria**: el tic compone `rejilla(ahora − 100 ms)`, y
+   según dónde caía el primer disparo la latencia añadida iba de 107 a 137 ms entre
+   pasadas iguales. El primer disparo se alinea ahora a 2 ms detrás de un punto de la
+   rejilla. Además, el temporizador estricto de ayer había caído por error en
+   `LinkPartsLoad`: se devuelve y va en `SplitBench`.
+
+**Medido** (dos iPhone; 300 s; micro, director y detección en los dos):
+
+| Pasada | Latencia p50 / p95 | tic p5 | Partes perdidas | Detector (maestro) |
+|---|---|---|---|---|
+| Vision, antes | 131 / 135 ms | 29,38 | 0 | p50 22 ms |
+| Producción, detección antes de componer | 135 / 139 ms | 29,35 | 0 | p50 34 ms (inferencia 16,5) |
+| Detección después de componer | 107 / 109 ms | 29,40 | 7 de 8925 | p50 33 ms |
+| **+ fase alineada** | **109 / 111 ms** ✅ | 29,41 | 0 | 2245 pasadas, 0 saltadas |
+
+El tic p5 se queda en 29,4 (pide ≥29,5): es el temporizador de 30 Hz con toda la carga.
+La CPU del maestro está en el 46 % de un núcleo y la del esclavo en el 37 %.
+
+**Pendiente**: un fallo del iPhone 16 Pro (08:17, SIGSEGV en un callback de NetService de
+CFNetwork, `objc_loadWeak`) que no se reprodujo en las cuatro pasadas siguientes. El banco
+no usa NetService (ni Multipeer ni ServerDiscovery): queda anotado por si vuelve.
+
 ## 2026-10-06 · IOS-73 — el director con los dos iPhone y detección en los dos · ✅
 
 10 min con `RIG_SPLIT_DIRECTOR=1`: el DirectorService dirige con las cajas de los dos

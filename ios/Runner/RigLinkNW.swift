@@ -531,8 +531,7 @@ final class LinkPartsLoad {
     }
 
     func run() {
-        // .strict: el sistema no agrupa los disparos para ahorrar energía.
-        let t = DispatchSource.makeTimerSource(flags: .strict, queue: queue)
+        let t = DispatchSource.makeTimerSource(queue: queue)
         t.schedule(deadline: .now(), repeating: 1.0 / Self.fps, leeway: .milliseconds(1))
         t.setEventHandler { [weak self] in self?.tick() }
         timer = t
@@ -738,7 +737,12 @@ final class SplitBench {
     /// La huella del proceso una vez por minuto, en MB: que no crezca (IOS-47/48).
     private var footprintMb: [Double] = []
     /// La carga del detector de jugadores en el maestro (RIG_DETECT=<paquete>).
-    private lazy var detect: DetectLoad? = env["RIG_DETECT"].flatMap { DetectLoad(package: $0) }
+    private lazy var detect: BenchDetector? = {
+        guard let paquete = env["RIG_DETECT"] else { return nil }
+        // RIG_DETECT_CHAIN=vision: la carga de Vision; por defecto, la cadena de producción.
+        if env["RIG_DETECT_CHAIN"] == "vision" { return DetectLoad(package: paquete) }
+        return MetalDetectLoad(package: paquete, side: side)
+    }()
     private var detectTicks = 0
     /// IOS-64: la CPU del proceso al arrancar el banco, para su coste medio en el informe.
     private let cpuStartS = SplitBench.processCpuSeconds()
@@ -793,8 +797,19 @@ final class SplitBench {
     private var tsAudioFrames = 0
 
     func start() {
-        let t = DispatchSource.makeTimerSource(queue: queue)
-        t.schedule(deadline: .now(), repeating: 1.0 / Self.fps, leeway: .milliseconds(1))
+        // .strict: el sistema no agrupa los disparos para ahorrar energía.
+        let t = DispatchSource.makeTimerSource(flags: .strict, queue: queue)
+        // El primer disparo, justo después de un punto de la rejilla del programa: el tic
+        // compone `rejilla(ahora − espera)`, y si cae a mitad de fotograma la latencia
+        // añadida crece hasta un fotograma entero, fijado al azar al arrancar (p50 de 107 a
+        // 137 ms entre pasadas iguales). Con la fase alineada queda en la espera más el
+        // margen.
+        let ahora = Self.nowMs()
+        let reloj = ProgramClock(frameDurationMs: 1000 / Self.fps)
+        let siguiente = reloj.gridInstant(atOrBefore: ahora) + Int64((1000 / Self.fps).rounded(.up))
+        let retrasoMs = Double(siguiente - ahora) + Self.tickPhaseMarginMs
+        t.schedule(deadline: .now() + .microseconds(Int(retrasoMs * 1000)), repeating: 1.0 / Self.fps,
+                   leeway: .milliseconds(1))
         t.setEventHandler { [weak self] in self?.tick() }
         timer = t
         t.resume()
@@ -1035,7 +1050,10 @@ final class SplitBench {
         if case .connected = session.state, setUpIfNeeded() {
             colorTick(now: Self.nowMs())
         }
-        detectTick()
+        // El esclavo detecta aquí; el maestro, después de componer: preparar la franja y
+        // mandarla al runner antes de componer retrasaba el programa (latencia p95 de 114 a
+        // 139 ms con los dos iPhone).
+        if !session.isMaster { detectTick() }
         // El maestro compone SIEMPRE, con enlace o sin él (IOS-81: el programa no se
         // para porque caiga el esclavo); las vistas solo salen si hay sesión.
         guard session.isMaster, setUpIfNeeded(), let master else {
@@ -1082,9 +1100,14 @@ final class SplitBench {
             composeLatencyMs.append(Double(now - t) + Double(DispatchTime.now().uptimeNanoseconds - inicio) / 1e6)
         }
         drainProgram()
+        detectTick()
     }
 
     private static let footprintEveryS = 60.0
+    /// Lo que el tic espera detrás de cada punto de la rejilla, en ms: lo justo para que
+    /// el punto ya haya pasado aunque el temporizador se adelante un poco.
+    private static let tickPhaseMarginMs = 2.0
+
     /// Una detección cada 4 tics del programa: 7,5 Hz (PLAYER_TARGET_HZ).
     private static let detectEveryTicks = 4
 
@@ -1494,7 +1517,14 @@ enum RigClockDomain {
 // salen por `onDetections`: el esclavo las manda al maestro por el enlace; el maestro, a su
 // director. Una sola petición a la vez: si el modelo sigue ocupado, el fotograma se salta y se
 // cuenta; nunca se encola (CLAUDE.md §2).
-final class DetectLoad {
+/// Lo que el banco pide a un detector: ofrecerle un fotograma y su informe.
+protocol BenchDetector: AnyObject {
+    var onDetections: (([PlayerDetection], Int64, Double) -> Void)? { get set }
+    func offer(_ buffer: CVPixelBuffer, rigMs: Int64, release: @escaping () -> Void)
+    func report() -> [String: Any]
+}
+
+final class DetectLoad: BenchDetector {
     /// Las clases y el paso del CenterNet-MNv4 del plan B (ADR 0020).
     static let classes = ["goalkeeper", "player", "referee"]
     static let heatmapStride = 4
@@ -1611,5 +1641,144 @@ final class DetectLoad {
         return ["runs": runs, "skipped": skipped, "failures": failures, "detections": detections,
                 "compile_load_ms": compileMs, "p50_ms": p(latenciasMs, 0.5), "p90_ms": p(latenciasMs, 0.9),
                 "p99_ms": p(latenciasMs, 0.99), "decode_p50_ms": p(decodeMs, 0.5), "decode_p99_ms": p(decodeMs, 0.99)]
+    }
+}
+
+
+// La cadena de PRODUCCIÓN en el banco (IOS-21/22/23 con el plan B): la franja central del
+// NV12 a 1920x576 en Metal (DetectorInputBuilder), la inferencia en el ANE por el carril de
+// jugadores (CoreMLRunner) y el heatmap a cajas nativas (PlayerDecoder), todo por
+// CoreMLPlayerDetector. Se monta con el primer fotograma, que da el tamaño de la cámara.
+final class MetalDetectLoad: BenchDetector {
+    var onDetections: (([PlayerDetection], Int64, Double) -> Void)?
+    private let queue = DispatchQueue(label: "io.footballai.zero.split.detect-metal", qos: .userInitiated)
+    private let url: URL
+    private let side: CameraSide
+    private let lock = NSLock()
+    private var detector: CoreMLPlayerDetector?
+    private var montando = false
+    private var busy = false
+    private var runs = 0, skipped = 0, failures = 0, detections = 0
+    private var totalMs: [Double] = []
+    private var inferMs: [Double] = []
+    private var loadMs = 0.0
+    private var error = ""
+
+    init?(package: String, side: CameraSide) {
+        guard let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+        url = docs.appendingPathComponent("bench-resources/\(package)")
+        self.side = side
+    }
+
+    /// La ficha del CenterNet-MNv4 del plan B a 1920x576 (ADR 0020).
+    private static func entry() throws -> ModelManifest.Entry {
+        let (w, h, paso) = (DetectionSpec.playerInputWidth, DetectionSpec.playerInputHeight, DetectLoad.heatmapStride)
+        let mapa = [1, DetectLoad.classes.count, h / paso, w / paso]
+        return try ModelManifest.parse([
+            "version": 1,
+            "models": ["players": [
+                "version": "0.0.0-sembrado", "file": "players-centernet-mnv4.mlpackage",
+                "sha256": String(repeating: "0", count: 64), "min_ios": 18, "classes": DetectLoad.classes,
+                "input": ["name": "image", "shape": [1, 3, h, w], "color": "RGB"],
+                "outputs": [
+                    ["name": "heatmap", "shape": mapa, "meaning": "heatmap"],
+                    ["name": "offset", "shape": [1, 2, h / paso, w / paso], "meaning": "offset"],
+                    ["name": "size", "shape": [1, 2, h / paso, w / paso], "meaning": "size"],
+                ],
+                "postprocess": "heatmap", "box_format": "heatmap_stride", "heatmap_stride": paso,
+            ]],
+        ]).models["players"]!
+    }
+
+    private func montar(width: Int, height: Int) {
+        let t0 = DispatchTime.now().uptimeNanoseconds
+        Task.detached { [self] in
+            do {
+                let filas = min(height, Int(Double(DetectionSpec.playerInputHeight) / DetectionSpec.playerBandScale))
+                let arriba = (height - filas) / 2
+                let banda = try BandGeometry.fromDictionary([
+                    "version": BandGeometry.fileVersion, "rows": [arriba, arriba + filas],
+                    "input_size": [DetectionSpec.playerInputWidth, DetectionSpec.playerInputHeight],
+                    "regions": [["dst": [0, 0, DetectionSpec.playerInputWidth, DetectionSpec.playerInputHeight],
+                                 "src": [0, Double(arriba), Double(width), Double(filas)]]],
+                    "side": side.rawValue,
+                ])
+                guard let ctx = MetalContext() else { throw RigError.message("sin Metal") }
+                let builder = try DetectorInputBuilder(
+                    context: ctx, band: banda, sourceWidth: width, sourceHeight: height, upsideDown: side == .left
+                )
+                let runner = try await CoreMLRunner.load(url: url, entry: Self.entry())
+                let d = try CoreMLPlayerDetector(builder: builder, runner: runner, layout: banda.layout)
+                lock.lock()
+                detector = d
+                loadMs = Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6
+                lock.unlock()
+            } catch {
+                lock.lock()
+                self.error = "\(error)"
+                lock.unlock()
+                NSLog("[split] cadena del detector: %@", "\(error)")
+            }
+        }
+    }
+
+    func offer(_ buffer: CVPixelBuffer, rigMs: Int64, release: @escaping () -> Void) {
+        lock.lock()
+        guard let d = detector else {
+            let montar = !montando && error.isEmpty
+            montando = true
+            lock.unlock()
+            if montar { self.montar(width: CVPixelBufferGetWidth(buffer), height: CVPixelBufferGetHeight(buffer)) }
+            release()
+            return
+        }
+        if busy {
+            skipped += 1
+            lock.unlock()
+            release()
+            return
+        }
+        busy = true
+        lock.unlock()
+        let t0 = DispatchTime.now().uptimeNanoseconds
+        // La franja (Metal) y el envío al runner, fuera de la cola del tic del programa.
+        queue.async { [self] in self.run(d, buffer, rigMs: rigMs, t0: t0, release: release) }
+    }
+
+    private func run(
+        _ d: CoreMLPlayerDetector, _ buffer: CVPixelBuffer, rigMs: Int64, t0: UInt64, release: @escaping () -> Void
+    ) {
+        d.detect(buffer) { [self] resultado in
+            // El builder ya copió la franja a su propio búfer: el del anillo se suelta aquí.
+            release()
+            let ms = Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6
+            lock.lock()
+            busy = false
+            switch resultado {
+            case let .success((cajas, infer)):
+                runs += 1
+                detections += cajas.count
+                totalMs.append(ms)
+                inferMs.append(infer)
+                lock.unlock()
+                onDetections?(cajas, rigMs, ms)
+            case .failure:
+                failures += 1
+                lock.unlock()
+            }
+        }
+    }
+
+    func report() -> [String: Any] {
+        lock.lock(); defer { lock.unlock() }
+        func p(_ xs: [Double], _ q: Double) -> Double {
+            let o = xs.sorted()
+            return o.isEmpty ? 0 : o[min(o.count - 1, Int(q * Double(o.count)))]
+        }
+        return ["chain": "metal", "runs": runs, "skipped": skipped, "failures": failures, "detections": detections,
+                "load_ms": loadMs, "error": error, "p50_ms": p(totalMs, 0.5), "p90_ms": p(totalMs, 0.9),
+                "p99_ms": p(totalMs, 0.99), "infer_p50_ms": p(inferMs, 0.5), "infer_p99_ms": p(inferMs, 0.99)]
     }
 }

@@ -213,18 +213,26 @@ public final class CoreMLPlayerDetector: PlayerDetecting {
         let forma = a.shape.map(\.intValue)
         guard forma.count >= 3 else { return [] }
         let (c, h, w) = (forma[forma.count - 3], forma[forma.count - 2], forma[forma.count - 1])
-        var salida = [[[Float]]](repeating: [[Float]](repeating: [Float](repeating: 0, count: w), count: h), count: c)
         let total = c * h * w
-        if a.dataType == .float16 {
-            let p = a.dataPointer.bindMemory(to: Float16.self, capacity: total)
-            for k in 0..<c { for y in 0..<h { for x in 0..<w { salida[k][y][x] = Float(p[(k * h + y) * w + x]) } } }
-        } else if a.dataType == .float32 {
-            let p = a.dataPointer.bindMemory(to: Float.self, capacity: total)
-            for k in 0..<c { for y in 0..<h { for x in 0..<w { salida[k][y][x] = p[(k * h + y) * w + x] } } }
-        } else {
-            for k in 0..<c { for y in 0..<h { for x in 0..<w { salida[k][y][x] = a[(k * h + y) * w + x].floatValue } } }
+        // Fila a fila desde el puntero: copiar elemento a elemento en arrays anidados costaba
+        // 18 ms por inferencia en el iPhone 17 (la mitad del ciclo del detector).
+        func fila<T>(_ p: UnsafePointer<T>, _ k: Int, _ y: Int, _ conv: (T) -> Float) -> [Float] {
+            let base = p + (k * h + y) * w
+            return [Float](unsafeUninitializedCapacity: w) { buf, n in
+                for x in 0..<w { buf[x] = conv(base[x]) }
+                n = w
+            }
         }
-        return salida
+        switch a.dataType {
+        case .float32:
+            let p = UnsafePointer(a.dataPointer.bindMemory(to: Float.self, capacity: total))
+            return (0..<c).map { k in (0..<h).map { y in fila(p, k, y) { $0 } } }
+        case .float16:
+            let p = UnsafePointer(a.dataPointer.bindMemory(to: Float16.self, capacity: total))
+            return (0..<c).map { k in (0..<h).map { y in fila(p, k, y) { Float($0) } } }
+        default:
+            return (0..<c).map { k in (0..<h).map { y in (0..<w).map { x in a[(k * h + y) * w + x].floatValue } } }
+        }
     }
 
     /// [1, Q, K] → Q filas de K Float (fp16 o fp32).
