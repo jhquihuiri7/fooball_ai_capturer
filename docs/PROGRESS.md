@@ -29,6 +29,28 @@ PROPUESTO) sigue siendo del propietario.
 **Siguiente paso**: la ficha de CenterNet-MNv4 con pesos propios y su cableado en
 `CoreMLPlayerDetector`.
 
+## 2026-10-06 · IOS-85 (la parte local) — el maestro cae y el esclavo NO se promueve, como dice el ADR
+
+Banco de 240 s con los dos iPhone: el maestro (izquierdo) muere a los 93 s y vuelve a los
+171 s.
+
+| Móvil | Resultado |
+|---|---|
+| Esclavo (derecho) | Sigue de esclavo los 240 s; 3513 partes enviadas, ninguna mientras el maestro estuvo muerto |
+| Maestro, al volver | Retoma el mando: 2100 fotogramas en 70 s, 0 fallos; el esclavo le manda partes otra vez |
+| Programa | **Ninguno durante los 78 s de caída** |
+
+**Lectura**: es lo que pide el ADR 0023 §8. Sin VPS no hay promoción automática: un esclavo
+aislado no sabe si cayó el maestro o si es él quien está solo. La promoción automática
+exige el `welcome` del túnel y `master_status: lost` del hub durante ≥5 s; sin ellos, solo
+la fuerza el operador («Este móvil dirige»).
+
+`RoleElection` (IOS-83) está hecha y probada, pero aún **no está conectada** a
+RigLinkSession ni a la app. Eso es IOS-85, que depende del VPS (IOS-56, IOS-65, NUBE-14).
+Mientras tanto, en la cancha, si cae el maestro no hay programa hasta que vuelve o hasta
+que el operador fuerce el relevo, y ese camino del operador tampoco está conectado
+todavía.
+
 ## 2026-10-06 · IOS-43 e IOS-52 — la edad de las partes y el cierre de un hueco, medidos con los dos iPhone
 
 MasterProgramStage gana dos histogramas, con su test (`testLaEdadDeLasPartesYLoQueTardaElIdr`):
