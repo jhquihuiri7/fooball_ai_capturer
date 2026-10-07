@@ -61,8 +61,9 @@ public enum DetectionSpec {
     public static let playerSeamMinXOverlap: Double = 0.5
 
     /// Píxeles. Lado de cada ROI nativa del heatmap del balón (ADR 0020): el lote fijo es
-    /// [2, 3, 256, 256]. Las BALL_ROI_* de arriba son del detector DETR del pod, que vive
-    /// hasta el corte.
+    /// [2, 3, 256, 256]. Es a la vez la entrada del modelo (el `BALL_HEATMAP_INPUT` de REF-27):
+    /// la ROI es nativa y no se reescala. Las BALL_DETR_* de arriba son del detector DETR del
+    /// pod, que vive hasta el corte.
     /// (Python: `BALL_ROI_SIDE`.)
     public static let ballRoiSide: Int = 256
 
