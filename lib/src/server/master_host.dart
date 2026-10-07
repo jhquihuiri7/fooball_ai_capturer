@@ -12,6 +12,8 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:football_ai_capture/src/ads/ad_director.dart';
+import 'package:football_ai_capture/src/ads/ad_pack_downloader.dart';
 import 'package:football_ai_capture/src/constants.dart';
 import 'package:football_ai_capture/src/graphics/overlay_bridge.dart';
 import 'package:football_ai_capture/src/graphics/program_graphics.dart';
@@ -62,6 +64,8 @@ class MasterHost extends ChangeNotifier {
     this.legacyMatch,
     this.replicaSink,
     this.term,
+    this.adSink,
+    this.adPacks,
   }) : wallS = wallS ?? _wallClockS,
        _time = time ?? StopwatchTimeSource(),
        _monotonic = Stopwatch()..start();
@@ -113,6 +117,19 @@ class MasterHost extends ChangeNotifier {
 
   /// El term vigente del soporte (el de la negociación, IOS-80).
   final int Function()? term;
+
+  /// La franja nativa (IOS-48); sin ella, el maestro no pone anuncios.
+  final AdSink? adSink;
+
+  /// Los paquetes de anuncios del VPS (IOS-49): el último bajado al dirigir y cada uno
+  /// nuevo mientras se dirige.
+  final AdPackDownloader? adPacks;
+  AdDirector? _ads;
+  StreamSubscription<void>? _adChanges;
+  StreamSubscription<AdPack>? _adPackSub;
+
+  /// La franja mientras se sirve.
+  AdDirector? get ads => _ads;
   StreamSubscription<void>? _replicaChanges;
   Timer? _replicaTick;
   int _replicaSeq = 0;
@@ -185,6 +202,7 @@ class MasterHost extends ChangeNotifier {
       _api = api;
       _startGraphics(engine);
       _startReplica(engine);
+      await _startAds(engine);
       problem = engine.lineupsError;
     } on Exception catch (error) {
       problem = 'no se pudo servir el mando: $error';
@@ -222,6 +240,36 @@ class MasterHost extends ChangeNotifier {
     _changes = engine.changes.listen((_) => unawaited(g.refresh()));
     _clockTick = Timer.periodic(const Duration(seconds: 1), (_) => unawaited(g.refresh()));
     unawaited(g.refresh());
+  }
+
+  /// La franja: el paquete vigente, cada uno nuevo y los eventos del partido.
+  Future<void> _startAds(MatchEngine engine) async {
+    final AdSink? sink = adSink;
+    if (sink == null) {
+      return;
+    }
+    final AdDirector director = AdDirector(sink);
+    _ads = director;
+    unawaited(director.observe(MatchSignals.of(engine)));
+    _adChanges = engine.changes.listen((_) => unawaited(director.observe(MatchSignals.of(engine))));
+    final AdPackDownloader? paquetes = adPacks;
+    if (paquetes == null) {
+      return;
+    }
+    _adPackSub = paquetes.packs.listen((AdPack p) => unawaited(director.load(p)));
+    final AdPack? vigente = paquetes.current ?? paquetes.loadCurrent();
+    if (vigente != null) {
+      await director.load(vigente);
+    }
+  }
+
+  void _stopAds() {
+    unawaited(_adChanges?.cancel());
+    _adChanges = null;
+    unawaited(_adPackSub?.cancel());
+    _adPackSub = null;
+    _ads?.dispose();
+    _ads = null;
   }
 
   /// La pizarra al esclavo: con cada cambio del partido y cada REPLICA_INTERVAL_S.
@@ -278,6 +326,7 @@ class MasterHost extends ChangeNotifier {
   Future<void> stepDown() async {
     _stopGraphics();
     _stopReplica();
+    _stopAds();
     final MasterApiServer? server = _server;
     _server = null;
     _engine = null;
@@ -329,6 +378,7 @@ class MasterHost extends ChangeNotifier {
   void dispose() {
     _stopGraphics();
     _stopReplica();
+    _stopAds();
     final MasterApiServer? server = _server;
     _server = null;
     if (server != null) {

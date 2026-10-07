@@ -22,6 +22,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:football_ai_capture/src/ads/ad_director.dart';
+import 'package:football_ai_capture/src/ads/ad_pack_downloader.dart';
 import 'package:football_ai_capture/src/capture_labels.dart';
 import 'package:football_ai_capture/src/capture_session.dart';
 import 'package:football_ai_capture/src/constants.dart';
@@ -98,6 +100,10 @@ class _CapturePageState extends State<CapturePage> {
 
   final CaptureHostApi _api = CaptureHostApi();
 
+  /// Los anuncios del VPS en Documents/ads (IOS-49), en los dos móviles: el esclavo los
+  /// tiene si se promueve. IOS-65 le pasa cada `ads_changed` del túnel.
+  final AdPackDownloader _adPacks = AdPackDownloader(root: Directory('${appDocumentsPath()}/$adsDirectoryName'));
+
   /// El servidor del mando (IOS-62): solo en el soporte de verdad, no en el banco ni con
   /// un solo móvil ni con una sesión de test.
   late final MasterHost? _host =
@@ -118,6 +124,9 @@ class _CapturePageState extends State<CapturePage> {
               term: () => _session.rigTerm,
               // El cronómetro en el reloj del soporte y su dominio (ADR 0023 §4).
               time: RigTimeSource(_api.rigClockSnapshot),
+              // La franja (IOS-48/49); los paquetes los baja el túnel (IOS-65).
+              adSink: RigAdSink(),
+              adPacks: _adPacks,
             );
 
   /// Lo que enseña el panel local del estado del soporte (IOS-64).
@@ -186,6 +195,7 @@ class _CapturePageState extends State<CapturePage> {
   void dispose() {
     _peekTimer?.cancel();
     _refresh?.cancel();
+    unawaited(_adPacks.dispose());
     if (identical(_receiver, _session)) {
       CaptureFlutterApi.setUp(null);
       _receiver = null;

@@ -15,6 +15,51 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 
 
+## 2026-10-07 · IOS-49 — director de anuncios y descarga de paquetes (Dart) · 🚧 falta el túnel (IOS-65) y probarlo en el iPhone
+
+**Hecho**
+- `lib/src/ads/ad_director.dart`: porte de tools/ad_director.py: `AdTrigger` (gol,
+  medio-tiempo, arranque), `MatchSignals` (del MatchEngine: goles, reloj en marcha y
+  `streaming` como «al aire»), `triggerBetween` y `adEventLoops` = 2 (`EVENT_LOOPS`).
+  `AdDirector.load` manda `setAdPlaylist` (todos los anuncios; en `slots` solo la
+  rotación, por orden alfabético) y `observe`, en un flanco con anuncio vendido,
+  `setAdOverride(nombre, 2)`. La vuelta a la rotación la hace el nativo (AdRotation);
+  Dart solo lleva `eventOnAir` con un Timer para enseñarlo.
+- `lib/src/ads/ad_pack_downloader.dart`: atiende `ads_changed {manifest_sha256, url}`,
+  baja el manifiesto v1 de NUBE-17 (comprueba su sha256 y `v`) y cada PNG a
+  `Documents/ads/blobs/<sha>.png` con `Authorization: Bearer` y `Range` sobre el
+  `.part` (206 sigue, 200 empieza de cero), comprueba tamaño y sha256 y renombra.
+  `current` se escribe el último; `loadCurrent()` lo recupera sin red. Los avisos se
+  atienden en orden y uno que repite el vigente no baja nada.
+- MasterHost (`adSink`, `adPacks`): al dirigir carga el paquete vigente, cada uno nuevo
+  y observa el partido con cada cambio. capture_page crea el downloader en los dos
+  móviles (el esclavo lo tiene si se promueve).
+- Nativo: `setAdPlaylist` acepta `frames` (un PNG por fotograma, relativo a
+  `Documents/ads/`) en lugar de `dir`; `AdStore.loadFiles` decodifica cada PNG distinto
+  una vez y los repetidos comparten búfer (600 fotogramas de 40 PNG ocupan 40).
+- Tests: ad_director_test (fake_async: gol → `gol` 2 vueltas y vuelta a la rotación;
+  primer corte, evento sin anuncio, gol sobre gol; el gol por `match/goal` en un
+  MasterHost), ad_pack_downloader_test (VPS falso: token, corte a mitad de PNG y
+  reanudación con `Range: bytes=2500-`, servidor sin Range, PNG corrupto, 401, manifiesto
+  ajeno, mensajes mal formados); AdStoreTests amplía el de PNG con `loadFiles`.
+
+**Decisiones mínimas (pendientes de revisión del propietario)**
+- Los fotogramas van al nativo como lista de rutas (`frames`) y no como directorios con
+  copias o enlaces: no hay que duplicar en disco los PNG repetidos ni decodificarlos 600
+  veces.
+- Sin reintento propio: una descarga que falla lanza, deja el `.part` y sigue con el
+  siguiente `ads_changed` (el VPS lo manda tras cada `welcome`). Tiempo de espera de red
+  `adDownloadTimeout` = 30 s.
+- Cargar un paquete nuevo reinicia la rotación y quita el evento en curso (es lo que hace
+  `setAdPlaylist` del nativo); la referencia `add` no reinicia.
+- No se borran paquetes ni PNG viejos de `Documents/ads` (como el catálogo del VPS).
+
+**Queda fuera**: conectar `AdPackDownloader.onAdsChanged(mensaje, base:, token:)` al
+túnel (IOS-65, con la base del VPS y el token del soporte); enseñar `eventOnAir` y
+`error` en el panel; la prueba en el iPhone con un paquete real.
+
+**Siguiente paso**: IOS-65 llama a `onAdsChanged` con cada `ads_changed`.
+
 ## 2026-10-07 · La espera de la parte a 130 ms y el anillo propio a 6 huecos (SPK-04, IOS-44)
 
 Con los sellos ya en el reloj del host, la parte llega por Wi-Fi con p50 90 / p95 115 /
