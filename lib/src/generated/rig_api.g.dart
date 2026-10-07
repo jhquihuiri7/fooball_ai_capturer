@@ -152,7 +152,10 @@ class RigHostApi {
 
   /// La rotación de la franja (IOS-48), en JSON: `{"ads": [{"name", "dir", "fps"}],
   /// "slots": [{"name", "loops"}]}`. `dir` es un directorio de PNG RGBA de 1920×108
-  /// dentro de `Documents/ads/`. Arranca en este instante. Devuelve "" o el error.
+  /// dentro de `Documents/ads/`; en lugar de `dir`, `frames` es la lista de PNG de cada
+  /// fotograma, repetidos, relativos a `Documents/ads/` (el paquete del VPS, IOS-49).
+  /// Los anuncios que no están en `slots` se cargan para `setAdOverride`. Arranca en
+  /// este instante. Devuelve "" o el error.
   Future<String> setAdPlaylist(String json) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.RigHostApi.setAdPlaylist$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(

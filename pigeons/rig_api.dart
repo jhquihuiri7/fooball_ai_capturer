@@ -39,7 +39,10 @@ abstract class RigHostApi {
 
   /// La rotación de la franja (IOS-48), en JSON: `{"ads": [{"name", "dir", "fps"}],
   /// "slots": [{"name", "loops"}]}`. `dir` es un directorio de PNG RGBA de 1920×108
-  /// dentro de `Documents/ads/`. Arranca en este instante. Devuelve "" o el error.
+  /// dentro de `Documents/ads/`; en lugar de `dir`, `frames` es la lista de PNG de cada
+  /// fotograma, repetidos, relativos a `Documents/ads/` (el paquete del VPS, IOS-49).
+  /// Los anuncios que no están en `slots` se cargan para `setAdOverride`. Arranca en
+  /// este instante. Devuelve "" o el error.
   String setAdPlaylist(String json);
 
   /// La última miniatura JPEG de 640×360 (IOS-64): `left`, `right` o `program`. Vacía si

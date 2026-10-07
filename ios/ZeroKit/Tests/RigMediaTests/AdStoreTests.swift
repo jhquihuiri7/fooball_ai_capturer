@@ -72,6 +72,14 @@ final class AdStoreTests: XCTestCase {
         let clip = try s.loadDirectory(dir, name: "png", fps: 30)
         XCTAssertEqual(clip.frames, 2)
         XCTAssertEqual(pixel(try XCTUnwrap(s.strip(for: AdCue(ad: clip, frame: 0))).premul), [255, 0, 0, 255])
+
+        // El paquete del VPS (IOS-49): los fotogramas nombran PNG que se repiten.
+        let f0 = dir.appendingPathComponent("f0.png"), f1 = dir.appendingPathComponent("f1.png")
+        let repetidos = try s.loadFiles([f0, f0, f1, f0], name: "pack", fps: 25)
+        XCTAssertEqual(repetidos.frames, 4)
+        XCTAssertEqual(s.usedBytes, 2 * (w * h * 4 * 2) * 2, "dos PNG distintos por anuncio, no cuatro")
+        XCTAssertEqual(pixel(try XCTUnwrap(s.strip(for: AdCue(ad: repetidos, frame: 3))).premul), [255, 0, 0, 255])
+        XCTAssertThrowsError(try s.loadFiles([], name: "vacio", fps: 25))
     }
 
     func testLaRotacionPorElRelojDelSoporte() throws {

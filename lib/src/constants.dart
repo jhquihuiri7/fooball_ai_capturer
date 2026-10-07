@@ -289,3 +289,22 @@ const String prefersMasterKey = 'zero.prefersMaster';
 /// 4K local vaya encendida por defecto y arranque. Copia de `RecordingPolicy` en RigCore,
 /// donde el nativo la hace cumplir.
 const int phoneDiskReserveBytes = 40 * 1000 * 1000 * 1000;
+
+// --------------------------------------------------------------------------- //
+// Anuncios de la franja (IOS-49, ADR 0008 y ADR 0022 §6)
+// --------------------------------------------------------------------------- //
+
+/// Vueltas que da un anuncio de evento antes de devolver el turno a la rotación
+/// (`EVENT_LOOPS` de tools/ad_director.py): unos 40 s con anuncios de 20 s.
+const int adEventLoops = 2;
+
+/// La versión del manifiesto de anuncios que entiende la app (`AD_MANIFEST_VERSION`).
+const int adManifestVersion = 1;
+
+/// La carpeta de los anuncios dentro de Documents: la que lee `setAdPlaylist`.
+const String adsDirectoryName = 'ads';
+
+/// Lo más que se espera a una respuesta del VPS al bajar los anuncios. Un PNG de la
+/// franja son decenas de KB; si en 30 s no llega nada, la red se cayó y se reintenta
+/// con el siguiente `ads_changed` o al reconectar.
+const Duration adDownloadTimeout = Duration(seconds: 30);

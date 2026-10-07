@@ -126,7 +126,24 @@ public final class AdStore {
             .filter { $0.pathExtension.lowercased() == "png" }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
         guard !pngs.isEmpty else { throw AdStoreError.empty("\(url.path) no contiene ningún PNG") }
-        return try load(name: name, frames: try pngs.map(Self.rgba(of:)), fps: fps)
+        return try loadFiles(pngs, name: name, fps: fps)
+    }
+
+    /// Carga un anuncio de PNG, uno por fotograma y en orden, que pueden repetirse: el
+    /// paquete del VPS (IOS-49) nombra cada PNG distinto una vez y la franja repite el
+    /// 90 % de los fotogramas. Cada fichero se decodifica una sola vez y los repetidos
+    /// comparten el búfer, así que 600 fotogramas de 40 PNG ocupan 40 en memoria.
+    @discardableResult
+    public func loadFiles(_ urls: [URL], name: String, fps: Int) throws -> AdClip {
+        guard !urls.isEmpty else { throw AdStoreError.empty("\(name) no tiene fotogramas") }
+        var decodificados: [URL: [UInt8]] = [:]
+        let frames = try urls.map { url -> [UInt8] in
+            if let px = decodificados[url] { return px }
+            let px = try Self.rgba(of: url)
+            decodificados[url] = px
+            return px
+        }
+        return try load(name: name, frames: frames, fps: fps)
     }
 
     public func clip(named name: String) -> AdClip? {

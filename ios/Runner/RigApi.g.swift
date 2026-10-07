@@ -100,7 +100,10 @@ protocol RigHostApi {
   func clearOverlay(layer: Int64) throws
   /// La rotación de la franja (IOS-48), en JSON: `{"ads": [{"name", "dir", "fps"}],
   /// "slots": [{"name", "loops"}]}`. `dir` es un directorio de PNG RGBA de 1920×108
-  /// dentro de `Documents/ads/`. Arranca en este instante. Devuelve "" o el error.
+  /// dentro de `Documents/ads/`; en lugar de `dir`, `frames` es la lista de PNG de cada
+  /// fotograma, repetidos, relativos a `Documents/ads/` (el paquete del VPS, IOS-49).
+  /// Los anuncios que no están en `slots` se cargan para `setAdOverride`. Arranca en
+  /// este instante. Devuelve "" o el error.
   func setAdPlaylist(json: String) throws -> String
   /// La última miniatura JPEG de 640×360 (IOS-64): `left`, `right` o `program`. Vacía si
   /// todavía no hay.
@@ -182,7 +185,10 @@ class RigHostApiSetup {
     }
     /// La rotación de la franja (IOS-48), en JSON: `{"ads": [{"name", "dir", "fps"}],
     /// "slots": [{"name", "loops"}]}`. `dir` es un directorio de PNG RGBA de 1920×108
-    /// dentro de `Documents/ads/`. Arranca en este instante. Devuelve "" o el error.
+    /// dentro de `Documents/ads/`; en lugar de `dir`, `frames` es la lista de PNG de cada
+    /// fotograma, repetidos, relativos a `Documents/ads/` (el paquete del VPS, IOS-49).
+    /// Los anuncios que no están en `slots` se cargan para `setAdOverride`. Arranca en
+    /// este instante. Devuelve "" o el error.
     let setAdPlaylistChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.RigHostApi.setAdPlaylist\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       setAdPlaylistChannel.setMessageHandler { message, reply in

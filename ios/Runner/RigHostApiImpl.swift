@@ -34,11 +34,15 @@ enum AdHub {
             throw PigeonError(code: "ads", message: "lista de anuncios ilegible", details: nil)
         }
         for ad in doc["ads"] as? [[String: Any]] ?? [] {
-            guard let nombre = ad["name"] as? String, let dir = ad["dir"] as? String,
-                  !dir.contains("..")
-            else { continue }
-            try store.loadDirectory(raiz.appendingPathComponent(dir), name: nombre,
-                                    fps: (ad["fps"] as? Int) ?? 30)
+            guard let nombre = ad["name"] as? String else { continue }
+            let fps = (ad["fps"] as? Int) ?? 30
+            if let frames = ad["frames"] as? [String] {
+                // El paquete del VPS (IOS-49): un PNG por fotograma, repetidos.
+                guard !frames.contains(where: { $0.contains("..") }) else { continue }
+                try store.loadFiles(frames.map { raiz.appendingPathComponent($0) }, name: nombre, fps: fps)
+            } else if let dir = ad["dir"] as? String, !dir.contains("..") {
+                try store.loadDirectory(raiz.appendingPathComponent(dir), name: nombre, fps: fps)
+            }
         }
         let slots = try (doc["slots"] as? [[String: Any]] ?? []).compactMap { slot -> AdSlot? in
             guard let nombre = slot["name"] as? String, let clip = store.clip(named: nombre) else { return nil }
