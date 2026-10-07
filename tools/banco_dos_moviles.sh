@@ -41,11 +41,16 @@ instala() {  # $1 dispositivo, $2 dart-defines
   xcrun devicectl device install app --device "$1" "$RAIZ/build/ios/iphoneos/Runner.app" | grep -c "App installed"
 }
 
-# Mata cualquier proceso viejo de la app: uno de otra instalación se queda el puerto 8090.
+# Mata el proceso de Zero (uno viejo se queda el puerto 8090). Toda app de Flutter se
+# llama Runner.app: se mira la carpeta de la Zero instalada para no cerrar otras apps.
 mata() {  # $1 dispositivo
-  for pid in $(xcrun devicectl device info processes --device "$1" 2>/dev/null | awk '/Runner.app\/Runner/ {print $1}'); do
+  local apps procs; apps=$(mktemp); procs=$(mktemp)
+  xcrun devicectl device info apps --device "$1" --json-output "$apps" >/dev/null 2>&1 || true
+  xcrun devicectl device info processes --device "$1" --json-output "$procs" >/dev/null 2>&1 || true
+  for pid in $(python3 "$(dirname "$0")/procesos_zero.py" "$apps" "$procs" "$APP"); do
     xcrun devicectl device process terminate --device "$1" --pid "$pid" >/dev/null 2>&1 || true
   done
+  rm -f "$apps" "$procs"
 }
 
 lanza() {  # $1 dispositivo, $2 lado, $3 json extra
