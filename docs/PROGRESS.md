@@ -15,6 +15,36 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 
 
+
+## 2026-10-07 · Primer programa con la geometría calibrada (IOS-71, SPK-04) y la memoria sin ficheros
+
+**El cosido, con geometría medida.** Hasta hoy todas las pasadas usaban la geometría
+nominal (±45° de yaw, roll 0), y de ahí la imagen doblada en la costura. Con los dos
+móviles abiertos como en el soporte (a mano, sin soporte ni hubs) y una escena de
+interior, se calibró con los 5 pares que saca el banco al empezar
+(`bench/dos-moviles-20261007-1222`) y la misma `calibrate_upright` del servicio NUBE-09:
+
+- Con los umbrales del repo **no calibra**: 6-12 de 30 puntos coherentes, porque todo
+  está a 2-4 m y el paralaje entre lentes rompe el modelo de rotación pura.
+- Con un umbral tolerante **solo para esta prueba** (RANSAC 12 px y 12 puntos, en un
+  script aparte; el repo no cambia) los cinco pares coinciden: **yaw ±32,7°** entre
+  cámaras y **roll −7° en el derecho** (estaba ladeado), residuo 0,13-0,18°.
+  `docs/img/rig-interior-20261007.json`.
+- Copiado como `Documents/rig.json` a los dos iPhone (la app lo carga si existe; el
+  informe dice `rig: rig.json`), 150 s de programa (`bench/dos-moviles-20261007-1229`):
+  pared, esquina, cama y cable salen continuos a través de la costura; solo se dobla la
+  gorra junto a la camiseta, a ~2 m (paralaje). `docs/img/cosido-calibrado-20261007.jpg`.
+
+Para cerrar IOS-71 / SPK-04 falta lo de siempre: el soporte y una pareja de cancha (todo a
+más de 20 m) con los umbrales del repo. **Ojo:** los dos iPhone se quedan con ese
+`rig.json` de interior en Documents; bórrese o recalíbrese antes de otra pasada.
+
+**Memoria del maestro sin ficheros.** Sin la copia .mov ni el .ts
+(`RIG_SPLIT_NO_MOV=1 RIG_SPLIT_NO_TS=1`, `bench/dos-moviles-20261007-1153`) sigue creciendo
+1,44 MB/min (1,61-1,64 con ellos). No es la escritura: queda la composición, el
+codificador del programa, el decodificador de las partes o el director. Lo siguiente es
+bisecar con el director y el detector apagados.
+
 ## 2026-10-07 · IOS-49 — director de anuncios y descarga de paquetes (Dart) · 🚧 falta el túnel (IOS-65) y probarlo en el iPhone
 
 **Hecho**
