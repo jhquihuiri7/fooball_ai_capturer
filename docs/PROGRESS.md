@@ -16,6 +16,62 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 
 
+## 2026-10-07 · IOS-23 (cont.) — umbrales en float32, picos más baratos y la máscara del campo desde PitchModel · 🚧 falta medir en el iPhone
+
+El postproceso ya estaba (2026-10-04, `Postprocess.swift` + `PlayerDecoder`, con los
+dorados). Faltaba de la tarjeta el filtro de pies por PitchModel, los tests que nombra y
+la cifra en el iPhone.
+
+**Hecho**
+- **Divergencia con la referencia, arreglada**: numpy compara un tensor float32 con un
+  `float` de Python en float32 (NEP 50) y la réplica comparaba en Double. Justo en el
+  umbral daban distinto: un pico igual a `Float(0.3)` pasaba `> 0.3` en Swift y no en
+  numpy; un score igual a `Float(0.7)` no pasaba `>= 0.7`. Ahora el umbral de confianza,
+  el de los picos (también el del balón) y el margen de la junta se comparan en Float.
+- `heatmapPeaks` más barato sin cambiar el resultado: ventana recortada al mapa (equivale
+  al borde replicado), sale con el primer vecino mayor y solo ordena los
+  k·(2·kernel − 1)² mejores candidatos (cada pico descarta como mucho
+  (2·kernel − 1)² − 1 vecinos por la meseta). Mapa saturado 3×144×480 (pesos sembrados)
+  en el Mac en release: 5,8 → ~1,8 ms; mapa de partido: ~0,08 ms.
+- `RigCore/Detection/FootMask.swift`: la `pitch_mask[y, x]` sin mapa de bits. El pie se
+  recorta y se trunca como `np.clip(...).astype(np.intp)`, y con
+  `FootMask(pitch:width:height:)` el píxel se pregunta a `PitchModel.isInsidePlayable`
+  (la rasterización de IOS-36). `decode`/`decodeHeatmap` toman `footMask:` en lugar del
+  par `onPitch`/`pitchSize`.
+- Tests (+12): HeatmapPeaksTests (contra la versión directa en 300 mapas al azar, con
+  mesetas, empates y Float(0.3) justo en el umbral; un mutante que no mira más allá de
+  los primeros candidatos cae), NmsTests (el desplazamiento = NMS por clase, con
+  coordenadas negativas), DetrDecodeTests (los dos casos de detectors.json con
+  `pitch_mask` salen iguales con un PitchModel cuya área jugable es ese rectángulo;
+  recorte y truncado del pie; umbral en float32; recorte a la región; errores de ficha).
+
+**Decisiones mínimas (pendientes de revisión del propietario)**
+- La tarjeta pide `DetrDecode.swift`, `Nms.swift` y `HeatmapPeaks.swift`; el código sigue
+  en `Postprocess.swift` (decisión del 2026-10-04) y solo los tests llevan los nombres de
+  la tarjeta: mover ficheros ahora chocaría con quien toca la parte de ML.
+- Un pie NaN (salida rota del modelo) no pisa el campo: truncarlo abortaría la app. En
+  la referencia es indefinido.
+
+**Pendiente para la referencia (football-ai)**
+- Un dorado con un valor exactamente en `Float(umbral)` (picos y DETR) que fije la
+  comparación en float32.
+- `_finish` ordena con `np.argsort(-scores)`, que no es estable: con scores empatados el
+  orden depende de la plataforma. La réplica desempata por índice; `kind="stable"` lo
+  fijaría.
+- No hay rasterizador de `pitch_mask` desde un PitchModel: los dorados solo traen
+  rectángulos.
+
+**Queda fuera (sin commitear por la pausa)**: `RigMedia/Obs/DecoderBench.swift`,
+`DecoderBenchTests.swift` y su entrada `decoder-bench` en BenchRunner (que ahora también
+lleva cambios de SPK-53 de otro agente). Mide `decoder/detr300`, `decoder/heatmap` y
+`decoder/heatmap_saturated`; en el Mac en release, 300 queries p50 0,021 ms. La cifra de
+la aceptación (300 queries <0,2 ms **en el iPhone**) sigue sin medir. Tampoco se ha
+compilado la app (`flutter build ios`): no se tocó nada del Runner ni de Dart.
+
+**Siguiente paso**: commitear el banco cuando SPK-53 suelte BenchRunner, lanzarlo en el
+iPhone (`--dart-define=BENCH=decoder-bench`) y, cuando pitch.json llegue al móvil, pasar
+`FootMask(pitch:)` a CoreMLPlayerDetector.
+
 ## 2026-10-07 · IOS-62 — el `command` del túnel y la aceptación con PanelControl · 🚧 falta el tercer iPhone en la LAN
 
 La API ya estaba (2026-10-04). Faltaba lo que el VPS de NUBE-07 (`tools/nube/control.py` y

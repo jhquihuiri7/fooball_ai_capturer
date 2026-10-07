@@ -6,27 +6,33 @@ import RigCore
 import XCTest
 
 final class PostprocessTests: XCTestCase {
-    private func t(_ v: GoldenValue, _ k: String) throws -> GoldenTensor {
+    static func t(_ v: GoldenValue, _ k: String) throws -> GoldenTensor {
         guard case let .tensor(x) = try v.field(k) else { throw GoldenError.message("\(k) no es un tensor") }
         return x
     }
 
-    private func f32(_ v: GoldenValue, _ k: String) throws -> [Float] { try t(v, k).doubles().map(Float.init) }
+    static func f32(_ v: GoldenValue, _ k: String) throws -> [Float] { try Self.t(v, k).doubles().map(Float.init) }
 
-    private func filas(_ v: GoldenValue, _ k: String) throws -> [[Float]] {
-        let x = try t(v, k)
+    static func filas(_ v: GoldenValue, _ k: String) throws -> [[Float]] {
+        let x = try Self.t(v, k)
         let ancho = x.shape.count > 1 ? x.shape[1] : 1
         let d = try x.doubles().map(Float.init)
         return x.shape[0] == 0 ? [] : stride(from: 0, to: d.count, by: ancho).map { Array(d[$0..<($0 + ancho)]) }
     }
 
     /// Un tensor [1][C][H][W] (o [C][H][W]) como [C][H][W]: el lote, si lo hay, es 1.
-    private func mapa(_ v: GoldenValue, _ k: String) throws -> [[[Float]]] {
-        let x = try t(v, k)
+    static func mapa(_ v: GoldenValue, _ k: String) throws -> [[[Float]]] {
+        let x = try Self.t(v, k)
         let forma = Array(x.shape.suffix(3))
         let d = try x.doubles().map(Float.init)
         let (cc, hh, ww) = (forma[0], forma[1], forma[2])
         return (0..<cc).map { c in (0..<hh).map { y in Array(d[((c * hh + y) * ww)..<((c * hh + y) * ww + ww)]) } }
+    }
+
+    /// Una lista de cadenas del caso (los nombres de clase).
+    static func strings(_ v: GoldenValue, _ k: String) throws -> [String] {
+        guard case let .array(xs) = try v.field(k) else { throw GoldenError.message("\(k) no es una lista") }
+        return xs.compactMap { if case let .string(s) = $0 { return s } else { return nil } }
     }
 
     private func esquinas(_ c: [(x1: Float, y1: Float, x2: Float, y2: Float)]) -> GoldenValue {
@@ -44,33 +50,33 @@ final class PostprocessTests: XCTestCase {
             let actual: GoldenValue
             switch caso.fn {
             case "sigmoid":
-                let x = try t(i, "x")
-                actual = .object(["scores": .tensor(f32: try f32(i, "x").map(Postprocess.sigmoid), shape: x.shape)])
+                let x = try Self.t(i, "x")
+                actual = .object(["scores": .tensor(f32: try Self.f32(i, "x").map(Postprocess.sigmoid), shape: x.shape)])
             case "decode_boxes_to_corners":
                 func num(_ k: String) -> Float { Float((try? i.number(k)) ?? 0) }
                 actual = esquinas(Postprocess.decodeBoxesToCorners(
-                    try filas(i, "boxes"), width: num("width"), height: num("height"),
+                    try Self.filas(i, "boxes"), width: num("width"), height: num("height"),
                     offsetX: num("offset_x"), offsetY: num("offset_y")
                 ))
             case "decode_cxcywh_layout":
                 actual = esquinas(Postprocess.decodeCxcywhLayout(
-                    try filas(i, "boxes"), layout: try BandGeometryTests.layout(i.field("layout")),
+                    try Self.filas(i, "boxes"), layout: try BandGeometryTests.layout(i.field("layout")),
                     inputW: Int(try i.number("input_w")), inputH: Int(try i.number("input_h"))
                 ))
             case "decode_xyxy_input_px":
                 actual = esquinas(Postprocess.decodeXyxyInputPx(
-                    try filas(i, "boxes"), layout: try BandGeometryTests.layout(i.field("layout"))
+                    try Self.filas(i, "boxes"), layout: try BandGeometryTests.layout(i.field("layout"))
                 ))
             case "nms":
                 let keep = Postprocess.nms(
-                    boxes: try filas(i, "boxes"), scores: try f32(i, "scores"),
-                    classes: try t(i, "classes").doubles().map { Int($0) },
+                    boxes: try Self.filas(i, "boxes"), scores: try Self.f32(i, "scores"),
+                    classes: try Self.t(i, "classes").doubles().map { Int($0) },
                     iouThreshold: try i.number("iou_threshold"), maxDetections: Int(try i.number("max_detections")),
                     preTopk: Int(try i.number("pre_topk"))
                 )
                 actual = .object(["keep": .tensor(i32: keep.map(Int32.init), shape: [keep.count])])
             case "heatmap_peaks":
-                let h = try t(i, "heatmap")
+                let h = try Self.t(i, "heatmap")
                 let d = try h.doubles().map(Float.init)
                 let (cc, hh, ww) = (h.shape[0], h.shape[1], h.shape[2])
                 let mapa = (0..<cc).map { c in (0..<hh).map { y in Array(d[((c * hh + y) * ww)..<((c * hh + y) * ww + ww)]) } }
@@ -84,12 +90,12 @@ final class PostprocessTests: XCTestCase {
                     "score": .tensor(f32: p.map(\.score), shape: [p.count]),
                 ])
             case "refine_offset":
-                let o = try t(i, "offset")
+                let o = try Self.t(i, "offset")
                 let d = try o.doubles().map(Float.init)
                 let (hh, ww) = (o.shape[1], o.shape[2])
                 let off = (0..<2).map { c in (0..<hh).map { y in Array(d[((c * hh + y) * ww)..<((c * hh + y) * ww + ww)]) } }
                 let r = Postprocess.refineOffset(
-                    off, rows: try t(i, "rows").doubles().map { Int($0) }, cols: try t(i, "cols").doubles().map { Int($0) },
+                    off, rows: try Self.t(i, "rows").doubles().map { Int($0) }, cols: try Self.t(i, "cols").doubles().map { Int($0) },
                     stride: Int(try i.number("stride"))
                 )
                 actual = .object([
@@ -112,36 +118,29 @@ final class PostprocessTests: XCTestCase {
         for caso in doc.cases where caso.fn == "PlayerDetector.detect" {
             corridos += 1
             let i = caso.inputs
-            guard case let .array(nombres) = try i.field("classes") else { throw GoldenError.message("classes") }
             let iou = try? i.number("nms_iou")
             let paso = (try? i.number("heatmap_stride")).map { Int($0) }
             let dec = try PlayerDecoder(
-                classNames: nombres.compactMap { if case let .string(s) = $0 { return s } else { return nil } },
+                classNames: try Self.strings(i, "classes"),
                 confThreshold: (try? i.number("conf_threshold")) ?? DetectionSpec.playerConfThreshold,
                 maxDetections: (try? i.number("max_detections")).map { Int($0) } ?? DetectionSpec.playerMaxDetections,
                 postprocess: paso != nil ? .heatmap : iou == nil ? .detr : .nms,
                 boxFormat: PlayerDecoder.BoxFormat(rawValue: try i.string("box_format"))!,
                 nmsIou: iou, heatmapStride: paso
             )
-            var onPitch: ((Int, Int) -> Bool)?
-            var tam: (width: Int, height: Int)?
-            if case let .object(m)? = try? i.field("pitch_mask"), case let .array(dentro)? = m["inside"] {
-                let r = dentro.compactMap(\.numberValue).map { Int($0) }
-                tam = (Int(m["width"]!.numberValue!), Int(m["height"]!.numberValue!))
-                onPitch = { x, y in x >= r[0] && x < r[2] && y >= r[1] && y < r[3] }
-            }
+            let mascara = try Self.rectMask(i)
             let layout = try BandGeometryTests.layout(i.field("layout"))
             let dets: [PlayerDetection]
             if paso != nil {
                 heatmaps += 1
                 dets = try dec.decodeHeatmap(
-                    heatmap: try mapa(i, "heatmap"), offset: try mapa(i, "offset"), size: try mapa(i, "size"),
-                    layout: layout, onPitch: onPitch, pitchSize: tam
+                    heatmap: try Self.mapa(i, "heatmap"), offset: try Self.mapa(i, "offset"), size: try Self.mapa(i, "size"),
+                    layout: layout, footMask: mascara
                 )
             } else {
                 dets = try dec.decode(
-                    logits: try filas(i, "logits"), boxes: try filas(i, "boxes"),
-                    layout: layout, onPitch: onPitch, pitchSize: tam
+                    logits: try Self.filas(i, "logits"), boxes: try Self.filas(i, "boxes"),
+                    layout: layout, footMask: mascara
                 )
             }
             let actual: GoldenValue = .object([
@@ -155,6 +154,18 @@ final class PostprocessTests: XCTestCase {
         }
         XCTAssertGreaterThanOrEqual(corridos, 15)
         XCTAssertGreaterThanOrEqual(heatmaps, 3, "los casos del plan B CenterNet (ADR 0020)")
+    }
+
+    /// La `pitch_mask` de un caso de detectors.json: un rectángulo `inside` [x0, y0, x1, y1)
+    /// dentro de un fotograma `width`×`height`. nil si el caso no la lleva.
+    static func rectMask(_ i: GoldenValue) throws -> FootMask? {
+        guard case let .object(m)? = try? i.field("pitch_mask"), case let .array(dentro)? = m["inside"] else {
+            return nil
+        }
+        let r = dentro.compactMap(\.numberValue).map { Int($0) }
+        return try FootMask(width: Int(m["width"]!.numberValue!), height: Int(m["height"]!.numberValue!)) { x, y in
+            x >= r[0] && x < r[2] && y >= r[1] && y < r[3]
+        }
     }
 
     func testElHeatmapExigeSuPasoYSuFormato() {
@@ -173,7 +184,7 @@ final class PostprocessTests: XCTestCase {
 
     func testTrescientasQueriesSonBaratas() throws {
         // 300 queries vacías y 20 jugadores: la cuenta de la aceptación (<0,2 ms en el
-        // iPhone) se mide en el banco; aquí, que no crece con nada raro.
+        // iPhone) la da `decoder-bench`; aquí, que no crece con nada raro.
         var logits = Array(repeating: [Float(-9), -9, -9], count: 300)
         var cajas = Array(repeating: [Float(0.5), 0.5, 0.01, 0.02], count: 300)
         for q in 0..<20 { logits[q][1] = 3; cajas[q] = [Float(q) / 20 + 0.02, 0.5, 0.01, 0.05] }

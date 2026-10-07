@@ -282,11 +282,10 @@ public struct PlayerDecoder: Sendable {
         self.heatmapStride = heatmapStride
     }
 
-    /// `logits` [Q][C] y `boxes` [Q][4] tal cual salen del modelo; `onPitch` dice si un
-    /// píxel nativo (x, y) de los pies está en el campo (nil: sin máscara).
+    /// `logits` [Q][C] y `boxes` [Q][4] tal cual salen del modelo; `footMask` filtra por
+    /// los pies lo que no pisa el campo (nil: sin máscara).
     public func decode(
-        logits: [[Float]], boxes: [[Float]], layout: InputLayout,
-        onPitch: ((Int, Int) -> Bool)? = nil, pitchSize: (width: Int, height: Int)? = nil
+        logits: [[Float]], boxes: [[Float]], layout: InputLayout, footMask: FootMask? = nil
     ) throws -> [PlayerDetection] {
         guard postprocess != .heatmap else {
             throw RigError.message("postprocess heatmap: las salidas van por decodeHeatmap")
@@ -315,7 +314,7 @@ public struct PlayerDecoder: Sendable {
         let c = boxFormat == .cxcywhNorm
             ? Postprocess.decodeCxcywhLayout(elegidas, layout: layout, inputW: entrada.w, inputH: entrada.h)
             : Postprocess.decodeXyxyInputPx(elegidas, layout: layout)
-        return finish(c, sc, cls, layout: layout, onPitch: onPitch, pitchSize: pitchSize)
+        return finish(c, sc, cls, layout: layout, footMask: footMask)
     }
 
     /// El camino CenterNet (`_detect_heatmap`): `heatmap` [C][H][W] ya activado por clase,
@@ -325,7 +324,7 @@ public struct PlayerDecoder: Sendable {
     /// emiten; las cajas, a float en píxeles de la entrada como una cabeza xyxy_input_px.
     public func decodeHeatmap(
         heatmap: [[[Float]]], offset: [[[Float]]], size: [[[Float]]], layout: InputLayout,
-        onPitch: ((Int, Int) -> Bool)? = nil, pitchSize: (width: Int, height: Int)? = nil
+        footMask: FootMask? = nil
     ) throws -> [PlayerDetection] {
         guard postprocess == .heatmap, let paso = heatmapStride else {
             throw RigError.message("decodeHeatmap pide postprocess heatmap")
@@ -344,7 +343,7 @@ public struct PlayerDecoder: Sendable {
         }
         return finish(
             Postprocess.decodeXyxyInputPx(cajas, layout: layout), picos.map(\.score), picos.map(\.klass),
-            layout: layout, onPitch: onPitch, pitchSize: pitchSize
+            layout: layout, footMask: footMask
         )
     }
 
@@ -352,19 +351,14 @@ public struct PlayerDecoder: Sendable {
     /// máscara por los pies y el orden (o la NMS) con el tope.
     private func finish(
         _ cajas: [(x1: Float, y1: Float, x2: Float, y2: Float)], _ scores: [Float], _ clases: [Int],
-        layout: InputLayout, onPitch: ((Int, Int) -> Bool)?, pitchSize: (width: Int, height: Int)?
+        layout: InputLayout, footMask: FootMask?
     ) -> [PlayerDetection] {
         var c = cajas, sc = scores, cls = clases
         if layout.regions.count > 1 {
             (c, sc, cls) = Self.mergeSeam(layout, c, sc, cls)
         }
-        if let onPitch, let tam = pitchSize {
-            var keep: [Int] = []
-            for (i, b) in c.enumerated() {
-                let fx = min(max((b.x1 + b.x2) * 0.5, 0), Float(tam.width - 1))
-                let fy = min(max(b.y2, 0), Float(tam.height - 1))
-                if onPitch(Int(fx), Int(fy)) { keep.append(i) }
-            }
+        if let footMask {
+            let keep = c.indices.filter { footMask.contains(footX: (c[$0].x1 + c[$0].x2) * 0.5, footY: c[$0].y2) }
             c = keep.map { c[$0] }; sc = keep.map { sc[$0] }; cls = keep.map { cls[$0] }
         }
         guard !c.isEmpty else { return [] }
