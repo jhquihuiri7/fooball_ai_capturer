@@ -253,7 +253,9 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
                 )
                 s.audioFormat = { [weak self] in self?.engine.audioFormatDescription }
                 s.cameraSwitch = { [weak self] on in self?.engine.setCameraRunningForBench(on) }
-                s.exposureBias = { [weak self] ev in self?.engine.benchExposureBias(ev: ev) }
+                s.exposureBias = { [weak self, weak s] ev in
+                    self?.engine.benchExposureBias(ev: ev) { r in s?.exposureApplied = r }
+                }
                 engine.onAacFrame = { [weak s] trama in s?.audio(trama) }
                 s.start()
                 split = s

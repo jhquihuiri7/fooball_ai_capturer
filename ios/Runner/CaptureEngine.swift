@@ -312,23 +312,32 @@ final class CaptureEngine: NSObject {
         }
     }
 
-    /// El banco de IOS-38 desajusta a propósito la exposición del esclavo: el ISO por
-    /// 2^ev, con la misma obturación (la elegida sin parpadeo).
-    func benchExposureBias(ev: Double) {
+    /// El banco de IOS-38 desajusta a propósito la exposición del esclavo en 2^ev: primero
+    /// con el ISO y, si llega a su tope (poca luz), el resto con la obturación. Devuelve
+    /// lo aplicado de verdad, para el informe.
+    func benchExposureBias(ev: Double, done: @escaping ([String: Double]) -> Void) {
         queue.async { [self] in
-            guard let device, var applied else { return }
+            guard let device, var applied else { return done(["error": 1]) }
             let f = device.activeFormat
-            let iso = min(max(applied.iso * Float(pow(2.0, ev)), f.minISO), f.maxISO)
+            let factor = pow(2.0, ev)
+            let isoAntes = Double(applied.iso)
+            let durAntes = CMTimeGetSeconds(device.exposureDuration)
+            let iso = min(max(isoAntes * factor, Double(f.minISO)), Double(f.maxISO))
+            let resto = factor / (iso / isoAntes)
+            let dur = min(max(durAntes * resto, CMTimeGetSeconds(f.minExposureDuration)),
+                          CMTimeGetSeconds(f.maxExposureDuration))
             do {
                 try device.lockForConfiguration()
-                device.setExposureModeCustom(duration: AVCaptureDevice.currentExposureDuration, iso: iso,
-                                             completionHandler: nil)
+                device.setExposureModeCustom(duration: CMTime(seconds: dur, preferredTimescale: 1_000_000_000),
+                                             iso: Float(iso), completionHandler: nil)
                 device.unlockForConfiguration()
-                applied.iso = iso
+                applied.iso = Float(iso)
+                applied.exposureSeconds = dur
                 self.applied = applied
-                NSLog("[color] banco: ISO ×%.3f → %.0f", pow(2.0, ev), Double(iso))
+                done(["iso_before": isoAntes, "iso_after": iso, "exposure_ms_before": durAntes * 1000,
+                      "exposure_ms_after": dur * 1000, "ev_applied": log2((iso * dur) / (isoAntes * durAntes))])
             } catch {
-                NSLog("[color] banco: no se pudo cambiar el ISO: %@", error.localizedDescription)
+                done(["error": 2])
             }
         }
     }

@@ -29,6 +29,31 @@ PROPUESTO) sigue siendo del propietario.
 **Siguiente paso**: la ficha de CenterNet-MNv4 con pesos propios y su cableado en
 `CoreMLPlayerDetector`.
 
+## 2026-10-07 · IOS-38 — el igualado de color con los móviles colocados como en el soporte · ✅ (objetivo)
+
+Móviles lado a lado en V, mirando una habitación con luz; 150 s; +1/3 EV en el esclavo a
+los 60 s. El desajuste del banco usa el ISO y, si llega a su tope, la obturación, y apunta
+lo aplicado (`exposure_bias`). Esta vez fue +0,333 EV: ISO de 1089 a 1372 con la misma
+obturación de 10 ms. Datos en `bench/dos-moviles-20261007-0755`.
+
+| Tramo | Solape en bruto | Solape con las ganancias |
+|---|---|---|
+| Antes del golpe (40-60 s) | ~20-21 % | 0,06-0,8 % |
+| Tras +1/3 EV (60-150 s) | ~21-23 % | pico de 1,86 % a los 2 s, luego 0,01-0,9 % |
+
+**La diferencia con las ganancias nunca pasa del 2 %** (la aceptación pide bajar de 2 %
+en ≤10 s). Ganancias finales cerca de 1: izquierda 0,86/0,99/1,03, derecha 1,16/1,01/0,97.
+
+**Salvedad**: el +1/3 EV solo movió el bruto unos 2 puntos, no el ~25 % esperado. El
+procesado de imagen del iPhone (mapeo de tonos del vídeo) parece compensar parte del
+cambio de ISO, así que el golpe real fue menor. En una pasada anterior el ISO estaba en su
+tope y el desajuste no se aplicaba: de ahí el registro de lo aplicado.
+
+**A ojo** (fotogramas del programa): el color es continuo a los dos lados de la costura.
+Lo que se ve es geometría: una banda con doble imagen (la esquina de la pared y un objeto
+colgado), porque el banco usa la geometría nominal del soporte sin calibrar y los móviles
+están a mano. Lo arregla la calibración (IOS-71, con el VPS).
+
 ## 2026-10-06 · Con imagen real: las partes a 12 Mbit/s saturan la Wi-Fi; a 8, no (IOS-43, IOS-52, SPK-02)
 
 Los dos iPhone boca arriba, viendo el techo, con micro, director y detección en los dos.

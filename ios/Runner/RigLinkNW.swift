@@ -733,6 +733,8 @@ final class SplitBench {
     private var forceDone = false
     /// IOS-38: el desajuste de exposición del esclavo (RIG_SPLIT_EV a los RIG_SPLIT_EV_AT_S s).
     var exposureBias: ((Double) -> Void)?
+    /// Lo que el desajuste aplicó de verdad (ISO y obturación antes y después).
+    var exposureApplied: [String: Double] = [:]
     private var evDone = false
     /// IOS-38: [segundo, diferencia de luminancia en bruto, con las ganancias] por observación.
     private var colorSeries: [[Double]] = []
@@ -1372,6 +1374,7 @@ final class SplitBench {
             "ad_budget_bytes": AdHub.store?.budgetBytes ?? 0,
             "footprint_mb": footprintMb,
             "color_series": colorSeries,
+            "exposure_bias": exposureApplied,
             "thermal_by_minute": thermalByMinute,
             "battery": Double(UIDevice.current.batteryLevel),
             "detect": detect?.report() ?? [:],
