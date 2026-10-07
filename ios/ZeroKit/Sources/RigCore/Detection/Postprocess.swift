@@ -15,6 +15,12 @@ public enum Postprocess {
         Float(0.5) * (Float(1) + tanhf(x * Float(0.5)))
     }
 
+    /// Un umbral de la referencia tal como lo compara numpy contra un tensor float32: el
+    /// `float` de Python es un escalar débil (NEP 50) y se redondea a float32 antes de
+    /// comparar. Compararlo en Double no es lo mismo justo en el umbral: un score igual a
+    /// `Float(0.3)` (0,30000001) no pasa `> 0.3` en numpy y en Double sí.
+    static func float32Threshold(_ t: Double) -> Float { Float(t) }
+
     /// Cajas DETR cxcywh normalizadas → esquinas en píxeles de una región (en Float).
     public static func decodeBoxesToCorners(
         _ boxes: [[Float]], width: Float, height: Float, offsetX: Float = 0, offsetY: Float = 0
@@ -111,11 +117,26 @@ public enum Postprocess {
         public let row: Int
         public let col: Int
         public let score: Float
+
+        public init(klass: Int, row: Int, col: Int, score: Float) {
+            self.klass = klass
+            self.row = row
+            self.col = col
+            self.score = score
+        }
     }
 
     /// Los `k` mejores máximos locales de un heatmap [C][H][W] (`heatmap_peaks`): máximo
     /// en la ventana kernel×kernel con el borde replicado, sobre el umbral; una meseta da
     /// un solo pico.
+    ///
+    /// Corre en cada ciclo del detector, así que ahorra lo que no cambia el resultado
+    /// (HeatmapPeaksTests lo compara con la versión directa en mapas al azar):
+    /// - el borde replicado solo repite celdas que ya están en la ventana, así que basta
+    ///   recortarla al mapa, y una celda deja de ser candidata con el primer vecino mayor;
+    /// - cada pico elegido descarta por la meseta como mucho (2·kernel − 1)² − 1 vecinos
+    ///   de su clase, así que los `k` picos salen siempre de los k·(2·kernel − 1)²
+    ///   mejores candidatos: solo esos se ordenan.
     public static func heatmapPeaks(
         _ heatmap: [[[Float]]], k: Int,
         threshold: Double = DetectionSpec.ballHeatmapThreshold,
@@ -123,40 +144,76 @@ public enum Postprocess {
     ) -> [Peak] {
         guard k > 0, kernel >= 3, kernel % 2 == 1 else { return [] }
         let r = kernel / 2
+        let umbral = float32Threshold(threshold)
         var candidatos: [Peak] = []
         for (c, mapa) in heatmap.enumerated() {
             let h = mapa.count
             guard h > 0 else { continue }
             let w = mapa[0].count
             for y in 0..<h {
+                let fila = mapa[y]
+                let filas = max(y - r, 0)...min(y + r, h - 1)
                 for x in 0..<w {
-                    let v = mapa[y][x]
-                    guard Double(v) > threshold else { continue }
-                    var maximo = -Float.infinity
-                    for dy in -r...r {
-                        for dx in -r...r {
-                            let yy = min(max(y + dy, 0), h - 1), xx = min(max(x + dx, 0), w - 1)
-                            maximo = max(maximo, mapa[yy][xx])
-                        }
-                    }
-                    if v >= maximo { candidatos.append(Peak(klass: c, row: y, col: x, score: v)) }
+                    let v = fila[x]
+                    guard v > umbral else { continue }
+                    // Primero la propia fila, que ya está a mano y descarta casi todo.
+                    let columnas = max(x - r, 0)...min(x + r, w - 1)
+                    guard !columnas.contains(where: { fila[$0] > v }),
+                          !filas.contains(where: { yy in yy != y && columnas.contains { mapa[yy][$0] > v } })
+                    else { continue }
+                    candidatos.append(Peak(klass: c, row: y, col: x, score: v))
                 }
             }
         }
-        candidatos.sort {
-            if $0.score != $1.score { return $0.score > $1.score }
-            if $0.klass != $1.klass { return $0.klass < $1.klass }
-            if $0.row != $1.row { return $0.row < $1.row }
-            return $0.col < $1.col
-        }
+        let lado = 2 * kernel - 1
+        let (tope, desborda) = k.multipliedReportingOverflow(by: lado * lado)
+        let ordenados = desborda ? candidatos.sorted(by: precede) : mejores(candidatos, tope)
         var elegidos: [Peak] = []
-        for p in candidatos where elegidos.count < k {
+        for p in ordenados {
             let meseta = elegidos.contains {
                 $0.klass == p.klass && abs($0.row - p.row) < kernel && abs($0.col - p.col) < kernel
             }
-            if !meseta { elegidos.append(p) }
+            if !meseta {
+                elegidos.append(p)
+                if elegidos.count == k { break }
+            }
         }
         return elegidos
+    }
+
+    /// El orden de los picos: score descendente y, a igualdad, la menor clase, fila y
+    /// columna, como la referencia.
+    private static func precede(_ a: Peak, _ b: Peak) -> Bool {
+        if a.score != b.score { return a.score > b.score }
+        if a.klass != b.klass { return a.klass < b.klass }
+        if a.row != b.row { return a.row < b.row }
+        return a.col < b.col
+    }
+
+    /// Los `m` primeros de `todos` en el orden de `precede`, ya ordenados, sin ordenar el
+    /// resto: un montículo de los `m` mejores (la raíz, el peor de ellos).
+    private static func mejores(_ todos: [Peak], _ m: Int) -> [Peak] {
+        guard todos.count > m else { return todos.sorted(by: precede) }
+        var monticulo = Array(todos.prefix(m))
+        // Montículo en el que cada padre va DETRÁS de sus hijos en el orden de `precede`.
+        func hundir(_ desde: Int) {
+            var i = desde
+            while true {
+                let (a, b) = (2 * i + 1, 2 * i + 2)
+                var peor = i
+                if a < m, precede(monticulo[peor], monticulo[a]) { peor = a }
+                if b < m, precede(monticulo[peor], monticulo[b]) { peor = b }
+                if peor == i { return }
+                monticulo.swapAt(i, peor)
+                i = peor
+            }
+        }
+        for i in stride(from: m / 2 - 1, through: 0, by: -1) { hundir(i) }
+        for p in todos[m...] where precede(p, monticulo[0]) {
+            monticulo[0] = p
+            hundir(0)
+        }
+        return monticulo.sorted(by: precede)
     }
 
     /// De celda a píxeles de la entrada con el offset subpíxel [2][H][W] (CenterNet).
@@ -237,13 +294,15 @@ public struct PlayerDecoder: Sendable {
         guard logits.first.map({ $0.count == classes.count }) ?? true else {
             throw RigError.message("el modelo declara \(logits.first!.count) clases y su ficha lista \(classes.count)")
         }
-        // Sigmoid, argmax (el primero si empatan) y umbral, sin rescatar la segunda clase.
+        // Sigmoid, argmax (el primero si empatan) y umbral en float32, sin rescatar la
+        // segunda clase.
+        let umbral = Postprocess.float32Threshold(confThreshold)
         var idx: [Int] = [], cls: [Int] = [], sc: [Float] = []
         for (q, fila) in logits.enumerated() {
             let p = fila.map(Postprocess.sigmoid)
             var mejor = 0
             for c in 1..<p.count where p[c] > p[mejor] { mejor = c }
-            if Double(p[mejor]) >= confThreshold, classes[mejor] != nil {
+            if p[mejor] >= umbral, classes[mejor] != nil {
                 idx.append(q); cls.append(mejor); sc.append(p[mejor])
             }
         }
@@ -348,10 +407,11 @@ public struct PlayerDecoder: Sendable {
         guard !juntas.isEmpty else { return (cajas, scores, clases) }
         var c = cajas, s = scores
         var vivos = Array(repeating: true, count: c.count)
-        let eps = DetectionSpec.playerSeamEpsPx
-        for junta in juntas {
-            let arriba = c.indices.filter { vivos[$0] && abs(Double(c[$0].y2) - junta) <= eps }
-            let abajo = c.indices.filter { vivos[$0] && abs(Double(c[$0].y1) - junta) <= eps }
+        let eps = Postprocess.float32Threshold(DetectionSpec.playerSeamEpsPx)
+        for junta in juntas.map(Float.init) {
+            // En float32 como la referencia: `y2 - junta` con la junta de escalar débil.
+            let arriba = c.indices.filter { vivos[$0] && abs(c[$0].y2 - junta) <= eps }
+            let abajo = c.indices.filter { vivos[$0] && abs(c[$0].y1 - junta) <= eps }
             for i in arriba where vivos[i] {
                 for j in abajo where vivos[j] && clases[i] == clases[j] {
                     let solape = Double(min(c[i].x2, c[j].x2)) - Double(max(c[i].x1, c[j].x1))
