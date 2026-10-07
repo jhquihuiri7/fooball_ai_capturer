@@ -100,4 +100,4 @@ esac
 recoge "$IZQ" izquierdo
 recoge "$DER" derecho
 echo "informes en $SALIDA"
-find "$SALIDA" -name "*.json" -newer "$0" | head -20
+find "$SALIDA" -name "*.json" -newer "$0" | head -20 || true  # con más de 20, head corta la tubería (SIGPIPE, 141)
