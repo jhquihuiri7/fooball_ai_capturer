@@ -118,9 +118,9 @@ final class ViewSyncTests: XCTestCase {
     func testElMaestroNoComponeAntesDeSuTic() {
         let maestro = ProgramSync(frameDurationMs: Self.frameMs)
         let v = Self.vista(1000, id: 1)
-        XCTAssertNil(maestro.compose(programRigMs: 1000, nowRigMs: 1099, masterView: v))
+        XCTAssertNil(maestro.compose(programRigMs: 1000, nowRigMs: 999 + LinkConstants.partMaxWaitMs, masterView: v))
         maestro.receive(PartInfo(frameRigMs: 1003, view: ResolvedView(command: v, extrapolated: false)))
-        XCTAssertEqual(maestro.compose(programRigMs: 1000, nowRigMs: 1100, masterView: v),
+        XCTAssertEqual(maestro.compose(programRigMs: 1000, nowRigMs: 1000 + LinkConstants.partMaxWaitMs, masterView: v),
                        .twoLens(view: v, slaveFrameRigMs: 1003))
     }
 

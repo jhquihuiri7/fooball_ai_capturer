@@ -26,7 +26,12 @@ public enum LinkConstants {
     /// instante T (objetivo de SPK-04). Compone SIEMPRE en T + esto, llegue o no: el
     /// retardo del programa queda fijo, y una parte que no llegó a tiempo hace que ese
     /// fotograma salga de una lente.
-    public static let partMaxWaitMs: Int64 = 100
+    ///
+    /// 130 y no los 100 del ADR 0023: medido el 2026-10-07 con los sellos ya en el reloj
+    /// del host, la parte llega con p50 90 / p95 115 / p99 125 ms por Wi-Fi. Con 100, el
+    /// 19 % del programa salía de una lente; con 130, el 2,4 %, a cambio de 35 ms más de
+    /// retardo (p95 145 ms). Enmienda pendiente de la revisión del propietario.
+    public static let partMaxWaitMs: Int64 = 130
 
     /// Bits por segundo de la parte del esclavo por Wi-Fi. Medido el 2026-10-06 con los dos
     /// iPhone e imagen real: a 12 Mbit/s se perdía el 0,75 % de las partes (un IDR cada

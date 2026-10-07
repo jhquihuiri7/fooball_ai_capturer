@@ -14,6 +14,31 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 
 
+
+## 2026-10-07 · La espera de la parte a 130 ms y el anillo propio a 6 huecos (SPK-04, IOS-44)
+
+Con los sellos ya en el reloj del host, la parte llega por Wi-Fi con p50 90 / p95 115 /
+p99 125 ms, y con `PART_MAX_WAIT_MS` = 100 el 19 % del programa salía de una lente.
+Medido con los dos iPhone, imagen real y toda la carga (director, CenterNet en los dos,
+micro):
+
+| | Espera 100, anillo 4 (1020, 30 min) | Espera 130, anillo 4 (1058, 20 min) | Espera 130, anillo 6 (1126, 20 min) |
+|---|---|---|---|
+| Una lente | 10 267 (19 %) | 852 (2,4 %) | **721 (2,0 %)** |
+| Sin el fotograma propio | 0 | 175 | **0** |
+| Latencia añadida p95 | 110 ms | 145 ms | 144 ms |
+
+Con 4 huecos (133 ms), el fotograma de hace 130 ms a veces ya había salido del anillo:
+`PipelineConstants.frameRingSlots` pasa a 6 (+25 MB) y `LinkConstants.partMaxWaitMs` a
+130. El objetivo de IOS-44 (≤120 ms) deja de cumplirse por ~25 ms: enmienda en el ADR
+0023 de football-ai (f3d1542), pendiente de la revisión del propietario. Los tests que
+llevaban los 100 ms escritos los toman ahora de la constante.
+
+**Memoria del maestro**: sin la copia .mov (`RIG_SPLIT_NO_MOV=1`) crece igual, 1,64 MB/min
+(1,55 y 1,61 con ella). No es la .mov; se prueba sin el .ts.
+
+Swift 297 tests (1 saltado) ✅.
+
 ## 2026-10-07 · El fotograma propio del maestro se perdía: el reloj del micro (IOS-13, IOS-54, SPK-54)
 
 **Qué pasaba.** La pasada de 90 min con imagen real (`bench/dos-moviles-20261007-0837`) dio

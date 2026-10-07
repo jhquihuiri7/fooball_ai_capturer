@@ -116,7 +116,7 @@ final class MasterProgramStageTests: XCTestCase {
     func testSinParteATiempoUnaLenteConLaVistaDelMaestro() throws {
         let (stage, render, comp, _) = try maestro()
         let mia = vista(5000, id: 1, yaw: -0.3)
-        let salio = stage.tick(programRigMs: 5000, nowRigMs: 5100, masterView: mia)
+        let salio = stage.tick(programRigMs: 5000, nowRigMs: 5000 + LinkConstants.partMaxWaitMs, masterView: mia)
         XCTAssertEqual(salio, .oneLens(view: mia))
         XCTAssertEqual(render.vistas, [mia])
         XCTAssertEqual(comp.llamadas.last?.slave, false)
@@ -130,11 +130,11 @@ final class MasterProgramStageTests: XCTestCase {
         stage.onProgram = { _, t in salidas.append(t) }
         stage.onSourceChange = { fuentes.append($0) }
         let mia = vista(1000, id: 1)
-        stage.tick(programRigMs: 1000, nowRigMs: 1100, masterView: mia)  // con cámara
+        stage.tick(programRigMs: 1000, nowRigMs: 1000 + LinkConstants.partMaxWaitMs, masterView: mia)  // con cámara
         stage.masterFrame = { _ in nil }                                   // la cámara se para
         for k in 1...30 {
             let t = 1000 + Int64(k * 33)
-            stage.tick(programRigMs: t, nowRigMs: t + 100, masterView: vista(t, id: UInt32(k)))
+            stage.tick(programRigMs: t, nowRigMs: t + LinkConstants.partMaxWaitMs, masterView: vista(t, id: UInt32(k)))
         }
         XCTAssertEqual(fuentes, [.masterOnly, .hold, .noSignal])
         XCTAssertEqual(salidas.count, 31, "el programa no se para")
@@ -150,7 +150,7 @@ final class MasterProgramStageTests: XCTestCase {
         ps.forEach { stage.receive(part: $0, arrivalRigMs: $0.frameRigMs + 10) }
         esperaDecodificadas(stage, 3)
         let t = ps[1].frameRigMs
-        stage.tick(programRigMs: t, nowRigMs: t + 100, masterView: vista(t, id: 9))
+        stage.tick(programRigMs: t, nowRigMs: t + LinkConstants.partMaxWaitMs, masterView: vista(t, id: 9))
         XCTAssertEqual(stage.sources.current, .slaveOnly)
         XCTAssertTrue(render.vistas.isEmpty)
         XCTAssertEqual(comp.llamadas.last?.slave, true)
@@ -206,7 +206,7 @@ final class MasterProgramStageTests: XCTestCase {
         let (stage, render, comp, _) = try maestro()
         stage.receive(part: ps[0], arrivalRigMs: 1010)
         esperaDecodificadas(stage, 1)
-        stage.tick(programRigMs: 1000, nowRigMs: 1100, masterView: vista(1000, id: 2))
+        stage.tick(programRigMs: 1000, nowRigMs: 1000 + LinkConstants.partMaxWaitMs, masterView: vista(1000, id: 2))
         XCTAssertTrue(render.vistas.isEmpty)
         XCTAssertEqual(comp.llamadas.last?.master, false)
         XCTAssertEqual(comp.llamadas.last?.slave, true)

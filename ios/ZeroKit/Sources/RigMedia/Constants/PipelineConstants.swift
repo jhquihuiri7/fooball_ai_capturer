@@ -8,11 +8,13 @@ import Foundation
 public enum PipelineConstants {
     /// Huecos del anillo de fotogramas propio (`FRAME_RING_SLOTS` en el plan).
     ///
-    /// 4 fotogramas NV12 4K son 4 × 12,4 MB ≈ 50 MB: suficiente para que el detector
-    /// (7,5 Hz: uno de cada cuatro) y el render encuentren su fotograma sin que la
-    /// cámara espere, y poco para un móvil de 8 GB vigilado por el jetsam. La cámara
-    /// NUNCA retiene más de un búfer suyo (IOS-09): este anillo es la copia propia.
-    public static let frameRingSlots = 4
+    /// 6 fotogramas NV12 4K son 6 × 12,4 MB ≈ 75 MB. El maestro pide su fotograma de
+    /// hace `LinkConstants.partMaxWaitMs` (130 ms, 4 fotogramas a 30 fps) más el jitter
+    /// de la cámara, y el detector (7,5 Hz) retiene uno: con 4 huecos, el de 130 ms ya
+    /// había salido del anillo en 175 de 36 000 fotogramas (2026-10-07). Sigue siendo
+    /// poco para un móvil de 8 GB vigilado por el jetsam. La cámara NUNCA retiene más de
+    /// un búfer suyo (IOS-09): este anillo es la copia propia.
+    public static let frameRingSlots = 6
 
     /// Fotogramas que el pool de píxeles mantiene listos por encima del anillo.
     ///
