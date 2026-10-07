@@ -88,4 +88,51 @@ final class H264SeiTests: XCTestCase {
             XCTAssertEqual(H264Sei.unescape(escapado), rbsp, "\([UInt8](rbsp))")
         }
     }
+
+    /// Los dorados de sei.json (NUBE-20): la sonda del VPS construye y lee los mismos
+    /// bytes. Los rigMs no pasan de 2^53 - 1, que un Double guarda exacto.
+    func testLosDoradosDelSei() throws {
+        let documento = try Golden.loadDocument(named: "sei.json")
+        var corridos = 0
+        for caso in documento.cases {
+            switch caso.fn {
+            case "sei.build":
+                let nal = H264Sei.build(
+                    rigMs: UInt64(try caso.inputs.number("rig_ms")),
+                    viewId: UInt8(try caso.inputs.number("view_id"))
+                )
+                XCTAssertEqual(Self.hex(nal), try caso.expected.string("nal_hex"), caso.name)
+            case "sei.parse":
+                let leida = H264Sei.parse(nal: try Self.data(hex: caso.inputs.string("nal_hex")))
+                let nuestra = try caso.expected.field("ours").boolValue ?? false
+                XCTAssertEqual(leida != nil, nuestra, caso.name)
+                if let leida, nuestra {
+                    XCTAssertEqual(Double(leida.rigMs), try caso.expected.number("rig_ms"), caso.name)
+                    XCTAssertEqual(Double(leida.viewId), try caso.expected.number("view_id"), caso.name)
+                }
+            default:
+                XCTFail("fn sin réplica en sei.json: \(caso.fn)")
+            }
+            corridos += 1
+        }
+        XCTAssertGreaterThanOrEqual(corridos, 9, "sei.json trae build y parse")
+    }
+
+    private static func hex(_ data: Data) -> String {
+        data.map { String(format: "%02x", $0) }.joined()
+    }
+
+    private static func data(hex: String) throws -> Data {
+        var out = Data()
+        var indice = hex.startIndex
+        while indice < hex.endIndex {
+            let siguiente = hex.index(indice, offsetBy: 2)
+            guard let byte = UInt8(hex[indice..<siguiente], radix: 16) else {
+                throw GoldenError.message("hex mal formado: \(hex)")
+            }
+            out.append(byte)
+            indice = siguiente
+        }
+        return out
+    }
 }

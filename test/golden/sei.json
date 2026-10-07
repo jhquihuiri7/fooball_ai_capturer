@@ -1,0 +1,149 @@
+{
+  "schema": 1,
+  "module": "sei",
+  "conventions": {
+    "axes": "Ejes del soporte: X a la derecha, Y hacia abajo, Z hacia delante (rig.py).",
+    "rotation": "R = R_yaw · R_pitch · R_roll, de cámara a soporte; ortonormal (CameraPose.matrix), así que la inversa es la traspuesta.",
+    "angles": "Radianes. Yaw positivo gira la cámara a la derecha; pitch positivo, hacia arriba.",
+    "pixel_center": "El convenio de rig.py: el píxel i cubre [i, i+1) y su centro continuo está en i+0,5; CameraIntrinsics.scaled reescala pasando por ese centro.",
+    "homography": "Las homografías de vista van del programa a la cámara (view_homography).",
+    "scalars": "Float con el repr de Python: ida y vuelta exacta a Double en Swift.",
+    "tensors": "{dtype: f64|f32|u8|i32, shape, b64}, little-endian y orden C; en Swift, Data(base64Encoded:)."
+  },
+  "cases": [
+    {
+      "name": "build_tipico",
+      "fn": "sei.build",
+      "inputs": {
+        "rig_ms": 1791303900123,
+        "view_id": 3
+      },
+      "expected": {
+        "nal_hex": "060519666f6f7462616c6c2d61692e7269673000000301a112085bdb0380"
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "build_rig_ms_pequeno",
+      "fn": "sei.build",
+      "inputs": {
+        "rig_ms": 1,
+        "view_id": 0
+      },
+      "expected": {
+        "nal_hex": "060519666f6f7462616c6c2d61692e7269673000000300000300000300010080"
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "build_rig_ms_cero",
+      "fn": "sei.build",
+      "inputs": {
+        "rig_ms": 0,
+        "view_id": 0
+      },
+      "expected": {
+        "nal_hex": "060519666f6f7462616c6c2d61692e726967300000030000030000030000030080"
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "build_maximo_json",
+      "fn": "sei.build",
+      "inputs": {
+        "rig_ms": 9007199254740991,
+        "view_id": 255
+      },
+      "expected": {
+        "nal_hex": "060519666f6f7462616c6c2d61692e72696730001fffffffffffffff80"
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "parse_tipico",
+      "fn": "sei.parse",
+      "inputs": {
+        "nal_hex": "060519666f6f7462616c6c2d61692e7269673000000301a112085bdb0380"
+      },
+      "expected": {
+        "ours": true,
+        "rig_ms": 1791303900123,
+        "view_id": 3
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "parse_con_emulacion",
+      "fn": "sei.parse",
+      "inputs": {
+        "nal_hex": "060519666f6f7462616c6c2d61692e7269673000000300000300000300020180"
+      },
+      "expected": {
+        "ours": true,
+        "rig_ms": 2,
+        "view_id": 1
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "parse_otro_uuid",
+      "fn": "sei.parse",
+      "inputs": {
+        "nal_hex": "060519666f6f7462616c6c2d61692e7269673900000301a112085bdb0380"
+      },
+      "expected": {
+        "ours": false
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "parse_sps",
+      "fn": "sei.parse",
+      "inputs": {
+        "nal_hex": "67640028ac"
+      },
+      "expected": {
+        "ours": false
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "name": "parse_cortada",
+      "fn": "sei.parse",
+      "inputs": {
+        "nal_hex": "060519666f6f7462616c6c2d"
+      },
+      "expected": {
+        "ours": false
+      },
+      "tol": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    }
+  ]
+}

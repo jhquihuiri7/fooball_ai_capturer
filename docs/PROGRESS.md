@@ -12,6 +12,17 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+
+## 2026-10-07 · IOS-50 — la SEI del soporte, atada a los dorados de la sonda del VPS (NUBE-20)
+
+`sei.json` llega sincronizado desde football-ai (2c5018d) y `H264SeiTests` lo consume:
+`H264Sei.build` da los mismos bytes que `tools/nube/sei_probe.py` en los 4 casos de
+construcción (con emulación, rigMs 0 y 2^53 - 1) y `parse` lee igual los 5 de lectura
+(otro UUID, una SPS y una NAL cortada no son nuestras). La sonda midió en la Mac que la
+SEI sobrevive a SRT → MediaMTX → RTSP en el 100 % de los fotogramas.
+
+Swift 297 tests (1 saltado) ✅ · Flutter 333 ✅.
+
 ## 2026-10-05 · PlayerDecoder con el camino heatmap del plan B (ADR 0020) · ✅
 
 Aditivo: `detr` y `nms` no cambian. `PlayerDecoder` gana `postprocess: .heatmap` con
