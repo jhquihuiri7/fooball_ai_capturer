@@ -79,6 +79,21 @@ public enum DetectionSpec {
     /// (Python: `BALL_GLOBAL_LOST_HZ`.)
     public static let ballGlobalLostHz: Int = 10
 
+    /// Píxeles. Ancho del mosaico de la búsqueda global: la mitad del 4K, para que la parte
+    /// lejana entre nativa en dos mitades apiladas (ADR 0020).
+    /// (Python: `BALL_GLOBAL_INPUT_WIDTH`.)
+    public static let ballGlobalInputWidth: Int = 1920
+
+    /// Píxeles. Alto del mosaico de la búsqueda global: el del retranqueo de 10 m, que fijó
+    /// REF-33 mientras M3 no esté medido. El de 6 m (1296) quedó fuera de presupuesto.
+    /// (Python: `BALL_GLOBAL_INPUT_HEIGHT`.)
+    public static let ballGlobalInputHeight: Int = 896
+
+    /// ROIs por ciclo en el lote fijo del balón (ADR 0020): la predicción del Kalman y una
+    /// segunda hipótesis. Es la N de [N, 3, S, S]; una ROI que falta va a ceros.
+    /// (Python: `BALL_MAX_ROIS_PER_CYCLE_MOBILE`.)
+    public static let ballMaxRoisPerCycleMobile: Int = 2
+
     /// Frames en gris apilados por canal en la entrada del balón (ADR 0020): t-2, t-1 y t,
     /// consecutivos de captura (33 ms) aunque la inferencia vaya a otra cadencia.
     /// (Python: `BALL_TEMPORAL_FRAMES`.)

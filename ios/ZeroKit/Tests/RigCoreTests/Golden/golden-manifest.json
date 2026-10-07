@@ -1,10 +1,11 @@
 {
   "schema": 1,
   "warning": "NO EDITAR: copiado por tools/export_golden.py --sync del repo football-ai. Se regenera allí y se vuelve a sincronizar.",
-  "source_commit": "b0d60a6cd8cb0cc80de5873cbb4bd3a65245b688",
+  "source_commit": "479a84cbc565b6bba8bd4f22103e45a32ffe0da9",
   "files": {
     "action.json": "bc7e32ca75c01b4dcf33e76d0a5ad726fba41d3ed3ed2992b914a7b43803548d",
     "ad_strip.json": "312648972cf788bcf374cc223b71f3e706b1528d9555fc5305d4f89039813d55",
+    "ball_detector.json": "2679eafe437aa6a96ceb6172e707e64b7449d757a7f4c5c2e843a0a689dda00c",
     "band.json": "6169c08b04bc0865b7e45a77fb944916b2aa8ab3af8b223a9154ffc2d37a2101",
     "color.json": "d63f477ea19d1be6bc24e990347600ff5138638b10e3aa702cd5335ba0653f8e",
     "compose.json": "4ec729c8f8446e067badd57574ffdfd7261bae58a1ec54c8fe82ea4d8b8ffcb0",
@@ -12,7 +13,7 @@
     "detectors.json": "89af99fe14e0b2720ccfd15ad193e10f1099927a8f11246b0d6ad037e910e580",
     "director.json": "a469e93f18928e1768d83b267cc6fa02b2e7ffe61161c0a1479ccca9e7bef74b",
     "lineups.json": "6c9b8c6a5d305590b59c4589306af48d9f8c9a4721dd47f303bbf9e483b7dc74",
-    "manifest.json": "0053c88d1af0d4b52785b6f982dbf3b074db010910f1eb63664910a710278568",
+    "manifest.json": "3c4673c11b2c3d95a6a835ff5f1cd343ba9d20a5e80e2735e05e71aad3fdfc30",
     "match.json": "eb5c46eea88696f5e7050ec9a08f880e9d6abc4f1d6decfe8c1c4440aaeb91f6",
     "match_clock.json": "52608e4278498a5293b115a215d3b76c5e18cb2047a2da721cce5b7859ed7efc",
     "match_log_sample.jsonl": "ec2fb80272d367c309e98f10af2c2e04f2ca3b90a0a5f3b5c67ec32df46be5ae",
