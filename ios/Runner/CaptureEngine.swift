@@ -40,6 +40,11 @@ final class CaptureEngine: NSObject {
     // IOS-54: el micrófono, solo con RIG_AUDIO=1 hasta que se acepte el permiso en los
     // dos móviles. Las tramas AAC van a Documents/bench/audio-<t>.aac, con su informe.
     private let audioOutput = AVCaptureAudioDataOutput()
+    /// El primer fotograma visto (instante en el host y separación entre relojes), en ns.
+    private var clockSkewStart: (atNs: Int64, skewNs: Int64)?
+    /// La separación entre el reloj de la sesión y el del host, minuto a minuto, en ms.
+    private(set) var clockSkewByMinuteMs: [Double] = []
+    private static let nsPerMinute: Int64 = 60_000_000_000
     private let audioQueue = DispatchQueue(label: "io.footballai.capture.audio", qos: .userInitiated)
     private var audio: AudioCapture?
     private var audioFile: FileHandle?
@@ -272,8 +277,9 @@ final class CaptureEngine: NSObject {
             session.addOutput(audioOutput)
         }
         let captura = AudioCapture { [weak self] pts in
-            let ns = CMTimeConvertScale(pts, timescale: 1_000_000_000, method: .default).value
-            let offset = self?.rigClock?.offsetAt(ns: ns) ?? self?.clockOffsetNs ?? 0
+            guard let self else { return 0 }
+            let ns = self.hostNs(pts)
+            let offset = self.rigClock?.offsetAt(ns: ns) ?? self.clockOffsetNs
             return Double(ns + offset) / 1e6
         }
         captura.onFrame = { [weak self] trama in self?.writeAudio(trama) }
@@ -607,10 +613,11 @@ final class CaptureEngine: NSObject {
         guard writerStarted, let writer, writer.status == .writing, let input = audioWriterInput,
               input.isReadyForMoreMediaData
         else { return }
-        let ns = CMTimeConvertScale(
-            CMSampleBufferGetPresentationTimeStamp(pcm), timescale: 1_000_000_000, method: .default
-        ).value
-        let desfase = rigClock?.offsetAt(ns: ns) ?? clockOffsetNs
+        let pts = CMSampleBufferGetPresentationTimeStamp(pcm)
+        let crudo = CMTimeConvertScale(pts, timescale: 1_000_000_000, method: .default).value
+        let ns = hostNs(pts)
+        // Del reloj de la sesión al del host, y de ahí al del soporte: como el vídeo.
+        let desfase = (ns - crudo) + (rigClock?.offsetAt(ns: ns) ?? clockOffsetNs)
         if let copia = SampleRetime.shifted(pcm, byNs: desfase) {
             input.append(copia)
         }
@@ -742,6 +749,36 @@ final class CaptureEngine: NSObject {
 
 // MARK: - Frames
 
+extension CaptureEngine {
+    /// Un PTS de la cámara o del micro en el reloj del host, en ns.
+    ///
+    /// AVFoundation sella en `session.synchronizationClock`, y con el micro dentro de la
+    /// sesión ese reloj es el del dispositivo de audio, no el del host: deriva decenas de
+    /// ppm. El tic del programa, el enlace y el reloj del soporte van en el del host, así
+    /// que sin convertir el fotograma propio del maestro se iba alejando del instante que
+    /// se le pedía (medido el 2026-10-07: sin él en el 79 % del programa a los 90 min).
+    func hostNs(_ pts: CMTime) -> Int64 {
+        let host = CMClockGetHostTimeClock()
+        let enHost = session.synchronizationClock.map { CMSyncConvertTime(pts, from: $0, to: host) } ?? pts
+        return CMTimeConvertScale(enHost, timescale: 1_000_000_000, method: .default).value
+    }
+
+    /// Anota, una vez por minuto, cuánto se ha separado el reloj de la sesión del del
+    /// host desde el primer fotograma, en ms. El banco lo saca en su informe.
+    func noteClockSkew(pts: CMTime, hostNs ns: Int64) {
+        let crudo = CMTimeConvertScale(pts, timescale: 1_000_000_000, method: .default).value
+        let diferencia = ns - crudo
+        guard let inicio = clockSkewStart else {
+            clockSkewStart = (ns, diferencia)
+            return
+        }
+        let minutos = Int((ns - inicio.atNs) / Self.nsPerMinute)
+        if minutos >= clockSkewByMinuteMs.count {
+            clockSkewByMinuteMs.append(Double(diferencia - inicio.skewNs) / 1e6)
+        }
+    }
+}
+
 extension CaptureEngine: AVCaptureVideoDataOutputSampleBufferDelegate {
     func captureOutput(
         _ output: AVCaptureOutput,
@@ -752,11 +789,12 @@ extension CaptureEngine: AVCaptureVideoDataOutputSampleBufferDelegate {
         // IOS-13: con el enlace sobre Network el desfase sale del reloj nativo, por
         // fotograma y extrapolando la deriva, sin pasar por Pigeon. Con el Multipeer
         // de hoy sigue llegando de Dart por setClockOffsetNs.
-        let originalNs = CMTimeConvertScale(original, timescale: 1_000_000_000, method: .default).value
+        let originalNs = hostNs(original)
+        noteClockSkew(pts: original, hostNs: originalNs)
         let offsetNs = rigClock?.offsetAt(ns: originalNs) ?? clockOffsetNs
-        let rigTime = CMTimeAdd(original, CMTime(value: offsetNs, timescale: 1_000_000_000))
+        let rigNs = originalNs + offsetNs
+        let rigTime = CMTime(value: rigNs, timescale: 1_000_000_000)
 
-        let rigNs = Int64(CMTimeGetSeconds(rigTime) * 1_000_000_000)
         recentPts.append(rigNs)
         if recentPts.count > recentPtsCapacity {
             recentPts.removeFirst(recentPts.count - recentPtsCapacity)

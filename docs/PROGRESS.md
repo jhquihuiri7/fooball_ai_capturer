@@ -13,6 +13,51 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 ---
 
 
+
+## 2026-10-07 · El fotograma propio del maestro se perdía: el reloj del micro (IOS-13, IOS-54, SPK-54)
+
+**Qué pasaba.** La pasada de 90 min con imagen real (`bench/dos-moviles-20261007-0837`) dio
+el programa sin el fotograma propio del maestro en 123 235 de 156 079 fotogramas (79 %):
+la mitad del maestro en negro hacia el minuto 20 y SIN SEÑAL desde el 66, aunque las
+partes del esclavo llegaron todas (161 569 decodificadas). Las pasadas de 30 min ya lo
+tenían y no se vio: 8 102 (hoy) y 12 717 (ayer) fotogramas sin el propio, pero ningún
+SIN SEÑAL, que es lo que se miraba.
+
+**Por qué.** Desde IOS-54 el micro está en la misma `AVCaptureSession` que la cámara, y
+entonces AVFoundation sella vídeo y audio con el reloj del dispositivo de audio
+(`synchronizationClock`), no con el del host. El PTS se usaba tal cual, mientras el tic del
+programa, el enlace y el reloj del soporte van en el del host. Medido: el reloj de la
+sesión se separa del host **2,8 ms/min en el iPhone 17 (46 ppm) y 3,7 ms/min en el 16 Pro
+(61 ppm)**. Al pasar de ~17 ms el maestro ya no encuentra su fotograma del instante de la
+parte; al pasar de la espera de la parte, ni las partes.
+
+**Arreglo.** `CaptureEngine.hostNs` convierte cada PTS con `CMSyncConvertTime` del reloj de
+la sesión al del host antes de sumar el desfase del soporte: el vídeo, el audio del
+programa (AudioCapture) y el audio de la 4K. El informe del banco gana
+`capture_clock_skew_ms` (la separación minuto a minuto) y `part_wait_ms`; el banco,
+`RIG_SPLIT_PART_WAIT_MS`, `RIG_SPLIT_NO_MOV` y `RIG_SPLIT_NO_TS` para las mediciones que
+siguen.
+
+**Medido después** (30 min, la misma carga: director, CenterNet en los dos, micro):
+
+| | Antes (0802) | Después (1020) |
+|---|---|---|
+| Sin el fotograma propio | 8 102 | **0** |
+| SIN SEÑAL / retenidos | 0 / 199 | 0 / 0 |
+| Dos lentes / una lente | 52 087 / 1 912 | 43 724 / **10 267** |
+| Edad de la parte p50 / p95 / p99 | 45 / 90 / 105 ms | **90 / 115 / 125 ms** |
+| Latencia añadida p95 | 109 ms | 110 ms |
+
+**Lo que destapa.** Con los sellos bien, la edad real de la parte es p50 90 / p99 125 ms:
+la de antes salía baja porque los sellos del esclavo derivaban. Con `PART_MAX_WAIT_MS` =
+100 (ADR 0023, «objetivo» que fija SPK-04), el 19 % de los fotogramas sale de una lente
+porque la parte aún no llegó. Se mide 130 ms con `RIG_SPLIT_PART_WAIT_MS` antes de
+proponer el cambio.
+
+**Sigue abierto**: la memoria del maestro crece ~1,4 MB/min (610 MB a los 90 min; el
+esclavo, plano en ~427 MB). No está en las colas del banco ni del compositor, que están
+acotadas; se separa con `RIG_SPLIT_NO_MOV` y `RIG_SPLIT_NO_TS`.
+
 ## 2026-10-07 · IOS-50 — la SEI del soporte, atada a los dorados de la sonda del VPS (NUBE-20)
 
 `sei.json` llega sincronizado desde football-ai (2c5018d) y `H264SeiTests` lo consume:

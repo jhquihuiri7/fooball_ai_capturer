@@ -727,6 +727,12 @@ final class SplitBench {
     // IOS-57: la copia local del programa en .mov (con el audio del micro si lo hay).
     private var recorder: ProgramRecorder?
     var audioFormat: () -> CMAudioFormatDescription? = { nil }
+    /// La separación entre el reloj de la sesión de captura y el del host, por minuto (ms).
+    var captureClockSkew: () -> [Double] = { [] }
+    /// Lo que el maestro espera la parte del esclavo, en ms: `PART_MAX_WAIT_MS` del ADR
+    /// 0023, o RIG_SPLIT_PART_WAIT_MS para medir otro valor (SPK-04).
+    private lazy var partWaitMs: Int64 = env["RIG_SPLIT_PART_WAIT_MS"].flatMap(Int64.init)
+        ?? LinkConstants.partMaxWaitMs
     /// Para y reanuda la cámara (IOS-84: RIG_SPLIT_CAM_OFF_S / RIG_SPLIT_CAM_ON_S).
     var cameraSwitch: ((Bool) -> Void)?
     private var cameraOffDone = false
@@ -931,7 +937,8 @@ final class SplitBench {
                     c.ads = AdHub.rotation         // la franja (IOS-48)
                     return c
                 }(),
-                masterPool: pool
+                masterPool: pool,
+                maxWaitMs: partWaitMs
             )
             // IOS-48: con RIG_ADS=<fichero JSON en Documents/ads>, la lista del banco.
             if let fichero = env["RIG_ADS"],
@@ -1149,7 +1156,7 @@ final class SplitBench {
         // esperar, el instante «ahora» aún no tiene fotograma propio (salía SIN SEÑAL) y
         // el programa saltaba 100 ms adelante y atrás al caer y volver el par. Con el par
         // caído, lo que cambia es que MasterProgramStage no espera sus partes.
-        let t = rejilla(now - LinkConstants.partMaxWaitMs)
+        let t = rejilla(now - partWaitMs)
         guard t != lastProgramT else { return }
         lastProgramT = t
         let inicio = DispatchTime.now().uptimeNanoseconds
@@ -1288,7 +1295,10 @@ final class SplitBench {
             }
         }
         while let f = enc.pop() {
-            if recorder == nil, let fd = f.formatDescription, let url = tsURL?.deletingPathExtension().appendingPathExtension("mov") {
+            // RIG_SPLIT_NO_MOV=1 / RIG_SPLIT_NO_TS=1: sin la copia .mov o sin el .ts, para
+            // separar de dónde crece la memoria del maestro.
+            if recorder == nil, env["RIG_SPLIT_NO_MOV"] != "1", let fd = f.formatDescription,
+               let url = tsURL?.deletingPathExtension().appendingPathExtension("mov") {
                 recorder = try? ProgramRecorder(url: url, videoFormat: fd, audioFormat: audioFormat())
             }
             try? recorder?.append(video: f)
@@ -1300,7 +1310,9 @@ final class SplitBench {
             if firstVideoT == nil { firstVideoT = f.ptsNs / 1_000_000 }
             let paquetes = muxer.muxVideo(avcc: avcc, parameterSets: [], isKeyframe: f.isKeyframe,
                                           pts90k: pts, dts90k: pts)
-            if let ts = tsFile, !finished { writerQueue.async { try? ts.write(contentsOf: paquetes) } }
+            if let ts = tsFile, !finished, env["RIG_SPLIT_NO_TS"] != "1" {
+                writerQueue.async { try? ts.write(contentsOf: paquetes) }
+            }
         }
     }
 
@@ -1376,6 +1388,8 @@ final class SplitBench {
             "color_series": colorSeries,
             "exposure_bias": exposureApplied,
             "thermal_by_minute": thermalByMinute,
+            "capture_clock_skew_ms": captureClockSkew(),
+            "part_wait_ms": partWaitMs,
             "battery": Double(UIDevice.current.batteryLevel),
             "detect": detect?.report() ?? [:],
             // El coste medio de la app entera durante el banco, en % de UN núcleo
