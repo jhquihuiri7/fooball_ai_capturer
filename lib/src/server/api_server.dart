@@ -4,7 +4,8 @@
 ///
 /// [MasterApi] no sabe de sockets: recibe un [ApiRequest] y devuelve un [ApiResponse].
 /// Así la misma lógica atiende la LAN ([MasterApiServer], un HttpServer de dart:io) y,
-/// con IOS-65, los `command` que llegan por el túnel del VPS.
+/// con IOS-65, los `command` que llegan por el túnel del VPS ([MasterApi.command], que
+/// dice también qué `state` sale antes de la `response`).
 ///
 /// - `GET /api/v1/match?since=<boot>:<rev>`: el partido al momento o, si el mando ya lo
 ///   tiene al día, en cuanto cambie (≤25 s); como mucho 8 esperas, la novena es un 503.
@@ -12,7 +13,8 @@
 /// - `stream/*` es del VPS, que tiene el relé: se manda como `relay_command` y se espera
 ///   la respuesta [apiCommandTimeout] (504 si vence); sin túnel, 503.
 /// - Errores en RFC 7807. `Authorization: Bearer` con el token de mando (ámbitos `match`
-///   y, si se marcó, `stream`, nunca `rig`) o con el PIN del operador (los tres).
+///   y, si se marcó, `stream`, nunca `rig`) o con el PIN del operador (los tres). Por el
+///   túnel, `principal: operator` (el panel remoto) también tiene los tres.
 library;
 
 import 'dart:async';
@@ -41,6 +43,11 @@ const Set<String> _tokenScopes = <String>{panelScopeMatch, panelScopeStream};
 /// Lo que abre el PIN del operador.
 const Set<String> _operatorScopes = <String>{panelScopeMatch, panelScopeStream, controlScopeRig};
 
+/// Quién manda la petición. Por la LAN siempre es [bearer]: la credencial va en
+/// `Authorization`. Por el túnel, el VPS dice [operator] cuando la orden es del panel
+/// remoto, que ya entró con su contraseña y no trae `Authorization` (ADR 0022 §7).
+enum ApiPrincipal { bearer, operator }
+
 /// Una petición ya leída, venga de la LAN o del túnel. Las cabeceras, en minúsculas.
 class ApiRequest {
   const ApiRequest({
@@ -49,7 +56,35 @@ class ApiRequest {
     this.query = const <String, String>{},
     this.headers = const <String, String>{},
     this.body,
+    this.principal = ApiPrincipal.bearer,
   });
+
+  /// El `data` de un `command` del túnel (ADR 0022 §6), ya validado por el lector del
+  /// protocolo. Un `command` nunca espera, así que su `since` no se atiende (el hub ya lo
+  /// quita). El cuerpo llega como objeto JSON: no hace falta que traiga `content-type`.
+  factory ApiRequest.fromCommand(Map<String, Object?> data) {
+    final Object? query = data['query'];
+    final Object? headers = data['headers'];
+    final Object? body = data['body'];
+    final Map<String, String> cabeceras = <String, String>{
+      if (headers is Map<String, Object?>)
+        for (final MapEntry<String, Object?> e in headers.entries)
+          if (e.value is String) e.key.toLowerCase(): e.value! as String,
+    };
+    if (body != null) {
+      cabeceras.putIfAbsent('content-type', () => _jsonContentType);
+    }
+    return ApiRequest(
+      method: data['method'] is String ? data['method']! as String : '',
+      path: data['path'] is String ? data['path']! as String : '',
+      query: <String, String>{
+        if (query is String && query.isNotEmpty) ...Uri.splitQueryString(query),
+      }..remove('since'),
+      headers: cabeceras,
+      body: body == null ? null : utf8.encode(jsonEncode(body)),
+      principal: data['principal'] == 'operator' ? ApiPrincipal.operator : ApiPrincipal.bearer,
+    );
+  }
 
   final String method;
 
@@ -60,6 +95,7 @@ class ApiRequest {
 
   /// Los bytes del cuerpo, sin leer como JSON todavía.
   final List<int>? body;
+  final ApiPrincipal principal;
 }
 
 class ApiResponse {
@@ -85,6 +121,26 @@ class ApiResponse {
   final int status;
   final String contentType;
   final List<int> body;
+}
+
+/// Lo que contesta el maestro a un `command` del túnel (IOS-65).
+class CommandReply {
+  const CommandReply(this.state, this.response);
+
+  /// El DTO sin `scopes` si la orden subió `rev`; null si no. El túnel lo manda como
+  /// `state` **antes** que la `response`: el hub lee la conexión en orden, y así, cuando
+  /// el mando recibe su respuesta, la caché del VPS ya tiene el `rev` nuevo y la espera
+  /// larga que lanza después no le devuelve el partido de antes (ADR 0022, anotado al
+  /// implementar NUBE-07). Un `state` con ese `rev` ya en la cola por delante vale igual.
+  final Map<String, Object?>? state;
+  final ApiResponse response;
+
+  /// El `data` de la `response` del túnel: `{status, headers: {content-type}, body}`.
+  Map<String, Object?> get responseData => <String, Object?>{
+    'status': response.status,
+    'headers': <String, String>{'content-type': response.contentType},
+    'body': jsonDecode(utf8.decode(response.body)),
+  };
 }
 
 /// Lo que pide `stream/*` al VPS por el túnel. Devuelve sin más si el relé aplicó la
@@ -214,43 +270,74 @@ class MasterApi {
     return _order(ruta, request, acceso.$1!);
   }
 
+  /// Un `command` del túnel (IOS-65), con los mismos manejadores que la LAN. Por el túnel
+  /// solo llega lo que el hub reenvía: el partido y las órdenes. `stream/*` lo atiende el
+  /// propio VPS, que tiene el relé, y las miniaturas y el estado del soporte los sirve el
+  /// hub (ADR 0022 §7 y §12): 404.
+  Future<CommandReply> command(ApiRequest request) async {
+    final String ruta = request.path.startsWith(panelApiPrefix)
+        ? request.path.substring(panelApiPrefix.length)
+        : request.path;
+    if ((request.method == 'GET' && ruta != _matchRoute) || ruta.startsWith('stream/')) {
+      return CommandReply(null, ApiResponse.problem(HttpStatus.notFound, 'por el tunel no se sirve ${request.path}'));
+    }
+    final int antes = engine.rev;
+    final ApiResponse respuesta = await handle(request);
+    return CommandReply(engine.rev == antes ? null : stateDto(), respuesta);
+  }
+
+  /// El DTO del `state` del túnel: sin `scopes`, que son de cada petición (ADR 0022 §5).
+  Map<String, Object?> stateDto() => engine.toJson()..remove('scopes');
+
   // ------------------------------------------------------------------------- //
   // La puerta
   // ------------------------------------------------------------------------- //
 
   /// Los ámbitos de quien pregunta, o el error que hay que contestar.
   (Set<String>?, ApiResponse?) _access(ApiRequest request, String? scope) {
+    final bool operador = request.principal == ApiPrincipal.operator;
+    final (Set<String>?, ApiResponse?) quien = operador ? (_operatorScopes, null) : _bearer(request);
+    final Set<String>? ambitos = quien.$1;
+    if (ambitos == null) {
+      return quien;
+    }
+    if (scope != null && !ambitos.contains(scope)) {
+      return (null, ApiResponse.problem(HttpStatus.forbidden, 'este mando no tiene permiso de $scope'));
+    }
+    final String? dispositivo = request.headers[panelDeviceHeader.toLowerCase()];
+    // El panel remoto sin nombre no es un mando: el hub ya lleva su propia lista.
+    if (!operador || dispositivo != null) {
+      _noteDevice(dispositivo, stream: ambitos.contains(panelScopeStream));
+    }
+    return (ambitos, null);
+  }
+
+  /// Los ámbitos del `Authorization: Bearer`: el PIN del operador o un token de mando.
+  (Set<String>?, ApiResponse?) _bearer(ApiRequest request) {
     final String cabecera = request.headers['authorization'] ?? '';
     if (!cabecera.startsWith(_bearerPrefix)) {
       return (null, ApiResponse.problem(HttpStatus.unauthorized, 'falta el token: escanea el $controlQrName'));
     }
     final String credencial = cabecera.substring(_bearerPrefix.length);
-    final Set<String> ambitos;
     final String? pin = operatorPin;
     if (pin != null && pin.isNotEmpty && _sameText(credencial, pin)) {
-      ambitos = _operatorScopes;
-    } else {
-      final List<int>? secreto = controlSecret;
-      if (secreto == null) {
-        return (null, ApiResponse.problem(HttpStatus.unauthorized, 'token no valido: escanea el $controlQrName'));
-      }
-      try {
-        final ControlClaims claims = verifyToken(
-          secreto,
-          credencial,
-          matchId: engine.matchId,
-          nowS: wallS(),
-        );
-        ambitos = claims.scopes.intersection(_tokenScopes);
-      } on TokenError catch (error) {
-        return (null, ApiResponse.problem(error.status, error.message));
-      }
+      return (_operatorScopes, null);
     }
-    if (scope != null && !ambitos.contains(scope)) {
-      return (null, ApiResponse.problem(HttpStatus.forbidden, 'este mando no tiene permiso de $scope'));
+    final List<int>? secreto = controlSecret;
+    if (secreto == null) {
+      return (null, ApiResponse.problem(HttpStatus.unauthorized, 'token no valido: escanea el $controlQrName'));
     }
-    _noteDevice(request.headers[panelDeviceHeader.toLowerCase()], stream: ambitos.contains(panelScopeStream));
-    return (ambitos, null);
+    try {
+      final ControlClaims claims = verifyToken(
+        secreto,
+        credencial,
+        matchId: engine.matchId,
+        nowS: wallS(),
+      );
+      return (claims.scopes.intersection(_tokenScopes), null);
+    } on TokenError catch (error) {
+      return (null, ApiResponse.problem(error.status, error.message));
+    }
   }
 
   void _noteDevice(String? header, {required bool stream}) {

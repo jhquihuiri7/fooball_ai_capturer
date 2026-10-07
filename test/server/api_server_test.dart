@@ -41,6 +41,72 @@ Future<void> _until(bool Function() condition) async {
   }
 }
 
+/// El `data` de un mensaje de los dorados del túnel (`tools/nube/protocol.py`, NUBE-05).
+Map<String, Object?> _tunnelData(String name) {
+  final Map<String, Object?> golden =
+      jsonDecode(File('test/golden/tunnel.json').readAsStringSync()) as Map<String, Object?>;
+  final Map<String, Object?> caso = (golden['cases']! as List<Object?>)
+      .cast<Map<String, Object?>>()
+      .singleWhere((Map<String, Object?> c) => c['name'] == name);
+  final String texto = (caso['inputs']! as Map<String, Object?>)['text']! as String;
+  return (jsonDecode(texto) as Map<String, Object?>)['data']! as Map<String, Object?>;
+}
+
+/// Un proxy TCP entre el mando y el maestro que tira la vuelta de las primeras
+/// [dropPosts] órdenes cuando el maestro ya las ha aplicado: Starlink que corta a mitad.
+class _CutProxy {
+  _CutProxy._(this._socket, this._target);
+
+  static Future<_CutProxy> start(int target) async {
+    final ServerSocket socket = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+    final _CutProxy proxy = _CutProxy._(socket, target);
+    socket.listen((Socket client) => unawaited(proxy._pipe(client)));
+    return proxy;
+  }
+
+  final ServerSocket _socket;
+  final int _target;
+  int dropPosts = 0;
+
+  /// Órdenes que pasaron hacia el maestro, reintentos incluidos.
+  int posts = 0;
+
+  int get port => _socket.port;
+
+  Future<void> close() => _socket.close();
+
+  Future<void> _pipe(Socket client) async {
+    final Socket maestro = await Socket.connect(InternetAddress.loopbackIPv4, _target);
+    bool cortar = false;
+    client.listen(
+      (Uint8List datos) {
+        if (datos.length >= 5 && String.fromCharCodes(datos.sublist(0, 5)) == 'POST ') {
+          posts++;
+          if (dropPosts > 0) {
+            dropPosts--;
+            cortar = true;
+          }
+        }
+        maestro.add(datos);
+      },
+      onDone: maestro.destroy,
+      onError: (Object _) => maestro.destroy(),
+    );
+    maestro.listen(
+      (Uint8List datos) {
+        if (cortar) {
+          client.destroy();
+          maestro.destroy();
+          return;
+        }
+        client.add(datos);
+      },
+      onDone: client.destroy,
+      onError: (Object _) => client.destroy(),
+    );
+  }
+}
+
 void main() {
   final List<int> s = utf8.encode('secreto-del-soporte-de-prueba-0123456789');
   late Directory dir;
@@ -50,10 +116,10 @@ void main() {
   late MasterApiServer server;
   late HttpClient http;
 
-  String qr({Set<String> scopes = const <String>{panelScopeMatch}}) => controlPairingText(
+  String qr({Set<String> scopes = const <String>{panelScopeMatch}, int? port}) => controlPairingText(
     rigSecret: s,
     matchId: engine.matchId,
-    panels: <Uri>[Uri.parse('http://127.0.0.1:${server.port}')],
+    panels: <Uri>[Uri.parse('http://127.0.0.1:${port ?? server.port}')],
     nowS: _ahoraS,
     scopes: scopes,
   );
@@ -154,6 +220,88 @@ void main() {
       await _until(() => control.match != null);
       expect((await control.setStreaming(on: true)).outcome, CommandOutcome.forbidden);
     });
+
+    PanelControl mando(String nombre, {int? port}) {
+      final PanelControl m = PanelControl(
+        pairing: PanelPairing.parse(qr(port: port))!,
+        deviceName: nombre,
+        retryWindow: const Duration(milliseconds: 600),
+        retryDelay: const Duration(milliseconds: 50),
+        reconnectDelay: const Duration(milliseconds: 50),
+      );
+      addTearDown(m.dispose);
+      return m;
+    }
+
+    test('aceptación: dos mandos apuntan el mismo gol a la vez; entra uno y el otro, 409', () async {
+      final PanelControl luis = mando('Móvil de Luis');
+      control.start();
+      luis.start();
+      await _until(() => control.match != null && luis.match != null);
+      // Los dos vieron 0-0: el segundo que llega choca con `expect`.
+      final List<CommandResult> r = await Future.wait(<Future<CommandResult>>[
+        control.goal(MatchTeam.home, 1),
+        luis.goal(MatchTeam.home, 1),
+      ]);
+      expect(r.map((CommandResult x) => x.outcome).toSet(), <CommandOutcome>{
+        CommandOutcome.applied,
+        CommandOutcome.conflict,
+      });
+      expect(engine.homeGoals, 1);
+      // El que chocó enseña ya el marcador bueno, el del 409.
+      expect((control.match!.home.goals, luis.match!.home.goals), (1, 1));
+      expect(api.devices().map((ControlDevice d) => d.name).toSet(), <String>{'Móvil de Ana', 'Móvil de Luis'});
+    });
+
+    test('aceptación: la vuelta se pierde tras aplicar; el reintento con la misma clave no suma otro', () async {
+      final _CutProxy proxy = await _CutProxy.start(server.port);
+      addTearDown(proxy.close);
+      final PanelControl cortado = mando('Móvil por Starlink', port: proxy.port);
+      cortado.start();
+      await _until(() => cortado.match != null);
+      proxy.dropPosts = 1;
+      expect((await cortado.goal(MatchTeam.home, 1)).outcome, CommandOutcome.applied);
+      expect(proxy.posts, 2, reason: 'la primera se aplicó y su vuelta se perdió');
+      expect(engine.homeGoals, 1);
+      expect(cortado.match!.home.goals, 1);
+    });
+
+    test('aceptación: la espera larga de PanelControl despierta en ≤100 ms', () async {
+      control.start();
+      await _until(() => control.match != null && api.longPolls == 1);
+      final Completer<void> visto = Completer<void>();
+      final Stopwatch t = Stopwatch();
+      control.addListener(() {
+        if (!visto.isCompleted && control.match!.away.goals == 1) {
+          t.stop();
+          visto.complete();
+        }
+      });
+      t.start();
+      engine.apply('match/goal', <String, Object?>{'team': 'away', 'delta': 1, 'expect': 0});
+      await visto.future.timeout(const Duration(seconds: 2));
+      expect(t.elapsedMilliseconds, lessThanOrEqualTo(100));
+    });
+
+    test('aceptación: el noveno mando recibe 503 y sigue con el partido sin since', () async {
+      final List<PanelControl> ocho = <PanelControl>[
+        for (int i = 0; i < apiMaxLongPolls; i++) mando('Mando $i')..start(),
+      ];
+      await _until(() => api.longPolls == apiMaxLongPolls);
+      final PanelControl noveno = mando('Mando 8');
+      final List<String> problemas = <String>[];
+      noveno.addListener(() {
+        final String? p = noveno.problem;
+        if (p != null) {
+          problemas.add(p);
+        }
+      });
+      noveno.start();
+      await _until(() => problemas.any((String p) => p.contains('sin since')));
+      expect(noveno.match, isNotNull);
+      engine.apply('match/clock', <String, Object?>{'action': 'start'});
+      await _until(() => <PanelControl>[...ocho, noveno].every((PanelControl m) => m.match!.clockRunning));
+    });
   });
 
   test('un reintento con la misma clave se aplica una vez', () async {
@@ -249,6 +397,94 @@ void main() {
       final HttpClientResponse res = await roto.close();
       expect(res.statusCode, 400);
       expect(res.headers.contentType!.mimeType, problemContentType);
+    });
+  });
+
+  group('por el túnel (el command de IOS-65)', () {
+    Map<String, Object?> gol(String bearer, {String? key}) => <String, Object?>{
+      'method': 'POST',
+      'path': '/api/v1/match/goal',
+      // Sin content-type a propósito: el cuerpo de un command ya es JSON.
+      'headers': <String, Object?>{
+        'authorization': 'Bearer $bearer',
+        'idempotency-key': ?key,
+        'x-zero-device': 'ipad-banda',
+      },
+      'principal': 'bearer',
+      'body': <String, Object?>{'team': 'home', 'delta': 1, 'expect': 0},
+    };
+
+    test('el panel remoto (principal operator) entra sin Authorization con los tres ámbitos', () async {
+      final CommandReply r = await api.command(ApiRequest.fromCommand(_tunnelData('valido_command_del_panel')));
+      expect(r.response.status, 200);
+      expect(r.state, isNull, reason: 'un GET no sube rev');
+      final Map<String, Object?> dorado = _tunnelData('valido_response_del_maestro');
+      expect(r.responseData.keys, dorado.keys);
+      expect(r.responseData['headers'], dorado['headers']);
+      expect((r.responseData['body']! as Map<String, Object?>)['scopes'], <String>['match', 'rig', 'stream']);
+      expect(api.devices(), isEmpty, reason: 'el panel remoto sin nombre no es un mando');
+    });
+
+    test('una orden que sube rev trae el state, sin scopes, para mandarlo antes que la respuesta', () async {
+      final CommandReply r = await api.command(ApiRequest.fromCommand(gol(token(), key: 'k-tunel')));
+      expect(r.response.status, 200);
+      final Map<String, Object?> body = r.responseData['body']! as Map<String, Object?>;
+      expect(r.state!['rev'], body['rev']);
+      expect(body['scopes'], <String>['match']);
+      // El state del dorado: el DTO sin scopes (un state con scopes es bad_field).
+      expect(r.state!.keys.toSet(), _tunnelData('valido_state').keys.toSet());
+      expect(api.devices().single.name, 'ipad-banda');
+
+      // El reintento con la misma clave, por el túnel o por la LAN: lo mismo, sin state.
+      final CommandReply otra = await api.command(ApiRequest.fromCommand(gol(token(), key: 'k-tunel')));
+      expect(otra.state, isNull);
+      expect(otra.responseData, r.responseData);
+      final (int lan, Map<String, Object?> j) = await pedir(
+        'POST', 'match/goal', bearer: token(), body: gol(token())['body'], key: 'k-tunel',
+      );
+      expect((lan, j['rev']), (200, body['rev']));
+      expect(engine.homeGoals, 1);
+
+      // 409: no sube rev, así que no hay state; el partido bueno va en el problema.
+      final CommandReply choque = await api.command(ApiRequest.fromCommand(gol(token())));
+      expect(choque.state, isNull);
+      expect(choque.response.status, 409);
+      expect(choque.responseData['headers'], <String, String>{'content-type': problemContentType});
+      final Map<String, Object?> problema = choque.responseData['body']! as Map<String, Object?>;
+      expect(((problema['state']! as Map<String, Object?>)['home']! as Map<String, Object?>)['goals'], 1);
+    });
+
+    test('un command nunca espera: el since no se atiende', () async {
+      final CommandReply r = await api
+          .command(ApiRequest.fromCommand(<String, Object?>{
+            'method': 'GET',
+            'path': '/api/v1/match',
+            'query': 'since=${Uri.encodeQueryComponent('${engine.boot}:${engine.rev}')}',
+            'headers': <String, Object?>{'authorization': 'Bearer ${token()}'},
+            'principal': 'bearer',
+            'body': null,
+          }))
+          .timeout(const Duration(milliseconds: 500));
+      expect(r.response.status, 200);
+      expect(api.longPolls, 0);
+    });
+
+    test('ni stream/* ni las miniaturas; el token del dorado no abre', () async {
+      ApiRequest operador(String method, String path) => ApiRequest.fromCommand(<String, Object?>{
+        'method': method,
+        'path': path,
+        'headers': <String, Object?>{},
+        'principal': 'operator',
+        'body': method == 'POST' ? <String, Object?>{} : null,
+      });
+      api.relay = (String accion) async => fail('stream/* lo atiende el VPS');
+      expect((await api.command(operador('POST', '/api/v1/stream/start'))).response.status, 404);
+      expect((await api.command(operador('GET', '/api/v1/rig/thumb/left'))).response.status, 404);
+      // Por la LAN no hay principal: sin Authorization, 401 aunque sea el mismo GET.
+      expect((await pedir('GET', 'match')).$1, 401);
+      final CommandReply ajeno = await api.command(ApiRequest.fromCommand(_tunnelData('valido_command_del_mando')));
+      expect(ajeno.response.status, 401);
+      expect(engine.homeGoals, 0);
     });
   });
 

@@ -16,6 +16,50 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 
 
+## 2026-10-07 · IOS-62 — el `command` del túnel y la aceptación con PanelControl · 🚧 falta el tercer iPhone en la LAN
+
+La API ya estaba (2026-10-04). Faltaba lo que el VPS de NUBE-07 (`tools/nube/control.py` y
+el maestro falso) espera del maestro por el túnel, y la aceptación con el cliente de verdad.
+
+**Hecho**
+- `MasterApi.command(ApiRequest)`: los `command` del túnel (IOS-65) con los mismos
+  manejadores que la LAN. Devuelve `CommandReply`: el `state` (el DTO sin `scopes`) si la
+  orden subió `rev`, que el túnel tiene que mandar **antes** que la `response` (ADR 0022,
+  anotado al implementar NUBE-07), y `responseData`, la `response` v1
+  `{status, headers: {content-type}, body}`.
+- `ApiRequest.fromCommand(data)`: la query cruda sin `since` (un `command` nunca espera),
+  las cabeceras, el cuerpo ya JSON (sin exigir `content-type`) y `principal`.
+- `principal: operator` (el panel remoto, NUBE-08) entra sin `Authorization` con `match`,
+  `stream` y `rig`. Por la LAN no hay principal: siempre el Bearer.
+- Tests (+10, 23 en api_server_test):
+  - la aceptación con PanelControl contra el servidor real en el mismo proceso: dos
+    mandos apuntan el mismo gol a la vez (uno se aplica y el otro recibe 409 con el
+    marcador bueno); un proxy TCP corta la vuelta de una orden ya aplicada y el reintento
+    con la misma clave no suma otro gol; la espera larga despierta en ≤100 ms; el noveno
+    mando recibe 503 y sigue con el partido sin `since`;
+  - el `command` con los dorados de `tunnel.json` (`valido_command_del_panel`,
+    `valido_command_del_mando` y la forma de `valido_state` y `valido_response_del_maestro`):
+    el `state` antes de la respuesta, el reintento por el túnel y por la LAN con la misma
+    clave, el 409 sin `state` y el `since` que no hace esperar.
+
+**Decisiones mínimas (pendientes de revisión del propietario)**
+- Por el túnel, `stream/*` da 404 y no se reenvía como `relay_command`: el hub nunca la
+  manda (la atiende él, que tiene el relé), y atenderla haría esperar a un `command`.
+  También dan 404 los GET que no son `match` (miniaturas y estado del soporte: los sirve
+  el hub, ADR 0022 §12).
+- Un `command` de `principal: operator` sin `x-zero-device` no entra en la lista de mandos
+  del maestro: el hub lleva la suya.
+- Basta con que un `state` con ese `rev` vaya por delante de la respuesta en la cola del
+  túnel: IOS-65 puede fusionarlo con el que mande por `MatchEngine.changes`.
+
+**Queda fuera**: conectar `command` al túnel (IOS-65) y la prueba de la tarjeta en la LAN
+con un tercer iPhone que lleve el marcador del maestro (solo hay un iPhone y está en el
+banco). Con el Mac de tercer dispositivo ya se hizo (2026-10-04 y 2026-10-05: gol 200, el
+repetido 409 y la réplica en el esclavo).
+
+**Siguiente paso**: IOS-65 llama a `MasterApi.command` con cada `command` y manda
+`reply.state`, si lo hay, antes de la `response`.
+
 ## 2026-10-07 · Primer programa con la geometría calibrada (IOS-71, SPK-04) y la memoria sin ficheros
 
 **El cosido, con geometría medida.** Hasta hoy todas las pasadas usaban la geometría
