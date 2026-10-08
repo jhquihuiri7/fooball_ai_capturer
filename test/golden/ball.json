@@ -1,0 +1,2975 @@
+{
+  "schema": 1,
+  "module": "ball",
+  "conventions": {
+    "axes": "Ejes del soporte: X a la derecha, Y hacia abajo, Z hacia delante (rig.py).",
+    "rotation": "R = R_yaw · R_pitch · R_roll, de cámara a soporte; ortonormal (CameraPose.matrix), así que la inversa es la traspuesta.",
+    "angles": "Radianes. Yaw positivo gira la cámara a la derecha; pitch positivo, hacia arriba.",
+    "pixel_center": "El convenio de rig.py: el píxel i cubre [i, i+1) y su centro continuo está en i+0,5; CameraIntrinsics.scaled reescala pasando por ese centro.",
+    "homography": "Las homografías de vista van del programa a la cámara (view_homography).",
+    "scalars": "Float con el repr de Python: ida y vuelta exacta a Double en Swift.",
+    "tensors": "{dtype: f64|f32|u8|i32, shape, b64}, little-endian y orden C; en Swift, Data(base64Encoded:)."
+  },
+  "cases": [
+    {
+      "name": "kalman_paso_a_paso",
+      "fn": "BallKalman.ops",
+      "inputs": {
+        "start": [
+          1200.0,
+          700.0
+        ],
+        "ops": [
+          {
+            "op": "predict",
+            "dt_s": 0.06666666666666667
+          },
+          {
+            "op": "update",
+            "x_px": 1320.4,
+            "y_px": 690.2
+          },
+          {
+            "op": "predict",
+            "dt_s": 0.03333333333333333
+          },
+          {
+            "op": "predict",
+            "dt_s": 0.03333333333333333
+          },
+          {
+            "op": "update",
+            "x_px": 1441.1,
+            "y_px": 680.9
+          },
+          {
+            "op": "predict",
+            "dt_s": 0.0
+          },
+          {
+            "op": "predict",
+            "dt_s": 0.2
+          },
+          {
+            "op": "update",
+            "x_px": 1800.0,
+            "y_px": 650.0
+          }
+        ]
+      },
+      "expected": {
+        "state": {
+          "dtype": "f64",
+          "shape": [
+            8,
+            10
+          ],
+          "b64": "AAAAAADAkkAAAAAAAAAAAAAAAAAAZdNAAAAAAMBpEkEAAAAApLNRQQAAAAAA4IVAAAAAAAAAAAAAAAAAAGXTQAAAAADAaRJBAAAAAKSzUUEZP/TFgKGUQALHst4wkpxAfpussln+D0CSJpBO4l9OQIAYpvfqqexAwXI9pJ2RhUCGe+ucuppiwH6brLJZ/g9AkiaQTuJfTkCAGKb36qnsQHcBxzNPlZVAAsey3jCSnEAHITbBmlFWQM1vLOsNQ6dAQAzTe/Vk/EDc8zIn7WmFQIZ765y6mmLAByE2wZpRVkDNbyzrDUOnQEAM03v1ZPxA1cOZoR2JlkACx7LeMJKcQPBHHYwLEHtAgE+PJk6GvkAghum9ejoFQfd0KKo8QoVAhnvrnLqaYsDwRx2MCxB7QIBPjyZOhr5AIIbpvXo6BUH8xjlzcYSWQC6f0KfdPZxAxUd6OQS1D0Cfzi7jr+FRQAAD9nJkr+BAQr0JkidHhUAfZorYvTdhwMVHejkEtQ9An84u46/hUUAAA/ZyZK/gQPzGOXNxhJZALp/Qp909nEDFR3o5BLUPQJ/OLuOv4VFAAAP2cmSv4EBCvQmSJ0eFQB9miti9N2HAxUd6OQS1D0Cfzi7jr+FRQAAD9nJkr+BA0ubJlGoqnEAun9Cn3T2cQBLA9tjandVAz7KICM4nCkEN2MuRvRRAQSc4aXrEaoRAH2aK2L03YcASwPbY2p3VQM+yiAjOJwpBDdjLkb0UQEGQ61V7ACCcQMlzmm0O2ZtA6QbPGYX+D0D3/21+JVtDQOAXY13ZpuBAJHPxPAFQhEBKVWuK90NlwOkGzxmF/g9A9/9tfiVbQ0DgF2Nd2abgQA=="
+        },
+        "mahalanobis2": {
+          "dtype": "f64",
+          "shape": [
+            8
+          ],
+          "b64": "AAAAAAAAAABUmQoC44HnPwAAAAAAAAAAAAAAAAAAAAAz6d+IfaJwPwAAAAAAAAAAAAAAAAAAAAC+C8j5S5tKPw=="
+        }
+      },
+      "tol": {
+        "abs": 1e-06,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "seguimiento_recto_con_dos_rois",
+      "fn": "BallTracker.sequence",
+      "inputs": {
+        "width": 3840,
+        "height": 2160,
+        "roi_sides": [
+          256
+        ],
+        "max_rois": 2,
+        "dt_s": 0.03333333333333333,
+        "groups": [
+          [
+            1500.0,
+            1000.0
+          ],
+          [
+            2300.0,
+            850.0
+          ]
+        ],
+        "detections": {
+          "dtype": "f64",
+          "shape": [
+            40,
+            1,
+            3
+          ],
+          "b64": "AAAAAABAj0AAAAAAACCMQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAACAkUAAAAAAAOCLQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAABgk0AAAAAAAKCLQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAABAlUAAAAAAAGCLQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAgl0AAAAAAACCLQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAAmUAAAAAAAOCKQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAADgmkAAAAAAAKCKQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAADAnEAAAAAAAGCKQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAACgnkAAAAAAACCKQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAABAoEAAAAAAAOCJQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAwoUAAAAAAAKCJQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAgokAAAAAAAGCJQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAQo0AAAAAAACCJQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAApEAAAAAAAOCIQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAADwpEAAAAAAAKCIQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAADgpUAAAAAAAGCIQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAADQpkAAAAAAACCIQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAADAp0AAAAAAAOCHQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAACwqEAAAAAAAKCHQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAACgqUAAAAAAAGCHQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/"
+        },
+        "cycle": {
+          "dtype": "u8",
+          "shape": [
+            40
+          ],
+          "b64": "AQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAA=="
+        }
+      },
+      "expected": {
+        "state": [
+          "LOST",
+          "LOST",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING"
+        ],
+        "estimate": {
+          "dtype": "f64",
+          "shape": [
+            40,
+            8
+          ],
+          "b64": "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/f////+fiECk7f///x+cQAjs/////13AjZQNfRabD0CNlA19FpsPQJqZmZmZmek/AAAAAAAAAAC9/////2elQBIAAAAAgIhApO3///8fnEAI7P////9dwDGTC0G0005AMZMLQbTTTkAQy5ZG8PLnPxEREREREaE//v/////fpUAAAAAAAGCIQPoCAAAAIJxA/QIAAAAAXsCNlA19FpsPQI2UDX0Wmw9AmpmZmZmZ6T8AAAAAAAAAAAsAAAAAWKZA/f////8/iED6AgAAACCcQP0CAAAAAF7AKpMLQbTTTkAqkwtBtNNOQBDLlkbw8uc/ERERERERoT8AAAAAANCmQAAAAAAAIIhAcv////8fnEB1//////9dwIqUDX0Wmw9AipQNfRabD0CamZmZmZnpPwAAAAAAAAAA/v////9Hp0ABAAAAAACIQHL/////H5xAdf//////XcAxkwtBtNNOQDGTC0G0005AEMuWRvDy5z8RERERERGhPwAAAAAAwKdAAAAAAADgh0AJAAAAACCcQKIAAAAAAF7AjZQNfRabD0CNlA19FpsPQJqZmZmZmek/AAAAAAAAAAAAAAAAADioQP//////v4dACQAAAAAgnECiAAAAAABewCqTC0G0005AKpMLQbTTTkAQy5ZG8PLnPxEREREREaE/AAAAAACwqEAAAAAAAKCHQAkAAAAAIJxAdf//////XcCKlA19FpsPQIqUDX0Wmw9AmpmZmZmZ6T8AAAAAAAAAAAAAAAAAKKlAAQAAAACAh0AJAAAAACCcQHX//////13AMZMLQbTTTkAxkwtBtNNOQBDLlkbw8uc/ERERERERoT8AAAAAAKCpQAAAAAAAYIdACQAAAAAgnECiAAAAAABewI2UDX0Wmw9AjZQNfRabD0CamZmZmZnpPwAAAAAAAAAAAAAAAAAYqkD//////z+HQAkAAAAAIJxAogAAAAAAXsAqkwtBtNNOQCqTC0G0005AEMuWRvDy5z8RERERERGhPw=="
+        },
+        "has_estimate": {
+          "dtype": "u8",
+          "shape": [
+            40
+          ],
+          "b64": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ=="
+        },
+        "accepted": {
+          "dtype": "i32",
+          "shape": [
+            40
+          ],
+          "b64": "AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////w=="
+        },
+        "rois": {
+          "dtype": "i32",
+          "shape": [
+            40,
+            2,
+            3
+          ],
+          "b64": "XAUAAGgDAAAAAQAAfAgAANICAAAAAQAAaAMAAAQDAAAAAQAAXAUAAGgDAAAAAQAAaAMAAAQDAAAAAQAAXAUAAGgDAAAAAQAAHAQAAPgCAAAAAQAAXAUAAGgDAAAAAQAAWQQAAPQCAAAAAQAAXAUAAGgDAAAAAQAAlAQAAPACAAAAAQAAXAUAAGgDAAAAAQAA0AQAAOwCAAAAAQAAXAUAAGgDAAAAAQAADAUAAOgCAAAAAQAAXAUAAGgDAAAAAQAASAUAAOQCAAAAAQAAXAUAAGgDAAAAAQAAhAUAAOACAAAAAQAAXAUAAGgDAAAAAQAAwAUAANwCAAAAAQAAXAUAAGgDAAAAAQAA/AUAANgCAAAAAQAAXAUAAGgDAAAAAQAAOAYAANQCAAAAAQAAXAUAAGgDAAAAAQAAdAYAANACAAAAAQAAXAUAAGgDAAAAAQAAsAYAAMwCAAAAAQAAXAUAAGgDAAAAAQAA7AYAAMgCAAAAAQAAfAgAANICAAAAAQAAKAcAAMQCAAAAAQAAfAgAANICAAAAAQAAZAcAAMACAAAAAQAAfAgAANICAAAAAQAAoAcAALwCAAAAAQAAfAgAANICAAAAAQAA3AcAALgCAAAAAQAAfAgAANICAAAAAQAAGAgAALQCAAAAAQAAXAUAAGgDAAAAAQAAVAgAALACAAAAAQAAXAUAAGgDAAAAAQAAkAgAAKwCAAAAAQAAXAUAAGgDAAAAAQAAzAgAAKgCAAAAAQAAXAUAAGgDAAAAAQAACAkAAKQCAAAAAQAAfAgAANICAAAAAQAARAkAAKACAAAAAQAAfAgAANICAAAAAQAAgAkAAJwCAAAAAQAAfAgAANICAAAAAQAAvAkAAJgCAAAAAQAAfAgAANICAAAAAQAA+AkAAJQCAAAAAQAAfAgAANICAAAAAQAANAoAAJACAAAAAQAAfAgAANICAAAAAQAAcAoAAIwCAAAAAQAAfAgAANICAAAAAQAArAoAAIgCAAAAAQAAfAgAANICAAAAAQAA6AoAAIQCAAAAAQAAfAgAANICAAAAAQAAJAsAAIACAAAAAQAAfAgAANICAAAAAQAAYAsAAHwCAAAAAQAAfAgAANICAAAAAQAAnAsAAHgCAAAAAQAAfAgAANICAAAAAQAA2AsAAHQCAAAAAQAAfAgAANICAAAAAQAAFAwAAHACAAAAAQAAfAgAANICAAAAAQAAUAwAAGwCAAAAAQAAfAgAANICAAAAAQAAjAwAAGgCAAAAAQAAfAgAANICAAAAAQAA"
+        },
+        "roi_count": {
+          "dtype": "i32",
+          "shape": [
+            40
+          ],
+          "b64": "AgAAAAIAAAACAAAAAgAAAAIAAAACAAAAAgAAAAIAAAACAAAAAgAAAAIAAAACAAAAAgAAAAIAAAACAAAAAgAAAAIAAAACAAAAAgAAAAIAAAACAAAAAgAAAAIAAAACAAAAAgAAAAIAAAACAAAAAgAAAAIAAAACAAAAAgAAAAIAAAACAAAAAgAAAAIAAAACAAAAAgAAAAIAAAACAAAAAgAAAA=="
+        },
+        "roi_sources": [
+          [
+            "player_guided",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ]
+        ],
+        "global_hz": {
+          "dtype": "i32",
+          "shape": [
+            40
+          ],
+          "b64": "CgAAAAoAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAA=="
+        }
+      },
+      "tol": {
+        "abs": 1e-06,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "perdidas_y_ruido_de_medio_pixel",
+      "fn": "BallTracker.sequence",
+      "inputs": {
+        "width": 3840,
+        "height": 2160,
+        "roi_sides": [
+          256
+        ],
+        "max_rois": 2,
+        "dt_s": 0.03333333333333333,
+        "groups": [],
+        "detections": {
+          "dtype": "f64",
+          "shape": [
+            75,
+            1,
+            3
+          ],
+          "b64": "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"
+        },
+        "cycle": {
+          "dtype": "u8",
+          "shape": [
+            75
+          ],
+          "b64": "AQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQAB"
+        }
+      },
+      "expected": {
+        "state": [
+          "LOST",
+          "LOST",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "COASTING",
+          "COASTING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "COASTING",
+          "COASTING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING"
+        ],
+        "estimate": {
+          "dtype": "f64",
+          "shape": [
+            75,
+            8
+          ],
+          "b64": "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"
+        },
+        "has_estimate": {
+          "dtype": "u8",
+          "shape": [
+            75
+          ],
+          "b64": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB"
+        },
+        "accepted": {
+          "dtype": "i32",
+          "shape": [
+            75
+          ],
+          "b64": "AAAAAP////8AAAAA/////wAAAAD/////AAAAAP///////////////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP//////////////////////////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP///////////////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA"
+        },
+        "rois": {
+          "dtype": "i32",
+          "shape": [
+            75,
+            2,
+            3
+          ],
+          "b64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA1wEAAPgEAAAAAQAAAAAAAAAAAAAAAAAA1wEAAPgEAAAAAQAAAAAAAAAAAAAAAAAARwIAANsEAAAAAQAAAAAAAAAAAAAAAAAAbAIAANEEAAAAAQAAAAAAAAAAAAAAAAAAjwIAAMUEAAAAAQAAAAAAAAAAAAAAAAAAtAIAALsEAAAAAQAAAAAAAAAAAAAAAAAA2QIAALEEAAAAAQAAAAAAAAAAAAAAAAAA/gIAAKcEAAAAAQAAAAAAAAAAAAAAAAAAIwMAAJ0EAAAAAQAAAAAAAAAAAAAAAAAARwMAAJMEAAAAAQAAAAAAAAAAAAAAAAAAawMAAIkEAAAAAQAAAAAAAAAAAAAAAAAAkAMAAH8EAAAAAQAAAAAAAAAAAAAAAAAAtQMAAHgEAAAAAQAAAAAAAAAAAAAAAAAA2gMAAG8EAAAAAQAAAAAAAAAAAAAAAAAA/wMAAGIEAAAAAQAAAAAAAAAAAAAAAAAAJAQAAFgEAAAAAQAAAAAAAAAAAAAAAAAARgQAAE0EAAAAAQAAAAAAAAAAAAAAAAAAagQAAEIEAAAAAQAAAAAAAAAAAAAAAAAAkQQAADoEAAAAAQAAAAAAAAAAAAAAAAAAtgQAADEEAAAAAQAAAAAAAAAAAAAAAAAA2gQAACQEAAAAAQAAAAAAAAAAAAAAAAAA/gQAABkEAAAAAQAAAAAAAAAAAAAAAAAAJAUAABQEAAAAAQAAAAAAAAAAAAAAAAAASQUAAAsEAAAAAQAAAAAAAAAAAAAAAAAAbAUAAP4DAAAAAQAAAAAAAAAAAAAAAAAAkAUAAPMDAAAAAQAAAAAAAAAAAAAAAAAAtAUAAOkDAAAAAQAAAAAAAAAAAAAAAAAA2AUAAN4DAAAAAQAAAAAAAAAAAAAAAAAA/AUAANQDAAAAAQAAAAAAAAAAAAAAAAAAIAYAAMoDAAAAAQAAAAAAAAAAAAAAAAAASQYAAMQDAAAAAQAAAAAAAAAAAAAAAAAAbgYAALoDAAAAAQAAAAAAAAAAAAAAAAAAkgYAAK0DAAAAAQAAAAAAAAAAAAAAAAAAtgYAAKMDAAAAAQAAAAAAAAAAAAAAAAAA3AYAAJoDAAAAAQAAAAAAAAAAAAAAAAAAAAcAAJADAAAAAQAAAAAAAAAAAAAAAAAAJQcAAIYDAAAAAQAAAAAAAAAAAAAAAAAASgcAAHwDAAAAAQAAAAAAAAAAAAAAAAAAbQcAAHIDAAAAAQAAAAAAAAAAAAAAAAAAkQcAAGgDAAAAAQAAAAAAAAAAAAAAAAAAuAcAAF4DAAAAAQAAAAAAAAAAAAAAAAAA3QcAAFQDAAAAAQAAAAAAAAAAAAAAAAAAAAgAAEsDAAAAAQAAAAAAAAAAAAAAAAAAJQgAAEIDAAAAAQAAAAAAAAAAAAAAAAAASwgAADUDAAAAAQAAAAAAAAAAAAAAAAAAcAgAACsDAAAAAQAAAAAAAAAAAAAAAAAAkwgAACMDAAAAAQAAAAAAAAAAAAAAAAAAtwgAABoDAAAAAQAAAAAAAAAAAAAAAAAA3ggAAA4DAAAAAQAAAAAAAAAAAAAAAAAAAwkAAAMDAAAAAQAAAAAAAAAAAAAAAAAAKAkAAPkCAAAAAQAAAAAAAAAAAAAAAAAATQkAAO4CAAAAAQAAAAAAAAAAAAAAAAAAbwkAAOYCAAAAAQAAAAAAAAAAAAAAAAAAlAkAANwCAAAAAQAAAAAAAAAAAAAAAAAAugkAANACAAAAAQAAAAAAAAAAAAAAAAAA3wkAAMYCAAAAAQAAAAAAAAAAAAAAAAAAAQoAAL4CAAAAAQAAAAAAAAAAAAAAAAAAJQoAALUCAAAAAQAAAAAAAAAAAAAAAAAASgoAAKwCAAAAAQAAAAAAAAAAAAAAAAAAbwoAAKICAAAAAQAAAAAAAAAAAAAAAAAAlQoAAJYCAAAAAQAAAAAAAAAAAAAAAAAAugoAAIsCAAAAAQAAAAAAAAAAAAAAAAAA3goAAIECAAAAAQAAAAAAAAAAAAAAAAAAAgsAAHcCAAAAAQAAAAAAAAAAAAAAAAAAJwsAAG4CAAAAAQAAAAAAAAAAAAAAAAAATAsAAGUCAAAAAQAAAAAAAAAAAAAAAAAAbwsAAFkCAAAAAQAAAAAAAAAAAAAAAAAAkwsAAE8CAAAAAQAAAAAAAAAAAAAAAAAAugsAAEYCAAAAAQAAAAAAAAAAAAAAAAAA4AsAAD0CAAAAAQAAAAAAAAAAAAAAAAAABAwAADICAAAAAQAAAAAAAAAAAAAAAAAAKAwAACgCAAAAAQAAAAAAAAAAAAAAAAAATAwAABwCAAAAAQAAAAAAAAAAAAAAAAAAcAwAABICAAAAAQAAAAAAAAAAAAAAAAAA"
+        },
+        "roi_count": {
+          "dtype": "i32",
+          "shape": [
+            75
+          ],
+          "b64": "AAAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAA"
+        },
+        "roi_sources": [
+          [],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ]
+        ],
+        "global_hz": {
+          "dtype": "i32",
+          "shape": [
+            75
+          ],
+          "b64": "CgAAAAoAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAA"
+        }
+      },
+      "tol": {
+        "abs": 1e-06,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "oclusion_corta_coasting_y_vuelta",
+      "fn": "BallTracker.sequence",
+      "inputs": {
+        "width": 3840,
+        "height": 2160,
+        "roi_sides": [
+          256
+        ],
+        "max_rois": 2,
+        "dt_s": 0.03333333333333333,
+        "groups": [],
+        "detections": {
+          "dtype": "f64",
+          "shape": [
+            50,
+            1,
+            3
+          ],
+          "b64": "AAAAAAAAiUAAAAAAAECPQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/VVVVVVVVjECrqqqqqqqPQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/q6qqqqqqj0CrqqqqqgqQQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAACAkUAAAAAAAECQQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/q6qqqqoqk0BVVVVVVXWQQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/VlVVVVXVlECrqqqqqqqQQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAACAlkAAAAAAAOCQQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/qqqqqqoqmEBVVVVVVRWRQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/VlVVVVXVmUCrqqqqqkqRQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAACAm0AAAAAAAICRQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/q6qqqqoqnUBVVVVVVbWRQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/VVVVVVXVnkCrqqqqquqRQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/VlVVVVWVo0BVVVVVVfWSQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/qqqqqqpqpECrqqqqqiqTQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAABApUAAAAAAAGCTQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/VlVVVVUVpkBVVVVVVZWTQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/q6qqqqrqpkCrqqqqqsqTQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAADAp0AAAAAAAACUQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/VVVVVVWVqEBVVVVVVTWUQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/q6qqqqpqqUCrqqqqqmqUQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAABAqkAAAAAAAKCUQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/"
+        },
+        "cycle": {
+          "dtype": "u8",
+          "shape": [
+            50
+          ],
+          "b64": "AQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQA="
+        }
+      },
+      "expected": {
+        "state": [
+          "LOST",
+          "LOST",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING"
+        ],
+        "estimate": {
+          "dtype": "f64",
+          "shape": [
+            50,
+            8
+          ],
+          "b64": "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AACUQD0AAAAAAJlAkf//////aEBKjNiEFpsPQEqM2IQWmw9AmpmZmZmZ6T8AAAAAAAAAAKyqqqqqKqhAqqqqqqoalEA9AAAAAACZQJH//////2hA1Le1VbTTTkDUt7VVtNNOQBDLlkbw8uc/ERERERERoT9VVVVVVZWoQFVVVVVVNZRAzP//////mEAoAAAAAABpQDElSX0Wmw9AMSVJfRabD0CamZmZmZnpPwAAAAAAAAAA////////qEAAAAAAAFCUQMz//////5hAKAAAAAAAaUABIKhBtNNOQAEgqEG0005AEMuWRvDy5z8RERERERGhP6uqqqqqaqlAq6qqqqpqlEAXAAAAAACZQCgAAAAAAGlAKFgPfRabD0AoWA99FpsPQJqZmZmZmek/AAAAAAAAAABWVVVVVdWpQFZVVVVVhZRAFwAAAAAAmUAoAAAAAABpQIQxEEG0005AhDEQQbTTTkAQy5ZG8PLnPxEREREREaE/AAAAAABAqkAAAAAAAKCUQPH//////5hAkf//////aEDpoQ19FpsPQOmhDX0Wmw9AmpmZmZmZ6T8AAAAAAAAAAKqqqqqqqqpAqqqqqqq6lEDx//////+YQJH//////2hABbYLQbTTTkAFtgtBtNNOQBDLlkbw8uc/ERERERERoT8="
+        },
+        "has_estimate": {
+          "dtype": "u8",
+          "shape": [
+            50
+          ],
+          "b64": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
+        },
+        "accepted": {
+          "dtype": "i32",
+          "shape": [
+            50
+          ],
+          "b64": "AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD///////////////////////////////////////////////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8="
+        },
+        "rois": {
+          "dtype": "i32",
+          "shape": [
+            50,
+            2,
+            3
+          ],
+          "b64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAoAIAAGgDAAAAAQAAAAAAAAAAAAAAAAAAoAIAAGgDAAAAAQAAAAAAAAAAAAAAAAAAQAMAAHwDAAAAAQAAAAAAAAAAAAAAAAAAdgMAAIMDAAAAAQAAAAAAAAAAAAAAAAAAqwMAAIkDAAAAAQAAAAAAAAAAAAAAAAAA4AMAAJADAAAAAQAAAAAAAAAAAAAAAAAAFQQAAJcDAAAAAQAAAAAAAAAAAAAAAAAASwQAAJ0DAAAAAQAAAAAAAAAAAAAAAAAAgAQAAKQDAAAAAQAAAAAAAAAAAAAAAAAAtQQAAKsDAAAAAQAAAAAAAAAAAAAAAAAA6wQAALEDAAAAAQAAAAAAAAAAAAAAAAAAIAUAALgDAAAAAQAAAAAAAAAAAAAAAAAAVQUAAL8DAAAAAQAAAAAAAAAAAAAAAAAAiwUAAMUDAAAAAQAAAAAAAAAAAAAAAAAAwAUAAMwDAAAAAQAAAAAAAAAAAAAAAAAA9QUAANMDAAAAAQAAAAAAAAAAAAAAAAAAKwYAANkDAAAAAQAAAAAAAAAAAAAAAAAAYAYAAOADAAAAAQAAAAAAAAAAAAAAAAAAlQYAAOcDAAAAAQAAAAAAAAAAAAAAAAAAywYAAO0DAAAAAQAAAAAAAAAAAAAAAAAAAAcAAPQDAAAAAQAAAAAAAAAAAAAAAAAANQcAAPsDAAAAAQAAAAAAAAAAAAAAAAAAawcAAAEEAAAAAQAAAAAAAAAAAAAAAAAAoAcAAAgEAAAAAQAAAAAAAAAAAAAAAAAA1QcAAA8EAAAAAQAAAAAAAAAAAAAAAAAACwgAABUEAAAAAQAAAAAAAAAAAAAAAAAAQAgAABwEAAAAAQAAAAAAAAAAAAAAAAAAdQgAACMEAAAAAQAAAAAAAAAAAAAAAAAAqwgAACkEAAAAAQAAAAAAAAAAAAAAAAAA4AgAADAEAAAAAQAAAAAAAAAAAAAAAAAAFQkAADcEAAAAAQAAAAAAAAAAAAAAAAAASwkAAD0EAAAAAQAAAAAAAAAAAAAAAAAAgAkAAEQEAAAAAQAAAAAAAAAAAAAAAAAAtQkAAEsEAAAAAQAAAAAAAAAAAAAAAAAA6wkAAFEEAAAAAQAAAAAAAAAAAAAAAAAAIAoAAFgEAAAAAQAAAAAAAAAAAAAAAAAAVQoAAF8EAAAAAQAAAAAAAAAAAAAAAAAAiwoAAGUEAAAAAQAAAAAAAAAAAAAAAAAAwAoAAGwEAAAAAQAAAAAAAAAAAAAAAAAA9QoAAHMEAAAAAQAAAAAAAAAAAAAAAAAAKwsAAHkEAAAAAQAAAAAAAAAAAAAAAAAAYAsAAIAEAAAAAQAAAAAAAAAAAAAAAAAAlQsAAIcEAAAAAQAAAAAAAAAAAAAAAAAAywsAAI0EAAAAAQAAAAAAAAAAAAAAAAAAAAwAAJQEAAAAAQAAAAAAAAAAAAAAAAAANQwAAJsEAAAAAQAAAAAAAAAAAAAAAAAAawwAAKEEAAAAAQAAAAAAAAAAAAAAAAAAoAwAAKgEAAAAAQAAAAAAAAAAAAAAAAAA1QwAAK8EAAAAAQAAAAAAAAAAAAAAAAAA"
+        },
+        "roi_count": {
+          "dtype": "i32",
+          "shape": [
+            50
+          ],
+          "b64": "AAAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAA="
+        },
+        "roi_sources": [
+          [],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ]
+        ],
+        "global_hz": {
+          "dtype": "i32",
+          "shape": [
+            50
+          ],
+          "b64": "CgAAAAoAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAA="
+        }
+      },
+      "tol": {
+        "abs": 1e-06,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "oclusion_larga_lost_y_reentrada",
+      "fn": "BallTracker.sequence",
+      "inputs": {
+        "width": 3840,
+        "height": 2160,
+        "roi_sides": [
+          256
+        ],
+        "max_rois": 2,
+        "dt_s": 0.03333333333333333,
+        "groups": [],
+        "detections": {
+          "dtype": "f64",
+          "shape": [
+            75,
+            1,
+            3
+          ],
+          "b64": "AAAAAABAj0AAAAAAACCMQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAACAkUAAAAAAAOCLQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAABgk0AAAAAAAKCLQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAABAlUAAAAAAAGCLQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAgl0AAAAAAACCLQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAAmUAAAAAAAOCKQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAADgmkAAAAAAAKCKQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAADAnEAAAAAAAGCKQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAACgnkAAAAAAACCKQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAABAoEAAAAAAAOCJQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAwoUAAAAAAAKCJQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAADAokAAAAAAAOCFQGZmZmZmZuY/AAAAAACEokAAAAAAADCGQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAMokAAAAAAANCGQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAACUoUAAAAAAAHCHQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAcoUAAAAAAABCIQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAACkoEAAAAAAALCIQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAsoEAAAAAAAFCJQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAABon0AAAAAAAPCJQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAB4nkAAAAAAAJCKQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAACInUAAAAAAADCLQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAACYnEAAAAAAANCLQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAACom0AAAAAAAHCMQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAC4mkAAAAAAABCNQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAADImUAAAAAAALCNQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAADYmEAAAAAAAFCOQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAADol0AAAAAAAPCOQJqZmZmZmek/"
+        },
+        "cycle": {
+          "dtype": "u8",
+          "shape": [
+            75
+          ],
+          "b64": "AQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAQEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQAB"
+        }
+      },
+      "expected": {
+        "state": [
+          "LOST",
+          "LOST",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "LOST",
+          "LOST",
+          "LOST",
+          "LOST",
+          "LOST",
+          "LOST",
+          "LOST",
+          "LOST",
+          "LOST",
+          "LOST",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING"
+        ],
+        "estimate": {
+          "dtype": "f64",
+          "shape": [
+            75,
+            8
+          ],
+          "b64": "AAAAAABAj0AAAAAAACCMQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQQAAAAAAAABBAmpmZmZmZ6T8AAAAAAAAAAAAAAAAAQI9AAAAAAAAgjEAAAAAAAAAAAAAAAAAAAAAAAAAAAAA4s0AAAAAAADizQBDLlkbw8uc/ERERERERoT+C47Qi53+RQHeutFAD4ItA3bnSQg1AnECnLEdHMCJewOrAqKVX/g9A6sCopVf+D0CamZmZmZnpPwAAAAAAAAAA5xzvpPhwkkBYL/HY3r+LQN250kINQJxApyxHRzAiXsCOZa/l0XpQQI5lr+XRelBAEMuWRvDy5z8RERERERGhP54n7hMGYJNAp+mKMP+fi0B+eYjU+hmcQFTn5hWU+V3AbEu6LqWgD0BsS7oupaAPQJqZmZmZmek/AAAAAAAAAADeXp200k+UQI4mDQoGgItAfnmI1PoZnEBU5+YVlPldwMm8KK9a5k5Aybwor1rmTkAQy5ZG8PLnPxEREREREaE/N6rIz/4/lUBO6Y8oAGCLQGa7CQMXIZxAiC7XnCkBXsAPb0lKS5sPQA9vSUpLmw9AmpmZmZmZ6T8AAAAAAAAAAKljrxwIMJZAlNAb6/4/i0BmuwkDFyGcQIgu15wpAV7Awu0vOEzUTkDC7S84TNROQBDLlkbw8uc/ERERERERoT8vGOg2ACCXQKTarfj/H4tA4VDLC88fnEBbVlDIy/9dwG0DjzAYmw9AbQOPMBibD0CamZmZmZnpPwAAAAAAAAAA4Zoqlf4PmEAmuGAwAACLQOFQywvPH5xAW1ZQyMv/XcD2kyXguNNOQPaTJeC4005AEMuWRvDy5z8RERERERGhPzl2Yvb//5hAgTRIAQDgikA7lSV6CCCcQFHB0goJAF7A3f9ZihabD0Dd/1mKFpsPQJqZmZmZmek/AAAAAAAAAABEDLk+APCZQG8Po/f/v4pAO5UlegggnEBRwdIKCQBewKx9WGS0005ArH1YZLTTTkAQy5ZG8PLnPxEREREREaE/bOqpAQDgmkAUNsf//5+KQC5yOor+H5xAUWlPcf7/XcBuU3N9FpsPQG5Tc30Wmw9AmpmZmZmZ6T8AAAAAAAAAALJlNPX/z5tA+XpwAQCAikAucjqK/h+cQFFpT3H+/13AtRgXQrTTTkC1GBdCtNNOQBDLlkbw8uc/ERERERERoT/Oqrb//7+cQBjHCQAAYIpAI2Q7QAAgnEAOnoNEAABewBeYEH0Wmw9AF5gQfRabD0CamZmZmZnpPwAAAAAAAAAAvsfaAQCwnUArssD//z+KQCNkO0AAIJxADp6DRAAAXsDudxNBtNNOQO53E0G0005AEMuWRvDy5z8RERERERGhP7OZDAAAoJ5A6FH+//8fikBZ3vj0/x+cQN6oPPT//13AUasNfRabD0BRqw19FpsPQJqZmZmZmek/AAAAAAAAAAD6fq7//4+fQAHeCgAAAIpAWd749P8fnEDeqDz0//9dwMDOC0G0005AwM4LQbTTTkAQy5ZG8PLnPxEREREREaE/HOv+//8/oEDWSQAAAOCJQCeC5AEAIJxAdM8EAgAAXsAvlQ19FpsPQC+VDX0Wmw9AmpmZmZmZ6T8AAAAAAAAAAFj+BgAAuKBAkiL+//+/iUAnguQBACCcQHTPBAIAAF7A7pQLQbTTTkDulAtBtNNOQBDLlkbw8uc/ERERERERoT+FLwAAADChQFTz////n4lAttys//8fnEACUaf///9dwJaUDX0Wmw9AlpQNfRabD0CamZmZmZnpPwAAAAAAAAAAzMz+//+noUDtUQAAAICJQLbcrP//H5xAAlGn////XcA/kwtBtNNOQD+TC0G0005AEMuWRvDy5z8RERERERGhPxNq/f//H6JAhrAAAABgiUC23Kz//x+cQAJRp////13Ayav+Nn0LdEDJq/42fQt0QB60XC6JZ+Y/ERERERERsT9aB/z//5eiQB8PAQAAQIlAttys//8fnEACUaf///9dwKbjyBwlaYxApuPIHCVpjEBItN5EovXkP5qZmZmZmbk/oaT6//8Po0C4bQEAACCJQLbcrP//H5xAAlGn////XcA9sfZjt4ueQD2x9mO3i55AGYJvhJab4z8RERERERHBP+hB+f//h6NAUcwBAAAAiUC23Kz//x+cQAJRp////13AmDQ75yYErECYNDvnJgSsQFIljA7cV+I/VVVVVVVVxT8v3/f///+jQOoqAgAA4IhAttys//8fnEACUaf///9dwGrmeHOVKrdAauZ4c5Uqt0DAwI5rAinhP5mZmZmZmck/dnz2//93pECDiQIAAMCIQLbcrP//H5xAAlGn////XcBWyEfsOc7BQFbIR+w5zsFAA+pK57AN4D/d3d3d3d3NP70Z9f//76RA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J+YWggAgjMD47rlWAMByQPQMj3wWmw9A9AyPfBabD0CamZmZmZnpPwAAAAAAAAAAMQkd/v/fn0Dg+UEBAKCJQCfmFoIAIIzA+O65VgDAckDDDso/tNNOQMMOyj+0005AEMuWRvDy5z8RERERERGhP5828///Z59AQIYIAADwiUBcTljp/x+MwJOJ5fD/v3JAwPIJfRabD0DA8gl9FpsPQJqZmZmZmek/AAAAAAAAAAD731MAAPCeQFgVyP//P4pAXE5Y6f8fjMCTieXw/79yQNozAkG0005A2jMCQbTTTkAQy5ZG8PLnPxEREREREaE/UzkCAAB4nkB0hP7//4+KQCo76QMAIIzA4HybAgDAckBVeQ19FpsPQFV5DX0Wmw9AmpmZmZmZ6T8AAAAAAAAAAGiJ8f///51AZ6QJAADgikAqO+kDACCMwOB8mwIAwHJAz0wLQbTTTkDPTAtBtNNOQBDLlkbw8uc/ERERERERoT/Enf///4edQH1BAAAAMItAM8ZT//8fjMCBLo3//79yQLmTDX0Wmw9AuZMNfRabD0CamZmZmZnpPwAAAAAAAAAAmHwCAAAQnUCZV/7//3+LQDPGU///H4zAgS6N//+/ckAfkQtBtNNOQB+RC0G0005AEMuWRvDy5z8RERERERGhP+UQAAAAmJxAvfT////Pi0CKlB0AACCMwIG4EwAAwHJAi5QNfRabD0CLlA19FpsPQJqZmZmZmek/AAAAAAAAAACwkv///x+cQOFIAAAAIIxAipQdAAAgjMCBuBMAAMByQCKTC0G0005AIpMLQbTTTkAQy5ZG8PLnPxEREREREaE/Gf3///+nm0DvAQAAAHCMQDjs+v//H4zAep38//+/ckCAlA19FpsPQICUDX0Wmw9AmpmZmZmZ6T8AAAAAAAAAAMMSAAAAMJtAfvP///+/jEA47Pr//x+MwHqd/P//v3JAL5MLQbTTTkAvkwtBtNNOQBDLlkbw8uc/ERERERERoT9/AAAAALiaQKv/////D41AFd8AAAAgjMCslAAAAMByQI2UDX0Wmw9AjZQNfRabD0CamZmZmZnpPwAAAAAAAAAAx/z///8/mkAlAgAAAGCNQBXfAAAAIIzArJQAAADAckAqkwtBtNNOQCqTC0G0005AEMuWRvDy5z8RERERERGhP+r/////x5lADwAAAACwjUCY2f///x+MwJjm////v3JAipQNfRabD0CKlA19FpsPQJqZmZmZmek/AAAAAAAAAACOAAAAAFCZQKP//////41AmNn///8fjMCY5v///79yQDGTC0G0005AMZMLQbTTTkAQy5ZG8PLnPxEREREREaE/BAAAAADYmED+/////0+OQJ8GAAAAIIzALAQAAADAckCNlA19FpsPQI2UDX0Wmw9AmpmZmZmZ6T8AAAAAAAAAAOj/////X5hAEAAAAACgjkCfBgAAACCMwCwEAAAAwHJAKpMLQbTTTkAqkwtBtNNOQBDLlkbw8uc/ERERERERoT///////+eXQAAAAAAA8I5A+P7///8fjMAr/////79yQIqUDX0Wmw9AipQNfRabD0CamZmZmZnpPwAAAAAAAAAA"
+        },
+        "has_estimate": {
+          "dtype": "u8",
+          "shape": [
+            75
+          ],
+          "b64": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAAAAAAAAAAAAAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB"
+        },
+        "accepted": {
+          "dtype": "i32",
+          "shape": [
+            75
+          ],
+          "b64": "AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////AAAAAAAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA"
+        },
+        "rois": {
+          "dtype": "i32",
+          "shape": [
+            75,
+            2,
+            3
+          ],
+          "b64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaAMAAAQDAAAAAQAAAAAAAAAAAAAAAAAAaAMAAAQDAAAAAQAAAAAAAAAAAAAAAAAAHAQAAPgCAAAAAQAAAAAAAAAAAAAAAAAAWQQAAPQCAAAAAQAAAAAAAAAAAAAAAAAAlAQAAPACAAAAAQAAAAAAAAAAAAAAAAAA0AQAAOwCAAAAAQAAAAAAAAAAAAAAAAAADAUAAOgCAAAAAQAAAAAAAAAAAAAAAAAASAUAAOQCAAAAAQAAAAAAAAAAAAAAAAAAhAUAAOACAAAAAQAAAAAAAAAAAAAAAAAAwAUAANwCAAAAAQAAAAAAAAAAAAAAAAAA/AUAANgCAAAAAQAAAAAAAAAAAAAAAAAAOAYAANQCAAAAAQAAAAAAAAAAAAAAAAAAdAYAANACAAAAAQAAAAAAAAAAAAAAAAAAsAYAAMwCAAAAAQAAAAAAAAAAAAAAAAAA7AYAAMgCAAAAAQAAAAAAAAAAAAAAAAAAKAcAAMQCAAAAAQAAAAAAAAAAAAAAAAAAZAcAAMACAAAAAQAAAAAAAAAAAAAAAAAAoAcAALwCAAAAAQAAAAAAAAAAAAAAAAAA3AcAALgCAAAAAQAAAAAAAAAAAAAAAAAAGAgAALQCAAAAAQAAAAAAAAAAAAAAAAAAVAgAALACAAAAAQAAAAAAAAAAAAAAAAAAkAgAAKwCAAAAAQAAAAAAAAAAAAAAAAAAzAgAAKgCAAAAAQAAAAAAAAAAAAAAAAAACAkAAKQCAAAAAQAAAAAAAAAAAAAAAAAARAkAAKACAAAAAQAAAAAAAAAAAAAAAAAAgAkAAJwCAAAAAQAAAAAAAAAAAAAAAAAAvAkAAJgCAAAAAQAAAAAAAAAAAAAAAAAA+AkAAJQCAAAAAQAAAAAAAAAAAAAAAAAANAoAAJACAAAAAQAAAAAAAAAAAAAAAAAAcAoAAIwCAAAAAQAAAAAAAAAAAAAAAAAArAoAAIgCAAAAAQAAAAAAAAAAAAAAAAAA6AoAAIQCAAAAAQAAAAAAAAAAAAAAAAAAJAsAAIACAAAAAQAAAAAAAAAAAAAAAAAAYAsAAHwCAAAAAQAAAAAAAAAAAAAAAAAAnAsAAHgCAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA4AgAADwCAAAAAQAAAAAAAAAAAAAAAAAApAgAAFACAAAAAQAAAAAAAAAAAAAAAAAAhggAAFoCAAAAAQAAAAAAAAAAAAAAAAAAaAgAAGQCAAAAAQAAAAAAAAAAAAAAAAAASggAAG4CAAAAAQAAAAAAAAAAAAAAAAAALAgAAHgCAAAAAQAAAAAAAAAAAAAAAAAADggAAIICAAAAAQAAAAAAAAAAAAAAAAAA8AcAAIwCAAAAAQAAAAAAAAAAAAAAAAAA0gcAAJYCAAAAAQAAAAAAAAAAAAAAAAAAtAcAAKACAAAAAQAAAAAAAAAAAAAAAAAAlgcAAKoCAAAAAQAAAAAAAAAAAAAAAAAAeAcAALQCAAAAAQAAAAAAAAAAAAAAAAAAWgcAAL4CAAAAAQAAAAAAAAAAAAAAAAAAPAcAAMgCAAAAAQAAAAAAAAAAAAAAAAAAHgcAANICAAAAAQAAAAAAAAAAAAAAAAAAAAcAANwCAAAAAQAAAAAAAAAAAAAAAAAA4gYAAOYCAAAAAQAAAAAAAAAAAAAAAAAAxAYAAPACAAAAAQAAAAAAAAAAAAAAAAAApgYAAPoCAAAAAQAAAAAAAAAAAAAAAAAAiAYAAAQDAAAAAQAAAAAAAAAAAAAAAAAAagYAAA4DAAAAAQAAAAAAAAAAAAAAAAAATAYAABgDAAAAAQAAAAAAAAAAAAAAAAAALgYAACIDAAAAAQAAAAAAAAAAAAAAAAAAEAYAACwDAAAAAQAAAAAAAAAAAAAAAAAA8gUAADYDAAAAAQAAAAAAAAAAAAAAAAAA1AUAAEADAAAAAQAAAAAAAAAAAAAAAAAAtgUAAEoDAAAAAQAAAAAAAAAAAAAAAAAAmAUAAFQDAAAAAQAAAAAAAAAAAAAAAAAAegUAAF4DAAAAAQAAAAAAAAAAAAAAAAAA"
+        },
+        "roi_count": {
+          "dtype": "i32",
+          "shape": [
+            75
+          ],
+          "b64": "AAAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAA"
+        },
+        "roi_sources": [
+          [],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ]
+        ],
+        "global_hz": {
+          "dtype": "i32",
+          "shape": [
+            75
+          ],
+          "b64": "CgAAAAoAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAACgAAAAoAAAAKAAAACgAAAAoAAAAKAAAACgAAAAoAAAAKAAAACgAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAA"
+        }
+      },
+      "tol": {
+        "abs": 1e-06,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "salto_de_puerta_falso_positivo",
+      "fn": "BallTracker.sequence",
+      "inputs": {
+        "width": 3840,
+        "height": 2160,
+        "roi_sides": [
+          256
+        ],
+        "max_rois": 2,
+        "dt_s": 0.03333333333333333,
+        "groups": [],
+        "detections": {
+          "dtype": "f64",
+          "shape": [
+            36,
+            2,
+            3
+          ],
+          "b64": "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"
+        },
+        "cycle": {
+          "dtype": "u8",
+          "shape": [
+            36
+          ],
+          "b64": "AQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEA"
+        }
+      },
+      "expected": {
+        "state": [
+          "LOST",
+          "LOST",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "COASTING",
+          "COASTING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING"
+        ],
+        "estimate": {
+          "dtype": "f64",
+          "shape": [
+            36,
+            8
+          ],
+          "b64": "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HAAAAAAAjkDqtgAAAJCaQLyAAAAAwGLAdbexPmW3D0B1t7E+ZbcPQJqZmZmZmek/AAAAAAAAAABpraqqqjamQAn/////141A6rYAAACQmkC8gAAAAMBiwMIY7//8V09Awhjv//xXT0AQy5ZG8PLnPxEREREREaE/EgAAAACopkD6/////6+NQC7d////j5pAdOf///+/YsAr4NJUgZwPQCvg0lSBnA9AmpmZmZmZ6T8AAAAAAAAAANNUVVVVGadALgAAAACIjUAu3f///4+aQHTn////v2LADph8sT7YTkAOmHyxPthOQBDLlkbw8uc/ERERERERoT+nqqqqqoqnQAEAAAAAYI1AFgYAAACQmkBLBAAAAMBiwCKLJWcjmw9AIoslZyObD0CamZmZmZnpPwAAAAAAAAAAFgAAAAD8p0D4/////zeNQBYGAAAAkJpASwQAAADAYsCnwlXM2NNOQKfCVczY005AEMuWRvDy5z8RERERERGhP1dVVVVVbahAAAAAAAAQjUAr/////4+aQEr/////v2LAJdro5RabD0Al2ujlFpsPQJqZmZmZmek/AAAAAAAAAACpqqqqqt6oQAIAAAAA6IxAK/////+PmkBK/////79iwM6M/lu1005Azoz+W7XTTkAQy5ZG8PLnPxEREREREaE/"
+        },
+        "has_estimate": {
+          "dtype": "u8",
+          "shape": [
+            36
+          ],
+          "b64": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB"
+        },
+        "accepted": {
+          "dtype": "i32",
+          "shape": [
+            36
+          ],
+          "b64": "AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wEAAAD/////AAAAAP////8AAAAA/////wAAAAD///////////////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////"
+        },
+        "rois": {
+          "dtype": "i32",
+          "shape": [
+            36,
+            2,
+            3
+          ],
+          "b64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMAQAAMwDAAAAAQAAAAAAAAAAAAAAAAAAMAQAAMwDAAAAAQAAAAAAAAAAAAAAAAAA2gQAAL0DAAAAAQAAAAAAAAAAAAAAAAAAEwUAALgDAAAAAQAAAAAAAAAAAAAAAAAASwUAALMDAAAAAQAAAAAAAAAAAAAAAAAAhAUAAK4DAAAAAQAAAAAAAAAAAAAAAAAAvQUAAKkDAAAAAQAAAAAAAAAAAAAAAAAA9QUAAKQDAAAAAQAAAAAAAAAAAAAAAAAALgYAAJ8DAAAAAQAAAAAAAAAAAAAAAAAAZwYAAJoDAAAAAQAAAAAAAAAAAAAAAAAAnwYAAJUDAAAAAQAAAAAAAAAAAAAAAAAA2AYAAJADAAAAAQAAAAAAAAAAAAAAAAAAEQcAAIsDAAAAAQAAAAAAAAAAAAAAAAAASQcAAIYDAAAAAQAAAAAAAAAAAAAAAAAAggcAAIEDAAAAAQAAAAAAAAAAAAAAAAAAuwcAAHwDAAAAAQAAAAAAAAAAAAAAAAAA8wcAAHcDAAAAAQAAAAAAAAAAAAAAAAAALAgAAHIDAAAAAQAAAAAAAAAAAAAAAAAAZQgAAG0DAAAAAQAAAAAAAAAAAAAAAAAAnQgAAGgDAAAAAQAAAAAAAAAAAAAAAAAA1ggAAGMDAAAAAQAAAAAAAAAAAAAAAAAADwkAAF4DAAAAAQAAAAAAAAAAAAAAAAAARwkAAFkDAAAAAQAAAAAAAAAAAAAAAAAAgAkAAFQDAAAAAQAAAAAAAAAAAAAAAAAAuQkAAE8DAAAAAQAAAAAAAAAAAAAAAAAA8QkAAEoDAAAAAQAAAAAAAAAAAAAAAAAAKgoAAEUDAAAAAQAAAAAAAAAAAAAAAAAAYwoAAEADAAAAAQAAAAAAAAAAAAAAAAAAmwoAADsDAAAAAQAAAAAAAAAAAAAAAAAA1AoAADYDAAAAAQAAAAAAAAAAAAAAAAAADQsAADEDAAAAAQAAAAAAAAAAAAAAAAAARQsAACwDAAAAAQAAAAAAAAAAAAAAAAAAfgsAACcDAAAAAQAAAAAAAAAAAAAAAAAAtwsAACIDAAAAAQAAAAAAAAAAAAAAAAAA7wsAAB0DAAAAAQAAAAAAAAAAAAAAAAAA"
+        },
+        "roi_count": {
+          "dtype": "i32",
+          "shape": [
+            36
+          ],
+          "b64": "AAAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAA"
+        },
+        "roi_sources": [
+          [],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ]
+        ],
+        "global_hz": {
+          "dtype": "i32",
+          "shape": [
+            36
+          ],
+          "b64": "CgAAAAoAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAA"
+        }
+      },
+      "tol": {
+        "abs": 1e-06,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "salto_de_puerta_balon_desviado",
+      "fn": "BallTracker.sequence",
+      "inputs": {
+        "width": 3840,
+        "height": 2160,
+        "roi_sides": [
+          256
+        ],
+        "max_rois": 2,
+        "dt_s": 0.03333333333333333,
+        "groups": [],
+        "detections": {
+          "dtype": "f64",
+          "shape": [
+            56,
+            1,
+            3
+          ],
+          "b64": "AAAAAABAj0AAAAAAAMCSQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAACAkUBVVVVVVaWSQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAABgk0CrqqqqqoqSQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAABAlUAAAAAAAHCSQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAgl0BVVVVVVVWSQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAAmUCrqqqqqjqSQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAADgmkAAAAAAACCSQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAADAnEBVVVVVVQWSQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAACgnkCrqqqqquqRQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAABAoEAAAAAAANCRQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAwoUBVVVVVVbWRQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAgokCrqqqqqpqRQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAQo0AAAAAAAICRQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAwoUAAAAAAAGCNQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAgnEAAAAAAAACEQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAADgmkAAAAAAACCCQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAACgmUAAAAAAAECAQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAABgmEAAAAAAAMB8QJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAgl0AAAAAAAAB5QJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAADglUAAAAAAAEB1QJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAACglEAAAAAAAIBxQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAABgk0AAAAAAAIBrQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/"
+        },
+        "cycle": {
+          "dtype": "u8",
+          "shape": [
+            56
+          ],
+          "b64": "AQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQA="
+        }
+      },
+      "expected": {
+        "state": [
+          "LOST",
+          "LOST",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "LOST",
+          "LOST",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING"
+        ],
+        "estimate": {
+          "dtype": "f64",
+          "shape": [
+            56,
+            8
+          ],
+          "b64": "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KK+qqqpKkUB3jf3//x+cQCLT/f///1jANrH2Y7eLnkA2sfZjt4ueQBmCb4SWm+M/ERERERERwT8xzf///2elQPxaVVVVPZFAd439//8fnEAi0/3///9YwJI0O+cmBKxAkjQ75yYErEBSJYwO3FfiP1VVVVVVVcU/wML////fpUDQBgAAADCRQHeN/f//H5xAItP9////WMBm5nhzlSq3QGbmeHOVKrdAwMCOawIp4T+ZmZmZmZnJP0+4////V6ZApLKqqqoikUB3jf3//x+cQCLT/f///1jAU8hH7DnOwUBTyEfsOc7BQAPqSuewDeA/3d3d3d3dzT/erf///8+mQHheVVVVFZFAd439//8fnEAi0/3///9YwITMcFHX68lAhMxwUdfryUAhbGwRSgnePxEREREREdE/baP///9Hp0BMCgAAAAiRQHeN/f//H5xAItP9////WMDjv5t0ERfSQOO/m3QRF9JAotS8RWIZ3D8zMzMzMzPTP/yY////v6dAILaqqqr6kEB3jf3//x+cQCLT/f///1jADPHNWY5q2EAM8c1ZjmrYQDMeF/t1Sdo/VVVVVVVV1T+Ljv///zeoQPRhVVVV7ZBAd439//8fnEAi0/3///9YwN98JywxCOBA33wnLDEI4EAxIw4odZfYP3d3d3d3d9c/GoT///+vqEDIDQAAAOCQQHeN/f//H5xAItP9////WMD8bA+4RpTkQPxsD7hGlORApK800XEB1z+ZmZmZmZnZP6l5////J6lAnLmqqqrSkEB3jf3//x+cQCLT/f///1jA3cie0Ifp6UDdyJ7Qh+npQFJ73dadhdU/u7u7u7u72z84b////5+pQHBlVVVVxZBAd439//8fnEAi0/3///9YwEHI6jr6C/BAQcjqOvoL8EARAh7nSCLUP93d3d3d3d0/x2T///8XqkBEEQAAALiQQHeN/f//H5xAItP9////WMD24dlTxpfzQPbh2VPGl/NAMIy9kd7V0j/////////fPwAAAAAAIJxAAAAAAAAAhEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEEAAAAAAAAAQQJqZmZmZmek/AAAAAAAAAAAAAAAAACCcQAAAAAAAAIRAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLNAAAAAAAA4s0AQy5ZG8PLnPxEREREREaE/VGiHkxDgmkB+HEvdGCCCQOh7jCxe1ZLA3bnSQg1AjMDqwKilV/4PQOrAqKVX/g9AmpmZmZmZ6T8AAAAAAAAAALvstTxaP5pAGeMQWwcvgUDoe4wsXtWSwN250kINQIzAjmWv5dF6UECOZa/l0XpQQBDLlkbw8uc/ERERERERoT9CkLby+5+ZQGLYEez5P4BA8VCwjfy7ksB+eYjU+hmMwGxLui6loA9AbEu6LqWgD0CamZmZmZnpPwAAAAAAAAAAwsBBMh4AmUBEQsWWWqB+QPFQsI38u5LAfnmI1PoZjMDJvCivWuZOQMm8KK9a5k5AEMuWRvDy5z8RERERERGhP4aOz8oAYJhAkqtuYALAfEDufAYCusCSwGa7CQMXIYzAD29JSkubD0APb0lKS5sPQJqZmZmZmek/AAAAAAAAAADkEouX+r+XQK04ocbv33pA7nwGArrAksBmuwkDFyGMwMLtLzhM1E5Awu0vOEzUTkAQy5ZG8PLnPxEREREREaE/NkVl2/8fl0Cizy+S//94QNI1Ml3fv5LAz1DLC88fjMBtA48wGJsPQG0DjzAYmw9AmpmZmZmZ6T8AAAAAAAAAAMCY4/EAgJZAP8qq1QIgd0DSNTJd37+SwM9QywvPH4zA9pMl4LjTTkD2kyXguNNOQBDLlkbw8uc/ERERERERoT+FBmkGAOCVQI4TOxMAQHVA0rjDpgXAksA8lSV6CCCMwN3/WYoWmw9A3f9ZihabD0CamZmZmZnpPwAAAAAAAAAAKU0v1v8/lUB5542C/19zQNK4w6YFwJLAPJUlegggjMCsfVhktNNOQKx9WGS0005AEMuWRvDy5z8RERERERGhP2MO5P7/n5RAKCus/P9/cUCHodEG/7+SwC9yOor+H4zAblNzfRabD0BuU3N9FpsPQJqZmZmZmek/AAAAAAAAAADeZjIHAACUQDlpLisAQG9Ah6HRBv+/ksAvcjqK/h+MwLUYF0K0005AtRgXQrTTTkAQy5ZG8PLnPxEREREREaE/d+MwAABgk0DJVCUBAIBrQMhC0ioAwJLALWQ7QAAgjMAXmBB9FpsPQBeYEH0Wmw9AmpmZmZmZ6T8AAAAAAAAAANd6w/7/v5JAB+GU+P+/Z0DIQtIqAMCSwC1kO0AAIIzA7ncTQbTTTkDudxNBtNNOQBDLlkbw8uc/ERERERERoT8="
+        },
+        "has_estimate": {
+          "dtype": "u8",
+          "shape": [
+            56
+          ],
+          "b64": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
+        },
+        "accepted": {
+          "dtype": "i32",
+          "shape": [
+            56
+          ],
+          "b64": "AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP///////////////////////////////////////////////////////////////////////////////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8="
+        },
+        "rois": {
+          "dtype": "i32",
+          "shape": [
+            56,
+            2,
+            3
+          ],
+          "b64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaAMAADAEAAAAAQAAAAAAAAAAAAAAAAAAaAMAADAEAAAAAQAAAAAAAAAAAAAAAAAAHAQAACYEAAAAAQAAAAAAAAAAAAAAAAAAWQQAACMEAAAAAQAAAAAAAAAAAAAAAAAAlAQAAB8EAAAAAQAAAAAAAAAAAAAAAAAA0AQAABwEAAAAAQAAAAAAAAAAAAAAAAAADAUAABkEAAAAAQAAAAAAAAAAAAAAAAAASAUAABUEAAAAAQAAAAAAAAAAAAAAAAAAhAUAABIEAAAAAQAAAAAAAAAAAAAAAAAAwAUAAA8EAAAAAQAAAAAAAAAAAAAAAAAA/AUAAAsEAAAAAQAAAAAAAAAAAAAAAAAAOAYAAAgEAAAAAQAAAAAAAAAAAAAAAAAAdAYAAAUEAAAAAQAAAAAAAAAAAAAAAAAAsAYAAAEEAAAAAQAAAAAAAAAAAAAAAAAA7AYAAP4DAAAAAQAAAAAAAAAAAAAAAAAAKAcAAPsDAAAAAQAAAAAAAAAAAAAAAAAAZAcAAPcDAAAAAQAAAAAAAAAAAAAAAAAAoAcAAPQDAAAAAQAAAAAAAAAAAAAAAAAA3AcAAPEDAAAAAQAAAAAAAAAAAAAAAAAAGAgAAO0DAAAAAQAAAAAAAAAAAAAAAAAAVAgAAOoDAAAAAQAAAAAAAAAAAAAAAAAAkAgAAOcDAAAAAQAAAAAAAAAAAAAAAAAAzAgAAOMDAAAAAQAAAAAAAAAAAAAAAAAACAkAAOADAAAAAQAAAAAAAAAAAAAAAAAARAkAAN0DAAAAAQAAAAAAAAAAAAAAAAAAgAkAANkDAAAAAQAAAAAAAAAAAAAAAAAAvAkAANYDAAAAAQAAAAAAAAAAAAAAAAAA+AkAANMDAAAAAQAAAAAAAAAAAAAAAAAANAoAAM8DAAAAAQAAAAAAAAAAAAAAAAAAcAoAAMwDAAAAAQAAAAAAAAAAAAAAAAAArAoAAMkDAAAAAQAAAAAAAAAAAAAAAAAA6AoAAMUDAAAAAQAAAAAAAAAAAAAAAAAAJAsAAMIDAAAAAQAAAAAAAAAAAAAAAAAAYAsAAL8DAAAAAQAAAAAAAAAAAAAAAAAAnAsAALsDAAAAAQAAAAAAAAAAAAAAAAAA2AsAALgDAAAAAQAAAAAAAAAAAAAAAAAAFAwAALUDAAAAAQAAAAAAAAAAAAAAAAAAUAwAALEDAAAAAQAAAAAAAAAAAAAAAAAAjAwAAK4DAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAiAYAAAACAAAAAQAAAAAAAAAAAAAAAAAAiAYAAAACAAAAAQAAAAAAAAAAAAAAAAAAEAYAAKYBAAAAAQAAAAAAAAAAAAAAAAAA6AUAAIgBAAAAAQAAAAAAAAAAAAAAAAAAwAUAAGoBAAAAAQAAAAAAAAAAAAAAAAAAmAUAAEwBAAAAAQAAAAAAAAAAAAAAAAAAcAUAAC4BAAAAAQAAAAAAAAAAAAAAAAAASAUAABABAAAAAQAAAAAAAAAAAAAAAAAAIAUAAPIAAAAAAQAAAAAAAAAAAAAAAAAA+AQAANQAAAAAAQAAAAAAAAAAAAAAAAAA0AQAALYAAAAAAQAAAAAAAAAAAAAAAAAAqAQAAJgAAAAAAQAAAAAAAAAAAAAAAAAAgAQAAHoAAAAAAQAAAAAAAAAAAAAAAAAAWAQAAFwAAAAAAQAAAAAAAAAAAAAAAAAAMAQAAD4AAAAAAQAAAAAAAAAAAAAAAAAA"
+        },
+        "roi_count": {
+          "dtype": "i32",
+          "shape": [
+            56
+          ],
+          "b64": "AAAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAAAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAA="
+        },
+        "roi_sources": [
+          [],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ]
+        ],
+        "global_hz": {
+          "dtype": "i32",
+          "shape": [
+            56
+          ],
+          "b64": "CgAAAAoAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAoAAAAKAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAA="
+        }
+      },
+      "tol": {
+        "abs": 1e-06,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "candidata_sustituida_y_confirmada",
+      "fn": "BallTracker.sequence",
+      "inputs": {
+        "width": 3840,
+        "height": 2160,
+        "roi_sides": [
+          256
+        ],
+        "max_rois": 2,
+        "dt_s": 0.03333333333333333,
+        "groups": [],
+        "detections": {
+          "dtype": "f64",
+          "shape": [
+            16,
+            2,
+            3
+          ],
+          "b64": "AAAAAABwp0AAAAAAAAB5QJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAADgj0AAAAAAAFCUQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAABwp0AAAAAAAAB5QJqZmZmZmek/AAAAAADQkUAAAAAAAFCUQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAACwk0AAAAAAAFCUQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAACQlUAAAAAAAFCUQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAABwl0AAAAAAAFCUQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAABQmUAAAAAAAFCUQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAwm0AAAAAAAFCUQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/"
+        },
+        "cycle": {
+          "dtype": "u8",
+          "shape": [
+            16
+          ],
+          "b64": "AQABAAEAAQABAAEAAQABAA=="
+        }
+      },
+      "expected": {
+        "state": [
+          "LOST",
+          "LOST",
+          "LOST",
+          "LOST",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING"
+        ],
+        "estimate": {
+          "dtype": "f64",
+          "shape": [
+            16,
+            8
+          ],
+          "b64": "AAAAAABwp0AAAAAAAAB5QAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQQAAAAAAAABBAmpmZmZmZ6T8AAAAAAAAAAAAAAAAAcKdAAAAAAAAAeUAAAAAAAAAAAAAAAAAAAAAAAAAAAAA4s0AAAAAAADizQBDLlkbw8uc/ERERERERoT8AAAAAAOCPQAAAAAAAUJRAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBAAAAAAAAAEECamZmZmZnpPwAAAAAAAAAAAAAAAADgj0AAAAAAAFCUQAAAAAAAAAAAAAAAAAAAAAAAAAAAADizQAAAAAAAOLNAEMuWRvDy5z8RERERERGhP4LjtCLnz5FAAAAAAABQlEDdudJCDUCcQAAAAAAAAAAA6sCopVf+D0DqwKilV/4PQJqZmZmZmek/AAAAAAAAAADnHO+k+MCSQAAAAAAAUJRA3bnSQg1AnEAAAAAAAAAAAI5lr+XRelBAjmWv5dF6UEAQy5ZG8PLnPxEREREREaE/nifuEwawk0AAAAAAAFCUQH55iNT6GZxAAAAAAAAAAABsS7oupaAPQGxLui6loA9AmpmZmZmZ6T8AAAAAAAAAAN5enbTSn5RAAAAAAABQlEB+eYjU+hmcQAAAAAAAAAAAybwor1rmTkDJvCivWuZOQBDLlkbw8uc/ERERERERoT83qsjP/o+VQAAAAAAAUJRAZrsJAxchnEAAAAAAAAAAAA9vSUpLmw9AD29JSkubD0CamZmZmZnpPwAAAAAAAAAAqWOvHAiAlkAAAAAAAFCUQGa7CQMXIZxAAAAAAAAAAADC7S84TNROQMLtLzhM1E5AEMuWRvDy5z8RERERERGhPy8Y6DYAcJdAAAAAAABQlEDhUMsLzx+cQAAAAAAAAAAAbQOPMBibD0BtA48wGJsPQJqZmZmZmek/AAAAAAAAAADhmiqV/l+YQAAAAAAAUJRA4VDLC88fnEAAAAAAAAAAAPaTJeC4005A9pMl4LjTTkAQy5ZG8PLnPxEREREREaE/OXZi9v9PmUAAAAAAAFCUQDuVJXoIIJxAAAAAAAAAAADd/1mKFpsPQN3/WYoWmw9AmpmZmZmZ6T8AAAAAAAAAAEQMuT4AQJpAAAAAAABQlEA7lSV6CCCcQAAAAAAAAAAArH1YZLTTTkCsfVhktNNOQBDLlkbw8uc/ERERERERoT9s6qkBADCbQAAAAAAAUJRALnI6iv4fnEAAAAAAAAAAAG5Tc30Wmw9AblNzfRabD0CamZmZmZnpPwAAAAAAAAAAsmU09f8fnEAAAAAAAFCUQC5yOor+H5xAAAAAAAAAAAC1GBdCtNNOQLUYF0K0005AEMuWRvDy5z8RERERERGhPw=="
+        },
+        "has_estimate": {
+          "dtype": "u8",
+          "shape": [
+            16
+          ],
+          "b64": "AQEBAQEBAQEBAQEBAQEBAQ=="
+        },
+        "accepted": {
+          "dtype": "i32",
+          "shape": [
+            16
+          ],
+          "b64": "AAAAAP////8AAAAA/////wEAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////w=="
+        },
+        "rois": {
+          "dtype": "i32",
+          "shape": [
+            16,
+            2,
+            3
+          ],
+          "b64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOAsAABABAAAAAQAAAAAAAAAAAAAAAAAAOAsAABABAAAAAQAAAAAAAAAAAAAAAAAAfAMAAJQEAAAAAQAAAAAAAAAAAAAAAAAAfAMAAJQEAAAAAQAAAAAAAAAAAAAAAAAAMAQAAJQEAAAAAQAAAAAAAAAAAAAAAAAAbQQAAJQEAAAAAQAAAAAAAAAAAAAAAAAAqAQAAJQEAAAAAQAAAAAAAAAAAAAAAAAA5AQAAJQEAAAAAQAAAAAAAAAAAAAAAAAAIAUAAJQEAAAAAQAAAAAAAAAAAAAAAAAAXAUAAJQEAAAAAQAAAAAAAAAAAAAAAAAAmAUAAJQEAAAAAQAAAAAAAAAAAAAAAAAA1AUAAJQEAAAAAQAAAAAAAAAAAAAAAAAAEAYAAJQEAAAAAQAAAAAAAAAAAAAAAAAATAYAAJQEAAAAAQAAAAAAAAAAAAAAAAAAiAYAAJQEAAAAAQAAAAAAAAAAAAAAAAAA"
+        },
+        "roi_count": {
+          "dtype": "i32",
+          "shape": [
+            16
+          ],
+          "b64": "AAAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAA=="
+        },
+        "roi_sources": [
+          [],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ]
+        ],
+        "global_hz": {
+          "dtype": "i32",
+          "shape": [
+            16
+          ],
+          "b64": "CgAAAAoAAAAKAAAACgAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAA=="
+        }
+      },
+      "tol": {
+        "abs": 1e-06,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "varias_en_la_puerta_gana_menor_d2_por_score",
+      "fn": "BallTracker.sequence",
+      "inputs": {
+        "width": 3840,
+        "height": 2160,
+        "roi_sides": [
+          256
+        ],
+        "max_rois": 2,
+        "dt_s": 0.03333333333333333,
+        "groups": [],
+        "detections": {
+          "dtype": "f64",
+          "shape": [
+            24,
+            3,
+            3
+          ],
+          "b64": "AAAAAABAj0AAAAAAACCMQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAACAkUAAAAAAAOCLQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAABgk0AAAAAAAKCLQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAABAlUAAAAAAAGCLQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAgl0AAAAAAACCLQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAAmUAAAAAAAOCKQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAADgmkAAAAAAAKCKQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAADEnEAAAAAAAGCKQGZmZmZmZtY/AAAAAADGnEAAAAAAAGCKQGZmZmZmZu4/AAAAAADMnEAAAAAAAGCKQM3MzMzMzOw/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAACgnkAAAAAAACCKQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAABAoEAAAAAAAOCJQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAwoUAAAAAAAKCJQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAgokAAAAAAAGCJQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/"
+        },
+        "cycle": {
+          "dtype": "u8",
+          "shape": [
+            24
+          ],
+          "b64": "AQABAAEAAQABAAEAAQABAAEAAQABAAEA"
+        }
+      },
+      "expected": {
+        "state": [
+          "LOST",
+          "LOST",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING"
+        ],
+        "estimate": {
+          "dtype": "f64",
+          "shape": [
+            24,
+            8
+          ],
+          "b64": "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"
+        },
+        "has_estimate": {
+          "dtype": "u8",
+          "shape": [
+            24
+          ],
+          "b64": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB"
+        },
+        "accepted": {
+          "dtype": "i32",
+          "shape": [
+            24
+          ],
+          "b64": "AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8BAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////"
+        },
+        "rois": {
+          "dtype": "i32",
+          "shape": [
+            24,
+            2,
+            3
+          ],
+          "b64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaAMAAAQDAAAAAQAAAAAAAAAAAAAAAAAAaAMAAAQDAAAAAQAAAAAAAAAAAAAAAAAAHAQAAPgCAAAAAQAAAAAAAAAAAAAAAAAAWQQAAPQCAAAAAQAAAAAAAAAAAAAAAAAAlAQAAPACAAAAAQAAAAAAAAAAAAAAAAAA0AQAAOwCAAAAAQAAAAAAAAAAAAAAAAAADAUAAOgCAAAAAQAAAAAAAAAAAAAAAAAASAUAAOQCAAAAAQAAAAAAAAAAAAAAAAAAhAUAAOACAAAAAQAAAAAAAAAAAAAAAAAAwAUAANwCAAAAAQAAAAAAAAAAAAAAAAAA/AUAANgCAAAAAQAAAAAAAAAAAAAAAAAAOAYAANQCAAAAAQAAAAAAAAAAAAAAAAAAdAYAANACAAAAAQAAAAAAAAAAAAAAAAAAsAYAAMwCAAAAAQAAAAAAAAAAAAAAAAAA7gYAAMgCAAAAAQAAAAAAAAAAAAAAAAAAKwcAAMQCAAAAAQAAAAAAAAAAAAAAAAAAYwcAAMACAAAAAQAAAAAAAAAAAAAAAAAAngcAALwCAAAAAQAAAAAAAAAAAAAAAAAA3AcAALgCAAAAAQAAAAAAAAAAAAAAAAAAGQgAALQCAAAAAQAAAAAAAAAAAAAAAAAAVAgAALACAAAAAQAAAAAAAAAAAAAAAAAAkAgAAKwCAAAAAQAAAAAAAAAAAAAAAAAAzAgAAKgCAAAAAQAAAAAAAAAAAAAAAAAA"
+        },
+        "roi_count": {
+          "dtype": "i32",
+          "shape": [
+            24
+          ],
+          "b64": "AAAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAA"
+        },
+        "roi_sources": [
+          [],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ]
+        ],
+        "global_hz": {
+          "dtype": "i32",
+          "shape": [
+            24
+          ],
+          "b64": "CgAAAAoAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAA"
+        }
+      },
+      "tol": {
+        "abs": 1e-06,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "lado_320_cuando_crece_la_incertidumbre",
+      "fn": "BallTracker.sequence",
+      "inputs": {
+        "width": 3840,
+        "height": 2160,
+        "roi_sides": [
+          256,
+          320
+        ],
+        "max_rois": 2,
+        "dt_s": 0.03333333333333333,
+        "groups": [],
+        "detections": {
+          "dtype": "f64",
+          "shape": [
+            30,
+            1,
+            3
+          ],
+          "b64": "AAAAAABAj0AAAAAAACCMQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAACAkUAAAAAAAOCLQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAABgk0AAAAAAAKCLQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAABAlUAAAAAAAGCLQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAgl0AAAAAAACCLQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAAmUAAAAAAAOCKQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAgokAAAAAAAGCJQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAQo0AAAAAAACCJQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAApEAAAAAAAOCIQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAADwpEAAAAAAAKCIQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/"
+        },
+        "cycle": {
+          "dtype": "u8",
+          "shape": [
+            30
+          ],
+          "b64": "AQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEA"
+        }
+      },
+      "expected": {
+        "state": [
+          "LOST",
+          "LOST",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "COASTING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING"
+        ],
+        "estimate": {
+          "dtype": "f64",
+          "shape": [
+            30,
+            8
+          ],
+          "b64": "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"
+        },
+        "has_estimate": {
+          "dtype": "u8",
+          "shape": [
+            30
+          ],
+          "b64": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB"
+        },
+        "accepted": {
+          "dtype": "i32",
+          "shape": [
+            30
+          ],
+          "b64": "AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD//////////////////////////////////////////////////////////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////"
+        },
+        "rois": {
+          "dtype": "i32",
+          "shape": [
+            30,
+            2,
+            3
+          ],
+          "b64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAASAMAAOQCAABAAQAAAAAAAAAAAAAAAAAASAMAAOQCAABAAQAAAAAAAAAAAAAAAAAAHAQAAPgCAAAAAQAAAAAAAAAAAAAAAAAAWQQAAPQCAAAAAQAAAAAAAAAAAAAAAAAAlAQAAPACAAAAAQAAAAAAAAAAAAAAAAAA0AQAAOwCAAAAAQAAAAAAAAAAAAAAAAAADAUAAOgCAAAAAQAAAAAAAAAAAAAAAAAASAUAAOQCAAAAAQAAAAAAAAAAAAAAAAAAhAUAAOACAAAAAQAAAAAAAAAAAAAAAAAAwAUAANwCAAAAAQAAAAAAAAAAAAAAAAAA/AUAANgCAAAAAQAAAAAAAAAAAAAAAAAAOAYAANQCAAAAAQAAAAAAAAAAAAAAAAAAVAYAALACAABAAQAAAAAAAAAAAAAAAAAAkAYAAKwCAABAAQAAAAAAAAAAAAAAAAAAzAYAAKgCAABAAQAAAAAAAAAAAAAAAAAACAcAAKQCAABAAQAAAAAAAAAAAAAAAAAARAcAAKACAABAAQAAAAAAAAAAAAAAAAAAgAcAAJwCAABAAQAAAAAAAAAAAAAAAAAAvAcAAJgCAABAAQAAAAAAAAAAAAAAAAAA+AcAAJQCAABAAQAAAAAAAAAAAAAAAAAANAgAAJACAABAAQAAAAAAAAAAAAAAAAAAcAgAAIwCAABAAQAAAAAAAAAAAAAAAAAAzAgAAKgCAAAAAQAAAAAAAAAAAAAAAAAA6AgAAIQCAABAAQAAAAAAAAAAAAAAAAAARAkAAKACAAAAAQAAAAAAAAAAAAAAAAAAgAkAAJwCAAAAAQAAAAAAAAAAAAAAAAAAvAkAAJgCAAAAAQAAAAAAAAAAAAAAAAAA+AkAAJQCAAAAAQAAAAAAAAAAAAAAAAAANAoAAJACAAAAAQAAAAAAAAAAAAAAAAAA"
+        },
+        "roi_count": {
+          "dtype": "i32",
+          "shape": [
+            30
+          ],
+          "b64": "AAAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAA"
+        },
+        "roi_sources": [
+          [],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ],
+          [
+            "predictive"
+          ]
+        ],
+        "global_hz": {
+          "dtype": "i32",
+          "shape": [
+            30
+          ],
+          "b64": "CgAAAAoAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAA"
+        }
+      },
+      "tol": {
+        "abs": 1e-06,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "rois_sin_filtro_y_en_la_esquina",
+      "fn": "BallTracker.sequence",
+      "inputs": {
+        "width": 3840,
+        "height": 2160,
+        "roi_sides": [
+          256
+        ],
+        "max_rois": 2,
+        "dt_s": 0.03333333333333333,
+        "groups": [
+          [
+            100.0,
+            2100.0
+          ],
+          [
+            3700.0,
+            100.0
+          ],
+          [
+            1900.0,
+            1000.0
+          ]
+        ],
+        "detections": {
+          "dtype": "f64",
+          "shape": [
+            20,
+            1,
+            3
+          ],
+          "b64": "AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAAKEAAAAAAAMygQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAAIEAAAAAAAMKgQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAAEEAAAAAAALigQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAAAAAAAAAAAK6gQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAAEMAAAAAAAKSgQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAAIMAAAAAAAJqgQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAAKMAAAAAAAJCgQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/AAAAAAAAMMAAAAAAAIagQJqZmZmZmek/AAAAAAAA+H8AAAAAAAD4fwAAAAAAAPh/"
+        },
+        "cycle": {
+          "dtype": "u8",
+          "shape": [
+            20
+          ],
+          "b64": "AAAAAAEAAQABAAEAAQABAAEAAQA="
+        }
+      },
+      "expected": {
+        "state": [
+          "LOST",
+          "LOST",
+          "LOST",
+          "LOST",
+          "LOST",
+          "LOST",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING",
+          "TRACKING"
+        ],
+        "estimate": {
+          "dtype": "f64",
+          "shape": [
+            20,
+            8
+          ],
+          "b64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAChAAAAAAADMoEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEEAAAAAAAAAQQJqZmZmZmek/AAAAAAAAAAAAAAAAAAAoQAAAAAAAzKBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLNAAAAAAAA4s0AQy5ZG8PLnPxEREREREaE/5M6VFmoAIEBDO5yEAMKgQKcsR0cwIk7A6HuMLF7VUsDqwKilV/4PQOrAqKVX/g9AmpmZmZmZ6T8AAAAAAAAAACTWSzy29xdAZq/l0fq8oECnLEdHMCJOwOh7jCxe1VLAjmWv5dF6UECOZa/l0XpQQBDLlkbw8uc/ERERERERoT9b03RFmP8PQIK0ld//t6BA6efmFZT5TcDMULCN/LtSwGxLui6loA9AbEu6LqWgD0CamZmZmZnpPwAAAAAAAAAAmkaTBgUDAEAGDpLxALOgQOnn5hWU+U3AzFCwjfy7UsDJvCivWuZOQMm8KK9a5k5AEMuWRvDy5z8RERERERGhP4BUAqf0RwQ/dHxWBgCuoEBZLtecKQFOwKN8BgK6wFLAD29JSkubD0APb0lKS5sPQJqZmZmZmek/AAAAAAAAAAD6tRdyigAAwJdYvNT/qKBAWS7XnCkBTsCjfAYCusBSwMLtLzhM1E5Awu0vOEzUTkAQy5ZG8PLnPxEREREREaE/51aJ1AEAEMAqKtv+/6OgQDhWUMjL/03AYTUyXd+/UsBtA48wGJsPQG0DjzAYmw9AmpmZmZmZ6T8AAAAAAAAAAG320efz/xfAxhyPBwCfoEA4VlDIy/9NwGE1Ml3fv1LA9pMl4LjTTkD2kyXguNNOQBDLlkbw8uc/ERERERERoT/F3/Kt//8fwDRIMwAAmqBATcHSCgkATsCkt8OmBcBSwN3/WYoWmw9A3f9ZihabD0CamZmZmZnpPwAAAAAAAAAAMRKeCwEAJMBperH+/5SgQE3B0goJAE7ApLfDpgXAUsCsfVhktNNOQKx9WGS0005AEMuWRvDy5z8RERERERGhP4k9GQcAACjAcyD3//+PoEC2aE9x/v9NwGSf0Qb/v1LAblNzfRabD0BuU3N9FpsPQJqZmZmZmek/AAAAAAAAAADUoPDR//8rwDeTOQAAi6BAtmhPcf7/TcBkn9EG/79SwLUYF0K0005AtRgXQrTTTkAQy5ZG8PLnPxEREREREaE/Bx3H/v//L8AchwEAAIagQAmeg0QAAE7AFkHSKgDAUsAXmBB9FpsPQBeYEH0Wmw9AmpmZmZmZ6T8AAAAAAAAAAFHd9AMAADLA1xv2//+AoEAJnoNEAABOwBZB0ioAwFLA7ncTQbTTTkDudxNBtNNOQBDLlkbw8uc/ERERERERoT8="
+        },
+        "has_estimate": {
+          "dtype": "u8",
+          "shape": [
+            20
+          ],
+          "b64": "AAAAAAEBAQEBAQEBAQEBAQEBAQE="
+        },
+        "accepted": {
+          "dtype": "i32",
+          "shape": [
+            20
+          ],
+          "b64": "/////////////////////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8="
+        },
+        "rois": {
+          "dtype": "i32",
+          "shape": [
+            20,
+            2,
+            3
+          ],
+          "b64": "AAAAAHAHAAAAAQAA9A0AAAAAAAAAAQAAAAAAAHAHAAAAAQAA9A0AAAAAAAAAAQAAAAAAAHAHAAAAAQAA9A0AAAAAAAAAAQAAAAAAAHAHAAAAAQAA9A0AAAAAAAAAAQAAAAAAAHAHAAAAAQAA9A0AAAAAAAAAAQAAAAAAAHAHAAAAAQAA7AYAAGgDAAAAAQAAAAAAAHAHAAAAAQAA7AYAAGgDAAAAAQAAAAAAAHAHAAAAAQAA7AYAAGgDAAAAAQAAAAAAAHAHAAAAAQAA7AYAAGgDAAAAAQAAAAAAAHAHAAAAAQAA7AYAAGgDAAAAAQAAAAAAAHAHAAAAAQAA7AYAAGgDAAAAAQAAAAAAAHAHAAAAAQAA7AYAAGgDAAAAAQAAAAAAAHAHAAAAAQAA7AYAAGgDAAAAAQAAAAAAAHAHAAAAAQAA7AYAAGgDAAAAAQAAAAAAAHAHAAAAAQAA7AYAAGgDAAAAAQAAAAAAAHAHAAAAAQAA7AYAAGgDAAAAAQAAAAAAAHAHAAAAAQAA7AYAAGgDAAAAAQAAAAAAAHAHAAAAAQAA7AYAAGgDAAAAAQAAAAAAAHAHAAAAAQAA7AYAAGgDAAAAAQAAAAAAAHAHAAAAAQAA7AYAAGgDAAAAAQAA"
+        },
+        "roi_count": {
+          "dtype": "i32",
+          "shape": [
+            20
+          ],
+          "b64": "AgAAAAIAAAACAAAAAgAAAAIAAAACAAAAAgAAAAIAAAACAAAAAgAAAAIAAAACAAAAAgAAAAIAAAACAAAAAgAAAAIAAAACAAAAAgAAAAIAAAA="
+        },
+        "roi_sources": [
+          [
+            "player_guided",
+            "player_guided"
+          ],
+          [
+            "player_guided",
+            "player_guided"
+          ],
+          [
+            "player_guided",
+            "player_guided"
+          ],
+          [
+            "player_guided",
+            "player_guided"
+          ],
+          [
+            "player_guided",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ],
+          [
+            "predictive",
+            "player_guided"
+          ]
+        ],
+        "global_hz": {
+          "dtype": "i32",
+          "shape": [
+            20
+          ],
+          "b64": "CgAAAAoAAAAKAAAACgAAAAoAAAAKAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAA="
+        }
+      },
+      "tol": {
+        "abs": 1e-06,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "fusion_en_el_solape_las_dos",
+      "fn": "fuse_estimates",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 3.141592653589793
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 0.05235987755982989
+            }
+          }
+        },
+        "estimates": {
+          "left": {
+            "state": "TRACKING",
+            "x_px": 738.9981512681259,
+            "y_px": 906.917437213291,
+            "vx_px_s": 0.0,
+            "vy_px_s": 0.0,
+            "var_x_px2": 4.0,
+            "var_y_px2": 4.0,
+            "confidence": 0.8,
+            "age_s": 0.0
+          },
+          "right": {
+            "state": "COASTING",
+            "x_px": 748.6764851542639,
+            "y_px": 1313.7065561841305,
+            "vx_px_s": 0.0,
+            "vy_px_s": 0.0,
+            "var_x_px2": 4.0,
+            "var_y_px2": 4.0,
+            "confidence": 0.8,
+            "age_s": 0.0
+          }
+        },
+        "max_angle_rad": 0.02
+      },
+      "expected": {
+        "fused": {
+          "yaw_rad": -0.00017315971335432552,
+          "pitch_rad": -0.1997718881830346,
+          "score": 0.8,
+          "sides": [
+            "left",
+            "right"
+          ],
+          "keys": [
+            0,
+            1
+          ],
+          "separation_rad": 0.0007608133052711183
+        }
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "fusion_una_camara_perdida",
+      "fn": "fuse_estimates",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 3.141592653589793
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 0.05235987755982989
+            }
+          }
+        },
+        "estimates": {
+          "left": {
+            "state": "LOST",
+            "x_px": 737.9981512681259,
+            "y_px": 906.917437213291,
+            "vx_px_s": 0.0,
+            "vy_px_s": 0.0,
+            "var_x_px2": 4.0,
+            "var_y_px2": 4.0,
+            "confidence": 0.8,
+            "age_s": 0.0
+          },
+          "right": {
+            "state": "COASTING",
+            "x_px": 748.6764851542639,
+            "y_px": 1314.7065561841305,
+            "vx_px_s": 0.0,
+            "vy_px_s": 0.0,
+            "var_x_px2": 4.0,
+            "var_y_px2": 4.0,
+            "confidence": 0.5,
+            "age_s": 0.0
+          }
+        },
+        "max_angle_rad": 0.02
+      },
+      "expected": {
+        "fused": {
+          "yaw_rad": 0.0,
+          "pitch_rad": -0.2,
+          "score": 0.5,
+          "sides": [
+            "right"
+          ],
+          "keys": [
+            1
+          ],
+          "separation_rad": 0.0
+        }
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "fusion_sin_acuerdo_manda_la_confianza",
+      "fn": "fuse_estimates",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 3.141592653589793
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 0.05235987755982989
+            }
+          }
+        },
+        "estimates": {
+          "left": {
+            "state": "TRACKING",
+            "x_px": 957.6261652868035,
+            "y_px": 933.4884256918441,
+            "vx_px_s": 0.0,
+            "vy_px_s": 0.0,
+            "var_x_px2": 4.0,
+            "var_y_px2": 4.0,
+            "confidence": 0.4,
+            "age_s": 0.0
+          },
+          "right": {
+            "state": "TRACKING",
+            "x_px": 966.612888522462,
+            "y_px": 1276.6775401904176,
+            "vx_px_s": 0.0,
+            "vy_px_s": 0.0,
+            "var_x_px2": 4.0,
+            "var_y_px2": 4.0,
+            "confidence": 0.7,
+            "age_s": 0.0
+          }
+        },
+        "max_angle_rad": 0.02
+      },
+      "expected": {
+        "fused": {
+          "yaw_rad": 0.1000000000000001,
+          "pitch_rad": -0.19999999999999996,
+          "score": 0.7,
+          "sides": [
+            "right"
+          ],
+          "keys": [
+            1
+          ],
+          "separation_rad": 0.0
+        }
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "fusion_sin_pistas",
+      "fn": "fuse_estimates",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 3.141592653589793
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.823776197365,
+              "fy": 1446.823776197365,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317007977318,
+              "pitch_rad": -0.13962634015954636,
+              "roll_rad": 0.05235987755982989
+            }
+          }
+        },
+        "estimates": {
+          "left": null,
+          "right": {
+            "state": "LOST",
+            "x_px": 748.6764851542639,
+            "y_px": 1314.7065561841305,
+            "vx_px_s": 0.0,
+            "vy_px_s": 0.0,
+            "var_x_px2": 4.0,
+            "var_y_px2": 4.0,
+            "confidence": 0.8,
+            "age_s": 0.0
+          }
+        },
+        "max_angle_rad": 0.02
+      },
+      "expected": {
+        "fused": null
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    }
+  ]
+}

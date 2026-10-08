@@ -117,6 +117,54 @@ public enum DetectionSpec {
     /// (Python: `BALL_HEATMAP_THRESHOLD`.)
     public static let ballHeatmapThreshold: Double = 0.3
 
+    /// Píxeles nativos por segundo al cuadrado. Ruido de proceso: la desviación de la
+    /// aceleración blanca a trozos que absorbe la gravedad vista de lejos, los efectos, los botes
+    /// y la perspectiva del gran angular. Son los 8 px/fotograma² de `BALL_KF_ACCEL_STD_PX` del
+    /// repo de entrenamiento, a 30 fps.
+    /// (Python: `BALL_KF_ACCEL_STD_PX_S2`.)
+    public static let ballKfAccelStdPxS2: Double = 7200.0
+
+    /// Píxeles nativos. Desviación del centro que da el heatmap, en cada eje: la del repo de
+    /// entrenamiento (`BALL_KF_MEAS_STD_PX`).
+    /// (Python: `BALL_KF_MEAS_STD_PX`.)
+    public static let ballKfMeasStdPx: Double = 2.0
+
+    /// Píxeles nativos por segundo. Desviación de la velocidad al nacer el filtro con una
+    /// sola detección: lo más rápido que se ve el balón, 70 px/fotograma a 30 fps (los 58,5 px de
+    /// un balón a 25 m/s visto a 20 m, con un 20 % de margen; `BALL_GATE_PX_PER_FRAME` del
+    /// repo de entrenamiento).
+    /// (Python: `BALL_KF_INIT_SPEED_STD_PX_S`.)
+    public static let ballKfInitSpeedStdPxS: Double = 2100.0
+
+    /// Sin unidades. Puerta de Mahalanobis de la asociación: χ² con 2 grados de libertad al
+    /// 99 % (§13.2). Una detección con d² = yᵀ·S⁻¹·y por encima no es este balón.
+    /// (Python: `BALL_GATE_CHI2`.)
+    public static let ballGateChi2: Double = 9.21
+
+    /// Segundos sin una detección aceptada tras los que el balón se da por perdido: el
+    /// filtro se tira y la búsqueda global sube a `BALL_GLOBAL_LOST_HZ`. Es el corte de pista
+    /// del repo de entrenamiento (`BALL_TRACK_MAX_COAST_FRAMES`, 15 fotogramas a 30 fps): a
+    /// 25 m/s, en medio segundo la predicción ya no está dentro de una ROI de 256.
+    /// (Python: `BALL_LOST_AFTER_S`.)
+    public static let ballLostAfterS: Double = 0.5
+
+    /// Segundos. Constante de tiempo con la que decae la confianza sin detecciones,
+    /// conf ← conf·exp(-dt/τ) (§12.5). Al fundir las dos cámaras, si no ven el mismo balón,
+    /// manda la de más confianza.
+    /// (Python: `BALL_CONFIDENCE_TAU_S`.)
+    public static let ballConfidenceTauS: Double = 0.5
+
+    /// Sin unidades. Lado de ROI que pide la incertidumbre, en desviaciones de la posición
+    /// predicha: 6 es ±3 a cada lado. El lado se redondea al export más cercano
+    /// (`heatmap_side`), así que con solo 256 no cambia nada hasta que llegue la de 320.
+    /// (Python: `BALL_ROI_SIGMA_K`.)
+    public static let ballRoiSigmaK: Double = 6.0
+
+    /// Píxeles nativos que se suman al lado de ROI que pide la incertidumbre: 32 por lado,
+    /// el balón cercano entero (~25 px) y el borde, donde el heatmap ve medio contexto.
+    /// (Python: `BALL_ROI_MARGIN_PX`.)
+    public static let ballRoiMarginPx: Int = 64
+
     /// IoU, sin unidades (0-1). Dos cajas de la misma clase con más solape que esto son el
     /// mismo objeto y sobrevive la de mejor score. 0.5 es el valor clásico: más bajo borra
     /// jugadores pegados en un córner; más alto deja duplicados que el tracker cuenta dos
