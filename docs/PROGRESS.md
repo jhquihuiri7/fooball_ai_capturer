@@ -12,6 +12,37 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+
+## 2026-10-08 · 90 min con los dos iPhone y todos los arreglos: aguanta un partido (SPK-54, IOS-44)
+
+Maestro iPhone 17 y esclavo iPhone 16 Pro por Wi-Fi, apuntando a un cuarto con luz de día,
+sin soporte ni hubs. Toda la carga: director, CenterNet en los dos por la cadena de
+producción, micro, N0 y franja; espera de la parte 130 ms y anillo de 6 (9468324), los
+sellos en el reloj del host (cc2a98e). Datos en `bench/dos-moviles-20261008-0808/manual`
+(recogidos a mano: el script del banco cambió en disco mientras corría).
+
+| | 2026-10-07 (antes de los arreglos) | 2026-10-08 |
+|---|---|---|
+| Programa | 156 079 fotogramas; 37 714 SIN SEÑAL | **161 877; 0 SIN SEÑAL, 0 fallos de composición** |
+| Sin el fotograma propio | 123 235 (79 %) | **0** |
+| Dos lentes / una lente | 31 338 / 1 506 (+79 466 solo esclavo) | 135 561 / 26 316 |
+| Latencia añadida p50 / p95 | 107 / 136 ms | 140 / 144 ms |
+| Partes | 161 735 recibidas, 139 perdidas | 139 707 recibidas, 1 292 perdidas, 531 IDR |
+| Térmica | maestro serious desde el minuto 2 | maestro nominal → fair; esclavo serious desde el ~40 |
+| Memoria del maestro | 326 → 610 MB | 389 → 629 MB (**+1,25 MB/min**); esclavo plano en ~442 |
+
+**Lectura.** Los dos arreglos de ayer se sostienen 90 min: nunca falta el fotograma propio
+y no hay ni un SIN SEÑAL. De los 26 316 fotogramas de una lente, 20 197 son vistas del
+director que caen enteras del lado del maestro (el esclavo manda `no_part`, lo correcto);
+las partes que faltaron de verdad son ~6 100 (3,8 %), la mitad en los primeros 20 min, con
+83 caídas cortas del enlace por Wi-Fi (106 s fuera de `up`); después, estable hasta el
+final. La geometría era el `rig.json` de interior de ayer, con los móviles ya movidos: no
+cambia el coste, sí qué vistas cruzan la costura.
+
+**Sigue abierto**: la memoria del maestro (+1,25 MB/min, ~120 MB por partido). No es la
+escritura de ficheros (2026-10-07); esta tarde se separa con `tools/banco_un_movil.sh`
+(maestro solo, sin partes ni decodificador) apagando director, detector y micro por turnos.
+
 ## 2026-10-08 · IOS-14 — Wi-Fi Aware como plan B del enlace · 🚧 falta la prueba con los dos iPhone
 
 Hecho en el Mac, sin tocar los iPhone (estaba corriendo la pasada de 90 min). La
