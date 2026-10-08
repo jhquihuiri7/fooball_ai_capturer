@@ -13,6 +13,35 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 ---
 
 
+
+## 2026-10-08 · El cosido calibrado con los umbrales del repo (IOS-71, SPK-04)
+
+Con los dos iPhone a mano en la posición del soporte (iPhone 17 a la izquierda boca abajo,
+16 Pro a la derecha), mirando a una oficina de ~10 m de fondo, se calibró con los 5 pares
+que saca el banco al empezar (`bench/dos-moviles-20261008-1030`) y la `calibrate_upright` del
+servicio NUBE-09, **con los umbrales del repo** (RANSAC 3 px, ≥30 inliers):
+
+| Par | Inliers | Residuo | Yaw izq / der | Roll der |
+|---|---|---|---|---|
+| 1 | 164 / 265 | 0,065° | −35,65° / +35,65° | −11,24° |
+| 2 | 152 / 238 | 0,069° | −35,64° / +35,64° | −11,19° |
+| 3 | 151 / 248 | 0,071° | −35,65° / +35,65° | −11,21° |
+| 4 | 149 / 244 | 0,066° | −35,65° / +35,65° | −11,20° |
+| 5 | 143 / 231 | 0,061° | −35,64° / +35,64° | −11,34° |
+
+Los cinco coinciden a 0,01° en yaw y 0,15° en roll. El derecho estaba ladeado 11°: el
+trípode lo corregirá, pero la calibración ya lo compensa. Con ese `rig.json` en Documents de
+los dos (`docs/img/rig-agencia-20261008.json`), 150 s de programa
+(`bench/dos-moviles-20261008-1035`): el logo de la pared, que cae en el solape, sale una sola
+vez y entero; pared, ventana, sofá y garrafón continuos a través de la costura
+(`docs/img/cosido-calibrado-agencia-20261008.jpg`; el par crudo en
+`docs/img/par-calibracion-agencia-20261008.jpg`). 0 fotogramas propios perdidos, latencia p95
+144 ms. Ayer, en un cuarto a 2-4 m, solo calibraba aflojando los umbrales: con algo más de
+fondo ya no hace falta.
+
+Falta para cerrar IOS-71/SPK-04: el trípode (mañana) y la prueba en la cancha, más
+SPK-05 (ΔVMAF) sobre una grabación.
+
 ## 2026-10-08 · 90 min con los dos iPhone y todos los arreglos: aguanta un partido (SPK-54, IOS-44)
 
 Maestro iPhone 17 y esclavo iPhone 16 Pro por Wi-Fi, apuntando a un cuarto con luz de día,
