@@ -43,6 +43,13 @@ cambia el coste, sí qué vistas cruzan la costura.
 escritura de ficheros (2026-10-07); esta tarde se separa con `tools/banco_un_movil.sh`
 (maestro solo, sin partes ni decodificador) apagando director, detector y micro por turnos.
 
+**Base sin director, detector ni micro** (12 min con los dos, `bench/dos-moviles-20261008-0941`):
+la memoria del maestro **sigue creciendo** (474 → 500 MB del minuto 2 al 11, ~2 MB/min; la
+pasada es corta y ruidosa). La fuga no está en el director, el detector ni el micro: queda
+la base (cámara y anillo, compositor y gráfico, codificador del programa, decodificador de
+las partes). Siguiente: la misma base con un solo iPhone (`tools/banco_un_movil.sh`, sin
+partes ni decodificador); si crece igual, el decodificador queda fuera.
+
 ## 2026-10-08 · IOS-14 — Wi-Fi Aware como plan B del enlace · 🚧 falta la prueba con los dos iPhone
 
 Hecho en el Mac, sin tocar los iPhone (estaba corriendo la pasada de 90 min). La
