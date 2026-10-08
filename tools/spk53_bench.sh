@@ -86,7 +86,8 @@ case "$MODO" in
     subidos=$(xcrun devicectl device info files --device "$DEVICE" --domain-type appDataContainer \
       --domain-identifier "$APP" 2>/dev/null | awk '{print $1}')
     for v in explicit mlstate; do
-      echo "$subidos" | grep -qx "Documents/bench-resources/bench-spk53-$v.json" || {
+      # Sin tubería: con pipefail, `echo | grep -q` falla (SIGPIPE) justo cuando encuentra.
+      grep -qx "Documents/bench-resources/bench-spk53-$v.json" <<< "$subidos" || {
         echo "no está Documents/bench-resources/bench-spk53-$v.json en el iPhone" >&2; exit 1; }
     done
 

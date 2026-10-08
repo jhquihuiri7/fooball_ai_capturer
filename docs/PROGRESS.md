@@ -14,6 +14,31 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 
 
+
+## 2026-10-08 · SPK-53 e IOS-23 medidos en el iPhone 17 · ✅
+
+**SPK-53, el spotter N4 en modo paso** (`tools/spk53_bench.sh iphone`,
+`bench/spk53-20261008-1104`; iPhone 17, iOS 26.6.1, térmica nominal):
+
+| Variante | ANE (coste) | Paso p50 / p90 / p99 | Dorado (100 pasos) | Reinicio / intercalado | Carga |
+|---|---|---|---|---|---|
+| E/S explícita | 100 % | 0,295 / 0,327 / 0,352 ms | 0 fuera, peor Δ 0,0124 | 0 / 0 | compile 61 ms, load 393 ms |
+| MLState | 100 % | 0,287 / 0,313 / 0,349 ms | 0 fuera, peor Δ 0,0124 | 0 / 0 | compile 47 ms, load 285 ms |
+
+Las dos cumplen los cuatro criterios (≥95 % ANE, p50 ≤1,7 ms, el dorado, sin fugas), con
+el p50 a 6× del objetivo. Empatan (0,008 ms): por la regla anotada al preparar el banco
+(empate ≤0,1 ms → la explícita), **se elige la E/S explícita**, que además no ata al
+`MLState` de iOS 18+. Pendiente de la revisión del propietario.
+
+**IOS-23, el decodificador en el iPhone** (`tools/bench_iphone.sh decoder-bench`,
+`bench/decoder-bench-20261008-1104`, 2000 llamadas): `detr300` (300 queries) p50 0,012 /
+p99 0,018 ms — **la aceptación pide <0,2 ms**; `heatmap` (CenterNet) p50 0,073 / p99 0,097 ms;
+`heatmap_saturated` (mapa lleno de picos, el peor caso artificial) p50 1,42 / p99 1,53 ms.
+Con esto IOS-23 queda entera (los dorados ya pasaban el 2026-10-07).
+
+`tools/spk53_bench.sh`: la comprobación de los recursos fallaba con ellos en su sitio
+(`echo | grep -q` con pipefail sale con SIGPIPE justo al encontrar); ahora lee sin tubería.
+
 ## 2026-10-08 · El cosido calibrado con los umbrales del repo (IOS-71, SPK-04)
 
 Con los dos iPhone a mano en la posición del soporte (iPhone 17 a la izquierda boca abajo,
