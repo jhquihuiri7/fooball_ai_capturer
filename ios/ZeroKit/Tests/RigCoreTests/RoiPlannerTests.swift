@@ -1,5 +1,6 @@
-// El planificador de ROIs del balón (IOS-28): las reglas de la referencia que un dorado
-// no nombra solas. Las ROIs de las secuencias de ball.json llegan con el tracker (IOS-28b).
+// El planificador de ROIs del balón (IOS-28): las ROIs de las secuencias de ball.json
+// por separado —si fallan, el culpable es el planificador y no el filtro— y las reglas de
+// la referencia que un dorado no nombra solas.
 
 import Foundation
 import RigCore
@@ -7,6 +8,24 @@ import XCTest
 
 final class RoiPlannerTests: XCTestCase {
     private let (ancho, alto) = (3840, 2160)
+
+    func testLasRoisDeLasSecuenciasDoradas() throws {
+        let documento = try Golden.loadDocument(named: "ball.json")
+        var secuencias = 0
+        for caso in documento.cases where caso.fn == "BallTracker.sequence" {
+            secuencias += 1
+            let actual = try BallKalmanTests.replica(fn: caso.fn, inputs: caso.inputs)
+            for campo in ["rois", "roi_count", "roi_sources"] {
+                if let fallo = Golden.mismatch(
+                    actual: try actual.field(campo), expected: try caso.expected.field(campo),
+                    tol: caso.tol, path: "\(caso.name).\(campo)"
+                ) {
+                    XCTFail(fallo)
+                }
+            }
+        }
+        XCTAssertEqual(secuencias, 10)
+    }
 
     func testElLadoConExportMasCercanoYAEmpateElMayor() {
         XCTAssertEqual(BallRoiPlanner.heatmapSide(100), DetectionSpec.ballRoiSide)

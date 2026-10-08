@@ -12,6 +12,76 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-08 · IOS-28 — el Kalman del balón y el planificador de ROIs (RigCore) · ✅
+
+Réplica en RigCore (solo Foundation) de `libs/vision/ball_kalman.py` (REF-28), contra
+los 15 casos de `ball.json` (football-ai `a14ae4d`, sincronizado desde `5e4c4d5`). Va en
+dos commits porque pasa de las 400 líneas con los tests.
+
+**Hecho**
+- `Detection/BallKalman.swift` (IOS-28a): `BallAxisFilter` y `BallKalman`. Es el modelo
+  de velocidad constante en píxeles nativos, con un filtro por eje, `predict(dtS:)`,
+  `mahalanobis2` y `update`. Las cuentas van en el mismo orden que la referencia y las
+  constantes salen de `DetectionSpec` (`ballKf*`).
+- `Detection/BallRoiPlanner.swift` (IOS-28a): `BallRoi` (`clamped`, `contains`),
+  `BallRoiSource` y `BallRoiPlanner`:
+  - `heatmapSide`: el lado con export más cercano; a empate, el mayor.
+  - `roi(centeredAt:)`: ⌊c − lado/2 + 0,5⌋ y después se desplaza dentro del frame.
+  - `plan(prediction:groups:…)`: la ROI de la predicción, con el lado que pide 6σ + 64,
+    y la del grupo más cercano que no cae en ella. Sin filtro, los primeros grupos con
+    el lado mayor.
+- `Detection/BallTracker.swift` (IOS-28b):
+  - `BallTracker` con TRACKING/COASTING/LOST, la candidata que pide una segunda
+    detección, la puerta χ² 9,21 con el desempate por d²/score, la caducidad a 0,5 s con
+    la edad en Double, la confianza con τ = 0,5 s, `globalSearchHz` (3 o 10) y
+    `rois(groups:)`.
+  - `BallEstimate`, `BallDetection`, `BallKalmanState` y `RigModel.fuseBall`
+    (`fuse_estimates`).
+- Tests:
+  - `BallKalmanTests` replica el evaluador y pasa los 15 casos: 1 del filtro, 10
+    secuencias y 4 fusiones. Además cubre la edad que caduca en el fotograma 16, la
+    candidata, COASTING sin tocar el filtro, la puerta al nacer y lo que se rechaza.
+  - `RoiPlannerTests` compara aparte las ROIs de las 10 secuencias doradas y fija los
+    desempates: el lado, el centrado que no redondea al par, el desplazamiento, la
+    segunda hipótesis y el caso sin filtro.
+
+**Aceptación** («secuencias doradas idénticas, 1e-6»): **se cumple**. La tolerancia del
+dorado es 1e-6 absoluta o 1e-9 relativa. La desviación máxima medida en los 15 casos es
+de 2,8e-17 absoluta y 1,4e-16 relativa, prácticamente bit a bit. La tarjeta no pide
+ninguna medida en el iPhone; lo que corre en el móvil es IOS-74.
+
+**Decidido (pendiente de revisión del propietario)**
+- `update` devuelve el **índice** de la detección que tomó el filtro, en vez de la
+  detección. Python devuelve el objeto y el evaluador lo busca por identidad.
+- `BallDetection` lleva x, y, score, `roiId` y `source`. No lleva `w`/`h`, porque el
+  heatmap no mide la caja, ni `frame_seq`, que decidirá IOS-74.
+- El planificador es una función pura (`BallRoiPlanner.plan`) a la que llama
+  `BallTracker.rois`. Así RoiPlannerTests la prueba sin filtro.
+- Un dt negativo y unas desviaciones inválidas lanzan `RigError`, como el `ValueError`
+  de la referencia. `heatmapSide` sin lados devuelve nil.
+
+**Pendiente para la referencia (football-ai, no tocado)**
+- **La frase del Float no es exacta.** El ADR 0020 (REF-28c) y el docstring de
+  `evaluate_ball_kalman.py` dicen que en float32 la pista caducaría en el fotograma 15 y
+  que el dorado lo detecta. En float32, quince sumas de 1/30 dan **0,5 justos**: con `>`
+  también caduca en el 16, y el dorado no lo ve. Probado aquí con una edad en Float:
+  - con `>`, ball.json pasa entero;
+  - con `>=`, fallan `oclusion_larga_lost_y_reentrada` y `salto_de_puerta_balon_desviado`.
+
+  El dorado solo atrapa la combinación Float con `>=`. La réplica usa Double con `>`,
+  como la referencia. Si se quiere blindar, hace falta un caso con un dt en el que Double
+  y Float caigan a lados distintos de 0,5.
+- **`BALL_ROI_SIDES` no está en `DetectionSpec`.** Swift usa `[ballRoiSide]` por defecto
+  (`BallRoiPlanner.defaultSides`). Cuando SPK-52 apruebe 320, hay que exportarla.
+
+**Fuera**: el recorte [2, 3, S, S], el carril y la decodificación (IOS-74). El balón en
+la fusión del director (IOS-29). Las listas de ROIs y detecciones son arrays pequeños
+(2 ROIs) que se crean en cada ciclo; si el banco de IOS-74 lo ve en el p99, se
+preasignan.
+
+**Siguiente paso**: IOS-74, que pasa a `BallTracker` las detecciones del lote y del
+mosaico, y pasa las ROIs de `rois(groups:)` al recorte.
+
 ## 2026-10-07 · SPK-53 — la secuencia del spotter N4 en la app: MLState frente a E/S explícita · 🚧 falta la pasada del iPhone 17
 
 El export de las dos variantes y su secuencia dorada están en el repo de entrenamiento
