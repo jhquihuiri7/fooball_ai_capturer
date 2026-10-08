@@ -12,7 +12,14 @@
 // separado), lee del MLComputePlan la unidad y el coste por op (% del coste en el
 // ANE y ops fuera), mide p50/p90/p99 de las predicciones tras calentar (con
 // os_signpost, y el bucle SÍNCRONO: un await ensuciaría la medida) y comprueba el
-// bundle dorado de ML-12 contra la ruta coreml_fp16 con su tolerancia.
+// bundle dorado de ML-12 contra la ruta coreml_fp16 con su tolerancia. Un modelo en
+// modo paso con estado (SPK-53) declara `sequence` y lo recorre SequenceBench: la
+// secuencia dorada, el reinicio, dos recorridos intercalados y la latencia por paso.
+//
+// El banco lee `bench.json` o el fichero que diga MODEL_BENCH_SPEC (en el iPhone, por
+// `devicectl … launch --environment-variables`): así se lanza una tanda sin pisar la
+// otra ni recompilar. Un modelo que no carga o falla se apunta en el informe
+// (`<nombre>/failed` y el error en params) y el banco sigue con el siguiente.
 
 import CoreML
 import CoreVideo
@@ -34,9 +41,12 @@ public struct BenchModelSpec: Decodable {
     public var golden: String?
     /// La función del paquete multifunción (SPK-52); nil para un paquete normal.
     public var function: String?
+    /// El bundle de la secuencia dorada de un modo paso con estado (SPK-53): con él,
+    /// las predicciones son pasos con el estado vivo, no entradas sueltas.
+    public var sequence: String?
 
     enum CodingKeys: String, CodingKey {
-        case name, package, predictions, warmup, golden, function
+        case name, package, predictions, warmup, golden, function, sequence
         case computeUnits = "compute_units"
     }
 
@@ -49,6 +59,7 @@ public struct BenchModelSpec: Decodable {
         computeUnits = try c.decodeIfPresent(String.self, forKey: .computeUnits) ?? "cpu_and_ne"
         golden = try c.decodeIfPresent(String.self, forKey: .golden)
         function = try c.decodeIfPresent(String.self, forKey: .function)
+        sequence = try c.decodeIfPresent(String.self, forKey: .sequence)
     }
 }
 
@@ -84,10 +95,19 @@ public enum ModelBench {
     static let benchBoundsMs: [Double] =
         LatencyHistogram.defaultBoundsMs + [2000, 5000, 15000, 60000]
 
+    /// El fichero de modelos por defecto dentro de los recursos del banco.
+    public static let defaultSpec = "bench.json"
+
+    /// La variable de entorno que elige otro fichero de modelos (SPK-53).
+    public static let specEnvironmentKey = "MODEL_BENCH_SPEC"
+
     /// El puente síncrono para BenchRunner: bloquea mientras el trabajo async
     /// (compileModel, MLComputePlan.load) corre en otro ejecutor.
     public static func run(
-        resources: URL, report: inout BenchReport, progress: BenchRunner.Progress?
+        resources: URL,
+        report: inout BenchReport,
+        progress: BenchRunner.Progress?,
+        specName: String = defaultSpec
     ) throws {
         let base = report
         var resultado: Result<BenchReport, Error> = .failure(
@@ -97,7 +117,9 @@ public enum ModelBench {
         Task.detached {
             do {
                 resultado = .success(
-                    try await runAsync(resources: resources, report: base, progress: progress)
+                    try await runAsync(
+                        resources: resources, report: base, progress: progress, specName: specName
+                    )
                 )
             } catch {
                 resultado = .failure(error)
@@ -109,20 +131,33 @@ public enum ModelBench {
     }
 
     public static func runAsync(
-        resources: URL, report: BenchReport, progress: BenchRunner.Progress?
+        resources: URL,
+        report: BenchReport,
+        progress: BenchRunner.Progress?,
+        specName: String = defaultSpec
     ) async throws -> BenchReport {
-        let specURL = resources.appendingPathComponent("bench.json")
+        let specURL = resources.appendingPathComponent(specName)
         guard let datos = try? Data(contentsOf: specURL) else {
             throw ModelBenchError.missingResources(specURL.path)
         }
         let spec = try JSONDecoder().decode(BenchSpec.self, from: datos)
         var informe = report
         informe.params["models"] = spec.models.map(\.name).joined(separator: ",")
+        informe.params["spec"] = specName
 
         var compilados: [String: URL] = [:]  // por nombre de entrada, para el cambio
         for (indice, modelo) in spec.models.enumerated() {
             progress?(Double(indice) / Double(max(1, spec.models.count)), modelo.name)
-            compilados[modelo.name] = try await bench(modelo, resources: resources, report: &informe)
+            do {
+                compilados[modelo.name] = try await bench(
+                    modelo, resources: resources, report: &informe
+                )
+            } catch {
+                // Que un modelo no cargue (p. ej. el -14 de MLState en el ANE) ES una
+                // medida: se apunta y se sigue con el resto.
+                informe.counters["\(modelo.name)/failed"] = 1
+                informe.params["\(modelo.name)/error"] = String(describing: error)
+            }
             informe.thermal.append(thermalWord())
         }
         try benchFunctionSwitch(spec.models, compiled: compilados, report: &informe)
@@ -195,6 +230,14 @@ public enum ModelBench {
         report.counters["\(spec.name)/ops_off_ane"] = fuera
         report.counters["\(spec.name)/ane_cost_pct_x100"] = Int((costePct * 100).rounded())
 
+        if let secuencia = spec.sequence {
+            try benchSequence(
+                spec, model: modelo, bundleDir: resources.appendingPathComponent(secuencia),
+                report: &report
+            )
+            return compilado
+        }
+
         // Latencias, en síncrono.
         let entrada = try seededInputs(for: modelo)
         let histograma = try predictLoop(
@@ -210,6 +253,27 @@ public enum ModelBench {
             report.counters["\(spec.name)/golden_violations"] = violaciones
         }
         return compilado
+    }
+
+    /// El modo paso con estado (SPK-53): la secuencia dorada, el reinicio, el
+    /// intercalado y la latencia por paso, todo con el estado vivo.
+    private static func benchSequence(
+        _ spec: BenchModelSpec, model: MLModel, bundleDir: URL, report: inout BenchReport
+    ) throws {
+        let bundle = try GoldenBundle(dir: bundleDir)
+        let manifiesto = try SequenceManifest(bundleDir: bundleDir)
+        let r = try SequenceBench.run(
+            model: model, bundle: bundle, manifest: manifiesto,
+            warmup: spec.warmup, predictions: spec.predictions
+        )
+        report.params["\(spec.name)/state_mode"] = r.mode.rawValue
+        report.stagesMs["\(spec.name)/step"] = r.latency
+        report.counters["\(spec.name)/predictions"] = spec.predictions
+        report.counters["\(spec.name)/sequence_steps"] = r.steps
+        report.counters["\(spec.name)/golden_max_delta_x1e6"] = Int((r.goldenWorst * 1e6).rounded())
+        report.counters["\(spec.name)/golden_violations"] = r.goldenViolations
+        report.counters["\(spec.name)/repeat_violations"] = r.repeatViolations
+        report.counters["\(spec.name)/interleave_violations"] = r.interleaveViolations
     }
 
     private static func predictLoop(

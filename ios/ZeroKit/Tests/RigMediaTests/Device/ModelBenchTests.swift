@@ -7,7 +7,9 @@
 // valida el informe y se vuelca entre MODELBENCH-REPORT-BEGIN/END para capturarlo
 // desde xcodebuild.
 //
-// Sin BenchResources/bench.json (CI, un clon limpio), el banco se salta solo.
+// Sin BenchResources/bench.json (CI, un clon limpio), el banco se salta solo. Con
+// MODEL_BENCH_SPEC=<fichero> se mide otra tanda de los mismos recursos (SPK-53:
+// `MODEL_BENCH_SPEC=bench-spk53.json swift test --filter ModelBenchTests`).
 
 import Foundation
 import RigMedia
@@ -15,12 +17,14 @@ import XCTest
 
 final class ModelBenchTests: XCTestCase {
     func testBancoDeModelos() async throws {
+        let fichero = ProcessInfo.processInfo.environment[ModelBench.specEnvironmentKey]
+            ?? ModelBench.defaultSpec
         guard let recursos = Bundle.module.url(forResource: "BenchResources", withExtension: nil),
               FileManager.default.fileExists(
-                  atPath: recursos.appendingPathComponent("bench.json").path
+                  atPath: recursos.appendingPathComponent(fichero).path
               )
         else {
-            throw XCTSkip("sin BenchResources/bench.json: los recursos los pone SPK-51/52")
+            throw XCTSkip("sin BenchResources/\(fichero): los recursos los pone SPK-51/52/53")
         }
 
         let inicio = Date()
@@ -36,13 +40,19 @@ final class ModelBenchTests: XCTestCase {
             counters: [:]
         )
         var report = try await ModelBench.runAsync(
-            resources: recursos, report: base, progress: nil
+            resources: recursos, report: base, progress: nil, specName: fichero
         )
         report.durationS = Date().timeIntervalSince(inicio)
 
         // El dorado de ML-12 es la aceptación: ni una salida fuera de tolerancia.
-        for (clave, valor) in report.counters where clave.hasSuffix("/golden_violations") {
+        // Y en los modos paso (SPK-53), sin fugas: ni tras reiniciar ni entre dos estados.
+        let sinFallos = ["/golden_violations", "/repeat_violations", "/interleave_violations"]
+        for (clave, valor) in report.counters where sinFallos.contains(where: clave.hasSuffix) {
             XCTAssertEqual(valor, 0, "\(clave): \(valor) salidas fuera de tolerancia")
+        }
+        for (clave, _) in report.counters where clave.hasSuffix("/failed") {
+            let modelo = String(clave.dropLast("/failed".count))
+            XCTFail("\(modelo) falló: \(report.params["\(modelo)/error"] ?? "?")")
         }
         try write(report)
     }

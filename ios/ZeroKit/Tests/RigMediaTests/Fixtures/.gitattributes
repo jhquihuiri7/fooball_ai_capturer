@@ -1,0 +1,4 @@
+# Los dorados y los pesos son bytes: sin conversión de finales de línea ni diff de texto
+# (un .bin sin ceros parece texto y un checkout con autocrlf lo rompería).
+*.bin binary
+*.mlmodel binary

@@ -1,0 +1,14 @@
+{
+  "explicit_suffix": "_out",
+  "frame_dtype": "fp16",
+  "frame_input": "frame",
+  "frame_scale": 0.00392156862745098,
+  "outputs": [
+    "logits",
+    "h"
+  ],
+  "reference_route": "torch_fp32",
+  "steps": 12,
+  "tolerance_route": "coreml_fp16",
+  "version": 1
+}

@@ -105,7 +105,8 @@ public final class BenchRunner {
     /// `pipeline-noop` (IOS-09) mide el blit del anillo con fotogramas sintéticos;
     /// `vt-concurrency` (SPK-03) carga cámara, HEVC, H.264 y decodificación a la vez;
     /// `model-bench` (SPK-50) mide .mlpackage con sus recursos en
-    /// Documents/bench-resources (se suben con `devicectl device copy to`);
+    /// Documents/bench-resources (se suben con `devicectl device copy to`; el fichero
+    /// de modelos es bench.json o el de la variable MODEL_BENCH_SPEC, SPK-53);
     /// `director-bench` (IOS-37) mide el bucle del director por fotograma,
     /// `decoder-bench` (IOS-23), el decodificador de jugadores sin el modelo, y
     /// `metal-bench` (IOS-40/41/21), el tiempo de GPU de los kernels.
@@ -135,7 +136,9 @@ public final class BenchRunner {
             try ModelBench.run(
                 resources: documentos.appendingPathComponent("bench-resources"),
                 report: &report,
-                progress: progress
+                progress: progress,
+                specName: ProcessInfo.processInfo.environment[ModelBench.specEnvironmentKey]
+                    ?? ModelBench.defaultSpec
             )
         },
     ]

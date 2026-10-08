@@ -12,6 +12,91 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-07 · SPK-53 — la secuencia del spotter N4 en la app: MLState frente a E/S explícita · 🚧 falta la pasada del iPhone 17
+
+El export de las dos variantes y su secuencia dorada están en el repo de entrenamiento
+(`8b0b9a7`). Esta entrada es el arnés que las mide en la app.
+
+**Hecho**
+- `RigMedia/Obs/SequenceBench.swift`:
+  - `SequenceManifest` lee el `sequence.json` (versión 1) que acompaña al bundle de ML-12.
+  - `SequenceStepper` lleva un recorrido con su propio estado y deduce del modelo cuál de
+    las dos maneras usa:
+    - MLState: `makeState()` y `prediction(from:using:)`.
+    - Explícita: dos juegos de MLMultiArray fp16 sobre IOSurface, en doble búfer. Con
+      `outputBackings`, la salida `X_out` del paso k se escribe en el juego que lee el
+      paso k+1, sin copias ni reservas de memoria dentro del bucle.
+  - `SequenceBench.run` hace cuatro cosas: recorre la secuencia contra el dorado desde
+    cero; la repite tras reiniciar; corre dos recorridos intercalados sobre el mismo
+    MLModel, con 7 pasos de desfase; y mide la latencia por paso con el estado vivo, con
+    percentiles exactos.
+- `ModelBench`:
+  - Un modelo con `"sequence"` en bench.json va a SequenceBench. Deja `state_mode`, la
+    etapa `<nombre>/step`, `sequence_steps`, `golden_violations`, `golden_max_delta_x1e6`,
+    `repeat_violations` e `interleave_violations`.
+  - El fichero de modelos se elige con `MODEL_BENCH_SPEC` (bench.json por defecto).
+    BenchRunner lo lee del entorno del lanzamiento.
+  - Un modelo que no carga o que falla se apunta en el informe (`<nombre>/failed`, con el
+    error en params) y el banco sigue con el siguiente: el -14 de MLState en el ANE
+    también es una medida.
+  - ModelBenchTests falla si algún modelo tiene `/failed` o si hay fugas.
+- `SequenceBenchTests` (8 tests). Usan el gemelo diminuto: los paquetes
+  `Fixtures/n4-tiny-{mlstate,explicit}.mlpackage` (25 KB cada uno) y el bundle
+  `Fixtures/n4-tiny-v1` (12 pasos, 86 KB). Los genera el repo de entrenamiento y son
+  idénticos a sus `runs/spk53/fixtures`. Comprueban:
+  - que las dos variantes recorren el dorado sin fugas;
+  - el contraejemplo: sin reiniciar, el dorado sí ve la fuga;
+  - que las dos variantes dan lo mismo;
+  - que un modelo sin estado no se acepta como modo paso;
+  - los strides de un IOSurface;
+  - el banco entero por un bench.json que incluye un modelo inexistente.
+- `tools/spk53_bench.sh` tiene tres modos:
+  - `recursos <runs/spk53>` monta `build/spk53/bench-resources/`: los dos paquetes
+    (2,8 MB cada uno) y la secuencia de 100 pasos (34 MB). No van a git.
+  - `mac` corre ModelBenchTests con esos recursos.
+  - `iphone [dispositivo]` compila con `BENCH=model-bench`, instala la app, sube los
+    recursos y comprueba que han quedado donde ModelBench los busca. Luego lanza cada
+    variante por separado con `tools/bench_iphone.sh`, que solo cierra la Zero, y acaba
+    con la aceptación de la tarjeta criterio a criterio. Se ha probado contra un `xcrun`
+    falso.
+- `BenchResources/README.md`: `sequence`, `function` y `MODEL_BENCH_SPEC`.
+
+**El error de compilación** de `SequenceBenchTests.swift:124` ya no estaba en el stash.
+Los strides que recibe el cierre de `withUnsafeMutableBytes` son `[Int]`, y la línea ya
+usa `pasos[1]` sin `intValue`. Compila y pasa.
+
+**Medido en el Mac** (M4, macOS 26.3, carril `mac`, `cpu_and_ne`, compilación debug):
+
+| variante | ANE | paso p50 / p99 | dorado, 100 pasos | reinicio · intercalado |
+|---|---|---|---|---|
+| explícita | 100 % | 0,27 / 0,30 ms | 0 fuera (peor Δ 0,0135) | 0 · 0 |
+| MLState | 100 % | 0,26 / 0,29 ms | 0 fuera (peor Δ 0,0135) | 0 · 0 |
+
+Los 12 ms que dio la explícita en este mismo carril, según el repo de entrenamiento, no se
+repiten con el Mac menos cargado. La cifra que vale es la del iPhone.
+
+**Para la pasada del iPhone 17** (desbloqueado y con el Bloqueo automático en Nunca; los
+recursos ya están montados en `build/spk53/bench-resources`):
+
+```bash
+cd /Users/alexander/Trabajacion/fooball_ai_capturer
+# solo si cambió el export:
+tools/spk53_bench.sh recursos /Users/alexander/Trabajacion/fooball_ai_training/runs/spk53
+tools/spk53_bench.sh iphone 8FBBECC4-5239-59C4-BE22-5EEFB5958863
+```
+
+En el iPhone queda un `Documents/bench/model-bench-<epoch>.json` por variante, en el
+contenedor de `com.logicielapplab.zero`. En el Mac bajan a
+`bench/spk53-<fecha>/n4-step-explicit.json` y `n4-step-mlstate.json`.
+
+**Decidido (pendiente de revisión del propietario)**: si las dos variantes pasan los cuatro
+criterios, se elige la de menor p50 por paso. Si empatan (diferencia ≤0,1 ms), gana la E/S
+explícita, por dos razones: no depende de MLState, que ya dio el -14 en el ANE con la forma
+nativa, y su estado se puede leer o guardar sin API nueva.
+
+**Siguiente paso**: la pasada en el iPhone. Con ella se elige la variante y se cierra
+SPK-53, también en el PROGRESS del repo de entrenamiento.
+
 ## 2026-10-07 · IOS-23 (cont.) — el banco del decodificador (`decoder-bench`) · 🚧 falta la cifra del iPhone
 
 **Hecho**

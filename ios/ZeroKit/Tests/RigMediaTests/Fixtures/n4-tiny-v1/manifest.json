@@ -1,0 +1,469 @@
+{
+  "inputs": [
+    {
+      "dtype": "|u1",
+      "file": "entradas/frame_000.bin",
+      "layout": "NCHW_u8",
+      "name": "frame_000",
+      "shape": [
+        1,
+        3,
+        16,
+        128
+      ]
+    },
+    {
+      "dtype": "|u1",
+      "file": "entradas/frame_001.bin",
+      "layout": "NCHW_u8",
+      "name": "frame_001",
+      "shape": [
+        1,
+        3,
+        16,
+        128
+      ]
+    },
+    {
+      "dtype": "|u1",
+      "file": "entradas/frame_002.bin",
+      "layout": "NCHW_u8",
+      "name": "frame_002",
+      "shape": [
+        1,
+        3,
+        16,
+        128
+      ]
+    },
+    {
+      "dtype": "|u1",
+      "file": "entradas/frame_003.bin",
+      "layout": "NCHW_u8",
+      "name": "frame_003",
+      "shape": [
+        1,
+        3,
+        16,
+        128
+      ]
+    },
+    {
+      "dtype": "|u1",
+      "file": "entradas/frame_004.bin",
+      "layout": "NCHW_u8",
+      "name": "frame_004",
+      "shape": [
+        1,
+        3,
+        16,
+        128
+      ]
+    },
+    {
+      "dtype": "|u1",
+      "file": "entradas/frame_005.bin",
+      "layout": "NCHW_u8",
+      "name": "frame_005",
+      "shape": [
+        1,
+        3,
+        16,
+        128
+      ]
+    },
+    {
+      "dtype": "|u1",
+      "file": "entradas/frame_006.bin",
+      "layout": "NCHW_u8",
+      "name": "frame_006",
+      "shape": [
+        1,
+        3,
+        16,
+        128
+      ]
+    },
+    {
+      "dtype": "|u1",
+      "file": "entradas/frame_007.bin",
+      "layout": "NCHW_u8",
+      "name": "frame_007",
+      "shape": [
+        1,
+        3,
+        16,
+        128
+      ]
+    },
+    {
+      "dtype": "|u1",
+      "file": "entradas/frame_008.bin",
+      "layout": "NCHW_u8",
+      "name": "frame_008",
+      "shape": [
+        1,
+        3,
+        16,
+        128
+      ]
+    },
+    {
+      "dtype": "|u1",
+      "file": "entradas/frame_009.bin",
+      "layout": "NCHW_u8",
+      "name": "frame_009",
+      "shape": [
+        1,
+        3,
+        16,
+        128
+      ]
+    },
+    {
+      "dtype": "|u1",
+      "file": "entradas/frame_010.bin",
+      "layout": "NCHW_u8",
+      "name": "frame_010",
+      "shape": [
+        1,
+        3,
+        16,
+        128
+      ]
+    },
+    {
+      "dtype": "|u1",
+      "file": "entradas/frame_011.bin",
+      "layout": "NCHW_u8",
+      "name": "frame_011",
+      "shape": [
+        1,
+        3,
+        16,
+        128
+      ]
+    }
+  ],
+  "model": "n4-tiny",
+  "model_version": "v1",
+  "outputs": {
+    "torch_fp32": [
+      {
+        "dtype": "<f4",
+        "file": "salidas/torch_fp32/logits_000.bin",
+        "layout": "NC",
+        "name": "logits_000",
+        "shape": [
+          1,
+          4
+        ]
+      },
+      {
+        "dtype": "<f4",
+        "file": "salidas/torch_fp32/h_000.bin",
+        "layout": "NC",
+        "name": "h_000",
+        "shape": [
+          1,
+          32
+        ]
+      },
+      {
+        "dtype": "<f4",
+        "file": "salidas/torch_fp32/logits_001.bin",
+        "layout": "NC",
+        "name": "logits_001",
+        "shape": [
+          1,
+          4
+        ]
+      },
+      {
+        "dtype": "<f4",
+        "file": "salidas/torch_fp32/h_001.bin",
+        "layout": "NC",
+        "name": "h_001",
+        "shape": [
+          1,
+          32
+        ]
+      },
+      {
+        "dtype": "<f4",
+        "file": "salidas/torch_fp32/logits_002.bin",
+        "layout": "NC",
+        "name": "logits_002",
+        "shape": [
+          1,
+          4
+        ]
+      },
+      {
+        "dtype": "<f4",
+        "file": "salidas/torch_fp32/h_002.bin",
+        "layout": "NC",
+        "name": "h_002",
+        "shape": [
+          1,
+          32
+        ]
+      },
+      {
+        "dtype": "<f4",
+        "file": "salidas/torch_fp32/logits_003.bin",
+        "layout": "NC",
+        "name": "logits_003",
+        "shape": [
+          1,
+          4
+        ]
+      },
+      {
+        "dtype": "<f4",
+        "file": "salidas/torch_fp32/h_003.bin",
+        "layout": "NC",
+        "name": "h_003",
+        "shape": [
+          1,
+          32
+        ]
+      },
+      {
+        "dtype": "<f4",
+        "file": "salidas/torch_fp32/logits_004.bin",
+        "layout": "NC",
+        "name": "logits_004",
+        "shape": [
+          1,
+          4
+        ]
+      },
+      {
+        "dtype": "<f4",
+        "file": "salidas/torch_fp32/h_004.bin",
+        "layout": "NC",
+        "name": "h_004",
+        "shape": [
+          1,
+          32
+        ]
+      },
+      {
+        "dtype": "<f4",
+        "file": "salidas/torch_fp32/logits_005.bin",
+        "layout": "NC",
+        "name": "logits_005",
+        "shape": [
+          1,
+          4
+        ]
+      },
+      {
+        "dtype": "<f4",
+        "file": "salidas/torch_fp32/h_005.bin",
+        "layout": "NC",
+        "name": "h_005",
+        "shape": [
+          1,
+          32
+        ]
+      },
+      {
+        "dtype": "<f4",
+        "file": "salidas/torch_fp32/logits_006.bin",
+        "layout": "NC",
+        "name": "logits_006",
+        "shape": [
+          1,
+          4
+        ]
+      },
+      {
+        "dtype": "<f4",
+        "file": "salidas/torch_fp32/h_006.bin",
+        "layout": "NC",
+        "name": "h_006",
+        "shape": [
+          1,
+          32
+        ]
+      },
+      {
+        "dtype": "<f4",
+        "file": "salidas/torch_fp32/logits_007.bin",
+        "layout": "NC",
+        "name": "logits_007",
+        "shape": [
+          1,
+          4
+        ]
+      },
+      {
+        "dtype": "<f4",
+        "file": "salidas/torch_fp32/h_007.bin",
+        "layout": "NC",
+        "name": "h_007",
+        "shape": [
+          1,
+          32
+        ]
+      },
+      {
+        "dtype": "<f4",
+        "file": "salidas/torch_fp32/logits_008.bin",
+        "layout": "NC",
+        "name": "logits_008",
+        "shape": [
+          1,
+          4
+        ]
+      },
+      {
+        "dtype": "<f4",
+        "file": "salidas/torch_fp32/h_008.bin",
+        "layout": "NC",
+        "name": "h_008",
+        "shape": [
+          1,
+          32
+        ]
+      },
+      {
+        "dtype": "<f4",
+        "file": "salidas/torch_fp32/logits_009.bin",
+        "layout": "NC",
+        "name": "logits_009",
+        "shape": [
+          1,
+          4
+        ]
+      },
+      {
+        "dtype": "<f4",
+        "file": "salidas/torch_fp32/h_009.bin",
+        "layout": "NC",
+        "name": "h_009",
+        "shape": [
+          1,
+          32
+        ]
+      },
+      {
+        "dtype": "<f4",
+        "file": "salidas/torch_fp32/logits_010.bin",
+        "layout": "NC",
+        "name": "logits_010",
+        "shape": [
+          1,
+          4
+        ]
+      },
+      {
+        "dtype": "<f4",
+        "file": "salidas/torch_fp32/h_010.bin",
+        "layout": "NC",
+        "name": "h_010",
+        "shape": [
+          1,
+          32
+        ]
+      },
+      {
+        "dtype": "<f4",
+        "file": "salidas/torch_fp32/logits_011.bin",
+        "layout": "NC",
+        "name": "logits_011",
+        "shape": [
+          1,
+          4
+        ]
+      },
+      {
+        "dtype": "<f4",
+        "file": "salidas/torch_fp32/h_011.bin",
+        "layout": "NC",
+        "name": "h_011",
+        "shape": [
+          1,
+          32
+        ]
+      }
+    ]
+  },
+  "tolerances": {
+    "h_000": {
+      "coreml_fp16": 0.05
+    },
+    "h_001": {
+      "coreml_fp16": 0.05
+    },
+    "h_002": {
+      "coreml_fp16": 0.05
+    },
+    "h_003": {
+      "coreml_fp16": 0.05
+    },
+    "h_004": {
+      "coreml_fp16": 0.05
+    },
+    "h_005": {
+      "coreml_fp16": 0.05
+    },
+    "h_006": {
+      "coreml_fp16": 0.05
+    },
+    "h_007": {
+      "coreml_fp16": 0.05
+    },
+    "h_008": {
+      "coreml_fp16": 0.05
+    },
+    "h_009": {
+      "coreml_fp16": 0.05
+    },
+    "h_010": {
+      "coreml_fp16": 0.05
+    },
+    "h_011": {
+      "coreml_fp16": 0.05
+    },
+    "logits_000": {
+      "coreml_fp16": 0.02
+    },
+    "logits_001": {
+      "coreml_fp16": 0.02
+    },
+    "logits_002": {
+      "coreml_fp16": 0.02
+    },
+    "logits_003": {
+      "coreml_fp16": 0.02
+    },
+    "logits_004": {
+      "coreml_fp16": 0.02
+    },
+    "logits_005": {
+      "coreml_fp16": 0.02
+    },
+    "logits_006": {
+      "coreml_fp16": 0.02
+    },
+    "logits_007": {
+      "coreml_fp16": 0.02
+    },
+    "logits_008": {
+      "coreml_fp16": 0.02
+    },
+    "logits_009": {
+      "coreml_fp16": 0.02
+    },
+    "logits_010": {
+      "coreml_fp16": 0.02
+    },
+    "logits_011": {
+      "coreml_fp16": 0.02
+    }
+  },
+  "version": 1
+}
