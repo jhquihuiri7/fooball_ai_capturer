@@ -10,6 +10,9 @@
 // Para los tests de macOS el transporte también sabe escuchar en un puerto del
 // loopback y conectar a él directamente, sin Bonjour ni Ethernet: la lógica de
 // tramas, estados y reconexión es la misma.
+//
+// Cómo se anuncia y se busca cada canal lo dice la cita (LinkRendezvous, IOS-14):
+// Bonjour por la interfaz pedida, o Wi-Fi Aware entre dispositivos emparejados.
 
 import Foundation
 import Network
@@ -28,9 +31,6 @@ public final class NWLinkTransport: LinkTransport {
         /// Tests: conectar a un host y puerto concretos.
         case connect(host: String, port: UInt16)
     }
-
-    public static let serviceType = "_footballai-rig._tcp"
-    public static let mediaServiceType = "_footballai-media._udp"
 
     /// Un hueco entre llegadas de medios mayor que esto es un parón (ADR 0023 §6).
     static let mediaStallMs: Double = 100
@@ -62,7 +62,8 @@ public final class NWLinkTransport: LinkTransport {
     public var onReady: ((UInt16) -> Void)?
 
     private let mode: Mode
-    private let interfaceType: NWInterface.InterfaceType?
+    /// Cómo se encuentran los dos móviles: Bonjour por una interfaz o Wi-Fi Aware.
+    public let rendezvous: LinkRendezvous
     private let queue = DispatchQueue(label: "io.footballai.zero.link.control")
     private let log = Logger(subsystem: "io.footballai.zero", category: "link")
 
@@ -122,9 +123,19 @@ public final class NWLinkTransport: LinkTransport {
 
     /// `interfaceType` por defecto: Ethernet por el hub (ADR 0023). `.wifi` para el
     /// banco sin cables y `nil` para el loopback de los tests.
-    public init(mode: Mode, interfaceType: NWInterface.InterfaceType? = .wiredEthernet) {
+    public convenience init(mode: Mode, interfaceType: NWInterface.InterfaceType? = .wiredEthernet) {
+        self.init(mode: mode, rendezvous: BonjourRendezvous(interfaceType: interfaceType))
+    }
+
+    public init(mode: Mode, rendezvous: LinkRendezvous) {
         self.mode = mode
-        self.interfaceType = interfaceType
+        self.rendezvous = rendezvous
+    }
+
+    /// La ruta de la conexión de control, o nil sin conexión: el banco lee de ella el
+    /// informe de Wi-Fi Aware (señal, capacidad y latencia de emisión).
+    public var controlPath: NWPath? {
+        queue.sync { connection?.currentPath }
     }
 
     // MARK: - Ciclo de vida
@@ -222,13 +233,9 @@ public final class NWLinkTransport: LinkTransport {
         guard !stopped else { return }
         switch mode {
         case let .advertise(name, txt):
-            openListener(service: NWListener.Service(
-                name: name,
-                type: Self.serviceType,
-                txtRecord: NWTXTRecord(txt)
-            ), port: nil)
+            openListener { try self.rendezvous.makeListener(for: .control, name: name, txt: txt) }
         case let .listen(port):
-            openListener(service: nil, port: port)
+            openListener { try Self.plainListener(self.parameters(), port: port) }
         case .browse:
             openBrowser()
         case let .connect(host, port):
@@ -240,24 +247,26 @@ public final class NWLinkTransport: LinkTransport {
     }
 
     private func parameters() -> NWParameters {
-        let params = NWParameters.tcp
-        if let interfaceType {
-            params.requiredInterfaceType = interfaceType
-        }
-        // En la LAN del soporte no hay DNS ni rutas: nada de esperas de resolución.
-        params.includePeerToPeer = false
-        return params
+        rendezvous.parameters(for: .control)
     }
 
-    private func openListener(service: NWListener.Service?, port: UInt16?) {
+    /// Un listener sin anuncio en un puerto (0 = efímero): el de los tests.
+    private static func plainListener(_ params: NWParameters, port: UInt16) throws -> NWListener {
+        if port > 0, let nwPort = NWEndpoint.Port(rawValue: port) {
+            return try NWListener(using: params, on: nwPort)
+        }
+        return try NWListener(using: params)
+    }
+
+    /// Un error en palabras del medio: con Wi-Fi Aware, si falta el entitlement o el
+    /// emparejado.
+    private func describe(_ error: Error) -> String {
+        (error as? NWError).map(rendezvous.explain) ?? "\(error)"
+    }
+
+    private func openListener(_ make: () throws -> NWListener) {
         do {
-            let listener: NWListener
-            if let port, let nwPort = NWEndpoint.Port(rawValue: port) {
-                listener = try NWListener(using: parameters(), on: nwPort)
-            } else {
-                listener = try NWListener(using: parameters())
-            }
-            listener.service = service
+            let listener = try make()
             listener.newConnectionHandler = { [weak self] nueva in
                 guard let self else { return }
                 // Un soporte son dos móviles: la conexión nueva sustituye a la vieja,
@@ -273,8 +282,11 @@ public final class NWLinkTransport: LinkTransport {
                     self.state = .listening
                     self.onReady?(self.localPort)
                 case let .failed(error):
-                    self.state = .failed("\(error)")
+                    self.state = .failed(self.describe(error))
                     self.scheduleReopen()
+                case let .waiting(error):
+                    // Wi-Fi Aware sin nadie emparejado no falla: espera. Que se lea.
+                    self.log.info("listener en espera: \(self.describe(error))")
                 default:
                     break
                 }
@@ -282,16 +294,20 @@ public final class NWLinkTransport: LinkTransport {
             self.listener = listener
             listener.start(queue: queue)
         } catch {
-            state = .failed("\(error)")
+            state = .failed(describe(error))
             scheduleReopen()
         }
     }
 
     private func openBrowser() {
-        let browser = NWBrowser(
-            for: .bonjourWithTXTRecord(type: Self.serviceType, domain: nil),
-            using: parameters()
-        )
+        let browser: NWBrowser
+        do {
+            browser = try rendezvous.makeBrowser(for: .control)
+        } catch {
+            state = .failed(describe(error))
+            scheduleReopen()
+            return
+        }
         browser.browseResultsChangedHandler = { [weak self] results, cambios in
             guard let self else { return }
             // En un orden fijo (los resultados son un conjunto): rotar tiene que avanzar.
@@ -315,9 +331,16 @@ public final class NWLinkTransport: LinkTransport {
             }
         }
         browser.stateUpdateHandler = { [weak self] estado in
-            if case let .failed(error) = estado {
-                self?.state = .failed("\(error)")
-                self?.scheduleReopen()
+            guard let self else { return }
+            switch estado {
+            case let .failed(error):
+                self.state = .failed(self.describe(error))
+                self.scheduleReopen()
+            case let .waiting(error):
+                // Wi-Fi Aware sin emparejado o sin entitlement no falla: espera. Se dice.
+                self.log.info("browser en espera: \(self.describe(error))")
+            default:
+                break
             }
         }
         self.browser = browser
@@ -440,30 +463,20 @@ public final class NWLinkTransport: LinkTransport {
     // MARK: - Medios por UDP (IOS-16)
 
     private func mediaParameters() -> NWParameters {
-        let params = NWParameters.udp
-        if let interfaceType {
-            params.requiredInterfaceType = interfaceType
-        }
-        params.includePeerToPeer = false
-        return params
+        rendezvous.parameters(for: .media)
     }
 
     private func openMedia() {
         guard !stopped else { return }
         switch mode {
         case let .advertise(name, txt):
-            openMediaListener(service: NWListener.Service(
-                name: name,
-                type: Self.mediaServiceType,
-                txtRecord: NWTXTRecord(txt)
-            ), port: nil)
+            openMediaListener { try self.rendezvous.makeListener(for: .media, name: name, txt: txt) }
         case let .listen(port):
             // En los tests el puerto UDP es el TCP + 1. Con puerto 0, el TCP sale
             // efímero: se espera a conocerlo antes de atar el UDP al suyo + 1.
-            if port > 0 {
-                openMediaListener(service: nil, port: port + 1)
-            } else if localPort > 0 {
-                openMediaListener(service: nil, port: localPort + 1)
+            let base = port > 0 ? port : localPort
+            if base > 0 {
+                openMediaListener { try Self.plainListener(self.mediaParameters(), port: base + 1) }
             } else {
                 queue.asyncAfter(deadline: .now() + 0.05) { [weak self] in
                     guard let self, !self.stopped else { return }
@@ -481,15 +494,9 @@ public final class NWLinkTransport: LinkTransport {
     }
 
 
-    private func openMediaListener(service: NWListener.Service?, port: UInt16?) {
+    private func openMediaListener(_ make: () throws -> NWListener) {
         do {
-            let listener: NWListener
-            if let port, port > 0, let nwPort = NWEndpoint.Port(rawValue: port) {
-                listener = try NWListener(using: mediaParameters(), on: nwPort)
-            } else {
-                listener = try NWListener(using: mediaParameters())
-            }
-            listener.service = service
+            let listener = try make()
             listener.newConnectionHandler = { [weak self] nueva in
                 guard let self else { return }
                 self.mediaConnection?.cancel()
@@ -505,15 +512,18 @@ public final class NWLinkTransport: LinkTransport {
             mediaListener = listener
             listener.start(queue: queue)
         } catch {
-            log.error("medios sin listener: \(String(describing: error))")
+            log.error("medios sin listener: \(self.describe(error))")
         }
     }
 
     private func openMediaBrowser() {
-        let browser = NWBrowser(
-            for: .bonjourWithTXTRecord(type: Self.mediaServiceType, domain: nil),
-            using: mediaParameters()
-        )
+        let browser: NWBrowser
+        do {
+            browser = try rendezvous.makeBrowser(for: .media)
+        } catch {
+            log.error("medios sin browser: \(self.describe(error))")
+            return
+        }
         browser.browseResultsChangedHandler = { [weak self] results, cambios in
             guard let self else { return }
             // Lo recién aparecido primero: el anuncio viejo de la caché suele ser el que
