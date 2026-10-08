@@ -33,6 +33,10 @@ public struct LinkTransportStats: Equatable, Sendable {
     /// Tramas de medios tiradas al emitir porque la cola del espaciado estaba llena.
     public var mediaPacerDrops = 0
 
+    /// Citas (listener o browser) que se acabaron sin que fuera un fallo del enlace:
+    /// por Wi-Fi Aware caducan a los ~2 min de conectar y la conexión sigue (IOS-14).
+    public var rendezvousEnds = 0
+
     public init() {}
 }
 

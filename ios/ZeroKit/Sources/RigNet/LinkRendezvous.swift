@@ -28,10 +28,18 @@ public protocol LinkRendezvous {
     /// Un error de Network en palabras del medio (Wi-Fi Aware dice si falta el
     /// entitlement o el emparejado).
     func explain(_ error: NWError) -> String
+
+    /// Si el error de un listener o un browser dice que la cita caducó, y no que falló:
+    /// Wi-Fi Aware deja de publicar y de suscribirse cuando ya ha encontrado a todos
+    /// (`publisherTimeout`, `subscriberTimeout`), y las conexiones siguen. Bonjour no
+    /// caduca.
+    func isExpiry(_ error: NWError) -> Bool
 }
 
 extension LinkRendezvous {
     public func explain(_ error: NWError) -> String { "\(error)" }
+
+    public func isExpiry(_: NWError) -> Bool { false }
 }
 
 /// Bonjour por una interfaz: `.wiredEthernet` en el campo, `.wifi` en el banco y `nil`

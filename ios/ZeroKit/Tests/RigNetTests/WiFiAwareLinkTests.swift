@@ -158,3 +158,155 @@ private final class LoopbackRendezvous: LinkRendezvous {
         throw WiFiAwareLinkError.unsupported
     }
 }
+
+/// El fin de una cita (IOS-14): por Wi-Fi Aware, el listener y el browser caducan a los
+/// ~2 min de conectar (`publisherTimeout`, `subscriberTimeout`) y la conexión sigue. Ni
+/// eso es un fallo del transporte ni un listener que falla se queda sin sustituto.
+final class RendezvousEndTests: XCTestCase {
+    private let tag = Data(repeating: 6, count: LinkFrame.tagLength)
+
+    func testALiveConnectionSurvivesTheEndOfItsRendezvous() {
+        typealias T = NWLinkTransport
+        // Con la conexión arriba nunca es un fallo: el que busca la guarda hasta que caiga
+        // y el que anuncia vuelve a publicar al rato.
+        for caduca in [true, false] {
+            XCTAssertEqual(T.rendezvousEndAction(publishing: false, connected: true, expired: caduca), .keepUntilDrop)
+            XCTAssertEqual(T.rendezvousEndAction(publishing: true, connected: true, expired: caduca), .renewLater)
+        }
+        // Sin conexión: si caducó se abre otra sin más; si falló, `.failed` y otra con espera.
+        for publica in [true, false] {
+            XCTAssertEqual(T.rendezvousEndAction(publishing: publica, connected: false, expired: true), .reopen)
+            XCTAssertEqual(T.rendezvousEndAction(publishing: publica, connected: false, expired: false), .fail)
+        }
+        XCTAssertGreaterThan(T.rendezvousRenewS, T.rendezvousRetryS)
+    }
+
+    func testBonjourNeverExpires() {
+        let cita = BonjourRendezvous(interfaceType: nil)
+        XCTAssertFalse(cita.isExpiry(.posix(.ETIMEDOUT)))
+        XCTAssertFalse(cita.isExpiry(.posix(.EADDRINUSE)))
+    }
+
+    /// Un listener que falla se cambia por otro. Antes se quedaba el muerto y
+    /// scheduleReopen, que solo abre si no hay listener, no lo sustituía nunca.
+    func testAFailedListenerIsReplaced() throws {
+        let (anuncia, conecta, cita, estados) = try connectThroughAFailingListener(expires: false)
+        defer {
+            anuncia.stop()
+            conecta.stop()
+        }
+        XCTAssertEqual(cita.controlListeners, 2)
+        XCTAssertTrue(estados.values.contains { if case .failed = $0 { return true }; return false })
+        XCTAssertEqual(anuncia.stats.rendezvousEnds, 0)
+    }
+
+    /// Una cita que caduca sin conexión se abre otra sin pasar por `.failed`, y queda
+    /// apuntado para el banco.
+    func testAnExpiredRendezvousReopensWithoutFailing() throws {
+        let (anuncia, conecta, cita, estados) = try connectThroughAFailingListener(expires: true)
+        defer {
+            anuncia.stop()
+            conecta.stop()
+        }
+        XCTAssertEqual(cita.controlListeners, 2)
+        XCTAssertFalse(estados.values.contains { if case .failed = $0 { return true }; return false })
+        XCTAssertEqual(anuncia.stats.rendezvousEnds, 1)
+        XCTAssertNotNil(anuncia.lastRendezvousEnd)
+    }
+
+    /// El primer listener de control de la cita choca con un puerto ocupado y falla; el
+    /// segundo escucha donde conecta el otro, y pasan tramas.
+    private func connectThroughAFailingListener(
+        expires: Bool
+    ) throws -> (NWLinkTransport, NWLinkTransport, BusyFirstRendezvous, StateLog) {
+        let ocupado = try NWListener(using: .tcp)
+        let listo = expectation(description: "puerto ocupado")
+        ocupado.stateUpdateHandler = { if case .ready = $0 { listo.fulfill() } }
+        ocupado.newConnectionHandler = { $0.cancel() }
+        ocupado.start(queue: .global())
+        wait(for: [listo], timeout: 10)
+        addTeardownBlock { ocupado.cancel() }
+        let puertoOcupado = try XCTUnwrap(ocupado.port?.rawValue)
+
+        let puerto = UInt16.random(in: 42000...48000) & ~1
+        let cita = BusyFirstRendezvous(busyPort: puertoOcupado, port: puerto, expires: expires)
+        let anuncia = NWLinkTransport(mode: .advertise(name: "izq", txt: [:]), rendezvous: cita)
+        let estados = StateLog()
+        anuncia.onState = { estados.append($0) }
+        let conecta = NWLinkTransport(mode: .connect(host: "127.0.0.1", port: puerto), interfaceType: nil)
+        let conectado = expectation(description: "conectado")
+        conectado.assertForOverFulfill = false
+        conecta.onState = { if $0 == .connected { conectado.fulfill() } }
+        let recibido = expectation(description: "trama")
+        recibido.assertForOverFulfill = false
+        anuncia.onFrame = { _, canal in if canal == .control { recibido.fulfill() } }
+        anuncia.start()
+        conecta.start()
+        wait(for: [conectado], timeout: 15)
+        conecta.send(LinkFrame(type: .heartbeat, session: 1, seq: 1, rigMs: 0, payload: Data([1]), tag: tag), on: .control)
+        wait(for: [recibido], timeout: 10)
+        return (anuncia, conecta, cita, estados)
+    }
+}
+
+/// Los estados del transporte, desde su cola.
+private final class StateLog: @unchecked Sendable {
+    private let cerrojo = NSLock()
+    private var _values: [LinkTransportState] = []
+
+    var values: [LinkTransportState] {
+        cerrojo.lock(); defer { cerrojo.unlock() }
+        return _values
+    }
+
+    func append(_ estado: LinkTransportState) {
+        cerrojo.lock(); _values.append(estado); cerrojo.unlock()
+    }
+}
+
+/// Una cita de prueba cuyo primer listener de control escucha en un puerto ocupado (y
+/// falla con EADDRINUSE); los siguientes, en `port`, y los medios en `port + 1`. Con
+/// `expires`, ese fallo cuenta como caducidad, como `publisherTimeout` por Wi-Fi Aware.
+private final class BusyFirstRendezvous: LinkRendezvous {
+    private let busyPort: UInt16
+    private let port: UInt16
+    private let expires: Bool
+    private let cerrojo = NSLock()
+    private var _controlListeners = 0
+
+    var controlListeners: Int {
+        cerrojo.lock(); defer { cerrojo.unlock() }
+        return _controlListeners
+    }
+
+    init(busyPort: UInt16, port: UInt16, expires: Bool) {
+        self.busyPort = busyPort
+        self.port = port
+        self.expires = expires
+    }
+
+    var label: String { "busy-first-test" }
+
+    func parameters(for channel: LinkChannel) -> NWParameters {
+        BonjourRendezvous(interfaceType: nil).parameters(for: channel)
+    }
+
+    func makeListener(for channel: LinkChannel, name _: String, txt _: [String: String]) throws -> NWListener {
+        var p = port + 1
+        if channel == .control {
+            cerrojo.lock()
+            _controlListeners += 1
+            p = _controlListeners == 1 ? busyPort : port
+            cerrojo.unlock()
+        }
+        return try NWListener(using: parameters(for: channel), on: NWEndpoint.Port(rawValue: p)!)
+    }
+
+    func makeBrowser(for _: LinkChannel) throws -> NWBrowser {
+        throw WiFiAwareLinkError.unsupported
+    }
+
+    func isExpiry(_ error: NWError) -> Bool {
+        expires && error == .posix(.EADDRINUSE)
+    }
+}

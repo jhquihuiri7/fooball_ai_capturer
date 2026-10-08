@@ -84,7 +84,16 @@ public struct WiFiAwareRendezvous: LinkRendezvous {
     /// La categoría de acceso de la radio para los dos canales: vídeo interactivo.
     public static let serviceClass = NWParameters.ServiceClass.interactiveVideo
 
-    public init() {}
+    /// Cuánto se pide que dure la publicación y la suscripción. nil (el predeterminado):
+    /// lo que el sistema crea suficiente para encontrar a todos, unos 2 min; al caducar
+    /// las conexiones siguen y NWLinkTransport vuelve a publicar (`isExpiry`). Con un
+    /// valor (`RIG_LINK_AWARE_ACTIVE_S` en el banco) se pide más, por si la caducidad
+    /// arrastrara la conexión del que busca.
+    public let activeDuration: Duration?
+
+    public init(activeDuration: Duration? = nil) {
+        self.activeDuration = activeDuration
+    }
 
     public var label: String { "aware" }
 
@@ -105,7 +114,7 @@ public struct WiFiAwareRendezvous: LinkRendezvous {
         let servicio = try Self.publishable(channel)
         let cita = WAPublisherListener.wifiAware(.connecting(
             to: servicio, from: .allPairedDevices, datapath: .realtime
-        ))
+        ), active: activeDuration)
         let params = parameters(for: channel)
         cita.configureParameters(params)
         return try NWListener(service: cita.service, using: params)
@@ -113,7 +122,9 @@ public struct WiFiAwareRendezvous: LinkRendezvous {
 
     public func makeBrowser(for channel: LinkChannel) throws -> NWBrowser {
         let servicio = try Self.subscribable(channel)
-        let cita = WASubscriberBrowser.wifiAware(.connecting(to: .allPairedDevices, from: servicio))
+        let cita = WASubscriberBrowser.wifiAware(
+            .connecting(to: .allPairedDevices, from: servicio), active: activeDuration
+        )
         return NWBrowser(for: cita.makeDescriptor(), using: cita.configureParameters(parameters(for: channel)))
     }
 
@@ -125,6 +136,18 @@ public struct WiFiAwareRendezvous: LinkRendezvous {
         case .serviceNotDeclared: "Wi-Fi Aware: servicio no declarado en WiFiAwareServices"
         case .wifiAwareUnsupported: "Wi-Fi Aware: este iPhone no lo tiene"
         default: "Wi-Fi Aware: \(causa)"
+        }
+    }
+
+    /// Con `active: nil`, el sistema publica y se suscribe «lo justo para completar la
+    /// acción con todos los dispositivos de destino cercanos» (la documentación de
+    /// `wifiAware(_:active:)`) y después el listener y el browser fallan con estos
+    /// errores. Las conexiones que salieron de ellos siguen vivas: es el fin de la cita,
+    /// no del enlace (banco del 2026-10-08, a los ~116 s de conectar).
+    public func isExpiry(_ error: NWError) -> Bool {
+        switch error.wifiAware {
+        case .publisherTimeout?, .subscriberTimeout?: true
+        default: false
         }
     }
 

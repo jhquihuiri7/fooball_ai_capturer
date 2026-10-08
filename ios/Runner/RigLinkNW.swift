@@ -85,13 +85,21 @@ final class RigLinkNW: PeerLinking {
         let cita: LinkRendezvous = switch medium {
         case .ethernet: BonjourRendezvous(interfaceType: .wiredEthernet)
         case .wifi: BonjourRendezvous(interfaceType: .wifi)
-        case .aware: WiFiAwareRendezvous()
+        case .aware: WiFiAwareRendezvous(activeDuration: awareActiveDuration())
         }
         guard side == .left else { return NWLinkTransport(mode: .browse, rendezvous: cita) }
         return NWLinkTransport(mode: .advertise(
             name: UIDevice.current.name,
             txt: ["side": "left", "fp": LinkAuth.fingerprint(secret: secret)]
         ), rendezvous: cita)
+    }
+
+    /// IOS-14: con `RIG_LINK_AWARE_ACTIVE_S=<s>`, cuánto se pide que dure la publicación
+    /// y la suscripción por Wi-Fi Aware; sin ella, lo que decida el sistema (~2 min).
+    static func awareActiveDuration(
+        _ valor: String? = ProcessInfo.processInfo.environment["RIG_LINK_AWARE_ACTIVE_S"]
+    ) -> Duration? {
+        valor.flatMap(Int64.init).flatMap { $0 > 0 ? Duration.seconds($0) : nil }
     }
 
     /// El secreto del soporte, mientras no exista la provisión del Keychain (IOS-97).
@@ -363,6 +371,8 @@ enum LinkBench {
             let radio = ultimaRadio
             // Antes del cerrojo: lo lee en la cola del transporte, que también lo toma.
             let espera = transporte.waitingReason ?? ""
+            // IOS-14: la cita que caducó con la conexión viva no es un fallo del transporte.
+            let finCita = transporte.lastRendezvousEnd ?? ""
             cerrojo.lock(); defer { cerrojo.unlock() }
             let orden = rtts.sorted()
             func p(_ q: Double) -> Double {
@@ -378,8 +388,10 @@ enum LinkBench {
                     "side": lado.rawValue,
                     "interface": medio.rawValue,
                     "rendezvous": transporte.rendezvous.label,
+                    "aware_requested_active_s": RigLinkNW.awareActiveDuration().map { "\($0.components.seconds)" } ?? "sistema",
                     "transport_failures": fallosTransporte.joined(separator: " | "),
                     "transport_waiting": espera,
+                    "rendezvous_end": finCita,
                     "peer": par,
                     "internet_path": ruta,
                     "rejections": rechazos.joined(separator: " | "),
@@ -417,6 +429,7 @@ enum LinkBench {
                     "media_loss_gaps": stats.mediaLossGaps,
                     "media_stalls_over_100ms": stats.mediaStallsOver100Ms,
                     "media_pacer_drops": stats.mediaPacerDrops,
+                    "rendezvous_ends": stats.rendezvousEnds,
                 ].merging(deLaCarga) { a, _ in a }
             )
             if !rtts.isEmpty {

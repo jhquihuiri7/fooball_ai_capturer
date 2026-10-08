@@ -15,6 +15,106 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 
 
+## 2026-10-08 · IOS-14c — la cita de Wi-Fi Aware caduca a los ~2 min y el enlace se quedaba mudo · 🚧 falta repetir la prueba
+
+**La prueba** (`bench/dos-moviles-20261008-1047`, link90 de 600 s por Wi-Fi Aware, los dos
+emparejados a mano). Conecta: rendezvous=aware, connect_ms 2528/2408, RTT p50 3,9 / p90 6,6 /
+p99 13,6 ms, y el emparejado sobrevivió a reinstalar. Pero los dos dan un fallo del
+transporte: `publisherTimeout` el izquierdo (publica) y `subscriberTimeout` el derecho (se
+suscribe). A partir de ahí no pasa nada más:
+- Todo se para a los ~116 s de conectar. Los `no_part` del maestro son 3468, que a 30 fps son
+  115,6 s. El esclavo recibe 58 órdenes y 58 PTS, una cada 2 s: otros 116 s.
+- El informe parcial de los 300 s ya tiene los mismos contadores que el final de los 600 s
+  (tramas 1299/4715 y 4807/1299). Solo suben `commands_sent` y `pts_requests`, que el banco
+  cuenta aunque no salgan.
+- `media_stalls_over_100ms` 569 no es síntoma: los medios del maestro llegan así siempre
+  (~4,9 por segundo, igual que en la pasada de 90 min por Wi-Fi).
+
+**Qué es la caducidad** (SDK iPhoneOS 26.5 y la documentación de `wifiAware(_:active:)`).
+`WAPublisherListener.wifiAware(_:active:)` y `WASubscriberBrowser.wifiAware(_:active:)`
+tienen un `active requestedDuration: Duration? = nil`. Con nil, el sistema publica o se
+suscribe «long enough to guarantee the action completes with all nearby target devices».
+Después, el listener y el browser fallan con `WAError.publisherTimeout` y
+`.subscriberTimeout`. Es el fin de la cita, no del enlace. El maestro pasó 480 s sin ver caer
+su conexión (`reconnects` 0).
+
+**El fallo era nuestro.** NWLinkTransport trataba el `.failed` del listener o del browser
+como fallo del transporte:
+- Ponía `state = .failed` con la conexión viva. RigLinkSession, ante `.failed`, hace
+  `resetSession()`: tira la clave sin cambiar de estado. Desde ahí ningún lado manda ni
+  acepta nada, pero el banco sigue viéndolo «conectado» (`outages` 0).
+- Y no se curaba. `scheduleReopen` solo actúa sin conexión, y el listener muerto no se
+  soltaba nunca, así que el maestro no volvía a publicar.
+- El esclavo sí perdió después su conexión (`reconnects` 2). Volvió a suscribirse, pero ya no
+  había nadie publicando.
+
+**Por qué no salió ninguna parte.**
+- Los primeros 300 s del perfil son 0 Mbit/s: el esclavo manda `no_part`, que van a
+  `no_parts` (3468) y no a `parts_sent`.
+- A los 300 s empieza el escalón de 10 Mbit/s, pero `LinkPartsLoad.tick` solo manda con la
+  sesión en `.connected`. `parts_sent` 0 dice que la sesión del esclavo ya no lo estaba: su
+  conexión había caído y no podía volver.
+- Es el mismo fallo, no otro.
+
+**Hecho** (RigNet y el banco)
+- `LinkRendezvous.isExpiry(_:)`: false por defecto (Bonjour no caduca). En
+  `WiFiAwareRendezvous`, true para `publisherTimeout` y `subscriberTimeout`.
+- NWLinkTransport, el fin de una cita (`rendezvousEndAction`, una función pura con test):
+  - Con la conexión arriba nunca es un fallo. No toca `state`, la cuenta en
+    `stats.rendezvousEnds` y apunta el motivo en `lastRendezvousEnd`.
+    - El que busca guarda su browser sin cancelarlo hasta que caiga la conexión.
+    - El que anuncia vuelve a publicar a los `rendezvousRenewS` (5 s). Si el otro pierde la
+      conexión y este no se entera, lo puede volver a encontrar. El listener viejo se guarda
+      sin cancelar mientras siga la conexión: no se sabe si cancelarlo la arrastra.
+  - Sin conexión, si caducó, abre otra cita a los 0,5 s sin pasar por `.failed`. Si es un
+    error de verdad, `.failed` y se reintenta como antes.
+  - Al caer la conexión, las citas acabadas se cambian por otras nuevas, las de control y
+    las de medios, que antes no se vigilaban.
+  - Un listener que falla se suelta. Antes `scheduleReopen` no lo sustituía nunca, también
+    por Bonjour.
+  - Una conexión nueva que sustituye a otra viva pasa el estado por `.listening`. Así la
+    sesión vuelve a darse la mano; antes se quedaba con la clave de la vieja y el esclavo
+    daba «auth antes del hello».
+- `WiFiAwareRendezvous(activeDuration:)` y `RIG_LINK_AWARE_ACTIVE_S` en la app y en el banco,
+  por si la caducidad arrastrara la conexión del que busca. Sin ella, nil, como hoy.
+- El informe de `link-bench` añade `rendezvous_ends`, `rendezvous_end` y
+  `aware_requested_active_s`. La caducidad ya no sale en `transport_failures`.
+- Tests (4, `RendezvousEndTests`):
+  - La tabla de decisiones.
+  - Que Bonjour no caduca.
+  - Un listener que falla (puerto ocupado) se cambia por otro y el otro conecta. Sin el
+    arreglo, falla por tiempo.
+  - Una cita caducada se reabre sin `.failed` y queda contada.
+
+**Comprobado**
+- `swift test --skip ModelBench`: 344 tests, 1 saltado, 0 fallos.
+- `tools/check_layers.sh` limpio.
+- RigNet compilado para iOS con xcodebuild, sin avisos.
+- El Runner no se ha compilado (Alexander tenía `build/ios` en uso). Son tres líneas del
+  informe y `awareActiveDuration()`.
+
+**Pendiente**
+- Si la próxima pasada da `outages` y `reconnects` de uno cada ~2 min, la caducidad sí se
+  lleva la conexión del que busca. Entonces se pasa `RIG_LINK_AWARE_ACTIVE_S` y, si eso lo
+  arregla, se fija la duración en el código.
+- Un plazo de silencio del control que tire la conexión. Hoy, si el datapath muere sin avisar,
+  el TCP puede tardar minutos en darse cuenta. Es de IOS-17.
+- Los medios sin control vivo no tienen vigía propio en el que anuncia.
+
+**Para la próxima prueba**
+
+```bash
+# 1. La misma pasada. Esperado: connected=1, transport_failures vacío,
+#    rendezvous_ends ≥ 2 (la cita caduca y se renueva), frames y no_parts creciendo hasta el
+#    final, parts_sent > 0 desde los 300 s, commands_received ≈ 299, pts_answered ≈ 300.
+BANCO_EXTRA='{"RIG_LINK_INTERFACE": "aware"}' tools/banco_dos_moviles.sh link90 <secreto> 600
+# 2. Si va bien, la vuelta tras un corte con la cita ya caducada (el izquierdo se para 1 s
+#    a los 200 s). Esperado: outages 1, reconnect_ms de unos 3 s y partes después.
+BANCO_EXTRA='{"RIG_LINK_INTERFACE": "aware", "RIG_LINK_CUT_AT_S": "200"}' tools/banco_dos_moviles.sh link90 <secreto> 600
+# 3. Si la 1 da outages cada ~2 min, la misma con la cita larga:
+BANCO_EXTRA='{"RIG_LINK_INTERFACE": "aware", "RIG_LINK_AWARE_ACTIVE_S": "7200"}' tools/banco_dos_moviles.sh link90 <secreto> 600
+```
+
 ## 2026-10-08 · SPK-53 e IOS-23 medidos en el iPhone 17 · ✅
 
 **SPK-53, el spotter N4 en modo paso** (`tools/spk53_bench.sh iphone`,

@@ -48,6 +48,37 @@ public final class NWLinkTransport: LinkTransport {
     /// Espera creciente de la reconexión, con el tope de 2 s de la decisión 3.
     static let reconnectDelaysS: [Double] = [0.25, 0.5, 1.0, 2.0]
 
+    /// Segundos hasta volver a publicar una cita caducada con la conexión arriba (IOS-14).
+    /// Wi-Fi Aware deja de publicar a los ~2 min de conectar; sin anuncio, si el otro
+    /// pierde la conexión y este no se entera, no podría volver a encontrarlo. La espera
+    /// evita un bucle si la cita nueva caducara enseguida.
+    static let rendezvousRenewS: Double = 5
+
+    /// Segundos hasta abrir otra cita cuando la anterior caduca sin conexión: el otro
+    /// todavía no ha aparecido y hay que seguir publicando o buscando.
+    static let rendezvousRetryS: Double = 0.5
+
+    /// Qué se hace cuando una cita (listener o browser) se acaba (IOS-14).
+    enum RendezvousEndAction: Equatable {
+        /// El que busca, con la conexión arriba: la cita se guarda sin cancelar y se abre
+        /// otra cuando la conexión caiga. No es un fallo del transporte.
+        case keepUntilDrop
+        /// El que anuncia, con la conexión arriba: se vuelve a publicar al rato, sin
+        /// tocar la conexión, para que el otro lo encuentre si la pierde.
+        case renewLater
+        /// Sin conexión y la cita caducó: se abre otra enseguida, sin pasar por `.failed`.
+        case reopen
+        /// Sin conexión y un error de verdad: `.failed` y se abre otra con espera.
+        case fail
+    }
+
+    /// La decisión ante el fin de una cita. Con la conexión arriba nada es un fallo del
+    /// transporte: por Wi-Fi Aware las conexiones sobreviven a la cita que las creó.
+    static func rendezvousEndAction(publishing: Bool, connected: Bool, expired: Bool) -> RendezvousEndAction {
+        if connected { return publishing ? .renewLater : .keepUntilDrop }
+        return expired ? .reopen : .fail
+    }
+
     public var onFrame: ((LinkFrame, LinkChannel) -> Void)?
     public var onState: ((LinkTransportState) -> Void)?
     public var onPath: ((String) -> Void)?
@@ -145,6 +176,24 @@ public final class NWLinkTransport: LinkTransport {
     }
     private var esperaPor: String?
 
+    /// Por qué se acabó la última cita que no era un fallo (Wi-Fi Aware:
+    /// `publisherTimeout`), o nil. Para el banco.
+    public var lastRendezvousEnd: String? {
+        queue.sync { finDeCita }
+    }
+    private var finDeCita: String?
+
+    /// Los canales cuya cita se acabó y espera a que la cambien por otra (IOS-14): la del
+    /// que busca, hasta que caiga la conexión; la del que anuncia, `rendezvousRenewS`.
+    private var endedRendezvous: Set<LinkChannel> = []
+    /// Listeners acabados que se guardan mientras siga la conexión que salió de ellos.
+    private var retiredListeners: [NWListener] = []
+
+    private var publishes: Bool {
+        if case .advertise = mode { return true }
+        return false
+    }
+
     // MARK: - Ciclo de vida
 
     public func start() {
@@ -175,6 +224,8 @@ public final class NWLinkTransport: LinkTransport {
             mediaWatchdog?.cancel()
             mediaWatchdog = nil
             mediaCandidates = []
+            endedRendezvous = []
+            cancelRetiredListeners()
             pathMonitor?.cancel()
             pathMonitor = nil
             state = .idle
@@ -279,19 +330,23 @@ public final class NWLinkTransport: LinkTransport {
                 // Un soporte son dos móviles: la conexión nueva sustituye a la vieja,
                 // que Network puede tardar en dar por muerta (el patrón de RigLink).
                 self.connection?.cancel()
+                // Si la vieja seguía arriba, la sesión tiene que verlo para darse la mano
+                // otra vez por la nueva; si no, se queda con la clave de la vieja.
+                if self.state == .connected { self.state = .listening }
                 self.adopt(connection: nueva)
             }
-            listener.stateUpdateHandler = { [weak self] estado in
-                guard let self else { return }
+            listener.stateUpdateHandler = { [weak self, weak listener] estado in
+                // Lo que diga un listener ya sustituido no cuenta.
+                guard let self, let listener, listener === self.listener else { return }
                 switch estado {
                 case .ready:
                     self.esperaPor = nil
                     self.localPort = listener.port?.rawValue ?? 0
-                    self.state = .listening
+                    // Una cita renovada con la conexión arriba no la tumba.
+                    if self.state != .connected { self.state = .listening }
                     self.onReady?(self.localPort)
                 case let .failed(error):
-                    self.state = .failed(self.describe(error))
-                    self.scheduleReopen()
+                    self.rendezvousEnded(.control, error)
                 case let .waiting(error):
                     // Wi-Fi Aware sin nadie emparejado no falla: espera. Que se lea.
                     self.esperaPor = self.describe(error)
@@ -339,12 +394,11 @@ public final class NWLinkTransport: LinkTransport {
                 self.openConnection(to: self.controlCandidates[i])
             }
         }
-        browser.stateUpdateHandler = { [weak self] estado in
-            guard let self else { return }
+        browser.stateUpdateHandler = { [weak self, weak browser] estado in
+            guard let self, let browser, browser === self.browser else { return }
             switch estado {
             case let .failed(error):
-                self.state = .failed(self.describe(error))
-                self.scheduleReopen()
+                self.rendezvousEnded(.control, error)
             case let .waiting(error):
                 // Wi-Fi Aware sin emparejado o sin entitlement no falla: espera. Se dice.
                 self.esperaPor = self.describe(error)
@@ -412,8 +466,105 @@ public final class NWLinkTransport: LinkTransport {
         case .browse, .connect:
             state = .connecting
             controlCandidateIndex += 1
+            // El browser del control lo abre nuevo scheduleReopen.
+            endedRendezvous.remove(.control)
             scheduleReopen()
         }
+        // Las citas que se acabaron con la conexión viva se cambian ya por otras: sin
+        // ellas, por Wi-Fi Aware, los dos no podrían volver a encontrarse.
+        cancelRetiredListeners()
+        renewEndedRendezvous()
+    }
+
+    // MARK: - El fin de una cita (IOS-14)
+
+    /// Un listener o un browser se acabó. Con la conexión arriba no es un fallo del
+    /// transporte: por Wi-Fi Aware, la cita caduca a los ~2 min y la conexión sigue.
+    private func rendezvousEnded(_ channel: LinkChannel, _ error: NWError) {
+        let motivo = describe(error)
+        let accion = Self.rendezvousEndAction(
+            publishing: publishes, connected: state == .connected, expired: rendezvous.isExpiry(error)
+        )
+        if accion != .fail {
+            stats.rendezvousEnds += 1
+            finDeCita = motivo
+        }
+        log.info("cita de \(String(describing: channel)) acabada (\(motivo)): \(String(describing: accion))")
+        switch accion {
+        case .keepUntilDrop:
+            // Sin cancelarla: de ella salió la conexión que sigue.
+            endedRendezvous.insert(channel)
+        case .renewLater:
+            endedRendezvous.insert(channel)
+            queue.asyncAfter(deadline: .now() + Self.rendezvousRenewS) { [weak self] in
+                self?.renewEndedRendezvous()
+            }
+        case .reopen:
+            endedRendezvous.insert(channel)
+            queue.asyncAfter(deadline: .now() + Self.rendezvousRetryS) { [weak self] in
+                self?.renewEndedRendezvous()
+            }
+        case .fail where channel == .control:
+            state = .failed(motivo)
+            // Si no se suelta, scheduleReopen no cambia nunca el listener por otro.
+            listener?.cancel()
+            listener = nil
+            scheduleReopen()
+        case .fail:
+            // Los medios no cambian el estado del transporte: se dice y se reintenta.
+            log.error("medios sin cita: \(motivo)")
+            endedRendezvous.insert(channel)
+            queue.asyncAfter(deadline: .now() + Self.reconnectDelaysS[Self.reconnectDelaysS.count - 1]) {
+                [weak self] in self?.renewEndedRendezvous()
+            }
+        }
+    }
+
+    /// Cambia por otras nuevas las citas que se acabaron. El browser del control no se
+    /// abre con una conexión en marcha: abrirlo pasa el estado a `.connecting`.
+    private func renewEndedRendezvous() {
+        guard !stopped else { return }
+        for canal in endedRendezvous {
+            switch (mode, canal) {
+            case (.advertise, .control):
+                retire(listener)
+                listener = nil
+                open()
+            case (.advertise, .media):
+                retire(mediaListener)
+                mediaListener = nil
+                openMedia()
+            case (.browse, .control):
+                guard connection == nil else { continue }
+                browser?.cancel()
+                browser = nil
+                openBrowser()
+            case (.browse, .media):
+                mediaBrowser?.cancel()
+                mediaBrowser = nil
+                openMediaBrowser()
+            default:
+                break
+            }
+            endedRendezvous.remove(canal)
+        }
+    }
+
+    /// Un listener acabado del que anuncia. Con la conexión arriba se guarda sin
+    /// cancelar hasta que caiga: de él salió la conexión, y no se sabe si cancelarlo la
+    /// arrastra (la caducidad sola no lo hizo). Sin conexión se cancela ya.
+    private func retire(_ viejo: NWListener?) {
+        guard let viejo else { return }
+        if state == .connected {
+            retiredListeners.append(viejo)
+        } else {
+            viejo.cancel()
+        }
+    }
+
+    private func cancelRetiredListeners() {
+        retiredListeners.forEach { $0.cancel() }
+        retiredListeners.removeAll()
     }
 
     private func scheduleReopen() {
@@ -516,9 +667,15 @@ public final class NWLinkTransport: LinkTransport {
                 nueva.start(queue: self.queue)
                 self.receiveMedia(on: nueva)
             }
-            listener.stateUpdateHandler = { [weak self] estado in
-                if case .ready = estado {
-                    self?.mediaLocalPort = listener.port?.rawValue ?? 0
+            listener.stateUpdateHandler = { [weak self, weak listener] estado in
+                guard let self, let listener, listener === self.mediaListener else { return }
+                switch estado {
+                case .ready:
+                    self.mediaLocalPort = listener.port?.rawValue ?? 0
+                case let .failed(error):
+                    self.rendezvousEnded(.media, error)
+                default:
+                    break
                 }
             }
             mediaListener = listener
@@ -549,6 +706,12 @@ public final class NWLinkTransport: LinkTransport {
             if self.mediaConnection == nil || !nuevos.isEmpty, !self.mediaCandidates.isEmpty {
                 self.mediaCandidateIndex = 0
                 self.openMediaConnection(to: self.mediaCandidates[0])
+            }
+        }
+        browser.stateUpdateHandler = { [weak self, weak browser] estado in
+            guard let self, let browser, browser === self.mediaBrowser else { return }
+            if case let .failed(error) = estado {
+                self.rendezvousEnded(.media, error)
             }
         }
         mediaBrowser = browser
