@@ -1100,6 +1100,29 @@ class CaptureHostApi {
     ;
   }
 
+  /// Empareja este móvil con el otro del soporte por Wi-Fi Aware, una sola vez (IOS-14):
+  /// el izquierdo enseña un código y el derecho lo elige y lo teclea. Devuelve con quién
+  /// queda emparejado, o vacío si se cierra sin emparejar. Falla si el iPhone no tiene
+  /// Wi-Fi Aware o falta el entitlement.
+  Future<String> pairWithoutCable(CameraRole role) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.CaptureHostApi.pairWithoutCable$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[role]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as String;
+  }
+
   /// El secreto del mando del partido `matchId`: HMAC-SHA256(S, "zero-control-v1 " ‖
   /// match_id) en base64url (ADR 0023 §3). Lo deriva el nativo, así que el secreto del
   /// soporte S no pasa nunca a Dart. Vacío si este móvil no tiene S.

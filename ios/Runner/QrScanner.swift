@@ -128,18 +128,26 @@ enum QrScanner {
     /// hay cámara disponible.
     @MainActor
     static func scan() async -> String {
+        guard let top = topViewController() else { return "" }
+        return await withCheckedContinuation { continuation in
+            let scanner = QrScannerViewController { continuation.resume(returning: $0) }
+            top.present(scanner, animated: true)
+        }
+    }
+
+    /// Lo que está más arriba en la ventana principal: sobre eso se presenta una hoja
+    /// (el lector, o el emparejado de Wi-Fi Aware).
+    @MainActor
+    static func topViewController() -> UIViewController? {
         guard let root = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
             .flatMap(\.windows)
             .first(where: \.isKeyWindow)?.rootViewController
         else {
-            return ""
+            return nil
         }
         var top = root
         while let presented = top.presentedViewController { top = presented }
-        return await withCheckedContinuation { continuation in
-            let scanner = QrScannerViewController { continuation.resume(returning: $0) }
-            top.present(scanner, animated: true)
-        }
+        return top
     }
 }

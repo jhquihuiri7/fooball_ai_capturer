@@ -138,6 +138,13 @@ public final class NWLinkTransport: LinkTransport {
         queue.sync { connection?.currentPath }
     }
 
+    /// Por qué espera el listener o el browser de control, si espera: Wi-Fi Aware sin
+    /// nadie emparejado o sin entitlement no falla, se queda esperando. Para el banco.
+    public var waitingReason: String? {
+        queue.sync { esperaPor }
+    }
+    private var esperaPor: String?
+
     // MARK: - Ciclo de vida
 
     public func start() {
@@ -278,6 +285,7 @@ public final class NWLinkTransport: LinkTransport {
                 guard let self else { return }
                 switch estado {
                 case .ready:
+                    self.esperaPor = nil
                     self.localPort = listener.port?.rawValue ?? 0
                     self.state = .listening
                     self.onReady?(self.localPort)
@@ -286,6 +294,7 @@ public final class NWLinkTransport: LinkTransport {
                     self.scheduleReopen()
                 case let .waiting(error):
                     // Wi-Fi Aware sin nadie emparejado no falla: espera. Que se lea.
+                    self.esperaPor = self.describe(error)
                     self.log.info("listener en espera: \(self.describe(error))")
                 default:
                     break
@@ -338,7 +347,10 @@ public final class NWLinkTransport: LinkTransport {
                 self.scheduleReopen()
             case let .waiting(error):
                 // Wi-Fi Aware sin emparejado o sin entitlement no falla: espera. Se dice.
+                self.esperaPor = self.describe(error)
                 self.log.info("browser en espera: \(self.describe(error))")
+            case .ready:
+                self.esperaPor = nil
             default:
                 break
             }

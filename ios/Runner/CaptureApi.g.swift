@@ -786,6 +786,11 @@ protocol CaptureHostApi {
   /// `prefersMaster` es «Este móvil dirige»: solo decide al empezar un partido.
   func startLink(role: CameraRole, prefersMaster: Bool) throws
   func stopLink() throws
+  /// Empareja este móvil con el otro del soporte por Wi-Fi Aware, una sola vez (IOS-14):
+  /// el izquierdo enseña un código y el derecho lo elige y lo teclea. Devuelve con quién
+  /// queda emparejado, o vacío si se cierra sin emparejar. Falla si el iPhone no tiene
+  /// Wi-Fi Aware o falta el entitlement.
+  func pairWithoutCable(role: CameraRole) async throws -> String
   /// El secreto del mando del partido `matchId`: HMAC-SHA256(S, "zero-control-v1 " ‖
   /// match_id) en base64url (ADR 0023 §3). Lo deriva el nativo, así que el secreto del
   /// soporte S no pasa nunca a Dart. Vacío si este móvil no tiene S.
@@ -1200,6 +1205,27 @@ class CaptureHostApiSetup {
       }
     } else {
       stopLinkChannel.setMessageHandler(nil)
+    }
+    /// Empareja este móvil con el otro del soporte por Wi-Fi Aware, una sola vez (IOS-14):
+    /// el izquierdo enseña un código y el derecho lo elige y lo teclea. Devuelve con quién
+    /// queda emparejado, o vacío si se cierra sin emparejar. Falla si el iPhone no tiene
+    /// Wi-Fi Aware o falta el entitlement.
+    let pairWithoutCableChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.pairWithoutCable\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      pairWithoutCableChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let roleArg = args[0] as! CameraRole
+        Task { @MainActor in
+          do {
+            let result = try await api.pairWithoutCable(role: roleArg)
+            reply(wrapResult(result))
+          } catch {
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      pairWithoutCableChannel.setMessageHandler(nil)
     }
     /// El secreto del mando del partido `matchId`: HMAC-SHA256(S, "zero-control-v1 " ‖
     /// match_id) en base64url (ADR 0023 §3). Lo deriva el nativo, así que el secreto del

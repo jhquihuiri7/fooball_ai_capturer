@@ -375,6 +375,13 @@ abstract class CaptureHostApi {
 
   void stopLink();
 
+  /// Empareja este móvil con el otro del soporte por Wi-Fi Aware, una sola vez (IOS-14):
+  /// el izquierdo enseña un código y el derecho lo elige y lo teclea. Devuelve con quién
+  /// queda emparejado, o vacío si se cierra sin emparejar. Falla si el iPhone no tiene
+  /// Wi-Fi Aware o falta el entitlement.
+  @async
+  String pairWithoutCable(CameraRole role);
+
   /// El secreto del mando del partido `matchId`: HMAC-SHA256(S, "zero-control-v1 " ‖
   /// match_id) en base64url (ADR 0023 §3). Lo deriva el nativo, así que el secreto del
   /// soporte S no pasa nunca a Dart. Vacío si este móvil no tiene S.

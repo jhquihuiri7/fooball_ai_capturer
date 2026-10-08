@@ -12,6 +12,132 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-08 · IOS-14 — Wi-Fi Aware como plan B del enlace · 🚧 falta la prueba con los dos iPhone
+
+Hecho en el Mac, sin tocar los iPhone (estaba corriendo la pasada de 90 min). La
+aceptación («dos iPhone enlazan por Wi-Fi Aware sin router, y el banco da RTT y
+pérdidas») queda para la próxima ventana con los dos móviles. Los comandos van abajo.
+
+**La API que hay de verdad** (Xcode 26.6, SDK iPhoneOS 26.5):
+- `WiFiAware.framework`, solo en iOS.
+- `WAPublisherListener` y `WASubscriberBrowser` son los proveedores de la API nueva de
+  Network (`NetworkListener`/`NetworkBrowser`). También traen puentes a la clásica:
+  `service` y `configureParameters` para NWListener; `makeDescriptor` y
+  `configureParameters` para NWBrowser.
+- `NWParameters.wifiAware.performanceMode` (`.bulk`/`.realtime`); la categoría de acceso
+  la da `serviceClass`.
+- `DeviceDiscoveryUI` en UIKit: `DDDevicePairingViewController(listenerProvider:access:)`
+  para quien publica, y `DDDevicePickerViewController(browseDescriptor:parameters:access:)`
+  con `endpoint` async para quien busca.
+- `NWEndpoint.wifiAware`, `WAConnection` y `.addingConnections` son de iOS 26.4.
+
+**Entitlement: no falta nada.** `Runner.entitlements` ya traía
+`com.apple.developer.wifi-aware` con Publish y Subscribe (la rama sale de
+`bundle-id-zero`, IOS-01). El perfil del equipo 5AKXUHD733 lo incluye. Lo he comprobado
+en el `embedded.mobileprovision` del build de hoy: Publish y Subscribe, los dos iPhone,
+caduca el 2027-10-04. El binario enlaza WiFiAware y DeviceDiscoveryUI.
+
+**Hecho**
+- IOS-14a, en RigNet:
+  - `LinkRendezvous.swift`: la cita. Da el listener y el browser de cada canal y los
+    parámetros de la conexión. Con ella, NWLinkTransport deja de saber de Bonjour.
+    `BonjourRendezvous` es lo de siempre (Ethernet, Wi-Fi o loopback).
+    `NWLinkTransport(mode:interfaceType:)` sigue igual por fuera.
+  - `WiFiAwareLink.swift`:
+    - `WiFiAwareRendezvous`: el izquierdo publica los dos canales y el derecho se
+      suscribe, solo entre emparejados (`.allPairedDevices`). Modo realtime en los dos
+      lados (tienen que coincidir) y categoría `.interactiveVideo`. Los errores de la
+      radio salen con palabras: falta el entitlement, no hay nadie emparejado…
+    - `report(of:)`: señal, capacidad, techo, latencia de emisión de vídeo y tiempo
+      activo del datapath, para el banco (SPK-08).
+    - `WiFiAwarePairing.pair(side:from:)`: el emparejado único. El izquierdo enseña la
+      hoja con el código; el derecho, el selector. Las dos con acceso `.permanent`.
+      Termina al aparecer un emparejado nuevo, al elegir en el selector o al cerrarse
+      la hoja.
+  - `RigCore/Wire/TransportPolicy.swift`: `LinkMedium` (ethernet, wifi, aware) desde
+    `RIG_LINK_INTERFACE`, con su tasa de parte. Un valor que no se entiende es error. Antes,
+    cualquier cosa que no fuera `wifi` iba por Ethernet sin decirlo.
+  - `Info.plist`: `WiFiAwareServices` con los dos servicios, publicables y suscribibles.
+  - Tests:
+    - `TransportPolicyTests` (5).
+    - `WiFiAwareLinkTests` (6): nombres válidos según RFC 6335; Info.plist y entitlement
+      del Runner leídos desde el test; la cita de Bonjour; y que `.advertise` pide a la
+      cita un listener por canal, con el loopback de verdad.
+- IOS-14b, la app:
+  - `RIG_LINK_INTERFACE=aware` en la app y en `link-bench`. `RigLinkNW.makeTransport` es
+    la única fábrica del transporte (antes, dos copias).
+  - El informe de `link-bench` añade `interface`, `rendezvous`, `transport_failures`,
+    `transport_waiting` y, por Aware, `aware_signal`, `aware_capacity_mbps`,
+    `aware_ceiling_mbps`, `aware_tx_latency_video_ms` y `aware_active_s`.
+  - `transport_waiting` existe porque por Wi-Fi Aware, sin emparejado o sin
+    entitlement, el listener no falla: se queda esperando. NWLinkTransport lo expone en
+    `waitingReason`.
+  - Pigeon `pairWithoutCable(role)` y el botón «Emparejar sin cable» en
+    `role_page.dart`. Usa el lado elegido arriba y dice debajo con quién quedó
+    emparejado o por qué no. `role_page_test.dart` (4).
+  - `tools/banco_dos_moviles.sh emparejar`: la app normal en los dos, para el botón.
+
+**Decidido (pendiente de revisión del propietario)**
+- **Los medios por Wi-Fi Aware se llaman `_footballai-av._udp`**. `_footballai-media`
+  tiene 16 caracteres y RFC 6335 admite 15. Apple avisa de que con un nombre inválido
+  en el Info.plist la app se cierra al arrancar, y un test lo vigila. El control
+  conserva `_footballai-rig._tcp`.
+- **Dos servicios**, control y medios, como por Bonjour. No uso un servicio más
+  `.addingConnections`, que pide iOS 26.4 y cambiar el transporte.
+- **Sin TXT por Wi-Fi Aware**: la huella del secreto no viaja. Al otro soporte lo
+  paran el emparejado y el hello autenticado.
+- **`.interactiveVideo` también para el control**: la tarjeta pide la categoría de
+  vídeo, y el control es poco tráfico.
+- **La parte por Wi-Fi Aware va a 8 Mbit/s**, la misma que por Wi-Fi, hasta que SPK-08
+  mida (`LinkMedium.partBitrateAwareBps`).
+- **El «link-echo» de la tarjeta es `link-bench`**: un banco `link-echo` no existe.
+  `link-bench` da el RTT del reloj (`link/rtt`), las pérdidas de medios
+  (`media_loss_gaps`) y las de partes con `RIG_LINK_PARTS=1`.
+- La política automática y el cambio en caliente son de IOS-17, que ya encuentra
+  `TransportPolicy.swift` con `LinkMedium`.
+
+**Lo que solo dirá el iPhone** (riesgos, por si no enlaza)
+- El puente a la API clásica: `NWListener(service:using:)` con el `service` de
+  `WAPublisherListener`, y NWBrowser con `makeDescriptor()`. Apple documenta ese puente
+  pero enseña los ejemplos con la API nueva. Si no conecta, el plan B es pasar
+  `WiFiAwareRendezvous` a `NetworkListener`/`NetworkBrowser` sin tocar las tramas.
+- No sé qué hace la hoja de emparejado al terminar. Se cubren las tres salidas.
+- Que el emparejado sobreviva a reinstalar con `BENCH=link-bench`. Es una
+  actualización, no un borrado. Si se perdiera, el informe lo diría en
+  `transport_waiting`.
+
+**Fuera**
+- IOS-63: por Wi-Fi Aware, `peerHost` es una IPv6 de enlace local de la interfaz NAN, y
+  el mando por la LAN no la alcanza. El QR Mando solo sirve por Ethernet o Wi-Fi.
+- La pantalla no enseña si ya hay emparejado al abrir; solo tras pulsar el botón.
+- SPK-08 (90 min, vatios) e IOS-17.
+
+**Comprobado**
+- `swift test --skip ModelBench`: 340 tests, 1 saltado, 0 fallos.
+- `tools/check_layers.sh` limpio.
+- RigNet compilado para iOS con xcodebuild, sin avisos.
+- `flutter analyze` sin avisos; `flutter test`: 361.
+- `flutter build ios --release` ✓. El build lleva el entitlement y `WiFiAwareServices`.
+
+**Para la próxima ventana con los dos iPhone** (desbloqueados, con el Bloqueo
+automático en Nunca y el Wi-Fi encendido; el router no hace falta):
+
+```bash
+cd /Users/alexander/Trabajacion/fooball_ai_capturer
+# 1. Una vez: la app normal en los dos. A mano, en cada uno su lado y «Emparejar sin
+#    cable». El derecho (16 Pro) elige al iPhone 17 y teclea el código que enseña.
+tools/banco_dos_moviles.sh emparejar <fichero_secreto>
+# 2. El banco del enlace por Wi-Fi Aware: 10 min, partes a 0/10/30 Mbit/s cada 5 min.
+#    Para probar sin router, el router apagado o lejos.
+BANCO_EXTRA='{"RIG_LINK_INTERFACE": "aware"}' tools/banco_dos_moviles.sh link90 <fichero_secreto> 600
+# 3. El informe: connected=1, interface=aware, rendezvous=aware, transport_waiting
+#    vacío, link/rtt, media_loss_gaps, pérdidas de partes y los aware_*.
+ls bench/dos-moviles-*/izquierdo/bench/link-bench-*.json bench/dos-moviles-*/derecho/bench/link-bench-*.json
+```
+
+**Siguiente paso**: la pasada de arriba para dar la aceptación, y luego IOS-17 (política
+y cambio en caliente) y SPK-08 (90 min por Wi-Fi Aware).
+
 ## 2026-10-08 · IOS-28 — el Kalman del balón y el planificador de ROIs (RigCore) · ✅
 
 Réplica en RigCore (solo Foundation) de `libs/vision/ball_kalman.py` (REF-28), contra

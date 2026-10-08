@@ -3,6 +3,12 @@
 #
 #   tools/banco_dos_moviles.sh split  <fichero_secreto> [segundos]   # IOS-43/44/38/70/47/48/64
 #   tools/banco_dos_moviles.sh link90 <fichero_secreto> [segundos]   # SPK-02 / IOS-52
+#   tools/banco_dos_moviles.sh emparejar <fichero_secreto>           # IOS-14, una vez
+#
+# Wi-Fi Aware (IOS-14, SPK-08): `emparejar` instala la app normal en los dos y la abre;
+# a mano, en cada uno su lado y «Emparejar sin cable» (el derecho elige el iPhone 17 y
+# teclea el código que enseña el izquierdo). Después, el banco del enlace sin router:
+#   BANCO_EXTRA='{"RIG_LINK_INTERFACE": "aware"}' tools/banco_dos_moviles.sh link90 <secreto> 600
 #
 # <fichero_secreto>: el secreto del soporte en base64, en un fichero (no se imprime nunca).
 # Los móviles, por variable de entorno o los de siempre:
@@ -98,6 +104,16 @@ case "$MODO" in
     lanza "$IZQ" left "$EXTRA"
     lanza "$DER" right "$EXTRA"
     espera $(( SEG + 60 ))
+    ;;
+  emparejar)
+    # Sin AUTO_ROLE ni BENCH: hace falta la pantalla de lado para el botón.
+    instala "$IZQ" ""
+    instala "$DER" ""
+    mata "$IZQ"; mata "$DER"
+    lanza "$IZQ" left "{}"
+    lanza "$DER" right "{}"
+    echo "En los dos: su lado y «Emparejar sin cable». El derecho elige al izquierdo y teclea su código."
+    exit 0
     ;;
   *) echo "modo desconocido: $MODO" >&2; exit 2 ;;
 esac

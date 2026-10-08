@@ -11,6 +11,7 @@ library;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:football_ai_capture/src/constants.dart';
@@ -62,6 +63,11 @@ class _RolePageState extends State<RolePage> {
 
   /// Por qué no se pudo abrir el mando, si no se pudo.
   String? _mandoProblem;
+
+  /// IOS-14: emparejando por Wi-Fi Aware, y lo que salió (con quién, o por qué no).
+  bool _pairing = false;
+  String? _pairingNote;
+  bool _pairingFailed = false;
 
   @override
   void initState() {
@@ -203,6 +209,36 @@ class _RolePageState extends State<RolePage> {
             ),
       ),
     );
+  }
+
+  /// Wi-Fi Aware, el plan B del enlace sin router (IOS-14): se empareja una vez y el
+  /// sistema lo recuerda. El izquierdo enseña un código y el derecho lo teclea, así que
+  /// el lado elegido arriba decide qué hoja sale.
+  Future<void> _pairWithoutCable() async {
+    setState(() {
+      _pairing = true;
+      _pairingNote = null;
+    });
+    String note;
+    bool failed = false;
+    try {
+      final String peer = await _api.pairWithoutCable(_role);
+      note = peer.isEmpty ? 'Sin emparejar.' : 'Emparejado sin cable con $peer.';
+    } on PlatformException catch (e) {
+      note = 'No se pudo emparejar: ${e.message ?? e.code}';
+      failed = true;
+    } on Exception {
+      // Sin nativo (tests sin el método) no hay Wi-Fi Aware.
+      note = 'No se pudo emparejar.';
+      failed = true;
+    }
+    if (mounted) {
+      setState(() {
+        _pairing = false;
+        _pairingNote = note;
+        _pairingFailed = failed;
+      });
+    }
   }
 
   /// El móvil como mando del panel, sin cámara (ADR 0017 de football-ai).
@@ -352,6 +388,27 @@ class _RolePageState extends State<RolePage> {
                       value: _standalone,
                       onChanged: () => setState(() => _standalone = !_standalone),
                     ),
+                    const SizedBox(height: ZeroMetrics.innerGap),
+                    // Una vez por soporte, con los dos móviles delante: el plan B si no
+                    // hay cable ni router (IOS-14).
+                    ZeroButton.secondary(
+                      label: _pairing ? 'Emparejando…' : 'Emparejar sin cable',
+                      onPressed: _pairing ? null : () => unawaited(_pairWithoutCable()),
+                    ),
+                    if (_pairingNote case final String note)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          note,
+                          textAlign: TextAlign.center,
+                          style: ZeroType.plex(
+                            size: 12,
+                            weight: FontWeight.w500,
+                            color: _pairingFailed ? ZeroColors.alarm : ZeroColors.inkTertiary,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
                     const Spacer(),
                     const SizedBox(height: 20),
                     ZeroButton.primary(

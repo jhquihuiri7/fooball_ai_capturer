@@ -6,6 +6,7 @@
 
 import AVFoundation
 import Flutter
+import RigNet
 import Security
 
 final class CaptureHostApiImpl: NSObject, CaptureHostApi {
@@ -211,7 +212,12 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
                     details: nil
                 )
             }
-            let nw = RigLinkNW(role: role, secret: secreto, prefersMaster: prefersMaster)
+            guard let medio = RigLinkNW.medium() else {
+                throw PigeonError(
+                    code: "link", message: "RIG_LINK_INTERFACE no es ethernet, wifi ni aware", details: nil
+                )
+            }
+            let nw = RigLinkNW(role: role, secret: secreto, prefersMaster: prefersMaster, medium: medio)
             // IOS-13: la cámara lee el reloj nativo por fotograma, sin pasar por
             // Pigeon; a Dart solo le llega la estimación, para la pantalla y la fase.
             engine.rigClock = nw.clock
@@ -307,6 +313,19 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
         engine.rigClock = nil
         engine.onLookLocked = nil
         engine.forgetMasterLook()
+    }
+
+    /// IOS-14: el emparejado único por Wi-Fi Aware, con la hoja de DeviceDiscoveryUI.
+    @MainActor
+    func pairWithoutCable(role: CameraRole) async throws -> String {
+        guard let encima = QrScanner.topViewController() else {
+            throw PigeonError(code: "aware", message: "no hay pantalla sobre la que emparejar", details: nil)
+        }
+        do {
+            return try await WiFiAwarePairing.pair(side: role == .left ? .left : .right, from: encima)
+        } catch {
+            throw PigeonError(code: "aware", message: "\(error)", details: nil)
+        }
     }
 
     func masterRecentPtsNs() async throws -> [Int64] {

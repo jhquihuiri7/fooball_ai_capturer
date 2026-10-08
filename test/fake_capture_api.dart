@@ -3,6 +3,8 @@ library;
 
 import 'dart:async';
 
+import 'package:flutter/services.dart';
+
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
 
 /// Un frame a 30 fps, en nanosegundos.
@@ -221,6 +223,21 @@ class FakeCaptureApi extends CaptureHostApi {
 
   @override
   Future<void> stopLink() async => stopLinkCalls++;
+
+  /// IOS-14: con qué lado se pidió emparejar por Wi-Fi Aware, qué contesta el nativo y,
+  /// si se pone, el error que lanza (como el PigeonError del nativo).
+  final List<CameraRole> pairRequests = <CameraRole>[];
+  String pairedPeer = '';
+  String? pairError;
+
+  @override
+  Future<String> pairWithoutCable(CameraRole role) async {
+    pairRequests.add(role);
+    if (pairError case final String error) {
+      throw PlatformException(code: 'aware', message: error);
+    }
+    return pairedPeer;
+  }
 
   /// El secreto del mando que devolvería el nativo; vacío = sin secreto del soporte.
   String controlSecretValue = '';

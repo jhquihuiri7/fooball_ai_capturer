@@ -68,12 +68,30 @@ final class RigLinkNW: PeerLinking {
         set { session.onClockEstimate = newValue }
     }
 
-    /// La interfaz del enlace: Ethernet por el hub (ADR 0023) salvo RIG_LINK_INTERFACE=wifi,
-    /// el banco sin cables.
-    static func interfaceType(_ valor: String? = ProcessInfo.processInfo.environment["RIG_LINK_INTERFACE"])
-        -> NWInterface.InterfaceType
+    /// El medio del enlace: Ethernet por el hub (ADR 0023) salvo RIG_LINK_INTERFACE=wifi,
+    /// el banco sin cables, o =aware, Wi-Fi Aware sin router (IOS-14). nil si no se
+    /// entiende el valor.
+    static func medium(_ valor: String? = ProcessInfo.processInfo.environment["RIG_LINK_INTERFACE"])
+        -> LinkMedium?
     {
-        valor == "wifi" ? .wifi : .wiredEthernet
+        LinkMedium.parse(valor)
+    }
+
+    /// El transporte del lado por el medio: escucha el izquierdo y conecta el derecho
+    /// (ADR 0023). Por Bonjour, el anuncio lleva el lado y la huella del secreto en la
+    /// TXT, para no invitar a un soporte ajeno; Wi-Fi Aware no tiene TXT y solo ve a los
+    /// emparejados.
+    static func makeTransport(side: RigLinkSession.Side, secret: Data, medium: LinkMedium) -> NWLinkTransport {
+        let cita: LinkRendezvous = switch medium {
+        case .ethernet: BonjourRendezvous(interfaceType: .wiredEthernet)
+        case .wifi: BonjourRendezvous(interfaceType: .wifi)
+        case .aware: WiFiAwareRendezvous()
+        }
+        guard side == .left else { return NWLinkTransport(mode: .browse, rendezvous: cita) }
+        return NWLinkTransport(mode: .advertise(
+            name: UIDevice.current.name,
+            txt: ["side": "left", "fp": LinkAuth.fingerprint(secret: secret)]
+        ), rendezvous: cita)
     }
 
     /// El secreto del soporte, mientras no exista la provisión del Keychain (IOS-97).
@@ -97,19 +115,9 @@ final class RigLinkNW: PeerLinking {
     /// El rol que negoció el enlace (IOS-80), con su term y su partido.
     var onRigRole: ((RigCore.RigRole, Int, String?) -> Void)?
 
-    init(role: CameraRole, secret: Data, prefersMaster: Bool) {
+    init(role: CameraRole, secret: Data, prefersMaster: Bool, medium: LinkMedium) {
         let side: RigLinkSession.Side = role == .left ? .left : .right
-        // Escucha el izquierdo y conecta el derecho (ADR 0023): el anuncio lleva el lado
-        // y la huella del secreto en la TXT, para no invitar a un soporte ajeno.
-        let transport: NWLinkTransport
-        if side == .left {
-            transport = NWLinkTransport(mode: .advertise(
-                name: UIDevice.current.name,
-                txt: ["side": "left", "fp": LinkAuth.fingerprint(secret: secret)]
-            ), interfaceType: Self.interfaceType())
-        } else {
-            transport = NWLinkTransport(mode: .browse, interfaceType: Self.interfaceType())
-        }
+        let transport = Self.makeTransport(side: side, secret: secret, medium: medium)
         self.transport = transport
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
         session = RigLinkSession(
@@ -189,7 +197,8 @@ final class RigLinkNW: PeerLinking {
 //
 //   RIG_LINK_SIDE       left | right (escucha el izquierdo, conecta el derecho)
 //   RIG_LINK_SECRET     el secreto del soporte, base64 (el mismo en los dos)
-//   RIG_LINK_INTERFACE  ethernet (por defecto, el hub) | wifi (banco sin cables)
+//   RIG_LINK_INTERFACE  ethernet (por defecto, el hub) | wifi (banco sin cables) |
+//                       aware (Wi-Fi Aware sin router, IOS-14; emparejados antes)
 //   RIG_LINK_BENCH_S    segundos que dura (por defecto 60)
 //   RIG_LINK_CUT_AT_S   segundo en que el izquierdo corta el enlace 1 s, como quien
 //                       desenchufa el cable (0 = no corta; por defecto 20)
@@ -218,16 +227,13 @@ enum LinkBench {
         guard let secreto = RigLinkNW.benchSecret() else {
             throw BenchError.unknownBench("link-bench: falta RIG_LINK_SECRET (base64)")
         }
-        let interfaz = RigLinkNW.interfaceType(entorno["RIG_LINK_INTERFACE"])
+        guard let medio = RigLinkNW.medium(entorno["RIG_LINK_INTERFACE"]) else {
+            throw BenchError.unknownBench("link-bench: RIG_LINK_INTERFACE no es ethernet, wifi ni aware")
+        }
         let duracion = entorno["RIG_LINK_BENCH_S"].flatMap(Double.init) ?? defaultDurationS
         let corteEn = entorno["RIG_LINK_CUT_AT_S"].flatMap(Int.init) ?? defaultCutAtS
 
-        let transporte: NWLinkTransport = lado == .left
-            ? NWLinkTransport(
-                mode: .advertise(name: UIDevice.current.name,
-                                 txt: ["side": "left", "fp": LinkAuth.fingerprint(secret: secreto)]),
-                interfaceType: interfaz)
-            : NWLinkTransport(mode: .browse, interfaceType: interfaz)
+        let transporte = RigLinkNW.makeTransport(side: lado, secret: secreto, medium: medio)
         // SPK-02: el ritmo del espaciado, para medirlo sin recompilar.
         if let golpe = entorno["RIG_LINK_PACING_BURST"].flatMap(Int.init) {
             transporte.pacingBurstDatagrams = max(1, golpe)
@@ -268,6 +274,8 @@ enum LinkBench {
         // El desglose de la conexión: transporte escuchando/conectando, TCP arriba
         // (la sesión pasa a autenticar) y auth hecho. Se encadena al de la sesión.
         var hitos: [String: Double] = [:]
+        var fallosTransporte: [String] = []
+        var ultimaRadio: [String: String] = [:]
         func hito(_ nombre: String) {
             if hitos[nombre] == nil {
                 hitos[nombre] = Double(DispatchTime.now().uptimeNanoseconds - inicio) / 1e6
@@ -280,6 +288,9 @@ enum LinkBench {
             case .listening: hito("t_listening_ms")
             case .connecting: hito("t_connecting_ms")
             case .connected: hito("t_tcp_ms")
+            // Por Wi-Fi Aware, lo que falla antes de conectar (sin emparejado, sin
+            // entitlement) solo se ve aquí.
+            case let .failed(motivo) where !fallosTransporte.contains(motivo): fallosTransporte.append(motivo)
             default: break
             }
             cerrojo.unlock()
@@ -346,6 +357,12 @@ enum LinkBench {
         func escribe(duracion: Double, sufijo: String) throws -> URL {
             let stats = transporte.stats
             let deLaCarga = carga?.counters() ?? [:]
+            // Al final la sesión ya está parada: vale la última lectura de la radio.
+            let leida = medio == .aware ? Self.awareReport(transporte) : [:]
+            if !leida.isEmpty { ultimaRadio = leida }
+            let radio = ultimaRadio
+            // Antes del cerrojo: lo lee en la cola del transporte, que también lo toma.
+            let espera = transporte.waitingReason ?? ""
             cerrojo.lock(); defer { cerrojo.unlock() }
             let orden = rtts.sorted()
             func p(_ q: Double) -> Double {
@@ -359,7 +376,10 @@ enum LinkBench {
                 durationS: duracion,
                 params: [
                     "side": lado.rawValue,
-                    "interface": entorno["RIG_LINK_INTERFACE"] ?? "ethernet",
+                    "interface": medio.rawValue,
+                    "rendezvous": transporte.rendezvous.label,
+                    "transport_failures": fallosTransporte.joined(separator: " | "),
+                    "transport_waiting": espera,
                     "peer": par,
                     "internet_path": ruta,
                     "rejections": rechazos.joined(separator: " | "),
@@ -367,7 +387,7 @@ enum LinkBench {
                     "prefers_master": sesion.prefersMaster ? "1" : "0",
                     "parts_profile": carga?.profileDescription ?? "",
                     "pacing": "\(transporte.pacingBurstDatagrams) cada \(transporte.pacingIntervalUs) us",
-                ],
+                ].merging(radio) { a, _ in a },
                 thermal: [],
                 stagesMs: [:],
                 counters: [
@@ -453,9 +473,41 @@ enum LinkBench {
             }
             progress?(Double(s + 1) / Double(pasos), "enlace \(lado.rawValue): \(conexiones > 0 ? "conectado" : "buscando")")
         }
+        if medio == .aware {
+            let leida = Self.awareReport(transporte)
+            if !leida.isEmpty { ultimaRadio = leida }
+        }
         carga?.stop()
         sesion.stop()
         return try escribe(duracion: duracion, sufijo: "\(Int64(Date().timeIntervalSince1970))")
+    }
+
+    /// Lo que dice la radio de Wi-Fi Aware de la conexión de control (SPK-08): señal,
+    /// capacidad y latencia de emisión de vídeo; vacío sin conexión. Espera como mucho
+    /// `awareReportTimeoutS`: el informe no puede colgarse por la radio.
+    static func awareReport(_ transporte: NWLinkTransport) -> [String: String] {
+        guard let ruta = transporte.controlPath else { return [:] }
+        let caja = ReportBox()
+        let listo = DispatchSemaphore(value: 0)
+        Task.detached {
+            caja.value = await WiFiAwareRendezvous.report(of: ruta)
+            listo.signal()
+        }
+        _ = listo.wait(timeout: .now() + awareReportTimeoutS)
+        return caja.value
+    }
+
+    static let awareReportTimeoutS = 1.0
+}
+
+/// El informe de la radio, de la tarea que lo lee al hilo del banco.
+private final class ReportBox: @unchecked Sendable {
+    private let cerrojo = NSLock()
+    private var leido: [String: String] = [:]
+
+    var value: [String: String] {
+        get { cerrojo.lock(); defer { cerrojo.unlock() }; return leido }
+        set { cerrojo.lock(); leido = newValue; cerrojo.unlock() }
     }
 }
 
@@ -890,8 +942,7 @@ final class SplitBench {
             let enc = try VideoEncoder(
                 width: Self.programWidth, height: Self.programHeight,
                 bitrateBps: env["RIG_SPLIT_PART_MBPS"].flatMap(Double.init).map { Int($0 * 1_000_000) }
-                    ?? (env["RIG_LINK_INTERFACE"] == "wifi"
-                        ? LinkConstants.partBitrateWifiBps : LinkConstants.partBitrateEthernetBps),
+                    ?? (LinkMedium.parse(env["RIG_LINK_INTERFACE"]) ?? .ethernet).partBitrateBps,
                 viewId: side == .left ? 0 : 1
             )
             let s = SlavePartStage(
