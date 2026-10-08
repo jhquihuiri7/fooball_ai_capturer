@@ -71,6 +71,17 @@ public final class MetalContext {
         return CVMetalTextureGetTexture(texture)
     }
 
+    /// Suelta de la caché las texturas cuyos búferes ya nadie usa.
+    ///
+    /// La caché guarda una entrada por cada CVPixelBuffer que ve, y sin vaciarla no las
+    /// suelta nunca. Con los búferes de nuestros pools da igual (son siempre los mismos),
+    /// pero el decodificador de las partes renueva los suyos: medido el 2026-10-08, el
+    /// maestro crecía ~2 MB/min con partes y quedaba plano sin ellas. Se llama una vez por
+    /// fotograma, cuando la GPU ya terminó con él.
+    public func flushTextureCache() {
+        CVMetalTextureCacheFlush(textureCache, 0)
+    }
+
     /// Las fuentes .metal copiadas al bundle, en un solo texto. `nil` si no hay.
     private static func bundledSources() -> String? {
         let urls = (Bundle.module.urls(forResourcesWithExtension: "metal", subdirectory: nil) ?? [])

@@ -72,6 +72,8 @@ public final class MetalProgramComposer: ProgramComposing {
         )
         buffer.commit()
         buffer.waitUntilCompleted()
+        // La GPU ya soltó las texturas de este fotograma: fuera las entradas muertas.
+        context.flushTextureCache()
     }
 }
 

@@ -15,6 +15,43 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 
 
+
+## 2026-10-08 · Wi-Fi Aware con los dos iPhone (IOS-14) y la fuga de memoria acotada al enlace con el esclavo
+
+**Wi-Fi Aware** (emparejados a mano con «Emparejar sin cable»; el emparejado sobrevive a
+reinstalar). Tres pasadas de `link90` con `RIG_LINK_INTERFACE=aware`:
+
+| Pasada | Conecta | Órdenes (recibidas/enviadas) | Partes | Cortes / reconexión | RTT p50 / p99 |
+|---|---|---|---|---|---|
+| 10:47, sin arreglo (`bench/dos-moviles-20261008-1047`) | 2,5 s | 58 / 299 | 0 (la sesión cayó a los ~116 s) | el esclavo sin poder volver | 3,9 / 13,6 ms |
+| 11:22, con 95f756e (`…-1122`) | 6,3 s | 183 / 203 | 6619 enviadas, 5472 recibidas, 8,9 % perdidas, hasta 12,3 Mbit/s | 2 / 54-90 s | 4,6 / 21 ms |
+| 12:04, con `RIG_LINK_AWARE_ACTIVE_S=7200` (`…-1204`) | 6,5 s | 165 / 185 | 2946 enviadas, 2629 recibidas, 0 perdidas en conexión, hasta 11,3 Mbit/s | 2 / 20-30 s | 4,5 / 17,7 ms |
+
+Lectura: el enlace por Wi-Fi Aware ya conecta solo entre los dos iPhone, sin router, con
+un RTT parecido al de la Wi-Fi, y tras 95f756e la caducidad de la cita ya no lo tumba
+para siempre. Pero iOS **sigue caducando la cita aunque se pidan 7200 s** (6 y 4
+caducidades en 8 min) y, cuando caduca, a veces se lleva la conexión: 2 cortes en 8-10
+min, que vuelven solos en 20-90 s. Así no sirve para un partido. IOS-14 sigue 🚧.
+Siguiente: averiguar en la documentación de WiFiAware si la conexión ya establecida puede
+sobrevivir a la caducidad de la cita (o pasar la cita a la API nueva de Network, el plan B
+que anotó 95f756e) y un vigía del control que tire y rehaga la conexión en segundos, no en
+decenas (IOS-17).
+
+**La fuga de memoria del maestro, acotada.** Con la base (sin director, detector, micro,
+.mov ni .ts):
+- con los dos iPhone, crece ~2 MB/min (`bench/dos-moviles-20261008-0941`, y 1,94 MB/min en
+  `…-1138`);
+- con el iPhone 17 solo (`tools/banco_un_movil.sh`, sin esclavo, sin partes ni
+  decodificador), **plana**: 468-480 MB en 15 min (`bench/un-movil-20261008-1106`).
+
+La fuga necesita el enlace con el esclavo. **No es la caché de texturas de Metal**: se
+añadió `MetalContext.flushTextureCache()` tras cada composición (lo que recomienda Apple, y
+se queda) y la pasada `…-1138` siguió en 1,94 MB/min. Revisado y acotado: el reensamblador
+de fragmentos, la ventana de bitrate del receptor, `decoded` y `viewsByRigMs`. Sospechosos
+que quedan: el decodificador de VideoToolbox de las partes y la recepción de
+`RigLinkSession`. Siguiente: con los dos, una pasada con el esclavo mandando `no_part` en
+todos los fotogramas (sin partes ni decodificador, pero con el enlace vivo).
+
 ## 2026-10-08 · IOS-14c — la cita de Wi-Fi Aware caduca a los ~2 min y el enlace se quedaba mudo · 🚧 falta repetir la prueba
 
 **La prueba** (`bench/dos-moviles-20261008-1047`, link90 de 600 s por Wi-Fi Aware, los dos
