@@ -12,9 +12,49 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-07 · IOS-23 (cont.) — el banco del decodificador (`decoder-bench`) · 🚧 falta la cifra del iPhone
 
+**Hecho**
+- `RigMedia/Obs/DecoderBench.swift`, en BenchRunner como `decoder-bench`: lo que cuesta
+  pasar las salidas del modelo a cajas con `PlayerDecoder`, sin el modelo y sin la copia
+  desde MLMultiArray (`planes`, que es de CoreMLPlayerDetector). Las salidas se siembran
+  (SplitMix64) antes de medir y las muestras se guardan en crudo, con percentiles
+  exactos, como en director-bench. Tres etapas:
+  - `decoder/detr300`: 300 queries × 3 clases, 25 personas sobre el umbral. Es la
+    aceptación.
+  - `decoder/heatmap`: el CenterNet del plan B (ADR 0020), 3×144×480 con 25 picos.
+  - `decoder/heatmap_saturated`: ruido uniforme, como los pesos sembrados; llega al tope
+    de detecciones.
+  `calls` por `BENCH_PARAMS` (2000 por defecto).
+- `DecoderBenchTests`: con 3 llamadas por BenchRunner, el informe sale con las tres
+  etapas (p50 ≤ p99) y las detecciones del guion (25, 25 y `playerMaxDetections`).
+- `tools/bench_iphone.sh <banco> [dispositivo]`: un banco de BenchRunner en el iPhone sin
+  tocarlo. Compila con `BENCH`, instala, cierra solo la Zero (`procesos_zero.py`), lanza,
+  espera el informe nuevo de `Documents/bench/`, lo baja a `bench/<banco>-<fecha>/` y
+  vuelve a cerrar la Zero. Admite `ENTORNO` (variables del lanzamiento), `SIN_COMPILAR`,
+  `BENCH_PARAMS`, `SALIDA` y `NOMBRE`. Se ha probado contra un `xcrun` falso: el informe
+  baja, una Zero muerta se detecta (dos miradas seguidas sin proceso) y nunca se cierra
+  el Runner de otra app. En el iPhone no se ha probado, porque estaba ocupado.
 
+**Medido en el Mac** (M4, release, 2000 llamadas): `detr300` p50 **0,021 ms** (p99 0,036);
+`heatmap` 0,092 ms; `heatmap_saturated` 1,63 ms.
 
+**Para medir en el iPhone 17** (desbloqueado y con el Bloqueo automático en Nunca):
+
+```bash
+cd /Users/alexander/Trabajacion/fooball_ai_capturer
+tools/bench_iphone.sh decoder-bench 8FBBECC4-5239-59C4-BE22-5EEFB5958863
+```
+
+En el iPhone, el informe queda en `Documents/bench/decoder-bench-<epoch>.json`, dentro del
+contenedor de `com.logicielapplab.zero`. En el Mac baja a `bench/decoder-bench-<fecha>/`.
+Pasa si `stages_ms["decoder/detr300"].p50_ms` < 0,2.
+
+**Decisión mínima (pendiente de revisión del propietario)**: el «<0,2 ms» de la tarjeta se
+lee sobre el p50. El p99 se apunta al lado.
+
+**Siguiente paso**: la pasada en el iPhone. Cuando pitch.json llegue al móvil, pasar
+`FootMask(pitch:)` a CoreMLPlayerDetector.
 
 ## 2026-10-07 · IOS-23 (cont.) — umbrales en float32, picos más baratos y la máscara del campo desde PitchModel · 🚧 falta medir en el iPhone
 

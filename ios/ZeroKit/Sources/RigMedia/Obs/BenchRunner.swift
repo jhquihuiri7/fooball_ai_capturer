@@ -106,7 +106,8 @@ public final class BenchRunner {
     /// `vt-concurrency` (SPK-03) carga cámara, HEVC, H.264 y decodificación a la vez;
     /// `model-bench` (SPK-50) mide .mlpackage con sus recursos en
     /// Documents/bench-resources (se suben con `devicectl device copy to`);
-    /// `director-bench` (IOS-37) mide el bucle del director por fotograma y
+    /// `director-bench` (IOS-37) mide el bucle del director por fotograma,
+    /// `decoder-bench` (IOS-23), el decodificador de jugadores sin el modelo, y
     /// `metal-bench` (IOS-40/41/21), el tiempo de GPU de los kernels.
     private static let benches: [String: Bench] = [
         "noop": { report, _ in
@@ -123,6 +124,9 @@ public final class BenchRunner {
         },
         "director-bench": { report, progress in
             try DirectorBench.run(report: &report, progress: progress)
+        },
+        "decoder-bench": { report, progress in
+            try DecoderBench.run(report: &report, progress: progress)
         },
         "model-bench": { report, progress in
             let documentos = try FileManager.default.url(
