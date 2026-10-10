@@ -16,6 +16,160 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 
 
+## 2026-10-10 · IOS-14c — lo que dice Apple de una conexión Wi-Fi Aware larga, y el enlace que vuelve en segundos · 🚧 falta la prueba con los dos iPhone
+
+**Lo que dice la documentación.** Fuentes: el SDK iPhoneOS 26.5 de Xcode 26.6 (los
+`.swiftinterface` y `.swiftdoc` de WiFiAware y Network), la sesión WWDC25 228 «Supercharge
+device connectivity with Wi-Fi Aware», y el artículo y el código de ejemplo «Building
+peer-to-peer apps».
+- **La cita solo sirve para encontrarse.**
+  - WWDC25: «To conserve wireless resources and power, stop the listener and browser once
+    all the required connections have been made.»
+  - El ejemplo de Apple para el browser con el primer punto que ve (`.finish`) y conecta
+    después. Su listener sigue hasta que caduca; ante `publisherTimeout` solo dice «Timed
+    out. Tap Advertise to restart.», sin tocar las conexiones.
+- **El datapath vive con las conexiones, no con la cita.**
+  - `addingConnections`: «Make additional network connections over a preexisting Wi-Fi
+    Aware datapath, without publishing or advertising any services».
+  - Y «Your app must have at least one pre-existing NetworkConnection to a remote device».
+  - No hay que mantener vivo ningún otro objeto: `WAConnection` solo da `deriveSharedSecret`.
+- **`requestedDuration` es una petición, sin máximo documentado.** «Optional duration
+  requested to keep the NetworkListener publishing. The default value of nil instructs the
+  system to stay active for long enough to guarantee the action completes with all nearby
+  target devices.» Medido el 2026-10-08: con 7200 s caduca igual a los ~2 min.
+- **Errores de una conexión:** `connectionIdleTimeout` («when a connection is unused for an
+  excessive duration»), `connectionTerminated` y `deviceNoLongerAvailable`. Ninguno pone
+  tiempo de vida a una conexión en uso.
+- **API nueva o puente.** El puente a la clásica (`service`, `configureParameters`,
+  `makeDescriptor`, `makeEndpoint(from:)`) es API pública documentada. La nueva
+  (`NetworkListener.run`, `NetworkBrowser.run`) tiene el mismo ciclo: el listener y el
+  browser fallan al caducar (`run` lanza) y las conexiones siguen. Nada dice que gestione
+  mejor la caducidad. Lo único que solo da la nueva es `.addingConnections`: el canal de
+  medios sobre el datapath del control, sin una segunda cita. Pide `NetworkConnection` hacia
+  un `WAEndpoint`; queda anotado para IOS-17/SPK-08.
+- **Rendimiento:** lo que ya llevamos.
+  - `.realtime` «prioritizes latency at the expense of throughput, power, and other
+    concurrent Wi-Fi use cases».
+  - WWDC25: «real time is used with interactive voice or video service class».
+  - El ejemplo de Apple usa justo `.realtime` con `.interactiveVideo`.
+  - «Each service must have the same WAPerformanceMode on both … sides».
+  - `.interactiveVideo` da «low-latency for moderate throughput flows» y «doesn't support
+    high throughput».
+- **Del daemon, no de la documentación.** Las cadenas de `/usr/libexec/wifip2pd` (el del Mac
+  trae el código de Wi-Fi Aware) son un indicio:
+  - mantiene el datapath con keep-alives propios: «%@ will be terminated because no keep
+    alive was received for %s»;
+  - no monta uno nuevo si la publicación asociada ya caducó: «cannot retry response because
+    the associated publisher is no longer active».
+
+**Diagnóstico** (`bench/dos-moviles-20261008-1122` y `…-1204`)
+- **Lo lento es volver, no caer.**
+  - En la caída de 11:22 el derecho hace 10 intentos en 54 s, unos 5,4 s cada uno: los 4 s
+    de `controlConnectTimeoutS`, la espera y otra suscripción.
+  - Por Wi-Fi Aware, montar el datapath y el TCP tarda 2,4-6,3 s, así que cada intento se
+    abortaba a medio montar.
+- **Nadie se entera de que el datapath murió.**
+  - El TCP, sin keepalive, sigue «arriba». En 11:22 el izquierdo cayó 36 s antes que el
+    derecho: 90 s fuera frente a 54.
+  - Mientras tanto, el derecho no volvía a suscribirse.
+  - Y al soltar el control, el derecho dejaba viva la conexión de medios sobre el mismo
+    datapath.
+- **En 12:04 hubo una tercera caída que no llegó a cerrarse.** Entre los 300 y los 480 s:
+  - el derecho suma 15 intentos más y recibe 42 órdenes de 90;
+  - el izquierdo recibe 2629 partes de unas 5400, y su informe final ya no trae `aware_*`.
+
+  `outages` no la cuenta: solo cuenta las caídas que vuelven.
+- **95f756e volvía a publicar cada ~2 min con la conexión arriba**, al revés de lo que pide
+  Apple. Si el derecho aún estaba suscrito a los medios, veía el anuncio nuevo y cambiaba de
+  conexión de medios a mitad. No hay prueba de que eso tumbe el datapath, pero sobra.
+- **Por qué cae, los informes no lo dicen:** no guardaban ni el motivo ni la hora. Desde
+  ahora, sí.
+
+**Hecho** (RigNet y el banco)
+- **Vigía de silencio**, `silenceTimeoutS` de la cita: 3 s por Wi-Fi Aware (`WiFiAwareTimings`);
+  por Bonjour no hay.
+  - Si el control está arriba, han llegado medios del otro desde que subió y luego callan
+    3 s (30 latidos), se tira el enlace entero y se vuelve a buscar. Se mira 4 veces por
+    plazo.
+  - Sin medios desde que subió el control (el apretón de manos, un conflicto de roles) no
+    se arma.
+- **Por Wi-Fi Aware el enlace es uno.**
+  - Si cae el control que estaba arriba, el derecho suelta también los medios y se vuelve a
+    suscribir a ellos, en vez de seguir hablando a un anuncio de un datapath muerto.
+  - El izquierdo no cancela su conexión de medios: la sustituye la nueva al llegar.
+    Cancelarla podría tirar la nueva, que puede llegar antes que el control y no trae
+    latidos hasta que sube la sesión.
+  - Si el control nuevo del derecho llega con el viejo aún arriba, el izquierdo cambia ya
+    sus citas caducadas por otras, para que la suscripción nueva a los medios lo encuentre.
+- **La cita que caduca con la conexión arriba se guarda hasta que la conexión cae**, en los
+  dos lados (`rendezvousEndAction` da `.keepUntilDrop`).
+  - Ya no se vuelve a publicar cada ~2 min.
+  - Al caer la conexión se abren citas nuevas en el acto.
+  - Un listener de Bonjour que falla de verdad sigue en `.renewLater`.
+- **Plazo para conectar por cita** (`connectTimeoutS`): 10 s por Wi-Fi Aware y los 4 s de
+  siempre por Bonjour.
+- **Línea de tiempo del transporte** (`events`): los últimos 80 sucesos, con su segundo.
+  - Recoge las citas publicadas y acabadas, el control arriba y cada caída con su motivo:
+    `falló: Wi-Fi Aware: connectionTerminated`, `silencio de 3.2 s`, `sin respuesta en 10 s`…
+  - Los errores de Wi-Fi Aware salen sin sus detalles vacíos.
+- **El informe de `link-bench`** añade `transport_events`, `silence_timeout_s` y
+  `silence_drops`.
+- **Tests:** `LinkSilenceTests` (4) y la tabla nueva de `RendezvousEndTests`.
+  - La decisión del vigía.
+  - Que solo Wi-Fi Aware tiene vigía y que sus plazos cubren lo medido.
+  - Por el loopback, un enlace que calla se tira y se rehace, con los medios otra vez.
+  - Sin medios desde que subió el control, no se tira nada.
+
+**No hecho, a propósito**
+- **Pasar a la API nueva:** no da nada mejor para la caducidad y cambia el transporte
+  entero. `.addingConnections` para los medios sí la pediría.
+- **Conectar con los parámetros de `configureParameters` del browser** (Apple: «the
+  parameters to use to configure the Wi-Fi Aware subscriber and the subsequent connection»).
+  Hoy conecta sin ellos, y no sé si atarían la conexión a la suscripción, que caduca. Si la
+  próxima pasada sigue cayendo justo tras cada caducidad, es lo siguiente que se prueba.
+- **Una conexión a medio montar que pasa a `.waiting` se sigue soltando en el acto.** La
+  línea de tiempo dirá si eso ocurre por Wi-Fi Aware.
+
+**Comprobado**
+- `swift test --skip ModelBench`: 348 tests, 1 saltado, 0 fallos.
+- `tools/check_layers.sh` limpio.
+- RigNet compilado para iOS con xcodebuild (derivedData temporal), sin avisos.
+- El Runner, sin `flutter build` y sin tocar `build/ios`: `swiftc -typecheck` de todos sus
+  `.swift` contra el RigNet nuevo y los módulos de HaishinKit y Flutter del DerivedData. 0
+  errores; los avisos son los de antes.
+
+**Para la próxima prueba** (los dos desbloqueados, emparejados como el 2026-10-08)
+
+```bash
+cd /Users/alexander/Trabajacion/fooball_ai_capturer
+# 1. 10 min por Wi-Fi Aware.
+BANCO_EXTRA='{"RIG_LINK_INTERFACE": "aware"}' tools/banco_dos_moviles.sh link90 <secreto> 600
+# 2. La vuelta tras un corte con la cita ya caducada: el izquierdo se para 1 s a los 200 s.
+BANCO_EXTRA='{"RIG_LINK_INTERFACE": "aware", "RIG_LINK_CUT_AT_S": "200"}' tools/banco_dos_moviles.sh link90 <secreto> 600
+# 3. Si las dos van bien, los 90 min (SPK-08).
+BANCO_EXTRA='{"RIG_LINK_INTERFACE": "aware"}' tools/banco_dos_moviles.sh link90 <secreto> 5400
+# La línea de tiempo de cada lado:
+for f in $(ls -t bench/dos-moviles-*/{izquierdo,derecho}/bench/link-bench-*-1*.json | head -2); do
+  python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); c=d["counters"]; p=d["params"]
+print(sys.argv[1], "outages", c["outages"], "reconnect_ms", c["reconnect_ms"], "silence_drops", c.get("silence_drops"), "rendezvous_ends", c["rendezvous_ends"])
+print("\n".join(p.get("transport_events", "").split(" | ")))' "$f"
+done
+```
+
+Qué mirar en los informes:
+- `silence_timeout_s` es `3.0`: el build lleva el arreglo.
+- **La 1:** `connected=1` y `commands_received` ≈ 299 en el derecho. `rendezvous_ends` baja
+  a ~2 por lado (una caducidad por canal) desde los 4-6 de antes.
+- **Si hay caídas:** `reconnect_ms` de unos 3-10 s, y no de 20-90.
+  - `transport_events` dice el motivo de cada `control caído (…)`.
+  - Si cada caída llega justo después de una `cita … acabada (Wi-Fi Aware: publisherTimeout
+    | subscriberTimeout)`, la caducidad sí se lleva el datapath. Entonces lo siguiente es
+    probar `configureParameters` y, si no basta, la API nueva con `.addingConnections`
+    (ADR).
+- **La 2:** `outages` 1 y `reconnect_ms` de pocos segundos.
+- **Una caída sin cerrar al final** no sale en `outages`: se ve como un último `control caído`
+  sin `control arriba` detrás.
+
 ## 2026-10-08 · Wi-Fi Aware con los dos iPhone (IOS-14) y la fuga de memoria acotada al enlace con el esclavo
 
 **Wi-Fi Aware** (emparejados a mano con «Emparejar sin cable»; el emparejado sobrevive a
