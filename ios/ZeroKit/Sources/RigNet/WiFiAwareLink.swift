@@ -56,6 +56,28 @@ public enum WiFiAwareServices {
     static let maxServiceNameLength = 15
 }
 
+/// Los plazos del enlace por Wi-Fi Aware (IOS-14c). Fuera del `#if` para probarlos en el
+/// Mac: los usa la cita, que solo existe en iOS.
+///
+/// Apple trata la cita como algo que solo sirve para encontrarse: «stop the listener and
+/// browser once all the required connections have been made» (WWDC25 228), y el datapath
+/// vive mientras haya una conexión (`addingConnections` pide «at least one pre-existing
+/// NetworkConnection»). Pero si el datapath muere, nada avisa: el TCP tarda decenas de
+/// segundos en rendirse y, mientras, el otro no puede volver a montar el suyo.
+public enum WiFiAwareTimings {
+    /// Segundos para que el control quede listo. Por Wi-Fi Aware la conexión monta un
+    /// datapath antes del TCP: de la suscripción al control listo se midieron 2,4-6,3 s
+    /// (bancos del 2026-10-08). Con los 4 s de Bonjour, tras una caída se abortaba cada
+    /// intento a medio montar y se volvía a suscribir: 10 intentos y 54 s fuera.
+    public static let connectTimeoutS: Double = 10
+
+    /// Segundos sin un dato del otro por medios tras los que el enlace está muerto. Los
+    /// latidos van a 10 Hz en los dos sentidos (ADR 0023 §6): son 30 latidos perdidos
+    /// seguidos, seis veces HEARTBEAT_LOSS_MS. Un parón de la radio de 1-2 s no rehace el
+    /// enlace; uno muerto vuelve a buscarse en 3 s y no en 20-90.
+    public static let silenceTimeoutS: Double = 3
+}
+
 public enum WiFiAwareLinkError: Error, CustomStringConvertible {
     /// Este iPhone no tiene Wi-Fi Aware (anterior al iPhone 12) o el sistema no lo da.
     case unsupported
@@ -86,9 +108,10 @@ public struct WiFiAwareRendezvous: LinkRendezvous {
 
     /// Cuánto se pide que dure la publicación y la suscripción. nil (el predeterminado):
     /// lo que el sistema crea suficiente para encontrar a todos, unos 2 min; al caducar
-    /// las conexiones siguen y NWLinkTransport vuelve a publicar (`isExpiry`). Con un
-    /// valor (`RIG_LINK_AWARE_ACTIVE_S` en el banco) se pide más, por si la caducidad
-    /// arrastrara la conexión del que busca.
+    /// las conexiones siguen y la cita no se renueva hasta que cae el enlace
+    /// (`isExpiry`). Con un valor (`RIG_LINK_AWARE_ACTIVE_S` en el banco) se pide más,
+    /// pero iOS 26.6.1 caduca igual a los ~2 min con 7200 s (banco del 2026-10-08 12:04):
+    /// es una petición, y la documentación no le da máximo.
     public let activeDuration: Duration?
 
     public init(activeDuration: Duration? = nil) {
@@ -96,6 +119,10 @@ public struct WiFiAwareRendezvous: LinkRendezvous {
     }
 
     public var label: String { "aware" }
+
+    public var connectTimeoutS: Double { WiFiAwareTimings.connectTimeoutS }
+
+    public var silenceTimeoutS: Double? { WiFiAwareTimings.silenceTimeoutS }
 
     public static var isSupported: Bool {
         WACapabilities.supportedFeatures.contains(.wifiAware)
@@ -135,7 +162,10 @@ public struct WiFiAwareRendezvous: LinkRendezvous {
         case .noPairedDevices: "Wi-Fi Aware: no hay ningún iPhone emparejado («Emparejar sin cable»)"
         case .serviceNotDeclared: "Wi-Fi Aware: servicio no declarado en WiFiAwareServices"
         case .wifiAwareUnsupported: "Wi-Fi Aware: este iPhone no lo tiene"
-        default: "Wi-Fi Aware: \(causa)"
+        // El caso sin sus detalles, que van vacíos: `connectionTerminated`, no
+        // `connectionTerminated(WiFiAware.WAError.ConnectionTerminatedDetails())`. Así cabe
+        // en la línea de tiempo del banco.
+        default: "Wi-Fi Aware: \(String(describing: causa).prefix { $0 != "(" })"
         }
     }
 

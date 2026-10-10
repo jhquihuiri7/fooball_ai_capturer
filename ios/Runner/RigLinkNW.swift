@@ -373,6 +373,9 @@ enum LinkBench {
             let espera = transporte.waitingReason ?? ""
             // IOS-14: la cita que caducó con la conexión viva no es un fallo del transporte.
             let finCita = transporte.lastRendezvousEnd ?? ""
+            // IOS-14c: la línea de tiempo del transporte (citas, caídas con su motivo y
+            // vueltas), para ver si cada caída coincide con una cita que caduca.
+            let sucesos = transporte.events.joined(separator: " | ")
             cerrojo.lock(); defer { cerrojo.unlock() }
             let orden = rtts.sorted()
             func p(_ q: Double) -> Double {
@@ -392,6 +395,8 @@ enum LinkBench {
                     "transport_failures": fallosTransporte.joined(separator: " | "),
                     "transport_waiting": espera,
                     "rendezvous_end": finCita,
+                    "transport_events": sucesos,
+                    "silence_timeout_s": transporte.rendezvous.silenceTimeoutS.map { "\($0)" } ?? "no",
                     "peer": par,
                     "internet_path": ruta,
                     "rejections": rechazos.joined(separator: " | "),
@@ -430,6 +435,7 @@ enum LinkBench {
                     "media_stalls_over_100ms": stats.mediaStallsOver100Ms,
                     "media_pacer_drops": stats.mediaPacerDrops,
                     "rendezvous_ends": stats.rendezvousEnds,
+                    "silence_drops": stats.silenceDrops,
                 ].merging(deLaCarga) { a, _ in a }
             )
             if !rtts.isEmpty {

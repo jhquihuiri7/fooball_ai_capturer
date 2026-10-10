@@ -12,7 +12,10 @@
 // tramas, estados y reconexión es la misma.
 //
 // Cómo se anuncia y se busca cada canal lo dice la cita (LinkRendezvous, IOS-14):
-// Bonjour por la interfaz pedida, o Wi-Fi Aware entre dispositivos emparejados.
+// Bonjour por la interfaz pedida, o Wi-Fi Aware entre dispositivos emparejados. Por Wi-Fi
+// Aware, además, la cita caduca a los ~2 min y nada avisa si el datapath muere: un vigía
+// de silencio tira el enlace entero (control y medios) cuando el otro calla, y la cita
+// se vuelve a abrir entonces, no mientras la conexión sigue (IOS-14c).
 
 import Foundation
 import Network
@@ -41,30 +44,38 @@ public final class NWLinkTransport: LinkTransport {
     static let mediaWatchdogS: Double = 3
 
     /// Segundos que se espera a que el control quede listo antes de darlo por perdido y
-    /// probar otro anuncio: una conexión a un anuncio muerto se queda en `.waiting` sin
-    /// fallar nunca.
+    /// probar otro anuncio, por Bonjour: una conexión a un anuncio muerto se queda en
+    /// `.waiting` sin fallar nunca. Wi-Fi Aware pide más (`connectTimeoutS` de la cita).
     static let controlConnectTimeoutS: Double = 4
 
     /// Espera creciente de la reconexión, con el tope de 2 s de la decisión 3.
     static let reconnectDelaysS: [Double] = [0.25, 0.5, 1.0, 2.0]
 
-    /// Segundos hasta volver a publicar una cita caducada con la conexión arriba (IOS-14).
-    /// Wi-Fi Aware deja de publicar a los ~2 min de conectar; sin anuncio, si el otro
-    /// pierde la conexión y este no se entera, no podría volver a encontrarlo. La espera
-    /// evita un bucle si la cita nueva caducara enseguida.
+    /// Segundos hasta volver a publicar, con la conexión arriba, una cita que FALLÓ (no
+    /// que caducó): por Bonjour, un listener que se cae se cambia por otro sin tocar la
+    /// conexión. La espera evita un bucle si el nuevo fallara enseguida. La que caduca
+    /// (Wi-Fi Aware) no se renueva hasta que cae la conexión (IOS-14c).
     static let rendezvousRenewS: Double = 5
 
     /// Segundos hasta abrir otra cita cuando la anterior caduca sin conexión: el otro
     /// todavía no ha aparecido y hay que seguir publicando o buscando.
     static let rendezvousRetryS: Double = 0.5
 
+    /// Cuántas veces por plazo de silencio mira el vigía: con 4, un enlace muerto se tira
+    /// entre 1 y 1,25 plazos después de lo último que llegó.
+    static let silenceChecksPerTimeout: Double = 4
+
+    /// Sucesos que guarda la línea de tiempo del banco (los últimos).
+    static let maxEvents = 80
+
     /// Qué se hace cuando una cita (listener o browser) se acaba (IOS-14).
     enum RendezvousEndAction: Equatable {
-        /// El que busca, con la conexión arriba: la cita se guarda sin cancelar y se abre
-        /// otra cuando la conexión caiga. No es un fallo del transporte.
+        /// Con la conexión arriba: la cita se guarda sin cancelar y se abre otra cuando la
+        /// conexión caiga. El que busca, siempre; los dos, si caducó (Wi-Fi Aware). No es
+        /// un fallo del transporte.
         case keepUntilDrop
-        /// El que anuncia, con la conexión arriba: se vuelve a publicar al rato, sin
-        /// tocar la conexión, para que el otro lo encuentre si la pierde.
+        /// El que anuncia, con la conexión arriba y un fallo que no es caducidad: se
+        /// vuelve a publicar al rato, sin tocar la conexión.
         case renewLater
         /// Sin conexión y la cita caducó: se abre otra enseguida, sin pasar por `.failed`.
         case reopen
@@ -73,10 +84,23 @@ public final class NWLinkTransport: LinkTransport {
     }
 
     /// La decisión ante el fin de una cita. Con la conexión arriba nada es un fallo del
-    /// transporte: por Wi-Fi Aware las conexiones sobreviven a la cita que las creó.
+    /// transporte: por Wi-Fi Aware las conexiones sobreviven a la cita que las creó, y
+    /// Apple pide soltar el listener y el browser en cuanto están las conexiones («stop
+    /// the listener and browser once all the required connections have been made», WWDC25
+    /// 228). Por eso la que caduca ya no se vuelve a publicar con la conexión arriba
+    /// (95f756e lo hacía cada ~2 min): si el enlace muere, el vigía de silencio lo tira en
+    /// los dos lados y es entonces cuando se abre una cita nueva (IOS-14c).
     static func rendezvousEndAction(publishing: Bool, connected: Bool, expired: Bool) -> RendezvousEndAction {
-        if connected { return publishing ? .renewLater : .keepUntilDrop }
+        if connected { return publishing && !expired ? .renewLater : .keepUntilDrop }
         return expired ? .reopen : .fail
+    }
+
+    /// Si el vigía de silencio tira el enlace: arriba, con vigía (la cita da plazo), con
+    /// medios del otro desde que subió el control (sin ellos no hay latidos que echar de
+    /// menos: el apretón de manos o un conflicto de roles) y callado más que el plazo.
+    static func linkIsDead(connected: Bool, peerMediaSinceConnect: Bool, silentS: Double, limitS: Double?) -> Bool {
+        guard connected, peerMediaSinceConnect, let limitS else { return false }
+        return silentS > limitS
     }
 
     public var onFrame: ((LinkFrame, LinkChannel) -> Void)?
@@ -189,6 +213,30 @@ public final class NWLinkTransport: LinkTransport {
     /// Listeners acabados que se guardan mientras siga la conexión que salió de ellos.
     private var retiredListeners: [NWListener] = []
 
+    // IOS-14c: el vigía de silencio. Cuándo llegó lo último del otro por medios (ns de
+    // uptime, monótono) y si llegó algo desde que subió el control.
+    private var lastPeerMediaNs: UInt64 = 0
+    private var peerMediaSinceConnect = false
+    private var linkWatchdog: DispatchSourceTimer?
+
+    /// Lo que le ha pasado al enlace, «segundos desde que se creó el transporte: qué», los
+    /// últimos `maxEvents`. Para el banco: dice si cada caída coincide con una cita que
+    /// caduca y con qué error cae cada conexión (IOS-14c).
+    public var events: [String] {
+        queue.sync { eventos }
+    }
+    private var eventos: [String] = []
+    private let createdNs = DispatchTime.now().uptimeNanoseconds
+
+    /// Apunta un suceso en la línea de tiempo. En la cola del transporte.
+    private func note(_ texto: String) {
+        let s = Double(DispatchTime.now().uptimeNanoseconds &- createdNs) / 1e9
+        eventos.append(String(format: "%.1f", s) + " " + texto)
+        if eventos.count > Self.maxEvents {
+            eventos.removeFirst(eventos.count - Self.maxEvents)
+        }
+    }
+
     private var publishes: Bool {
         if case .advertise = mode { return true }
         return false
@@ -203,6 +251,7 @@ public final class NWLinkTransport: LinkTransport {
             open()
             openMedia()
             startMediaWatchdog()
+            startLinkWatchdog()
         }
     }
 
@@ -223,6 +272,8 @@ public final class NWLinkTransport: LinkTransport {
             mediaBrowser = nil
             mediaWatchdog?.cancel()
             mediaWatchdog = nil
+            linkWatchdog?.cancel()
+            linkWatchdog = nil
             mediaCandidates = []
             endedRendezvous = []
             cancelRetiredListeners()
@@ -329,11 +380,21 @@ public final class NWLinkTransport: LinkTransport {
                 guard let self else { return }
                 // Un soporte son dos móviles: la conexión nueva sustituye a la vieja,
                 // que Network puede tardar en dar por muerta (el patrón de RigLink).
+                if self.connection != nil { self.note("control: llega otra y sustituye a la de antes") }
                 self.connection?.cancel()
                 // Si la vieja seguía arriba, la sesión tiene que verlo para darse la mano
                 // otra vez por la nueva; si no, se queda con la clave de la vieja.
-                if self.state == .connected { self.state = .listening }
+                let estabaArriba = self.state == .connected
+                if estabaArriba { self.state = .listening }
                 self.adopt(connection: nueva)
+                // Con vigía de silencio, el otro viene de cero (soltó su enlace entero) y se
+                // va a suscribir otra vez a los medios: la cita de medios caducada se
+                // cambia ya por otra, o no encontraría a nadie. La conexión de medios
+                // vieja la sustituye la nueva al llegar.
+                if estabaArriba, self.rendezvous.silenceTimeoutS != nil {
+                    self.cancelRetiredListeners()
+                    self.renewEndedRendezvous()
+                }
             }
             listener.stateUpdateHandler = { [weak self, weak listener] estado in
                 // Lo que diga un listener ya sustituido no cuenta.
@@ -342,6 +403,7 @@ public final class NWLinkTransport: LinkTransport {
                 case .ready:
                     self.esperaPor = nil
                     self.localPort = listener.port?.rawValue ?? 0
+                    self.note("cita de control publicada")
                     // Una cita renovada con la conexión arriba no la tumba.
                     if self.state != .connected { self.state = .listening }
                     self.onReady?(self.localPort)
@@ -349,6 +411,7 @@ public final class NWLinkTransport: LinkTransport {
                     self.rendezvousEnded(.control, error)
                 case let .waiting(error):
                     // Wi-Fi Aware sin nadie emparejado no falla: espera. Que se lea.
+                    if self.esperaPor != self.describe(error) { self.note("listener en espera: \(self.describe(error))") }
                     self.esperaPor = self.describe(error)
                     self.log.info("listener en espera: \(self.describe(error))")
                 default:
@@ -401,6 +464,7 @@ public final class NWLinkTransport: LinkTransport {
                 self.rendezvousEnded(.control, error)
             case let .waiting(error):
                 // Wi-Fi Aware sin emparejado o sin entitlement no falla: espera. Se dice.
+                if self.esperaPor != self.describe(error) { self.note("browser en espera: \(self.describe(error))") }
                 self.esperaPor = self.describe(error)
                 self.log.info("browser en espera: \(self.describe(error))")
             case .ready:
@@ -418,10 +482,12 @@ public final class NWLinkTransport: LinkTransport {
         state = .connecting
         let conexion = NWConnection(to: endpoint, using: parameters())
         adopt(connection: conexion)
-        queue.asyncAfter(deadline: .now() + Self.controlConnectTimeoutS) { [weak self, weak conexion] in
+        // Por Wi-Fi Aware la conexión monta antes un datapath: se le da más plazo.
+        let plazo = rendezvous.connectTimeoutS
+        queue.asyncAfter(deadline: .now() + plazo) { [weak self, weak conexion] in
             guard let self, let conexion, conexion === self.connection, self.state != .connected else { return }
-            self.log.info("control sin respuesta en \(Self.controlConnectTimeoutS) s: otro anuncio")
-            self.dropConnection()
+            self.log.info("control sin respuesta en \(plazo) s: otro anuncio")
+            self.dropConnection("sin respuesta en \(Int(plazo)) s")
         }
     }
 
@@ -435,18 +501,21 @@ public final class NWLinkTransport: LinkTransport {
             switch estado {
             case .ready:
                 self.reconnectAttempt = 0
+                // El vigía de silencio se arma con los primeros medios de esta conexión.
+                self.peerMediaSinceConnect = false
+                self.note("control arriba")
                 self.state = .connected
                 self.receive(on: nueva)
             case let .failed(error):
                 self.log.info("control caído: \(String(describing: error))")
-                self.dropConnection()
+                self.dropConnection("falló: \(self.describe(error))")
             case let .waiting(error):
                 // Rechazada o sin ruta: Network reintentaría el mismo anuncio para
                 // siempre. Se suelta y se prueba otro.
                 self.log.info("control en espera: \(String(describing: error))")
-                self.dropConnection()
+                self.dropConnection("en espera: \(self.describe(error))")
             case .cancelled:
-                self.dropConnection()
+                self.dropConnection("cancelada")
             default:
                 break
             }
@@ -454,8 +523,10 @@ public final class NWLinkTransport: LinkTransport {
         nueva.start(queue: queue)
     }
 
-    private func dropConnection() {
+    private func dropConnection(_ motivo: String) {
         guard !stopped else { return }
+        let estabaArriba = state == .connected
+        note("control caído (\(motivo))")
         connection?.cancel()
         connection = nil
         stats.reconnects += 1
@@ -470,10 +541,71 @@ public final class NWLinkTransport: LinkTransport {
             endedRendezvous.remove(.control)
             scheduleReopen()
         }
+        // Con vigía de silencio (Wi-Fi Aware) el enlace es uno: si cae el control que
+        // estaba arriba, el que busca suelta también los medios y se vuelve a suscribir,
+        // en vez de seguir hablando a un anuncio de un datapath muerto. Un intento que no
+        // llegó a subir no los toca.
+        if estabaArriba, rendezvous.silenceTimeoutS != nil {
+            dropMedia()
+        }
         // Las citas que se acabaron con la conexión viva se cambian ya por otras: sin
         // ellas, por Wi-Fi Aware, los dos no podrían volver a encontrarse.
         cancelRetiredListeners()
         renewEndedRendezvous()
+    }
+
+    /// El lado que busca suelta su conexión de medios y se suscribe de nuevo; el que
+    /// conecta (los tests) la vuelve a abrir. El que anuncia no toca la suya: la
+    /// sustituye la siguiente que acepte su listener (o el que abra renewEndedRendezvous
+    /// si el suyo caducó). Cancelarla aquí podría tirar la nueva, que puede llegar antes
+    /// que el control y no trae latidos hasta que la sesión sube.
+    private func dropMedia() {
+        switch mode {
+        case .browse:
+            mediaConnection?.cancel()
+            mediaConnection = nil
+            mediaOpenedAt = nil
+            mediaBrowser?.cancel()
+            mediaBrowser = nil
+            mediaCandidates = []
+            endedRendezvous.remove(.media)
+            openMediaBrowser()
+        case .connect:
+            mediaConnection?.cancel()
+            mediaConnection = nil
+            mediaOpenedAt = nil
+            openMedia()
+        case .advertise, .listen:
+            break
+        }
+    }
+
+    // MARK: - El vigía de silencio (IOS-14c)
+
+    /// Por Wi-Fi Aware, si el datapath muere nada avisa: el TCP tarda decenas de segundos
+    /// en rendirse y, mientras, el otro no puede volver a montar el suyo (bancos del
+    /// 2026-10-08: 20-90 s fuera). Los latidos van por medios a 10 Hz en los dos
+    /// sentidos; si callan `silenceTimeoutS`, se tira el enlace y se vuelve a buscar.
+    private func startLinkWatchdog() {
+        guard let limite = rendezvous.silenceTimeoutS, linkWatchdog == nil else { return }
+        let paso = limite / Self.silenceChecksPerTimeout
+        let t = DispatchSource.makeTimerSource(queue: queue)
+        t.schedule(deadline: .now() + paso, repeating: paso)
+        t.setEventHandler { [weak self] in self?.checkLink() }
+        linkWatchdog = t
+        t.resume()
+    }
+
+    private func checkLink() {
+        guard !stopped else { return }
+        let mudoS = Double(DispatchTime.now().uptimeNanoseconds &- lastPeerMediaNs) / 1e9
+        guard Self.linkIsDead(
+            connected: state == .connected, peerMediaSinceConnect: peerMediaSinceConnect,
+            silentS: mudoS, limitS: rendezvous.silenceTimeoutS
+        ) else { return }
+        stats.silenceDrops += 1
+        log.info("enlace mudo \(mudoS) s: se tira y se vuelve a buscar")
+        dropConnection(String(format: "silencio de %.1f s", mudoS))
     }
 
     // MARK: - El fin de una cita (IOS-14)
@@ -489,6 +621,7 @@ public final class NWLinkTransport: LinkTransport {
             stats.rendezvousEnds += 1
             finDeCita = motivo
         }
+        note("cita de \(channel == .control ? "control" : "medios") acabada (\(motivo)): \(accion)")
         log.info("cita de \(String(describing: channel)) acabada (\(motivo)): \(String(describing: accion))")
         switch accion {
         case .keepUntilDrop:
@@ -596,7 +729,7 @@ public final class NWLinkTransport: LinkTransport {
                 self.drainBuffer()
             }
             if terminado || error != nil {
-                self.dropConnection()
+                self.dropConnection(error.map { "al recibir: \(self.describe($0))" } ?? "cerrada por el otro")
                 return
             }
             self.receive(on: connection)
@@ -617,7 +750,7 @@ public final class NWLinkTransport: LinkTransport {
                 stats.invalidFrames += 1
                 log.error("trama inválida por control (\(campo)): se cierra")
                 buffer.removeAll(keepingCapacity: false)
-                dropConnection()
+                dropConnection("trama inválida (\(campo))")
                 return
             }
         }
@@ -750,6 +883,9 @@ public final class NWLinkTransport: LinkTransport {
 
     private func checkMedia() {
         guard !stopped, state == .connected, let abierta = mediaOpenedAt else { return }
+        // Con el vigía de silencio armado, unos medios mudos son un enlace muerto: lo tira
+        // entero checkLink, sin probar otro anuncio sobre el mismo datapath.
+        if rendezvous.silenceTimeoutS != nil, peerMediaSinceConnect { return }
         let ultima = max(lastMediaArrival ?? .distantPast, abierta)
         guard Date().timeIntervalSince(ultima) > Self.mediaWatchdogS else { return }
         mediaRotations += 1
@@ -788,6 +924,8 @@ public final class NWLinkTransport: LinkTransport {
             stats.invalidFrames += 1
             return
         }
+        lastPeerMediaNs = DispatchTime.now().uptimeNanoseconds
+        peerMediaSinceConnect = true
         let ahora = Date()
         if let anterior = lastMediaArrival,
            ahora.timeIntervalSince(anterior) * 1000 > Self.mediaStallMs {

@@ -167,12 +167,14 @@ final class RendezvousEndTests: XCTestCase {
 
     func testALiveConnectionSurvivesTheEndOfItsRendezvous() {
         typealias T = NWLinkTransport
-        // Con la conexión arriba nunca es un fallo: el que busca la guarda hasta que caiga
-        // y el que anuncia vuelve a publicar al rato.
+        // Con la conexión arriba nunca es un fallo. El que busca guarda la cita hasta que
+        // caiga la conexión; el que anuncia también si caducó (IOS-14c: Apple pide soltar
+        // la cita en cuanto están las conexiones), y si falló de verdad la cambia al rato.
         for caduca in [true, false] {
             XCTAssertEqual(T.rendezvousEndAction(publishing: false, connected: true, expired: caduca), .keepUntilDrop)
-            XCTAssertEqual(T.rendezvousEndAction(publishing: true, connected: true, expired: caduca), .renewLater)
         }
+        XCTAssertEqual(T.rendezvousEndAction(publishing: true, connected: true, expired: true), .keepUntilDrop)
+        XCTAssertEqual(T.rendezvousEndAction(publishing: true, connected: true, expired: false), .renewLater)
         // Sin conexión: si caducó se abre otra sin más; si falló, `.failed` y otra con espera.
         for publica in [true, false] {
             XCTAssertEqual(T.rendezvousEndAction(publishing: publica, connected: false, expired: true), .reopen)

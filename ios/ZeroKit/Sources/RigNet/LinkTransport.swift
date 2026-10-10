@@ -37,6 +37,10 @@ public struct LinkTransportStats: Equatable, Sendable {
     /// por Wi-Fi Aware caducan a los ~2 min de conectar y la conexión sigue (IOS-14).
     public var rendezvousEnds = 0
 
+    /// Enlaces tirados por el vigía de silencio: arriba, pero sin nada del otro por medios
+    /// durante el plazo de la cita (Wi-Fi Aware, IOS-14c).
+    public var silenceDrops = 0
+
     public init() {}
 }
 

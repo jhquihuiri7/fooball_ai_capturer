@@ -34,12 +34,25 @@ public protocol LinkRendezvous {
     /// (`publisherTimeout`, `subscriberTimeout`), y las conexiones siguen. Bonjour no
     /// caduca.
     func isExpiry(_ error: NWError) -> Bool
+
+    /// Segundos que se espera a que una conexión del control quede lista antes de darla
+    /// por perdida y probar otra vez.
+    var connectTimeoutS: Double { get }
+
+    /// Segundos sin nada del otro por medios, con el enlace arriba, tras los que el enlace
+    /// está muerto: se tiran el control y los medios y se vuelve a buscar (IOS-14c). nil,
+    /// sin vigía: el medio avisa solo cuando la conexión muere (Ethernet, Wi-Fi).
+    var silenceTimeoutS: Double? { get }
 }
 
 extension LinkRendezvous {
     public func explain(_ error: NWError) -> String { "\(error)" }
 
     public func isExpiry(_: NWError) -> Bool { false }
+
+    public var connectTimeoutS: Double { NWLinkTransport.controlConnectTimeoutS }
+
+    public var silenceTimeoutS: Double? { nil }
 }
 
 /// Bonjour por una interfaz: `.wiredEthernet` en el campo, `.wifi` en el banco y `nil`
