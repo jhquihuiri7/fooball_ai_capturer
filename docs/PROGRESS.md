@@ -16,6 +16,117 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 
 
+## 2026-10-10 · La fuga de memoria del maestro: el búfer de control del enlace se quedaba con todo · 🚧 falta el banco con los dos iPhone
+
+**Dónde estaba la bisección.** El maestro crece solo con enlace. Sin enlace queda plano
+(`bench/un-movil-20261008-1106`). Con enlace crece aunque falten la copia .mov, el .ts, el
+director, el detector, el micro y, hoy, las partes y el decodificador (`RIG_SPLIT_SLAVE_NO_PARTS=1`,
+`bench/dos-moviles-20261010-0951`). En esa pasada el maestro va de 454,2 MB en el minuto 3 a
+494,7 en el 19: la recta da 2,05 MB/min. El esclavo se queda plano entre 401 y 404 MB (−0,07).
+
+**La causa.** `NWLinkTransport.drainBuffer` juntaba el stream TCP de control en un `Data` y lo
+recortaba con `buffer.removeFirst(consumed)`.
+- `Data` es su propio SubSequence: `removeFirst` solo corre el `startIndex`. Los bytes leídos
+  siguen en el almacenamiento y el `append` siguiente escribe detrás.
+- El búfer guardaba todo lo recibido por control desde que subió la conexión. En el Mac,
+  143 MB por ese camino dejan 145 MB más de huella; con la copia que se hace ahora, 0,2 MB.
+- **Lo que el maestro recibe por control** es casi todo la miniatura del esclavo: ThumbHub,
+  JPEG de 640×360 a q 0,6, una por segundo.
+  - Los fotogramas de calibración del esclavo, recodificados como Thumbnailer, dan 23 KB
+    (oficina, 08-oct 10:30), 34-35 KB (otros del 08-oct) y 17 KB (hoy a los 30 s; según
+    `color_series`, la escena cambió a los ~31 s).
+  - 60 × 17-35 KB son **1,0-2,1 MB/min**, entre 90 y 190 MB por partido.
+  - Lo medido: 1,94-2,05 MB/min en la oficina, 1,25 MB/min en los 90 min. Unos 120 MB por
+    partido.
+- **El esclavo** solo recibe por control la pizarra cada 5 s, el look y las respuestas de
+  PTS: decenas de KB por minuto. Por eso se queda plano.
+- **Encaja con toda la bisección.** Con un iPhone solo no hay miniaturas que recibir. Sin
+  partes, las miniaturas siguen llegando por control.
+
+**Revisado y descartado** (a 30 fps, latidos a 10 Hz)
+
+| Qué | Lado | Cuánto crece | Veredicto |
+|---|---|---|---|
+| `PeerHealth.sentAt` / `sentOrder` | los dos | tope 256 seq | acotado |
+| `ViewHistory` 64, `SlaveViewResolver` 64, `ProgramSync` 16, `RigClock` 240, `ReplayWindow` fija | los dos | 0 | acotados |
+| `Reassembler` (4 a medias), cola del espaciado (2048 datagramas), `events` (80) | los dos | 0 | acotados |
+| `pendingPts` (caduca a 1,5 s), `retiredListeners` (se vacía al caer) | — | 0 | acotados |
+| `pingT1BySeq` de RigLinkSession | esclavo | 12 entradas/min, <1 KB/min | sin poda y nadie lo leía: **quitado** |
+| Envíos UDP con completion vacía | los dos | 40/s cada lado | simétrico, no retiene nada |
+| `receive`/`receiveMessage` encadenados | los dos | uno pendiente por conexión | se re-registra al completar |
+| Temporizadores (latido, vigías, miniatura) | los dos | uno de cada | se cancelan en `stop` |
+| Arrays por tic del banco (`tickIntervalsMs`, `composeLatencyMs`, `programIntervalsMs`) | maestro | 3 × 30/s × 8 B ≈ 43 KB/min, 4-8 MB por partido | también con un iPhone solo; del banco, no explica 2 MB/min |
+| `adCues` (1/s), `colorSeries` (0,5 Hz), `peerStates` | maestro | unos KB | del banco |
+
+**Hecho** (c5a5506)
+- **`LinkStreamReader` (RigCore/Wire).** Saca las tramas enteras del stream y copia lo que
+  queda a medias a un `Data` nuevo. Entre dos lecturas guarda como mucho una trama sin
+  terminar. NWLinkTransport lo usa en vez del `Data` recortado. La lectura máxima pasa a
+  `LinkConstants.controlReadChunkB` (64 KB, la de antes).
+- **`LinkTransportStats`** cuenta `controlBytesReceived` y `controlBufferPeakBytes`.
+  - Salen en los informes de `link-bench` y `program-split` como `control_rx_bytes` y
+    `control_buffer_peak_bytes`.
+  - `statsSnapshot` los lee en la cola del transporte.
+- **Interruptores nuevos del banco split**, por si quedara algo:
+  - `RIG_SPLIT_NO_THUMBS=1`: el esclavo no manda su miniatura.
+  - `RIG_SPLIT_NO_VIEWS=1`: el maestro no manda `view`, así que el esclavo no pinta ni manda
+    partes.
+  - `link_switches` en el informe dice cuáles estaban puestos.
+  - `RIG_SPLIT_SLAVE_NO_PARTS` sigue sin commitear, en el árbol de trabajo de Alexander.
+- **Tests (8).**
+  - `LinkStreamReaderTests` (6): tramas cortadas por cualquier sitio, un partido de 5400
+    miniaturas a trozos de 64 KB que deja como mucho una trama a medias, el testigo de
+    `removeFirst`, la basura, la longitud disparatada y el reinicio.
+  - Por el loopback: 300 miniaturas con el búfer por debajo de una trama y los bytes
+    contados.
+  - La huella del proceso: 100 MB por el lector, y crece menos de 25 MB.
+  - Con el `removeFirst` de antes fallan los de la cota: 162 MB retenidos y +102 MB de huella.
+
+**Aparte, sin tocar** (no es memoria). El callback de `receive` del control no comprueba que
+su conexión siga siendo la actual. Al sustituir o soltar una conexión, su lectura pendiente
+puede volver con error y llamar a `dropConnection`, que tiraría la conexión **nueva** y
+contaría una caída de más. No está comprobado en el iPhone. Para IOS-14c/IOS-17: mirar si en
+`transport_events` salen dos `control caído` seguidos.
+
+**Comprobado**
+- `swift test --skip ModelBench`: 356 tests, 1 saltado, 0 fallos.
+- `tools/check_layers.sh` limpio.
+- ZeroKit compilado para iOS con xcodebuild (derivedData temporal): sin avisos nuevos (queda
+  el de siempre de `VtConcurrencyBench`).
+- El Runner, sin `flutter build` y sin tocar `build/ios`: `swiftc -typecheck` de todos sus
+  `.swift` contra el ZeroKit nuevo y los módulos de HaishinKit y Flutter del DerivedData.
+  0 errores; los 32 avisos son los de antes. Se comprobó igual la versión commiteada, sin el
+  trozo de `RIG_SPLIT_SLAVE_NO_PARTS`.
+
+**Para la próxima prueba** (los dos iPhone, con el build que lleve c5a5506)
+
+```bash
+cd /Users/alexander/Trabajacion/fooball_ai_capturer
+# 1. La misma base de hoy. Esperado: el maestro plano.
+BANCO_EXTRA='{"RIG_SPLIT_NO_MOV": "1", "RIG_SPLIT_SLAVE_NO_PARTS": "1"}' tools/banco_dos_moviles.sh split <secreto> 1200
+# 2. Si queda plano, con la carga de verdad (partes y .mov) y luego los 90 min.
+tools/banco_dos_moviles.sh split <secreto> 1200
+# Lo que mirar del maestro:
+python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); f=d["footprint_mb"]; xs=range(3,len(f)); ys=f[3:]
+m=lambda v: sum(v)/len(v)
+r=sum((x-m(xs))*(y-m(ys)) for x,y in zip(xs,ys))/sum((x-m(xs))**2 for x in xs) if len(ys)>2 else None
+print(sys.argv[1], "recta desde el minuto 3:", r and round(r,2), "MB/min; control_rx_bytes", d.get("control_rx_bytes"),
+      "pico", d.get("control_buffer_peak_bytes"), d.get("link_switches"))' \
+  $(ls -t bench/dos-moviles-*/izquierdo/bench/program-split-left-*.json | head -1)
+```
+
+Qué mirar en el maestro:
+- La recta de `footprint_mb` desde el minuto 3, por debajo de ~0,3 MB/min. Antes, 2,05.
+- `control_rx_bytes` de 20 a 42 MB en 1200 s: lo que antes se quedaba en memoria.
+- `control_buffer_peak_bytes` por debajo de ~40 KB, una miniatura.
+
+Si aun así crece, por orden de probabilidad:
+1. Algo más en el camino de la miniatura. Se añade `"RIG_SPLIT_NO_THUMBS": "1"` a la pasada 1:
+   si queda plano, es eso.
+2. El tráfico de medios a 30 Hz. Se añade además `"RIG_SPLIT_NO_VIEWS": "1"`: si queda plano,
+   son las vistas y los «sin parte». Si sigue creciendo, es la base del enlace: latidos,
+   reloj y color.
+
 ## 2026-10-10 · IOS-14c — lo que dice Apple de una conexión Wi-Fi Aware larga, y el enlace que vuelve en segundos · 🚧 falta la prueba con los dos iPhone
 
 **Lo que dice la documentación.** Fuentes: el SDK iPhoneOS 26.5 de Xcode 26.6 (los
