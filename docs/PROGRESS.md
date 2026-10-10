@@ -17,6 +17,28 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 
 
+
+## 2026-10-10 · El cosido calibrado con director, y un arranque lento del canal de medios
+
+Con los dos iPhone en su posición (17 a la izquierda boca abajo, 16 Pro a la derecha)
+mirando a la oficina, calibró con los umbrales del repo los cinco pares de
+`bench/dos-moviles-20261010-1035`: 88-114 inliers, residuo 0,05-0,06°, **yaw ±42,0°** y el
+derecho con **roll −13,7°** (`docs/img/rig-20261010.json`, par en
+`docs/img/par-calibracion-20261010.jpg`). Con ese `rig.json` en los dos, 150 s de programa
+con director y CenterNet (`bench/dos-moviles-20261010-1106`,
+`docs/img/cosido-calibrado-director-20261010.jpg`): donde salen las dos lentes la costura
+es continua (pared de neopreno del maestro, puerta y escoba del esclavo), sin fotogramas
+propios perdidos.
+
+**Pero el 70 % salió de una lente (3138 de 4499), con negro donde va el esclavo.** No es
+la geometría: el esclavo mandó 4434 partes y el maestro recibió 1389, sin contar ninguna
+perdida; los fotogramas negros son los del principio (40 y 75 s) y los de 110 y 140 s salen
+bien. Parece que **el canal de medios tardó ~100 s en subir** al arrancar. En la pasada
+anterior de 15 min (`…-1035`, misma build salvo `rig.json`) salieron dos lentes en el 95 %.
+Pendiente: mirar los `transport_events`/tiempos de subida del canal de medios al arrancar
+(¿los cambios de IOS-14c en la cita o el vigía afectan a Bonjour?) y repetir una pasada
+corta midiendo cuándo llega la primera parte.
+
 ## 2026-10-10 · La fuga de memoria del maestro, resuelta y confirmada con los dos iPhone ✅
 
 La bisección con los iPhone reales (`footprint_mb` por minuto, recta desde el minuto 3):
