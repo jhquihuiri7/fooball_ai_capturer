@@ -18,6 +18,30 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 
 
+
+## 2026-10-10 · IOS-14 — Wi-Fi Aware: 10 min sin un corte, con el vigía de silencio · ✅
+
+Con 0d10448 (el vigía de 3 s, la cita que se guarda con la conexión arriba, 10 s para
+conectar), los dos iPhone emparejados y `RIG_LINK_INTERFACE=aware`, `link90` 600 s
+(`bench/dos-moviles-20261010-1125`):
+
+| | 2026-10-08 (95f756e) | **2026-10-10 (0d10448)** |
+|---|---|---|
+| Cortes / reconexión | 2 / 20-90 s | **0** |
+| Órdenes recibidas / enviadas | 165 / 185 | **298 / 298** |
+| PTS respondidos | 166 / 240 | **297 / 300** |
+| Partes enviadas / recibidas / perdidas | 2946 / 2629 / — | **9064 / 9039 / 24 (0,27 %)**, pico 34 Mbit/s (escalón de 30) |
+| RTT p50 / p90 / p99 | 4,5 / 6,6 / 17,7 ms | 5,1 / 8,1 / 23,6 ms |
+
+La cita caduca a los 120 s como siempre (`publisherTimeout`/`subscriberTimeout`,
+`keepUntilDrop`) y **la conexión sigue viva hasta el final** (el `control caído` a los
+602 s es el cierre del banco). `silence_drops` 0. Es lo que dice Apple: la cita solo sirve
+para encontrarse y el datapath vive con las conexiones.
+
+Aceptación de IOS-14 («dos iPhone enlazan por Wi-Fi Aware sin router, y el banco da RTT y
+pérdidas»): cumplida. Siguiente: SPK-08 (90 min por Wi-Fi Aware) e IOS-17 (la política
+automática y el cambio en caliente).
+
 ## 2026-10-10 · El cosido calibrado con director, y un arranque lento del canal de medios
 
 Con los dos iPhone en su posición (17 a la izquierda boca abajo, 16 Pro a la derecha)
