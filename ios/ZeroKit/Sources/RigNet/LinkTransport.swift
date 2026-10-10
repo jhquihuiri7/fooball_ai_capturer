@@ -41,6 +41,14 @@ public struct LinkTransportStats: Equatable, Sendable {
     /// durante el plazo de la cita (Wi-Fi Aware, IOS-14c).
     public var silenceDrops = 0
 
+    /// Bytes recibidos por control (TCP). En el maestro son sobre todo las miniaturas del
+    /// esclavo, a 1 Hz.
+    public var controlBytesReceived = 0
+    /// Lo más que ha guardado el búfer de control entre dos lecturas (en bytes de su
+    /// almacenamiento): como mucho una trama a medias, `LinkStreamReader.maxRetainedBytes`.
+    /// Antes del 2026-10-10 crecía con todo lo recibido.
+    public var controlBufferPeakBytes = 0
+
     public init() {}
 }
 

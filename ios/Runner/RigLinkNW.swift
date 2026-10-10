@@ -53,6 +53,9 @@ final class RigLinkNW: PeerLinking {
     /// La IP del otro móvil, o nil sin enlace (IOS-63).
     var peerHost: String? { transport.peerHost }
 
+    /// Los contadores del transporte, para el informe del banco program-split.
+    var transportStats: LinkTransportStats { transport.statsSnapshot }
+
     /// El partido que dirige este móvil: va en el hello de las siguientes conexiones.
     var matchId: String? {
         get { session.matchId }
@@ -436,6 +439,9 @@ enum LinkBench {
                     "media_pacer_drops": stats.mediaPacerDrops,
                     "rendezvous_ends": stats.rendezvousEnds,
                     "silence_drops": stats.silenceDrops,
+                    // 2026-10-10: lo recibido por control y lo más que guardó su búfer.
+                    "control_rx_bytes": stats.controlBytesReceived,
+                    "control_buffer_peak_bytes": stats.controlBufferPeakBytes,
                 ].merging(deLaCarga) { a, _ in a }
             )
             if !rtts.isEmpty {
@@ -730,6 +736,12 @@ final class LinkPartsLoad {
 //   RIG_NOMINAL_YAW_DEG     sin Documents/rig.json, la apertura de cada cámara (DEFAULT_RIG_YAW_DEG)
 //   RIG_NOMINAL_HFOV_DEG    y su HFOV (106, la ultra gran angular)
 //   RIG_NOMINAL_PITCH_DEG   y su pitch (DEFAULT_RIG_PITCH_DEG)
+//
+// Para separar de dónde crece la memoria del maestro (2026-10-07 a 2026-10-10):
+//   RIG_SPLIT_NO_MOV / RIG_SPLIT_NO_TS   sin la copia .mov / sin el .ts
+//   RIG_SPLIT_NO_VIEWS      1: el maestro no manda `view` (sin las vistas a 30 Hz; el
+//                           esclavo no pinta ni manda partes)
+//   RIG_SPLIT_NO_THUMBS     1: el esclavo no manda su miniatura por control (ThumbHub)
 
 final class SplitBench {
     static func enabled(_ entorno: [String: String] = ProcessInfo.processInfo.environment) -> Bool {
@@ -800,6 +812,8 @@ final class SplitBench {
     var audioFormat: () -> CMAudioFormatDescription? = { nil }
     /// La separación entre el reloj de la sesión de captura y el del host, por minuto (ms).
     var captureClockSkew: () -> [Double] = { [] }
+    /// Los contadores del transporte del enlace, para el informe (nil sin enlace de Network).
+    var linkStats: () -> LinkTransportStats? = { nil }
     /// Lo que el maestro espera la parte del esclavo, en ms: `PART_MAX_WAIT_MS` del ADR
     /// 0023, o RIG_SPLIT_PART_WAIT_MS para medir otro valor (SPK-04).
     private lazy var partWaitMs: Int64 = env["RIG_SPLIT_PART_WAIT_MS"].flatMap(Int64.init)
@@ -1220,7 +1234,9 @@ final class SplitBench {
         } else {
             history.append(scriptedView(rejilla(now + Self.viewLeadMs)))
         }
-        session.send(views: history.message())
+        if env["RIG_SPLIT_NO_VIEWS"] != "1" {
+            session.send(views: history.message())
+        }
 
         // El programa va siempre al mismo retraso, con el esclavo o sin él (IOS-81): sin
         // esperar, el instante «ahora» aún no tiene fotograma propio (salía SIN SEÑAL) y
@@ -1412,6 +1428,7 @@ final class SplitBench {
         let ms = master?.stats ?? .init()
         let ss = slave?.stats ?? .init()
         let link = master?.linkStats(nowRigMs: rigNowMs())
+        let transporte = linkStats()
         let fpsTicks = tickIntervalsMs.map { 1000 / max($0, 0.001) }
         let informe: [String: Any] = [
             "name": "program-split",
@@ -1455,6 +1472,12 @@ final class SplitBench {
             "ad_bytes": AdHub.store?.usedBytes ?? 0,
             "ad_budget_bytes": AdHub.store?.budgetBytes ?? 0,
             "footprint_mb": footprintMb,
+            // 2026-10-10: lo recibido por control (en el maestro, las miniaturas del
+            // esclavo) y lo más que guardó su búfer; antes se quedaba con todo.
+            "control_rx_bytes": transporte?.controlBytesReceived ?? -1,
+            "control_buffer_peak_bytes": transporte?.controlBufferPeakBytes ?? -1,
+            "link_switches": ["RIG_SPLIT_NO_VIEWS", "RIG_SPLIT_NO_THUMBS", "RIG_SPLIT_SLAVE_NO_PARTS",
+                              "RIG_SPLIT_NO_MOV", "RIG_SPLIT_NO_TS"].filter { env[$0] == "1" },
             "color_series": colorSeries,
             "exposure_bias": exposureApplied,
             "thermal_by_minute": thermalByMinute,
@@ -1636,9 +1659,12 @@ final class ThumbHub {
 
     /// Arranca la de la cámara propia; si hay enlace, la manda (esclavo) o recibe la del
     /// otro (maestro).
-    func start(side: CameraSide, pipeline: @escaping () -> RigPipeline?, session: RigLinkSession?) {
+    func start(side: CameraSide, pipeline: @escaping () -> RigPipeline?, session: RigLinkSession?,
+               environment: [String: String] = ProcessInfo.processInfo.environment) {
         stop()
         let otro = side == .left ? "right" : "left"
+        // RIG_SPLIT_NO_THUMBS=1: el esclavo no la manda (el banco de la memoria del maestro).
+        let mandar = environment["RIG_SPLIT_NO_THUMBS"] != "1"
         session?.onThumb = { [weak self] d in self?.store(otro, d) }
         let t = DispatchSource.makeTimerSource(queue: DispatchQueue(label: "io.footballai.zero.thumbs", qos: .utility))
         t.schedule(deadline: .now() + 1, repeating: 1)
@@ -1650,7 +1676,7 @@ final class ThumbHub {
             ring.release(lease)
             guard let jpeg else { return }
             store(side.rawValue, jpeg)
-            if let session, !session.isMaster { session.send(thumb: jpeg) }
+            if mandar, let session, !session.isMaster { session.send(thumb: jpeg) }
         }
         timer = t
         t.resume()

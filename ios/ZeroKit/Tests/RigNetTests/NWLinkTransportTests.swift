@@ -129,4 +129,82 @@ final class NWLinkTransportTests: XCTestCase {
     func testReconnectBackoffIsCappedAtTwoSeconds() {
         XCTAssertEqual(NWLinkTransport.reconnectDelaysS.max(), 2.0)
     }
+
+    /// La fuga del maestro (2026-10-10): 300 miniaturas de 30 KB por control. El búfer
+    /// de control no pasa de una trama a medias y los bytes quedan contados. Antes
+    /// guardaba los 9 MB.
+    func testControlBufferKeepsAtMostOneFrameAndCountsTheBytes() throws {
+        let (escucha, conecta) = try makePair()
+        defer {
+            escucha.stop()
+            conecta.stop()
+        }
+        let miniaturas = 300
+        let miniatura = LinkFrame(
+            type: .thumb, session: 9, seq: 1, rigMs: 5, payload: Data(repeating: 0x5A, count: 30_000), tag: tag
+        )
+        let todas = expectation(description: "miniaturas")
+        todas.expectedFulfillmentCount = miniaturas
+        escucha.onFrame = { frame, canal in
+            if canal == .control, frame.type == .thumb { todas.fulfill() }
+        }
+        let conectado = expectation(description: "conectado")
+        conecta.onState = { estado in
+            if estado == .connected { conectado.fulfill() }
+        }
+        conecta.start()
+        wait(for: [conectado], timeout: 10)
+
+        for _ in 0..<miniaturas {
+            conecta.send(miniatura, on: .control)
+        }
+        wait(for: [todas], timeout: 20)
+
+        let stats = escucha.statsSnapshot
+        XCTAssertEqual(stats.controlBytesReceived, miniaturas * miniatura.encode().count)
+        XCTAssertGreaterThan(stats.controlBufferPeakBytes, 0, "llegaron tramas cortadas")
+        XCTAssertLessThan(stats.controlBufferPeakBytes, miniatura.encode().count)
+    }
+}
+
+/// La huella del proceso, lo que mira jetsam: que el lector de control no la haga crecer.
+final class ControlReaderFootprintTests: XCTestCase {
+    private static func footprintMb() -> Double {
+        var info = task_vm_info_data_t()
+        var n = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
+        let r = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(n)) {
+                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &n)
+            }
+        }
+        return r == KERN_SUCCESS ? Double(info.phys_footprint) / 1_048_576 : -1
+    }
+
+    /// 100 MB de miniaturas por el lector, a trozos de 64 KB como los de NWConnection: la
+    /// huella no se mueve. Con el `removeFirst` de antes subía esos 100 MB (medido en el
+    /// Mac: 145 MB de huella tras 143 MB recibidos).
+    func testAHundredMegabytesThroughTheReaderDoNotStay() {
+        let tag = Data(repeating: 1, count: LinkFrame.tagLength)
+        let una = LinkFrame(
+            type: .thumb, session: 9, seq: 1, rigMs: 5, payload: Data(repeating: 0x5A, count: 30_000), tag: tag
+        ).encode()
+        let total = 100 * 1_048_576
+        var lector = LinkStreamReader()
+        var tramas = 0
+        let antes = Self.footprintMb()
+        var posicion = 0
+        while posicion < total {
+            let n = min(LinkConstants.controlReadChunkB, total - posicion)
+            var trozo = Data(capacity: n)
+            while trozo.count < n {
+                let dentro = (posicion + trozo.count) % una.count
+                trozo.append(una[dentro..<min(una.count, dentro + n - trozo.count)])
+            }
+            tramas += lector.push(trozo).frames.count
+            posicion += n
+        }
+        let crecio = Self.footprintMb() - antes
+        XCTAssertEqual(tramas, total / una.count)
+        XCTAssertLessThan(crecio, 25, "la huella creció \(crecio) MB con 100 MB leídos")
+    }
 }

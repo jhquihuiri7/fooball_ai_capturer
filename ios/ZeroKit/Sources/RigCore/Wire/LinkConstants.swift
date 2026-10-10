@@ -13,6 +13,10 @@ public enum LinkConstants {
     /// cualquier longitud disparatada de una trama corrupta.
     public static let maxFrameB = 1 << 20
 
+    /// Bytes que se piden como mucho en cada lectura del canal de control (TCP). Una
+    /// miniatura de ~30 KB entra de una vez; una trama mayor llega en varias lecturas.
+    public static let controlReadChunkB = 1 << 16
+
     /// Tramas a medias que el reensamblador retiene como mucho. Se acota por número y
     /// no por tiempo, como el FramePairer del servidor: con 4 en vuelo, la quinta
     /// expulsa a la más vieja, que se cuenta como incompleta.

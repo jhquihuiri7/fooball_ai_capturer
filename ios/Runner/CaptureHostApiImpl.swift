@@ -259,6 +259,7 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
                 )
                 s.audioFormat = { [weak self] in self?.engine.audioFormatDescription }
                 s.captureClockSkew = { [weak self] in self?.engine.clockSkewByMinuteMs ?? [] }
+                s.linkStats = { [weak nw] in nw?.transportStats }
                 s.cameraSwitch = { [weak self] on in self?.engine.setCameraRunningForBench(on) }
                 s.exposureBias = { [weak self, weak s] ev in
                     self?.engine.benchExposureBias(ev: ev) { r in s?.exposureApplied = r }

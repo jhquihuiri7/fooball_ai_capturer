@@ -160,7 +160,6 @@ public final class RigLinkSession {
     private var replay = ReplayWindow()
     private var pingGeneration = 0
     private var sentPings = 0
-    private var pingT1BySeq: [UInt32: Int64] = [:]
     private var pendingPts: [(deadline: Date, completion: ([Int64]) -> Void)] = []
 
     public init(
@@ -268,7 +267,6 @@ public final class RigLinkSession {
         replay = ReplayWindow()
         theirHello = nil
         theirHelloBytes = Data()
-        pingT1BySeq.removeAll()
     }
 
     private func transportChanged(_ estado: LinkTransportState) {
@@ -391,9 +389,9 @@ public final class RigLinkSession {
             }
             self.seqMedia &+= 1
             let seq = self.seqMedia
-            // El sello, lo más pegado posible al envío.
+            // El sello, lo más pegado posible al envío. Viaja en el payload y vuelve en el
+            // pong: no se guarda (un diccionario por seq que nadie leía crecía sin poda).
             let t1 = self.hostNowNs()
-            self.pingT1BySeq[seq] = t1
             var payload = Data()
             payload.appendBigEndian(t1)
             self.send(type: .clockPing, payload: payload, seq: seq, channel: .media)

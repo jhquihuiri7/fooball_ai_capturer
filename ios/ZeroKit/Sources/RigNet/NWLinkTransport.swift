@@ -112,6 +112,12 @@ public final class NWLinkTransport: LinkTransport {
     }
     public private(set) var stats = LinkTransportStats()
 
+    /// Los contadores leídos en la cola del transporte, para un informe desde otro hilo.
+    /// Nunca desde la propia cola: se bloquearía.
+    public var statsSnapshot: LinkTransportStats {
+        queue.sync { stats }
+    }
+
     /// El puerto real al escuchar (para los tests, con puerto efímero).
     public private(set) var localPort: UInt16 = 0
     public var onReady: ((UInt16) -> Void)?
@@ -126,7 +132,8 @@ public final class NWLinkTransport: LinkTransport {
     private var browser: NWBrowser?
     private var connection: NWConnection?
     private var pathMonitor: NWPathMonitor?
-    private var buffer = Data()
+    /// Las tramas del stream de control: guarda como mucho una a medias (2026-10-10).
+    private var controlReader = LinkStreamReader()
     private var reconnectAttempt = 0
     private var stopped = false
 
@@ -493,7 +500,7 @@ public final class NWLinkTransport: LinkTransport {
 
     private func adopt(connection nueva: NWConnection) {
         connection = nueva
-        buffer.removeAll(keepingCapacity: true)
+        controlReader.reset()
         nueva.stateUpdateHandler = { [weak self, weak nueva] estado in
             // Lo que diga una conexión ya sustituida no cuenta: si no, cancelarla al
             // cambiar a otra dispararía una reconexión de la que nadie quiere saber.
@@ -721,12 +728,11 @@ public final class NWLinkTransport: LinkTransport {
     // MARK: - Lectura del stream
 
     private func receive(on connection: NWConnection) {
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 1 << 16) {
+        connection.receive(minimumIncompleteLength: 1, maximumLength: LinkConstants.controlReadChunkB) {
             [weak self] data, _, terminado, error in
             guard let self else { return }
             if let data, !data.isEmpty {
-                self.buffer.append(data)
-                self.drainBuffer()
+                self.readControl(data)
             }
             if terminado || error != nil {
                 self.dropConnection(error.map { "al recibir: \(self.describe($0))" } ?? "cerrada por el otro")
@@ -736,23 +742,21 @@ public final class NWLinkTransport: LinkTransport {
         }
     }
 
-    private func drainBuffer() {
-        while true {
-            switch LinkFrame.decode(from: buffer) {
-            case let .frame(frame, consumed):
-                buffer.removeFirst(consumed)
-                stats.framesReceived += 1
-                onFrame?(frame, .control)
-            case .needsMoreData:
-                return
-            case let .invalid(campo):
-                // Basura por control: se tira y se cierra (ADR 0023 §2).
-                stats.invalidFrames += 1
-                log.error("trama inválida por control (\(campo)): se cierra")
-                buffer.removeAll(keepingCapacity: false)
-                dropConnection("trama inválida (\(campo))")
-                return
-            }
+    /// Un trozo del stream de control: las tramas que completa, a la sesión. Antes se
+    /// recortaba un Data con `removeFirst`, que guardaba todo lo leído (LinkStreamReader).
+    private func readControl(_ data: Data) {
+        stats.controlBytesReceived += data.count
+        let salida = controlReader.push(data)
+        stats.controlBufferPeakBytes = max(stats.controlBufferPeakBytes, controlReader.retainedBytes)
+        for frame in salida.frames {
+            stats.framesReceived += 1
+            onFrame?(frame, .control)
+        }
+        if let campo = salida.invalid {
+            // Basura por control: se tira y se cierra (ADR 0023 §2).
+            stats.invalidFrames += 1
+            log.error("trama inválida por control (\(campo)): se cierra")
+            dropConnection("trama inválida (\(campo))")
         }
     }
 
