@@ -985,8 +985,16 @@ final class SplitBench {
                                                 width: Self.programWidth, height: Self.programHeight),
                 encoder: enc
             )
+            // RIG_SPLIT_SLAVE_NO_PARTS=1: el esclavo renderiza y codifica igual, pero manda
+            // «sin parte» en lugar de la parte. El maestro sigue con el enlace vivo y sin
+            // partes ni decodificador: separa la fuga de memoria de esos dos (2026-10-10).
+            let soloSinParte = env["RIG_SPLIT_SLAVE_NO_PARTS"] == "1"
             s.onPart = { [weak self] p in
                 guard let self else { return }
+                if soloSinParte {
+                    session.send(noPart: NoPartPacket(frameRigMs: p.frameRigMs, viewId: p.view.viewId))
+                    return
+                }
                 // IOS-43: la edad de la parte al salir del esclavo (captura → render →
                 // codificado), en el reloj del soporte. La de llegada menos esta es la red.
                 let ns = RigLink.hostNowNs()
