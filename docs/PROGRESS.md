@@ -16,6 +16,30 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 
 
+
+## 2026-10-10 · La fuga de memoria del maestro, resuelta y confirmada con los dos iPhone ✅
+
+La bisección con los iPhone reales (`footprint_mb` por minuto, recta desde el minuto 3):
+
+| Pasada | Maestro |
+|---|---|
+| 90 min con toda la carga (2026-10-08, `bench/dos-moviles-20261008-0808`) | +1,25 MB/min (389 → 629 MB) |
+| Base sin director, detector, micro, .mov ni .ts, los dos (`…-1138`) | +1,94 MB/min |
+| Un solo iPhone, sin enlace (`bench/un-movil-20261008-1106`) | plana |
+| Los dos, el esclavo manda «sin parte» (sin partes ni decodificador, `…-20261010-0951`) | +2,05 MB/min |
+| **Con c5a5506, toda la carga y partes, 15 min (`…-20261010-1035`)** | **plana: 526-560 MB, −0,35 MB/min** |
+
+La causa (c5a5506): el búfer del canal de control se recortaba con `Data.removeFirst`,
+que no libera lo leído, y guardaba todo lo recibido desde que subió la conexión. Por
+control llega al maestro la miniatura del esclavo, una por segundo (17-35 KB): 1-2 MB/min.
+En la pasada de confirmación pasaron por ese canal **26,7 MB** (`control_rx_bytes`) y el
+búfer no pasó de **31 KB** (`control_buffer_peak_bytes`). El esclavo, plano en las dos.
+
+La caché de texturas de Metal (53e8661) no era la fuga, pero su vaciado se queda.
+
+**Siguiente**: unos 90 min con toda la carga para cerrar SPK-54 en memoria (la latencia y
+el programa ya aguantaron el 2026-10-08).
+
 ## 2026-10-10 · La fuga de memoria del maestro: el búfer de control del enlace se quedaba con todo · 🚧 falta el banco con los dos iPhone
 
 **Dónde estaba la bisección.** El maestro crece solo con enlace. Sin enlace queda plano
