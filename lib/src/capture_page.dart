@@ -144,6 +144,9 @@ class _CapturePageState extends State<CapturePage> {
         'ladder': st.ladderLevel,
         'battery': st.batteryLevel,
         'dropped_frames': st.droppedFrames,
+        // La 4K y el reloj del soporte: lo que esperó y los cortes por salto.
+        'rec_clock_wait_frames': st.recordingClockWaitFrames,
+        'rec_clock_jump_segments': st.recordingClockJumpSegments,
         'stream': st.streamState.name,
       },
     };

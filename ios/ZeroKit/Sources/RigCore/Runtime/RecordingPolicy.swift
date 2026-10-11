@@ -23,6 +23,21 @@ public enum RecordingPolicy {
     public static let benchReserveExtraGb: Int64 = 2
     static let bitsPerByte = 8.0
 
+    /// Un cambio del desfase al reloj del soporte mayor que esto entre dos fotogramas de la
+    /// 4K cierra el segmento, en ns (100 ms, tres fotogramas a 30 fps). RigClock se corrige
+    /// por la mitad del RTT filtrado (unos ms por Wi-Fi; el filtro ×3 deja hasta ~50 ms al
+    /// arrancar con un RTT malo) y deriva decenas de ppm (µs por fotograma). Un cambio de
+    /// dominio —la primera estimación del esclavo, un relevo— son horas o días: el
+    /// 2026-10-11, +591 898 s entre los dos iPhone (RecordingClockGate).
+    public static let clockJumpSegmentNs: Int64 = 100_000_000
+
+    /// Lo más que la 4K de un esclavo espera al reloj del soporte antes de grabar con el de
+    /// su host, en ns (30 s). El enlace sube en 1-3,4 s (una vez en 24 s, el 2026-10-08) y
+    /// la estimación llega ~0,5 s después (3 muestras de la ráfaga de 250 ms). Pasado esto,
+    /// perder la 4K es peor que un segmento sin emparejar: cuando llegue la estimación, el
+    /// salto abre otro segmento.
+    public static let clockWaitMaxNs: Int64 = 30_000_000_000
+
     /// Si con este disco libre se puede abrir la 4K. `reserveBytes`: la reserva del
     /// partido por defecto; un banco corto pide la suya (`benchReserveBytes`).
     public static func allowsLocalRecording(freeBytes: Int64, reserveBytes: Int64 = phoneDiskReserveBytes) -> Bool {

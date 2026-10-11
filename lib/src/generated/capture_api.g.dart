@@ -308,6 +308,8 @@ class CaptureStatus {
     required this.timecodeFailures,
     required this.recordingFile,
     required this.recordingSegment,
+    required this.recordingClockWaitFrames,
+    required this.recordingClockJumpSegments,
     required this.streamState,
     required this.streamDetail,
     required this.streamDroppedFrames,
@@ -372,6 +374,14 @@ class CaptureStatus {
   /// Número de segmento de la grabación en curso: 1 salvo que haya habido cortes.
   int recordingSegment;
 
+  /// Fotogramas que la grabación en curso tiró sin empezar, esperando al reloj del
+  /// soporte: en el esclavo, hasta la primera estimación (RecordingClockGate).
+  int recordingClockWaitFrames;
+
+  /// Segmentos que la grabación en curso abrió porque el desfase al reloj del soporte
+  /// saltó a mitad de fichero (un relevo, un reloj rehecho). Lo normal es 0.
+  int recordingClockJumpSegments;
+
   StreamState streamState;
 
   /// Por qué se está reconectando o falló, en palabras. Vacío si va bien.
@@ -409,6 +419,8 @@ class CaptureStatus {
       timecodeFailures,
       recordingFile,
       recordingSegment,
+      recordingClockWaitFrames,
+      recordingClockJumpSegments,
       streamState,
       streamDetail,
       streamDroppedFrames,
@@ -443,10 +455,12 @@ class CaptureStatus {
       timecodeFailures: result[18]! as int,
       recordingFile: result[19]! as String,
       recordingSegment: result[20]! as int,
-      streamState: result[21]! as StreamState,
-      streamDetail: result[22]! as String,
-      streamDroppedFrames: result[23]! as int,
-      streamBitrateBps: result[24]! as int,
+      recordingClockWaitFrames: result[21]! as int,
+      recordingClockJumpSegments: result[22]! as int,
+      streamState: result[23]! as StreamState,
+      streamDetail: result[24]! as String,
+      streamDroppedFrames: result[25]! as int,
+      streamBitrateBps: result[26]! as int,
     );
   }
 
@@ -459,7 +473,7 @@ class CaptureStatus {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(running, other.running) && _deepEquals(width, other.width) && _deepEquals(height, other.height) && _deepEquals(actualFps, other.actualFps) && _deepEquals(stabilizationDisabled, other.stabilizationDisabled) && _deepEquals(exposureLocked, other.exposureLocked) && _deepEquals(exposureSeconds, other.exposureSeconds) && _deepEquals(iso, other.iso) && _deepEquals(whiteBalanceLocked, other.whiteBalanceLocked) && _deepEquals(whiteBalanceKelvin, other.whiteBalanceKelvin) && _deepEquals(focusLocked, other.focusLocked) && _deepEquals(intrinsicsAvailable, other.intrinsicsAvailable) && _deepEquals(thermalState, other.thermalState) && _deepEquals(pressure, other.pressure) && _deepEquals(ladderLevel, other.ladderLevel) && _deepEquals(batteryLevel, other.batteryLevel) && _deepEquals(freeDiskBytes, other.freeDiskBytes) && _deepEquals(droppedFrames, other.droppedFrames) && _deepEquals(timecodeFailures, other.timecodeFailures) && _deepEquals(recordingFile, other.recordingFile) && _deepEquals(recordingSegment, other.recordingSegment) && _deepEquals(streamState, other.streamState) && _deepEquals(streamDetail, other.streamDetail) && _deepEquals(streamDroppedFrames, other.streamDroppedFrames) && _deepEquals(streamBitrateBps, other.streamBitrateBps);
+    return _deepEquals(running, other.running) && _deepEquals(width, other.width) && _deepEquals(height, other.height) && _deepEquals(actualFps, other.actualFps) && _deepEquals(stabilizationDisabled, other.stabilizationDisabled) && _deepEquals(exposureLocked, other.exposureLocked) && _deepEquals(exposureSeconds, other.exposureSeconds) && _deepEquals(iso, other.iso) && _deepEquals(whiteBalanceLocked, other.whiteBalanceLocked) && _deepEquals(whiteBalanceKelvin, other.whiteBalanceKelvin) && _deepEquals(focusLocked, other.focusLocked) && _deepEquals(intrinsicsAvailable, other.intrinsicsAvailable) && _deepEquals(thermalState, other.thermalState) && _deepEquals(pressure, other.pressure) && _deepEquals(ladderLevel, other.ladderLevel) && _deepEquals(batteryLevel, other.batteryLevel) && _deepEquals(freeDiskBytes, other.freeDiskBytes) && _deepEquals(droppedFrames, other.droppedFrames) && _deepEquals(timecodeFailures, other.timecodeFailures) && _deepEquals(recordingFile, other.recordingFile) && _deepEquals(recordingSegment, other.recordingSegment) && _deepEquals(recordingClockWaitFrames, other.recordingClockWaitFrames) && _deepEquals(recordingClockJumpSegments, other.recordingClockJumpSegments) && _deepEquals(streamState, other.streamState) && _deepEquals(streamDetail, other.streamDetail) && _deepEquals(streamDroppedFrames, other.streamDroppedFrames) && _deepEquals(streamBitrateBps, other.streamBitrateBps);
   }
 
   @override
@@ -468,7 +482,7 @@ class CaptureStatus {
 
   @override
   String toString() {
-    return 'CaptureStatus(running: $running, width: $width, height: $height, actualFps: $actualFps, stabilizationDisabled: $stabilizationDisabled, exposureLocked: $exposureLocked, exposureSeconds: $exposureSeconds, iso: $iso, whiteBalanceLocked: $whiteBalanceLocked, whiteBalanceKelvin: $whiteBalanceKelvin, focusLocked: $focusLocked, intrinsicsAvailable: $intrinsicsAvailable, thermalState: $thermalState, pressure: $pressure, ladderLevel: $ladderLevel, batteryLevel: $batteryLevel, freeDiskBytes: $freeDiskBytes, droppedFrames: $droppedFrames, timecodeFailures: $timecodeFailures, recordingFile: $recordingFile, recordingSegment: $recordingSegment, streamState: $streamState, streamDetail: $streamDetail, streamDroppedFrames: $streamDroppedFrames, streamBitrateBps: $streamBitrateBps)';
+    return 'CaptureStatus(running: $running, width: $width, height: $height, actualFps: $actualFps, stabilizationDisabled: $stabilizationDisabled, exposureLocked: $exposureLocked, exposureSeconds: $exposureSeconds, iso: $iso, whiteBalanceLocked: $whiteBalanceLocked, whiteBalanceKelvin: $whiteBalanceKelvin, focusLocked: $focusLocked, intrinsicsAvailable: $intrinsicsAvailable, thermalState: $thermalState, pressure: $pressure, ladderLevel: $ladderLevel, batteryLevel: $batteryLevel, freeDiskBytes: $freeDiskBytes, droppedFrames: $droppedFrames, timecodeFailures: $timecodeFailures, recordingFile: $recordingFile, recordingSegment: $recordingSegment, recordingClockWaitFrames: $recordingClockWaitFrames, recordingClockJumpSegments: $recordingClockJumpSegments, streamState: $streamState, streamDetail: $streamDetail, streamDroppedFrames: $streamDroppedFrames, streamBitrateBps: $streamBitrateBps)';
   }
 }
 

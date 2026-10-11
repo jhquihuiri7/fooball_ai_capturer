@@ -14,6 +14,121 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 
 
+## 2026-10-11 · La 4K del esclavo decía durar 592 497 s: el reloj del soporte cambiaba a mitad de fichero (IOS-57, IOS-13, SPK-04) · 🚧 falta la pasada con los dos iPhone
+
+**Qué pasaba.** En la pasada de SPK-04 (`bench/dos-moviles-20261011-1506`), la 4K del esclavo
+(16 Pro, `derecho/bench4k/1791752830/right-1791752830.mov`) dice durar 592 497 s y pesa 7,3 GB:
+≈97 Mbit/s reales en vez de 45. La del maestro está bien: 599,9 s y 45,1 Mbit/s. Con ffprobe,
+los 70 primeros fotogramas llegan hasta 2,27 s y el siguiente está en 591 899,6 s.
+
+**Por qué, en el código.**
+- `CaptureEngine.captureOutput` sella cada fotograma con
+  `hostNs + (rigClock?.offsetAt(ns:) ?? clockOffsetNs)`.
+- El escritor abría su sesión con el sello del primer fotograma, tuviera reloj o no.
+- En el esclavo, `RigClock.offsetAt` devuelve 0 sin muestras: es el reloj de su host. Con la
+  primera muestra devuelve ya el desfase de verdad (con menos de 3 muestras, el de la última),
+  ~591 898 s: la distancia entre los arranques de los dos iPhone.
+- La 4K arranca con la cámara, antes que el enlace. El informe del esclavo da el control arriba
+  a los 2343 ms y la primera trama por medios a los 2362: es el primer `clock_pong`, a los 70
+  fotogramas.
+- El codificador reparte el bitrate sobre esa duración absurda: de ahí el doble de bytes.
+- En el maestro el desfase es 0 siempre: nadie le pregunta la hora a él, y no pasa.
+- **El audio de la 4K** (`appendAudio`) lleva el mismo desfase: con micro, la primera trama
+  después del salto también habría alargado el fichero.
+
+**Arreglo**
+- **`RigCore/Runtime/RecordingClockGate`** (lógica pura) decide qué se hace con cada fotograma:
+  - **Sin reloj no se abre la sesión.** Abre con el maestro (la referencia del reloj, ADR 0023
+    §4), con el móvil solo o con Multipeer. En un esclavo, solo cuando RigClock tiene
+    estimación (3 muestras, ~0,5 s de ráfaga). Lo que tira mientras tanto lo cuenta.
+  - **Si la espera pasa de `RecordingPolicy.clockWaitMaxNs` (30 s), graba con su host.**
+    Perder la 4K entera, si el enlace no sube, es peor que un segmento sin emparejar. Cuando
+    llegue la estimación, el salto abre otro segmento.
+  - **Un salto del desfase cierra el segmento.** Si cambia más de
+    `RecordingPolicy.clockJumpSegmentNs` (100 ms) entre dos fotogramas, el fichero se cierra
+    entero y el fotograma abre el siguiente (`right-<t>-2.mov`, como tras un corte). Si el
+    reloj aún no vale, el nuevo espera a la estimación: es el caso del maestro que vuelve de
+    esclavo tras un relevo. Las correcciones normales son de ms y la deriva de µs por
+    fotograma; el umbral es lo que las separa de un cambio de dominio.
+  - **Un sello que no avanza se tira.** Una corrección de más de un fotograma hacia atrás,
+    por debajo del umbral, dejaba el PTS detrás del anterior. El escritor pasa entonces a
+    `.failed` y la 4K muere en silencio.
+  - **El audio va con el segmento del vídeo.** Una trama con otro desfase (el reloj saltó y
+    el vídeo aún no cortó) se tira y se cuenta.
+- **`CaptureEngine`.**
+  - Pregunta a la puerta por cada fotograma y por cada trama de audio.
+  - Corta el segmento en la propia cola de captura (`rollSegmentForClockJump`).
+  - El número y el fichero del segmento van bajo un cerrojo, porque ahora cambian también en
+    esa cola.
+  - `setClockReference`: `CaptureHostApiImpl` le pasa el rol de cada `onRigRole`. Al abrir
+    el enlace empieza de esclavo.
+- **El estado y el informe.**
+  - `CaptureStatus` (Pigeon) gana `recordingClockWaitFrames` y `recordingClockJumpSegments`,
+    y el panel local, `rec_clock_wait_frames` y `rec_clock_jump_segments`.
+  - El informe del banco split gana `rec4k.clock`: `clock_wait_frames`,
+    `clock_jump_segments`, `sessions_without_clock`, `out_of_order_frames` y
+    `audio_dropped_on_jump`.
+
+**¿Lo tienen otras grabaciones?**
+- **El programa (.ts y .mov del banco), en esta pasada no.** Lo compone el maestro, con
+  desfase 0: ffprobe da 599,9 s en los dos.
+- **El programa sí podría tenerlo con un relevo y vuelta** (A maestro → B promovido → A
+  vuelve de esclavo → A promovido otra vez). El .ts y el .mov se abren una vez por pasada.
+- **Eso, y la 4K del que vuelve, vienen de un fallo del enlace, no de la grabación:**
+  - el `clock_pong` contesta con el reloj de host crudo (`RigLinkSession.handle`, `t2` y `t3`);
+  - el promovido sella con su host más la recta que congeló (ADR 0023 §4: «pasa a ser la
+    referencia sin salto»);
+  - el maestro de antes, al volver de esclavo, se sincroniza al host crudo del promovido, a
+    ~591 898 s del dominio del soporte. Sus partes no casarían con las vistas.
+  - **El arreglo es de una línea:** contestar `t2` y `t3` en el reloj del soporte
+    (`+ clock.offsetAt`). Para un maestro sin muestras no cambia nada.
+  - Toca el contrato de `clock_pong` del ADR 0023 («en ns del reloj de host»): queda para su
+    propia tarea. Con este commit, la 4K de ese móvil al menos sale en dos segmentos limpios.
+- `audio-<t>.aac` es ADTS sin sellos, y las vistas y el N0 los escribe el maestro: no les pasa.
+- Suelto: el esclavo deja un `program-split-<t>.ts` de 0 bytes al acabar.
+
+**Comprobado**
+- `swift test --skip ModelBench`: 382 tests, 1 saltado, 0 fallos. Los nuevos son los 10 de
+  `RecordingClockGateTests`:
+  - el caso medido (70 sin reloj y luego +591 898 s): la sesión empieza con la estimación y
+    el fichero dura lo grabado;
+  - el maestro y el móvil solo graban desde el primer fotograma;
+  - con la sesión abierta, el reloj no se vuelve a mirar;
+  - el umbral, en los dos sentidos (5 ms y 100 ms no cortan; 100 ms + 1 ns sí);
+  - 90 min con 60 ppm de deriva, sin ningún corte;
+  - una corrección de 50 ms hacia atrás tira un fotograma;
+  - la espera vence a los 30 s y la estimación abre otro segmento;
+  - el relevo: corta, y el segmento nuevo espera a la estimación;
+  - el audio entre el salto y el corte del vídeo;
+  - el segmento abierto desde fuera.
+- `tools/check_layers.sh`: limpio.
+- `flutter analyze`: limpio. `flutter test`: 361, todos verdes.
+- `flutter build ios --release --no-pub --dart-define=AUTO_ROLE=left
+  --dart-define=PREFERS_MASTER=true`: compila (Runner.app de 28,1 MB), sin instalar.
+
+**Qué mirar en la próxima pasada** (vale la de SPK-04 con `RIG_SPLIT_RECORD_4K=1`)
+
+```bash
+cd /Users/alexander/Trabajacion/fooball_ai_capturer
+D=$(ls -td bench/dos-moviles-* | head -1)
+for p in $(ls -t $D/izquierdo/bench/program-split-left-*.json | head -1) $(ls -t $D/derecho/bench/program-split-right-*.json | head -1); do
+  python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); r=d["rec4k"]
+print(d["role"], "segmentos", r["segments"], "bytes", r["bytes"], "fotogramas", r["frames"]); print("  reloj", r.get("clock"))' "$p"
+done
+for f in $D/*/bench4k/*/*.mov; do echo "$f $(ffprobe -v error -show_entries format=duration,bit_rate -of csv=p=0 "$f")"; done
+```
+
+- **Maestro:** `clock_wait_frames` 0 y un segmento de ~600 s a ~45 Mbit/s, como hoy.
+- **Esclavo:**
+  - `clock_wait_frames` ≈ 70-90: el enlace a ~2,3 s y la ráfaga hasta la 3.ª muestra;
+  - `clock_jump_segments` 0 y un segmento;
+  - ~597 s a ~45 Mbit/s y ~3,4 GB, no 7,3.
+- **`out_of_order_frames`:** 0 o muy pocos.
+- **`sessions_without_clock` 1:** el enlace tardó más de 30 s. Saldrá un segundo segmento
+  (`clock_jump_segments` 1), y eso es lo esperado.
+- La 4K del esclavo empieza ahora ~3 s después del banco, con el primer fotograma con reloj.
+  Los 70 primeros de la 4K de hoy son los que hay que saltarse para el PSNR y el VMAF.
+
 ## 2026-10-11 · SPK-04, la pasada en el trípode por Wi-Fi: 0 desgarros; la GPU del maestro y la latencia, por encima · 🚧
 
 Los dos iPhone en el trípode con `rig-tripode-20261011.json` (yaw ±40,7°), 10 min con el

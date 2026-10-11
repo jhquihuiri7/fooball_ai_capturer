@@ -44,6 +44,8 @@ CaptureStatus fakeStatus({
     timecodeFailures: 0,
     recordingFile: recordingFile,
     recordingSegment: recordingSegment,
+    recordingClockWaitFrames: 0,
+    recordingClockJumpSegments: 0,
     streamState: streamState,
     streamDetail: streamDetail,
     streamDroppedFrames: 0,

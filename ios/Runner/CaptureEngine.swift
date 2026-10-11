@@ -66,8 +66,40 @@ final class CaptureEngine: NSObject {
     /// que el operador quería grabar, dónde, y cuántos segmentos van.
     private var recordingWanted = false
     private var recordingDirectory = ""
-    private(set) var recordingSegment = 0
-    private(set) var recordingFile = ""
+
+    /// Qué hacer con cada fotograma de la 4K según el reloj del soporte: esperar a que
+    /// valga y cortar el segmento si salta (RecordingClockGate; el esclavo de SPK-04 del
+    /// 2026-10-11 grabó 592 497 s en 10 min). Vive en la cola de captura.
+    private var clockGate = RecordingClockGate()
+    /// Si este móvil es la referencia del reloj del soporte (el maestro, ADR 0023 §4). Lo
+    /// fija el enlace con cada rol negociado; vive en la cola de captura.
+    private var isClockReference = false
+
+    /// El segmento en curso y la copia de la puerta, para leerlos fuera de la cola de
+    /// captura: el segmento cambia también en ella, al cortar por un salto del reloj.
+    private let recordingLock = NSLock()
+    private var segmentNumber = 0
+    private var segmentFile = ""
+    private var clockGateSnapshot = RecordingClockGate()
+
+    var recordingSegment: Int {
+        recordingLock.lock()
+        defer { recordingLock.unlock() }
+        return segmentNumber
+    }
+
+    var recordingFile: String {
+        recordingLock.lock()
+        defer { recordingLock.unlock() }
+        return segmentFile
+    }
+
+    /// Lo que la puerta del reloj hizo con la 4K en curso.
+    var recordingClock: RecordingClockGate {
+        recordingLock.lock()
+        defer { recordingLock.unlock() }
+        return clockGateSnapshot
+    }
 
     /// Exposición y balance del maestro, si han llegado por el enlace. Se guardan porque
     /// pueden llegar antes de que esta cámara esté configurada.
@@ -383,6 +415,40 @@ final class CaptureEngine: NSObject {
         }
     }
 
+    /// Este móvil pasa a ser (o deja de ser) la referencia del reloj del soporte: el rol
+    /// que negoció el enlace. Un esclavo no abre la 4K hasta tener estimación.
+    func setClockReference(_ on: Bool) {
+        queue.async { [weak self] in
+            self?.isClockReference = on
+        }
+    }
+
+    /// Qué sabe la cámara del reloj del soporte ahora mismo, en la cola de captura.
+    private func recordingClockState() -> RecordingClockState {
+        guard let rigClock else { return .unlinked }
+        if isClockReference { return .reference }
+        return rigClock.estimate == nil ? .waiting : .estimated
+    }
+
+    /// Copia la puerta del reloj para quien la lee fuera de la cola de captura.
+    private func publishClockGate() {
+        recordingLock.lock()
+        clockGateSnapshot = clockGate
+        recordingLock.unlock()
+    }
+
+    /// Los contadores de la puerta del reloj, para el informe del banco.
+    func recordingClockReport() -> [String: Any] {
+        let g = recordingClock
+        return [
+            "clock_wait_frames": g.framesWaitingForClock,
+            "clock_jump_segments": g.segmentsFromClockJump,
+            "sessions_without_clock": g.sessionsWithoutClock,
+            "out_of_order_frames": g.framesOutOfOrder,
+            "audio_dropped_on_jump": g.audioDroppedOnJump,
+        ]
+    }
+
     func recentFramePtsNs() -> [Int64] {
         queue.sync { recentPts }
     }
@@ -404,7 +470,12 @@ final class CaptureEngine: NSObject {
         }
         recordingWanted = true
         recordingDirectory = directory
-        recordingSegment = 1
+        // Una grabación nueva cuenta desde cero lo que el reloj del soporte le hizo esperar
+        // o cortar. En la cola, antes de que se instale su primer segmento.
+        queue.async { [self] in
+            clockGate = RecordingClockGate()
+            publishClockGate()
+        }
         if nv12Dumper != nil {
             queue.async { [self] in
                 dumpRunFrames = 0
@@ -412,7 +483,7 @@ final class CaptureEngine: NSObject {
                 dumpRunStartNs = DispatchTime.now().uptimeNanoseconds
             }
         }
-        return try openSegment()
+        return try openSegment(number: 1)
     }
 
     /// Borra los `.mov` de la carpeta de grabaciones, a mano. No toca nada más: ahí solo
@@ -430,20 +501,66 @@ final class CaptureEngine: NSObject {
         }
     }
 
-    /// Abre el archivo del segmento actual. Un fichero por arranque, con el lado en el
+    /// Un segmento de la 4K listo para recibir su primer fotograma.
+    private struct Segment {
+        let writer: AVAssetWriter
+        let video: AVAssetWriterInput
+        let audio: AVAssetWriterInput?
+        let path: String
+    }
+
+    /// Abre el segmento `number` desde fuera de la cola de captura: al empezar a grabar o
+    /// al volver de un corte. Se instala en la cola, cerrando antes el que hubiera.
+    private func openSegment(number: Int) throws -> String {
+        let nuevo = try makeSegment(number: number)
+        queue.async { [weak self] in
+            guard let self else { return }
+            // Si había una grabación abierta (dos toques seguidos), se cierra antes.
+            self.closeWriter()
+            self.install(nuevo)
+            // Un segmento abierto desde fuera empieza sin sesión: el primer fotograma
+            // con reloj la abre.
+            self.clockGate.segmentOpened()
+        }
+        return nuevo.path
+    }
+
+    /// El reloj del soporte saltó a mitad de segmento (RecordingClockGate): se cierra con
+    /// lo que tiene y se abre el siguiente aquí mismo, en la cola de captura, para que el
+    /// fotograma que saltó ya vaya en él. Devuelve si quedó abierto.
+    private func rollSegmentForClockJump() -> Bool {
+        closeWriter()
+        let numero = recordingSegment + 1
+        do {
+            install(try makeSegment(number: numero))
+            NSLog("[grabacion] el reloj del soporte saltó: segmento %d", numero)
+            return true
+        } catch {
+            NSLog("[grabacion] no se pudo abrir el segmento %d: %@", numero, error.localizedDescription)
+            return false
+        }
+    }
+
+    private func install(_ segment: Segment) {
+        writer = segment.writer
+        writerInput = segment.video
+        audioWriterInput = segment.audio
+        writerStarted = false
+    }
+
+    /// El archivo del segmento `number`. Un fichero por arranque, con el lado en el
     /// nombre: en el servidor hay que poder saber cuál es cuál sin abrirlos. Tras un
     /// corte, el siguiente segmento lleva su número al final.
-    private func openSegment() throws -> String {
+    private func makeSegment(number: Int) throws -> Segment {
         guard let settings, let applied else {
             throw CameraSetupError.noUltraWideCamera
         }
         let name = Self.segmentName(
             role: settings.role,
             epochSeconds: Int(Date().timeIntervalSince1970),
-            segment: recordingSegment
+            segment: number
         )
         let url = URL(fileURLWithPath: recordingDirectory).appendingPathComponent(name)
-        recordingFile = url.path
 
         let writer = try AVAssetWriter(outputURL: url, fileType: .mov)
         let input = AVAssetWriterInput(
@@ -477,17 +594,11 @@ final class CaptureEngine: NSObject {
                 audioInput = a
             }
         }
-
-        queue.async { [weak self] in
-            guard let self else { return }
-            // Si había una grabación abierta (dos toques seguidos), se cierra antes.
-            self.closeWriter()
-            self.writer = writer
-            self.writerInput = input
-            self.audioWriterInput = audioInput
-            self.writerStarted = false
-        }
-        return url.path
+        recordingLock.lock()
+        segmentNumber = number
+        segmentFile = url.path
+        recordingLock.unlock()
+        return Segment(writer: writer, video: input, audio: audioInput, path: url.path)
     }
 
     func stopRecording() {
@@ -547,11 +658,11 @@ final class CaptureEngine: NSObject {
     /// nadie pulse nada: en la cancha nadie está mirando el móvil.
     func interruptionEnded() {
         guard recordingWanted else { return }
-        recordingSegment += 1
+        let numero = recordingSegment + 1
         do {
-            _ = try openSegment()
+            _ = try openSegment(number: numero)
         } catch {
-            NSLog("[capture] no se pudo abrir el segmento %d: %@", recordingSegment, error.localizedDescription)
+            NSLog("[capture] no se pudo abrir el segmento %d: %@", numero, error.localizedDescription)
         }
     }
 
@@ -611,7 +722,9 @@ final class CaptureEngine: NSObject {
 
     /// El PCM del micro a la pista de audio de la 4K, en la cola de captura y con el
     /// mismo desfase al soporte que el vídeo. Antes del primer fotograma no hay sesión
-    /// abierta y se tira; si la pista va por detrás, también: nunca se encola.
+    /// abierta y se tira; si la pista va por detrás, también: nunca se encola. Y si el
+    /// desfase ya no es el del segmento (el reloj saltó y el vídeo aún no cortó), también:
+    /// alargaría el fichero hasta el dominio nuevo.
     private func appendAudio(_ pcm: CMSampleBuffer) {
         guard writerStarted, let writer, writer.status == .writing, let input = audioWriterInput,
               input.isReadyForMoreMediaData
@@ -619,8 +732,13 @@ final class CaptureEngine: NSObject {
         let pts = CMSampleBufferGetPresentationTimeStamp(pcm)
         let crudo = CMTimeConvertScale(pts, timescale: 1_000_000_000, method: .default).value
         let ns = hostNs(pts)
+        let alSoporte = rigClock?.offsetAt(ns: ns) ?? clockOffsetNs
+        guard clockGate.audio(offsetNs: alSoporte) else {
+            publishClockGate()
+            return
+        }
         // Del reloj de la sesión al del host, y de ahí al del soporte: como el vídeo.
-        let desfase = (ns - crudo) + (rigClock?.offsetAt(ns: ns) ?? clockOffsetNs)
+        let desfase = (ns - crudo) + alSoporte
         if let copia = SampleRetime.shifted(pcm, byNs: desfase) {
             input.append(copia)
         }
@@ -661,6 +779,7 @@ final class CaptureEngine: NSObject {
 
     func status() -> CaptureStatus {
         let applied = self.applied
+        let reloj = recordingClock
         return CaptureStatus(
             running: session.isRunning,
             width: Int64(applied?.width ?? 0),
@@ -683,6 +802,8 @@ final class CaptureEngine: NSObject {
             timecodeFailures: timecodeFailures,
             recordingFile: recordingFile,
             recordingSegment: Int64(recordingSegment),
+            recordingClockWaitFrames: reloj.framesWaitingForClock,
+            recordingClockJumpSegments: reloj.segmentsFromClockJump,
             streamState: Self.streamState(publisher.state),
             streamDetail: Self.streamDetail(publisher.state),
             streamDroppedFrames: publisher.droppedFrames,
@@ -828,9 +949,32 @@ extension CaptureEngine: AVCaptureVideoDataOutputSampleBufferDelegate {
         // detrás, el frame se descarta y se cuenta.
         publisher.append(sampleBuffer)
 
-        guard let writer, let input = writerInput else { return }
+        guard writer != nil else { return }
 
-        if !writerStarted {
+        // La 4K, solo con un reloj del soporte que valga y sin saltos dentro de un
+        // fichero (RecordingClockGate): el esclavo no abre la sesión hasta tener
+        // estimación, y un salto del desfase cierra el segmento y abre otro.
+        let decision = clockGate.video(hostNs: originalNs, offsetNs: offsetNs, clock: recordingClockState())
+        switch decision {
+        case .append:
+            appendToRecording(sampleBuffer, at: rigTime, startsSession: false)
+        case .startSession:
+            publishClockGate()
+            appendToRecording(sampleBuffer, at: rigTime, startsSession: true)
+        case let .rollSegment(empieza):
+            publishClockGate()
+            guard rollSegmentForClockJump(), empieza else { return }
+            appendToRecording(sampleBuffer, at: rigTime, startsSession: true)
+        case .waitForClock, .outOfOrder:
+            publishClockGate()
+        }
+    }
+
+    /// Mete un fotograma ya sellado en la 4K; con `startsSession`, abre antes la sesión
+    /// del escritor en su sello.
+    private func appendToRecording(_ sampleBuffer: CMSampleBuffer, at rigTime: CMTime, startsSession: Bool) {
+        guard let writer, let input = writerInput else { return }
+        if startsSession, !writerStarted {
             guard writer.startWriting() else {
                 // No se pudo abrir el archivo (disco, permisos): se suelta el escritor
                 // para no seguir intentándolo frame a frame, y queda en el log.
@@ -842,7 +986,7 @@ extension CaptureEngine: AVCaptureVideoDataOutputSampleBufferDelegate {
             writer.startSession(atSourceTime: rigTime)
             writerStarted = true
         }
-        guard writer.status == .writing else {
+        guard writerStarted, writer.status == .writing else {
             droppedFrames += 1
             return
         }

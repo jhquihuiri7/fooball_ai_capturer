@@ -397,6 +397,12 @@ struct CaptureStatus: Hashable, CustomStringConvertible {
   var recordingFile: String
   /// Número de segmento de la grabación en curso: 1 salvo que haya habido cortes.
   var recordingSegment: Int64
+  /// Fotogramas que la grabación en curso tiró sin empezar, esperando al reloj del
+  /// soporte: en el esclavo, hasta la primera estimación (RecordingClockGate).
+  var recordingClockWaitFrames: Int64
+  /// Segmentos que la grabación en curso abrió porque el desfase al reloj del soporte
+  /// saltó a mitad de fichero (un relevo, un reloj rehecho). Lo normal es 0.
+  var recordingClockJumpSegments: Int64
   var streamState: StreamState
   /// Por qué se está reconectando o falló, en palabras. Vacío si va bien.
   var streamDetail: String
@@ -432,10 +438,12 @@ struct CaptureStatus: Hashable, CustomStringConvertible {
     let timecodeFailures = pigeonVar_list[18] as! Int64
     let recordingFile = pigeonVar_list[19] as! String
     let recordingSegment = pigeonVar_list[20] as! Int64
-    let streamState = pigeonVar_list[21] as! StreamState
-    let streamDetail = pigeonVar_list[22] as! String
-    let streamDroppedFrames = pigeonVar_list[23] as! Int64
-    let streamBitrateBps = pigeonVar_list[24] as! Int64
+    let recordingClockWaitFrames = pigeonVar_list[21] as! Int64
+    let recordingClockJumpSegments = pigeonVar_list[22] as! Int64
+    let streamState = pigeonVar_list[23] as! StreamState
+    let streamDetail = pigeonVar_list[24] as! String
+    let streamDroppedFrames = pigeonVar_list[25] as! Int64
+    let streamBitrateBps = pigeonVar_list[26] as! Int64
 
     return CaptureStatus(
       running: running,
@@ -459,6 +467,8 @@ struct CaptureStatus: Hashable, CustomStringConvertible {
       timecodeFailures: timecodeFailures,
       recordingFile: recordingFile,
       recordingSegment: recordingSegment,
+      recordingClockWaitFrames: recordingClockWaitFrames,
+      recordingClockJumpSegments: recordingClockJumpSegments,
       streamState: streamState,
       streamDetail: streamDetail,
       streamDroppedFrames: streamDroppedFrames,
@@ -488,6 +498,8 @@ struct CaptureStatus: Hashable, CustomStringConvertible {
       timecodeFailures,
       recordingFile,
       recordingSegment,
+      recordingClockWaitFrames,
+      recordingClockJumpSegments,
       streamState,
       streamDetail,
       streamDroppedFrames,
@@ -498,7 +510,7 @@ struct CaptureStatus: Hashable, CustomStringConvertible {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return CaptureApiPigeonInternal.deepEquals(lhs.running, rhs.running) && CaptureApiPigeonInternal.deepEquals(lhs.width, rhs.width) && CaptureApiPigeonInternal.deepEquals(lhs.height, rhs.height) && CaptureApiPigeonInternal.deepEquals(lhs.actualFps, rhs.actualFps) && CaptureApiPigeonInternal.deepEquals(lhs.stabilizationDisabled, rhs.stabilizationDisabled) && CaptureApiPigeonInternal.deepEquals(lhs.exposureLocked, rhs.exposureLocked) && CaptureApiPigeonInternal.deepEquals(lhs.exposureSeconds, rhs.exposureSeconds) && CaptureApiPigeonInternal.deepEquals(lhs.iso, rhs.iso) && CaptureApiPigeonInternal.deepEquals(lhs.whiteBalanceLocked, rhs.whiteBalanceLocked) && CaptureApiPigeonInternal.deepEquals(lhs.whiteBalanceKelvin, rhs.whiteBalanceKelvin) && CaptureApiPigeonInternal.deepEquals(lhs.focusLocked, rhs.focusLocked) && CaptureApiPigeonInternal.deepEquals(lhs.intrinsicsAvailable, rhs.intrinsicsAvailable) && CaptureApiPigeonInternal.deepEquals(lhs.thermalState, rhs.thermalState) && CaptureApiPigeonInternal.deepEquals(lhs.pressure, rhs.pressure) && CaptureApiPigeonInternal.deepEquals(lhs.ladderLevel, rhs.ladderLevel) && CaptureApiPigeonInternal.deepEquals(lhs.batteryLevel, rhs.batteryLevel) && CaptureApiPigeonInternal.deepEquals(lhs.freeDiskBytes, rhs.freeDiskBytes) && CaptureApiPigeonInternal.deepEquals(lhs.droppedFrames, rhs.droppedFrames) && CaptureApiPigeonInternal.deepEquals(lhs.timecodeFailures, rhs.timecodeFailures) && CaptureApiPigeonInternal.deepEquals(lhs.recordingFile, rhs.recordingFile) && CaptureApiPigeonInternal.deepEquals(lhs.recordingSegment, rhs.recordingSegment) && CaptureApiPigeonInternal.deepEquals(lhs.streamState, rhs.streamState) && CaptureApiPigeonInternal.deepEquals(lhs.streamDetail, rhs.streamDetail) && CaptureApiPigeonInternal.deepEquals(lhs.streamDroppedFrames, rhs.streamDroppedFrames) && CaptureApiPigeonInternal.deepEquals(lhs.streamBitrateBps, rhs.streamBitrateBps)
+    return CaptureApiPigeonInternal.deepEquals(lhs.running, rhs.running) && CaptureApiPigeonInternal.deepEquals(lhs.width, rhs.width) && CaptureApiPigeonInternal.deepEquals(lhs.height, rhs.height) && CaptureApiPigeonInternal.deepEquals(lhs.actualFps, rhs.actualFps) && CaptureApiPigeonInternal.deepEquals(lhs.stabilizationDisabled, rhs.stabilizationDisabled) && CaptureApiPigeonInternal.deepEquals(lhs.exposureLocked, rhs.exposureLocked) && CaptureApiPigeonInternal.deepEquals(lhs.exposureSeconds, rhs.exposureSeconds) && CaptureApiPigeonInternal.deepEquals(lhs.iso, rhs.iso) && CaptureApiPigeonInternal.deepEquals(lhs.whiteBalanceLocked, rhs.whiteBalanceLocked) && CaptureApiPigeonInternal.deepEquals(lhs.whiteBalanceKelvin, rhs.whiteBalanceKelvin) && CaptureApiPigeonInternal.deepEquals(lhs.focusLocked, rhs.focusLocked) && CaptureApiPigeonInternal.deepEquals(lhs.intrinsicsAvailable, rhs.intrinsicsAvailable) && CaptureApiPigeonInternal.deepEquals(lhs.thermalState, rhs.thermalState) && CaptureApiPigeonInternal.deepEquals(lhs.pressure, rhs.pressure) && CaptureApiPigeonInternal.deepEquals(lhs.ladderLevel, rhs.ladderLevel) && CaptureApiPigeonInternal.deepEquals(lhs.batteryLevel, rhs.batteryLevel) && CaptureApiPigeonInternal.deepEquals(lhs.freeDiskBytes, rhs.freeDiskBytes) && CaptureApiPigeonInternal.deepEquals(lhs.droppedFrames, rhs.droppedFrames) && CaptureApiPigeonInternal.deepEquals(lhs.timecodeFailures, rhs.timecodeFailures) && CaptureApiPigeonInternal.deepEquals(lhs.recordingFile, rhs.recordingFile) && CaptureApiPigeonInternal.deepEquals(lhs.recordingSegment, rhs.recordingSegment) && CaptureApiPigeonInternal.deepEquals(lhs.recordingClockWaitFrames, rhs.recordingClockWaitFrames) && CaptureApiPigeonInternal.deepEquals(lhs.recordingClockJumpSegments, rhs.recordingClockJumpSegments) && CaptureApiPigeonInternal.deepEquals(lhs.streamState, rhs.streamState) && CaptureApiPigeonInternal.deepEquals(lhs.streamDetail, rhs.streamDetail) && CaptureApiPigeonInternal.deepEquals(lhs.streamDroppedFrames, rhs.streamDroppedFrames) && CaptureApiPigeonInternal.deepEquals(lhs.streamBitrateBps, rhs.streamBitrateBps)
   }
 
   func hash(into hasher: inout Hasher) {
@@ -524,6 +536,8 @@ struct CaptureStatus: Hashable, CustomStringConvertible {
     CaptureApiPigeonInternal.deepHash(value: timecodeFailures, hasher: &hasher)
     CaptureApiPigeonInternal.deepHash(value: recordingFile, hasher: &hasher)
     CaptureApiPigeonInternal.deepHash(value: recordingSegment, hasher: &hasher)
+    CaptureApiPigeonInternal.deepHash(value: recordingClockWaitFrames, hasher: &hasher)
+    CaptureApiPigeonInternal.deepHash(value: recordingClockJumpSegments, hasher: &hasher)
     CaptureApiPigeonInternal.deepHash(value: streamState, hasher: &hasher)
     CaptureApiPigeonInternal.deepHash(value: streamDetail, hasher: &hasher)
     CaptureApiPigeonInternal.deepHash(value: streamDroppedFrames, hasher: &hasher)
@@ -531,7 +545,7 @@ struct CaptureStatus: Hashable, CustomStringConvertible {
   }
 
   public var description: String {
-    return "CaptureStatus(running: \(String(describing: running)), width: \(String(describing: width)), height: \(String(describing: height)), actualFps: \(String(describing: actualFps)), stabilizationDisabled: \(String(describing: stabilizationDisabled)), exposureLocked: \(String(describing: exposureLocked)), exposureSeconds: \(String(describing: exposureSeconds)), iso: \(String(describing: iso)), whiteBalanceLocked: \(String(describing: whiteBalanceLocked)), whiteBalanceKelvin: \(String(describing: whiteBalanceKelvin)), focusLocked: \(String(describing: focusLocked)), intrinsicsAvailable: \(String(describing: intrinsicsAvailable)), thermalState: \(String(describing: thermalState)), pressure: \(String(describing: pressure)), ladderLevel: \(String(describing: ladderLevel)), batteryLevel: \(String(describing: batteryLevel)), freeDiskBytes: \(String(describing: freeDiskBytes)), droppedFrames: \(String(describing: droppedFrames)), timecodeFailures: \(String(describing: timecodeFailures)), recordingFile: \(String(describing: recordingFile)), recordingSegment: \(String(describing: recordingSegment)), streamState: \(String(describing: streamState)), streamDetail: \(String(describing: streamDetail)), streamDroppedFrames: \(String(describing: streamDroppedFrames)), streamBitrateBps: \(String(describing: streamBitrateBps)))"
+    return "CaptureStatus(running: \(String(describing: running)), width: \(String(describing: width)), height: \(String(describing: height)), actualFps: \(String(describing: actualFps)), stabilizationDisabled: \(String(describing: stabilizationDisabled)), exposureLocked: \(String(describing: exposureLocked)), exposureSeconds: \(String(describing: exposureSeconds)), iso: \(String(describing: iso)), whiteBalanceLocked: \(String(describing: whiteBalanceLocked)), whiteBalanceKelvin: \(String(describing: whiteBalanceKelvin)), focusLocked: \(String(describing: focusLocked)), intrinsicsAvailable: \(String(describing: intrinsicsAvailable)), thermalState: \(String(describing: thermalState)), pressure: \(String(describing: pressure)), ladderLevel: \(String(describing: ladderLevel)), batteryLevel: \(String(describing: batteryLevel)), freeDiskBytes: \(String(describing: freeDiskBytes)), droppedFrames: \(String(describing: droppedFrames)), timecodeFailures: \(String(describing: timecodeFailures)), recordingFile: \(String(describing: recordingFile)), recordingSegment: \(String(describing: recordingSegment)), recordingClockWaitFrames: \(String(describing: recordingClockWaitFrames)), recordingClockJumpSegments: \(String(describing: recordingClockJumpSegments)), streamState: \(String(describing: streamState)), streamDetail: \(String(describing: streamDetail)), streamDroppedFrames: \(String(describing: streamDroppedFrames)), streamBitrateBps: \(String(describing: streamBitrateBps)))"
   }
 }
 

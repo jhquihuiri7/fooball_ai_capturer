@@ -824,6 +824,8 @@ final class SplitBench {
     var startLocal4K: ((String, Int64) -> String)?
     var stopLocal4K: (() -> Void)?
     var local4KFrames: () -> Int64 = { 0 }
+    /// Lo que el reloj del soporte hizo con la 4K: fotogramas esperando y segmentos por salto.
+    var local4KClock: () -> [String: Any] = { [:] }
     private var rec4kDir: URL?
     private var rec4kStarted = false
     private var rec4kPath = ""
@@ -1436,7 +1438,7 @@ final class SplitBench {
             .filter { $0.pathExtension == "mov" } ?? []
         let bytes = movs.reduce(Int64(0)) { $0 + Int64((try? $1.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0) }
         return ["requested": true, "started": !rec4kPath.isEmpty, "segments": movs.count,
-                "bytes": bytes, "frames": local4KFrames(),
+                "bytes": bytes, "frames": local4KFrames(), "clock": local4KClock(),
                 "reserve_gb": Double(RecordingPolicy.benchReserveBytes(durationS: durationS)) / Self.bytesPerGb,
                 "disk_free_gb_start": diskFreeStartGb ?? -1,
                 "disk_free_gb_end": Double(CaptureEngine.freeDiskBytes()) / Self.bytesPerGb]

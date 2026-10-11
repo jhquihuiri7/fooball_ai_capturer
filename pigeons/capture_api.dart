@@ -167,6 +167,8 @@ class CaptureStatus {
     required this.timecodeFailures,
     required this.recordingFile,
     required this.recordingSegment,
+    required this.recordingClockWaitFrames,
+    required this.recordingClockJumpSegments,
     required this.streamState,
     required this.streamDetail,
     required this.streamDroppedFrames,
@@ -224,6 +226,14 @@ class CaptureStatus {
 
   /// Número de segmento de la grabación en curso: 1 salvo que haya habido cortes.
   final int recordingSegment;
+
+  /// Fotogramas que la grabación en curso tiró sin empezar, esperando al reloj del
+  /// soporte: en el esclavo, hasta la primera estimación (RecordingClockGate).
+  final int recordingClockWaitFrames;
+
+  /// Segmentos que la grabación en curso abrió porque el desfase al reloj del soporte
+  /// saltó a mitad de fichero (un relevo, un reloj rehecho). Lo normal es 0.
+  final int recordingClockJumpSegments;
 
   final StreamState streamState;
 

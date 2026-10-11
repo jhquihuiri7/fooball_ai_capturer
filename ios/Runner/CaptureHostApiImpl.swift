@@ -221,6 +221,9 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
             // IOS-13: la cámara lee el reloj nativo por fotograma, sin pasar por
             // Pigeon; a Dart solo le llega la estimación, para la pantalla y la fase.
             engine.rigClock = nw.clock
+            // Hasta que el enlace diga su rol, esclavo: la 4K espera al reloj (el rol
+            // llega en cuanto arranca la sesión, antes que el primer fotograma grabado).
+            engine.setClockReference(false)
             nw.onClockEstimate = { [weak self] estimate in
                 Task { @MainActor in
                     try? await self?.flutter.onClockEstimate(
@@ -236,8 +239,12 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
             calibPairs = pares
             // IOS-80: el rol negociado sube a Dart, que deja de suponer que manda el
             // izquierdo; al dirigir, se arma el disparo automático de la calibración.
+            let camara = engine
             nw.onRigRole = { [weak self, weak pares] rol, term, partido in
                 if rol == .master { pares?.armAutoTrigger() }
+                // El maestro es la referencia del reloj del soporte (ADR 0023 §4): su 4K
+                // no espera; la del esclavo, a la estimación (RecordingClockGate).
+                camara.setClockReference(rol == .master)
                 Task { @MainActor in
                     try? await self?.flutter.onRigRole(
                         role: rol == .master ? .master : .slave, term: Int64(term), matchId: partido
@@ -272,6 +279,7 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
                 }
                 s.stopLocal4K = { [weak self] in self?.engine.stopRecording() }
                 s.local4KFrames = { [weak self] in self?.engine.recordedFrames ?? 0 }
+                s.local4KClock = { [weak self] in self?.engine.recordingClockReport() ?? [:] }
                 s.start()
                 split = s
             }
