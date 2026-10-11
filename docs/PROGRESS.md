@@ -12,6 +12,121 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-11 · SPK-04 — el banco del render repartido: guion, GPU, desgarros y las 4K · 🚧 falta la pasada con los dos iPhone
+
+Lo que hace falta para que la pasada de 10 min deje medida la aceptación: la latencia
+añadida, la GPU y los desgarros en el informe del iPhone, y grabado todo lo que piden el
+PSNR (REF-41) y el VMAF (SPK-05) en el Mac.
+
+**Hecho**
+- **El director de guion** (`RIG_SPLIT_SCRIPT=spk04`, `Spk04Script` en RigCore).
+  - Barrido: `yaw = costura + 35° · sin(2π · (t mod 40 s) / 40 s)`, que cruza la costura
+    cada 20 s.
+  - Zoom: HFOV en triángulo de 40° a 83° y vuelta en 60 s.
+  - Depende solo del rigMs, sin instante de arranque: se repite cada 120 s y la
+    referencia lo recalcula con el rig.json.
+  - La costura y el pitch son la media de las dos cámaras del rig.json. Hoy, yaw ±42°:
+    costura en 0°.
+  - Con HFOV < 68° el encuadre cae entero en una lente en los extremos, a cada lado: son
+    los planos de una lente que pide SPK-05.
+  - Manda sobre `RIG_SPLIT_DIRECTOR`. El N0 apunta `shot: "spk04"`.
+- **La GPU por fotograma**, `gpuEndTime − gpuStartTime` del command buffer (`GpuTiming`,
+  cubos de 0,25 ms hasta 5 ms).
+  - En el esclavo, el render de la parte.
+  - En el maestro, el render de su mitad más la composición, y la composición sola.
+- **Los desgarros.** No había contador: el ADR 0023 §5 dice que no hay desgarro por
+  construcción.
+  - `TearCheck` (ViewSync) llama desgarrado a un fotograma de dos lentes con las mitades
+    de vistas distintas, o con las capturas de los dos móviles a más de medio fotograma.
+  - `MasterProgramStage` lo cuenta (`torn_frames`) con el instante real del fotograma
+    propio. Para eso, `masterFrame` devuelve ahora también su rigMs.
+  - Además, `halves_skew_ms` (la fase entre las cámaras; el ADR 0012 la quiere ≤5 ms) y
+    `extrapolated_view_frames` (partes pintadas con una vista extrapolada por el esclavo).
+- **Las vistas de cada instante:** `Documents/bench/program-views-<t>.jsonl`, una línea por
+  fotograma del programa.
+  - Lleva la vista de verdad (la de la parte en dos lentes), la costura, la rampa, las
+    ganancias, la fuente, los dos instantes de captura, el desgarro y la GPU.
+  - El N0 solo trae `view` a 7,5 Hz, y con un barrido que se mueve en cada fotograma eso
+    no da para un PSNR. Son ~2-3 MB en 10 min.
+- **La 4K local de los dos** (`RIG_SPLIT_RECORD_4K=1`): la de siempre de IOS-57, en
+  `Documents/bench4k/<t>/<lado>-<t>.mov`.
+  - Pide libre solo lo de la pasada (`RecordingPolicy.benchReserveBytes`: el doble de lo
+    que ocupa más 2 GB). Para 600 s son 8,75 GB; el partido sigue pidiendo 40 GB.
+  - Ocupa ~3,4 GB por móvil a 45 Mbit/s. El bitrate pasa a `RecordingPolicy.localBitrateBps`.
+- **El informe** `program-split-<lado>-<t>.json` gana estos campos:
+  - `script` y `spk04_script` (los parámetros, la costura y el pitch).
+  - `gpu_ms_per_frame` (p50/p95/p99/n), y en el maestro `compose_gpu_ms`.
+  - `torn_frames`, `halves_skew_ms` y `extrapolated_view_frames`.
+  - `rec4k`: si arrancó, los segmentos, los bytes, los fotogramas y el disco libre al
+    empezar y al acabar.
+  - `files`: las rutas, relativas a Documents, de todo lo grabado en la pasada.
+  - `spk04_acceptance`. En el maestro: `added_latency_ms_p95` (ya se medía, del instante
+    del programa al programa compuesto) con `≤120`, la GPU p99 con `≤3 ms` y los
+    desgarros con `0`. En el esclavo: su GPU.
+- **`tools/banco_dos_moviles.sh`** recoge, además de lo de siempre, lo que dice `files` del
+  informe de ESTA pasada (`tools/ficheros_pasada.py`, con epoch no anterior al arranque
+  del banco): el .mov del programa, las vistas, el N0 y las 4K. Con `SIN_4K=1` las 4K se
+  quedan en el móvil.
+
+**La pasada** (por Wi-Fi: no hay Ethernet; los dos con el rig.json de 2026-10-10)
+
+```bash
+cd /Users/alexander/Trabajacion/fooball_ai_capturer
+BANCO_EXTRA='{"RIG_SPLIT_SCRIPT": "spk04", "RIG_SPLIT_RECORD_4K": "1"}' \
+  tools/banco_dos_moviles.sh split <secreto> 600
+# Si ya están instalados con este build: SIN_INSTALAR=1 delante.
+```
+
+Lo que sale en `bench/dos-moviles-<fecha>/`:
+- **`izquierdo/`** (el maestro):
+  - `bench/program-split-left-<t>.json`
+  - `bench/program-split-<t>.ts` y su `.mov`
+  - `bench/program-views-<t>.jsonl`
+  - `n0/banco-<t>-left.jsonl`
+  - `bench4k/<t>/left-<t>.mov`
+  - `calib/…`
+- **`derecho/`** (el esclavo):
+  - `bench/program-split-right-<t>.json`
+  - `bench4k/<t>/right-<t>.mov`
+
+Qué mirar:
+
+```bash
+D=$(ls -td bench/dos-moviles-* | head -1)
+python3 -c 'import json,sys
+for p in sys.argv[1:]:
+    d=json.load(open(p)); print(p); print(" rig", d["rig"], "script", d["script"], "rec4k", d["rec4k"])
+    print(" gpu", d["gpu_ms_per_frame"], "\n acept", d["spk04_acceptance"])
+    print(" dos/una lente", d["two_lens_frames"], d["one_lens_frames"], "fase", d["halves_skew_ms"], "extrap", d["extrapolated_view_frames"])' \
+  $D/izquierdo/bench/program-split-left-*.json $D/derecho/bench/program-split-right-*.json
+```
+
+- `rig` tiene que ser `rig.json`: con `nominal` la costura no es la calibrada.
+- `rec4k.started` true en los dos: si no, no había 8,75 GB libres.
+- **La latencia, por Wi-Fi, no va a dar ≤120.** Con la espera de la parte en 130 ms, el
+  2026-10-07 dio un p95 de 144 ms. El ≤120 de la tarjeta es por Ethernet. Con
+  `RIG_SPLIT_PART_WAIT_MS=100` bajaría a ~110, pero el 19 % de los fotogramas sale de una
+  lente.
+
+**Comprobado**
+- `swift test --skip ModelBench`: 372 tests, 1 saltado, 0 fallos. Los nuevos:
+  `Spk04ScriptTests` (4), `TearCheckTests` (2), `RecordingPolicyBenchTests` (1), la GPU
+  del esclavo (1) y la GPU, el desgarro y `onComposed` del maestro (1).
+- Una primera vuelta con xcodebuild compilando a la vez dio 1 fallo que no se repitió.
+- `tools/check_layers.sh` limpio.
+- ZeroKit de lo commiteado (`git archive`, sin el trabajo a medias de otros en RigNet)
+  compilado para iOS con xcodebuild, en Release y con derivedData temporal.
+- El Runner, sin `flutter build` y sin tocar `build/ios`: `swiftc -typecheck` de sus `.swift`
+  commiteados contra ese ZeroKit y los módulos de HaishinKit y Flutter del DerivedData
+  (`Debug-iphoneos`). 0 errores; 32 avisos, los de antes.
+- `tools/ficheros_pasada.py` probado con informes falsos: el de una pasada vieja no se
+  recoge, y `SIN_4K=1` deja fuera las 4K.
+
+**Pendiente**
+- La pasada con los dos iPhone (Alexander, hoy hacia las 15:05).
+- El PSNR en la rampa frente a REF-41, con las vistas por instante, en football-ai.
+- El VMAF por mitades (SPK-05, `tools/vmaf_halves.sh`) con las mismas grabaciones.
+
 
 
 
