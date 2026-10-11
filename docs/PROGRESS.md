@@ -14,6 +14,28 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 
 
+
+## 2026-10-11 · SPK-04 y SPK-05 medidos en el Mac sobre la pasada del trípode: PSNR ✅, ΔVMAF intermedio
+
+Sobre `bench/dos-moviles-20261011-1506` (10 min del guion de SPK-04 por Wi-Fi, las dos 4K),
+con las herramientas de football-ai:
+
+- **PSNR en la rampa de la costura (SPK-04, `tools/spk04_psnr.py`, `--every 10`): p5 40,8 ·
+  p50 42,0 · media 42,1 dB; el 100 % ≥38 dB** (404 fotogramas; peor 40,2 dB). El primer
+  cálculo dio p50 19,9 dB por un fallo de la medida (la máscara de la rampa cruzaba el
+  marcador y la franja, que la referencia de Python no pinta); arreglado en e6ac376 midiendo
+  solo las filas sin gráfico (194-956). Lo que queda (~2 niveles rms) es códec y redondeo:
+  el tramo del esclavo da 39,8-41,1 dB y el del maestro 41,5-43,0.
+- **VMAF por mitades (SPK-05, `tools/vmaf_halves.sh`, `--every 3`, parte a 8 Mbit/s por
+  Wi-Fi): maestro 97,2 (p5 95,0) · esclavo 93,5 (p5 89,0) · ΔVMAF 3,7 → intermedio** (éxito
+  ≤2, abandono >5). Es la doble compresión de la mitad del esclavo (la parte H.264 a 8
+  Mbit/s y luego el programa); la tarjeta pide repetir con la parte a 15/25/35 Mbit/s:
+  por Wi-Fi solo cabe 15 (12 ya perdía el 0,75 %); 25/35 esperan a Ethernet (SPK-02).
+
+Con esto, de SPK-04 se cumplen 0 desgarros, la GPU del esclavo y el PSNR; quedan la GPU del
+maestro (p99 5 ms frente a 3: su mitad y la composición van en el mismo command buffer) y
+la latencia ≤120 ms, que supone Ethernet.
+
 ## 2026-10-11 · El maestro contesta la hora en el reloj del soporte: el que vuelve tras un relevo ya no se va 591 898 s (IOS-12, IOS-13, IOS-85; ADR 0023 §4, enmienda) · 🚧 falta el relevo de ida y vuelta con los dos iPhone
 
 **El fallo**, apuntado en la entrada de abajo («la 4K del esclavo») y confirmado en el código:
