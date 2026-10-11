@@ -69,8 +69,12 @@ mata() {  # $1 dispositivo
 }
 
 lanza() {  # $1 dispositivo, $2 lado, $3 json extra
-  local f; f=$(mktemp); entorno "$2" "$3" > "$f"
+  local f t0; f=$(mktemp); entorno "$2" "$3" > "$f"
+  t0=$(date +%s)
   xcrun devicectl device process launch --device "$1" --environment-variables "$(cat "$f")" $APP | tail -1
+  # La hora de cada lanzamiento y lo que tardó devicectl: en …-20261010-1106 el derecho abrió
+  # su enlace ~100 s después que el izquierdo y no quedó dicho si fue el lanzamiento o la app.
+  echo "  $(date +%T) $2 lanzado ($(( $(date +%s) - t0 )) s)"
   rm -f "$f"
 }
 

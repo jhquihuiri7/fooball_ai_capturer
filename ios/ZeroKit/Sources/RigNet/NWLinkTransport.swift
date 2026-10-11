@@ -65,8 +65,10 @@ public final class NWLinkTransport: LinkTransport {
     /// entre 1 y 1,25 plazos después de lo último que llegó.
     static let silenceChecksPerTimeout: Double = 4
 
-    /// Sucesos que guarda la línea de tiempo del banco (los últimos).
+    /// Sucesos que guarda la línea de tiempo del banco: los últimos `maxEvents` y, aparte,
+    /// los `maxStartEvents` primeros, que son el arranque (2026-10-11).
     static let maxEvents = 80
+    static let maxStartEvents = 40
 
     /// Qué se hace cuando una cita (listener o browser) se acaba (IOS-14).
     enum RendezvousEndAction: Equatable {
@@ -226,22 +228,36 @@ public final class NWLinkTransport: LinkTransport {
     private var peerMediaSinceConnect = false
     private var linkWatchdog: DispatchSourceTimer?
 
-    /// Lo que le ha pasado al enlace, «segundos desde que se creó el transporte: qué», los
-    /// últimos `maxEvents`. Para el banco: dice si cada caída coincide con una cita que
-    /// caduca y con qué error cae cada conexión (IOS-14c).
+    /// Lo que le ha pasado al enlace, «segundos desde que se creó el transporte: qué»: el
+    /// arranque y los últimos `maxEvents`. Para el banco: dice si cada caída coincide con
+    /// una cita que caduca y con qué error cae cada conexión (IOS-14c), y cuándo sube
+    /// cada canal al arrancar (2026-10-11).
     public var events: [String] {
-        queue.sync { eventos }
+        queue.sync { eventos.lines }
     }
-    private var eventos: [String] = []
-    private let createdNs = DispatchTime.now().uptimeNanoseconds
+    private var eventos = LinkEventLog(headCount: maxStartEvents, tailCount: maxEvents)
+    /// Cuándo se creó el transporte, en ns de uptime: el cero de `events`.
+    public let createdNs = DispatchTime.now().uptimeNanoseconds
 
     /// Apunta un suceso en la línea de tiempo. En la cola del transporte.
     private func note(_ texto: String) {
         let s = Double(DispatchTime.now().uptimeNanoseconds &- createdNs) / 1e9
         eventos.append(String(format: "%.1f", s) + " " + texto)
-        if eventos.count > Self.maxEvents {
-            eventos.removeFirst(eventos.count - Self.maxEvents)
+    }
+
+    /// Los anuncios que ve un browser: cuántos hay y cuántos acaban de aparecer o irse
+    /// (al arrancar, la caché de Bonjour puede traer el de un proceso anterior).
+    private func noteResults(_ canal: String, total: Int, cambios: Set<NWBrowser.Result.Change>) {
+        var altas = 0, bajas = 0
+        for cambio in cambios {
+            switch cambio {
+            case .added: altas += 1
+            case .removed: bajas += 1
+            default: break
+            }
         }
+        guard altas + bajas > 0 else { return }
+        note("\(canal): \(total) anuncios (+\(altas) −\(bajas))")
     }
 
     private var publishes: Bool {
@@ -446,6 +462,7 @@ public final class NWLinkTransport: LinkTransport {
             guard let self else { return }
             // En un orden fijo (los resultados son un conjunto): rotar tiene que avanzar.
             self.controlCandidates = results.map(\.endpoint).sorted { "\($0)" < "\($1)" }
+            self.noteResults("control", total: results.count, cambios: cambios)
             guard self.state != .connected else { return }
             // Un anuncio que acaba de aparecer manda sobre la conexión a medias: al
             // arrancar, la caché de Bonjour trae el anuncio del izquierdo de antes, ya
@@ -487,6 +504,7 @@ public final class NWLinkTransport: LinkTransport {
 
     private func openConnection(to endpoint: NWEndpoint) {
         state = .connecting
+        note("control: se conecta a \(endpoint)")
         let conexion = NWConnection(to: endpoint, using: parameters())
         adopt(connection: conexion)
         // Por Wi-Fi Aware la conexión monta antes un datapath: se le da más plazo.
@@ -511,6 +529,9 @@ public final class NWLinkTransport: LinkTransport {
                 // El vigía de silencio se arma con los primeros medios de esta conexión.
                 self.peerMediaSinceConnect = false
                 self.note("control arriba")
+                if self.stats.firstControlUpNs == nil {
+                    self.stats.firstControlUpNs = DispatchTime.now().uptimeNanoseconds
+                }
                 self.state = .connected
                 self.receive(on: nueva)
             case let .failed(error):
@@ -799,6 +820,8 @@ public final class NWLinkTransport: LinkTransport {
             let listener = try make()
             listener.newConnectionHandler = { [weak self] nueva in
                 guard let self else { return }
+                self.note(self.mediaConnection == nil ? "medios: llega una conexión"
+                    : "medios: llega otra y sustituye a la de antes")
                 self.mediaConnection?.cancel()
                 self.mediaConnection = nueva
                 nueva.start(queue: self.queue)
@@ -809,8 +832,11 @@ public final class NWLinkTransport: LinkTransport {
                 switch estado {
                 case .ready:
                     self.mediaLocalPort = listener.port?.rawValue ?? 0
+                    self.note("cita de medios publicada")
                 case let .failed(error):
                     self.rendezvousEnded(.media, error)
+                case let .waiting(error):
+                    self.note("listener de medios en espera: \(self.describe(error))")
                 default:
                     break
                 }
@@ -840,6 +866,7 @@ public final class NWLinkTransport: LinkTransport {
             }
             let resto = results.map(\.endpoint).filter { e in !nuevos.contains(where: { $0 == e }) }
             self.mediaCandidates = nuevos.reversed() + resto
+            self.noteResults("medios", total: results.count, cambios: cambios)
             if self.mediaConnection == nil || !nuevos.isEmpty, !self.mediaCandidates.isEmpty {
                 self.mediaCandidateIndex = 0
                 self.openMediaConnection(to: self.mediaCandidates[0])
@@ -847,8 +874,13 @@ public final class NWLinkTransport: LinkTransport {
         }
         browser.stateUpdateHandler = { [weak self, weak browser] estado in
             guard let self, let browser, browser === self.mediaBrowser else { return }
-            if case let .failed(error) = estado {
+            switch estado {
+            case let .failed(error):
                 self.rendezvousEnded(.media, error)
+            case let .waiting(error):
+                self.note("browser de medios en espera: \(self.describe(error))")
+            default:
+                break
             }
         }
         mediaBrowser = browser
@@ -857,15 +889,22 @@ public final class NWLinkTransport: LinkTransport {
 
     private func openMediaConnection(to endpoint: NWEndpoint) {
         mediaConnection?.cancel()
+        note("medios: se conecta a \(endpoint)")
         let conexion = NWConnection(to: endpoint, using: mediaParameters())
         mediaConnection = conexion
         mediaOpenedAt = Date()
         conexion.stateUpdateHandler = { [weak self] estado in
-            if case .ready = estado {
+            switch estado {
+            case .ready:
+                self?.note("medios: conexión lista")
                 self?.receiveMedia(on: conexion)
                 // Un sondeo: por UDP, el que escucha solo conoce al otro cuando le llega
                 // algo. El reensamblador del otro lo cuenta como basura y lo tira.
                 conexion.send(content: Data([0]), completion: .contentProcessed { _ in })
+            case let .failed(error), let .waiting(error):
+                self?.note("medios: conexión en espera o caída (\(self?.describe(error) ?? ""))")
+            default:
+                break
             }
         }
         conexion.start(queue: queue)
@@ -898,6 +937,7 @@ public final class NWLinkTransport: LinkTransport {
             guard !mediaCandidates.isEmpty else { return }
             mediaCandidateIndex = (mediaCandidateIndex + 1) % mediaCandidates.count
             log.info("medios mudos: se prueba el anuncio \(self.mediaCandidateIndex)")
+            note("medios mudos: se prueba el anuncio \(mediaCandidateIndex + 1) de \(mediaCandidates.count)")
             openMediaConnection(to: mediaCandidates[mediaCandidateIndex])
         case let .connect(host, port):
             openMediaConnection(to: NWEndpoint.hostPort(
@@ -929,6 +969,10 @@ public final class NWLinkTransport: LinkTransport {
             return
         }
         lastPeerMediaNs = DispatchTime.now().uptimeNanoseconds
+        // Una vez por subida del control (y una antes, si los medios se adelantan): el
+        // canal de medios, arriba de verdad.
+        if !peerMediaSinceConnect { note("medios: primera trama del otro") }
+        if stats.firstPeerMediaNs == nil { stats.firstPeerMediaNs = lastPeerMediaNs }
         peerMediaSinceConnect = true
         let ahora = Date()
         if let anterior = lastMediaArrival,

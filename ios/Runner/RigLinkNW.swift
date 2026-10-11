@@ -56,6 +56,10 @@ final class RigLinkNW: PeerLinking {
     /// Los contadores del transporte, para el informe del banco program-split.
     var transportStats: LinkTransportStats { transport.statsSnapshot }
 
+    /// La línea de tiempo del transporte y su cero (ns de uptime), para el banco
+    /// program-split (2026-10-11).
+    var transportTimeline: (createdNs: UInt64, events: [String]) { (transport.createdNs, transport.events) }
+
     /// El partido que dirige este móvil: va en el hello de las siguientes conexiones.
     var matchId: String? {
         get { session.matchId }
@@ -781,6 +785,15 @@ final class SplitBench {
     private let lock = NSLock()
     private var timer: DispatchSourceTimer?
     private let startNs = DispatchTime.now().uptimeNanoseconds
+    /// 2026-10-11: cuándo sube cada pieza del enlace, en ms desde el arranque del banco
+    /// (en `…-20261010-1106` el maestro no vio al esclavo hasta los 102 s y no se sabía
+    /// por qué), y el arranque en la hora Unix y en el reloj del soporte, para casar los
+    /// informes de los dos móviles.
+    private let linkTimeline = LinkStartupTimeline()
+    private let startHostNs = RigLink.hostNowNs()
+    private let startUnixMs = Int64(Date().timeIntervalSince1970 * 1000)
+    /// La línea de tiempo del transporte y su cero, para el informe.
+    var linkEvents: () -> (createdNs: UInt64, events: [String])? = { nil }
     private let durationS: Double
 
     // Montado al haber pipeline (sabe el tamaño de la cámara).
@@ -952,10 +965,14 @@ final class SplitBench {
         t.setEventHandler { [weak self] in self?.tick() }
         timer = t
         t.resume()
-        session.onViews = { [weak self] vistas in self?.slave?.receive(views: vistas) }
+        session.onViews = { [weak self] vistas in
+            self?.linkTimeline.mark(.firstView)
+            self?.slave?.receive(views: vistas)
+        }
         session.onIdrRequest = { [weak self] _ in self?.slave?.requestIdr() }
         session.onPart = { [weak self] parte, _ in
             guard let self else { return }
+            linkTimeline.mark(.firstPart)
             master?.receive(part: parte, arrivalRigMs: rigNowMs())
         }
         session.onNoPart = { [weak self] nada in self?.master?.receive(noPart: nada) }
@@ -964,6 +981,7 @@ final class SplitBench {
             self?.queue.async {
                 guard let self, self.session.isMaster else { return }
                 self.peerStates.append("\(self.rigNowMs()):\(estado.rawValue)")
+                if estado == .up { self.linkTimeline.mark(.peerUp) }
                 let caido = estado == .down
                 self.master?.peerDown = caido
                 self.director?.setSingleLens(caido ? self.side : nil)
@@ -1026,6 +1044,7 @@ final class SplitBench {
             let soloSinParte = env["RIG_SPLIT_SLAVE_NO_PARTS"] == "1"
             s.onPart = { [weak self] p in
                 guard let self else { return }
+                linkTimeline.mark(.firstPartSent)
                 if soloSinParte {
                     session.send(noPart: NoPartPacket(frameRigMs: p.frameRigMs, viewId: p.view.viewId))
                     return
@@ -1264,6 +1283,7 @@ final class SplitBench {
         if env["RIG_SPLIT_RECORD_4K"] == "1", !rec4kStarted, pipelineProvider() != nil {
             startRecording4K()
         }
+        if case .connected = session.state { linkTimeline.mark(.sessionUp) }
         if case .connected = session.state, setUpIfNeeded() {
             colorTick(now: rigNowMs())
         }
@@ -1610,6 +1630,7 @@ final class SplitBench {
         let ss = slave?.stats ?? .init()
         let link = master?.linkStats(nowRigMs: rigNowMs())
         let transporte = linkStats()
+        let enlace = linkEvents()
         let fpsTicks = tickIntervalsMs.map { 1000 / max($0, 0.001) }
         let latenciaP95 = pct(composeLatencyMs, 0.95)
         var guion: [String: Any] = [:]
@@ -1688,6 +1709,16 @@ final class SplitBench {
             // esclavo) y lo más que guardó su búfer; antes se quedaba con todo.
             "control_rx_bytes": transporte?.controlBytesReceived ?? -1,
             "control_buffer_peak_bytes": transporte?.controlBufferPeakBytes ?? -1,
+            // 2026-10-11: cuándo subió cada pieza del enlace (ms desde el arranque del banco,
+            // −1 si nunca), la línea de tiempo del transporte (sus segundos cuentan desde
+            // `transport_t0_ms`), cuánto tardó la app en abrir el enlace desde que la lanzaron
+            // y el arranque en el reloj del soporte, común a los dos móviles.
+            "link_timeline_ms": linkTimeline.report(transport: transporte),
+            "transport_events": enlace?.events ?? [],
+            "transport_t0_ms": enlace.map { linkTimeline.msSinceStart($0.createdNs) } ?? 0,
+            "launch_to_bench_ms": LinkStartupTimeline.processStartUnixMs().map { startUnixMs - $0 } ?? -1,
+            "bench_start_unix_ms": startUnixMs,
+            "bench_start_rig_ms": (startHostNs + session.clock.offsetAt(ns: startHostNs)) / 1_000_000,
             "link_switches": ["RIG_SPLIT_NO_VIEWS", "RIG_SPLIT_NO_THUMBS", "RIG_SPLIT_SLAVE_NO_PARTS",
                               "RIG_SPLIT_NO_MOV", "RIG_SPLIT_NO_TS"].filter { env[$0] == "1" },
             "color_series": colorSeries,

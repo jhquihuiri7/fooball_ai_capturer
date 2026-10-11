@@ -49,6 +49,12 @@ public struct LinkTransportStats: Equatable, Sendable {
     /// Antes del 2026-10-10 crecía con todo lo recibido.
     public var controlBufferPeakBytes = 0
 
+    /// Cuándo subió el control por primera vez y cuándo llegó la primera trama de medios
+    /// del otro, en ns de uptime (`DispatchTime`), o nil si aún no. Para el banco: del
+    /// arranque lento de `bench/dos-moviles-20261010-1106` no se sabía qué tardó.
+    public var firstControlUpNs: UInt64?
+    public var firstPeerMediaNs: UInt64?
+
     public init() {}
 }
 
