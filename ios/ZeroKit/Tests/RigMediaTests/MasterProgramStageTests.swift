@@ -82,7 +82,7 @@ final class MasterProgramStageTests: XCTestCase {
         )
         let propio = try fotograma(p)
         var pedidos: [Int64] = []
-        stage.masterFrame = { ms in pedidos.append(ms); return (propio, {}) }
+        stage.masterFrame = { ms in pedidos.append(ms); return (propio, ms, {}) }
         return (stage, render, comp, { pedidos })
     }
 
@@ -111,6 +111,55 @@ final class MasterProgramStageTests: XCTestCase {
         XCTAssertEqual(comp.llamadas.last?.master, true)
         XCTAssertEqual(comp.llamadas.last?.slave, true)
         XCTAssertEqual(stage.stats.twoLensFrames, 1)
+    }
+
+    private final class RenderConGpu: PartRendering {
+        let lastGpuMs: Double? = 1.25
+        func render(source: CVPixelBuffer, view: ViewCommand, into destination: CVPixelBuffer) throws {}
+    }
+
+    private final class ComposicionConGpu: ProgramComposing {
+        let lastGpuMs: Double? = 0.5
+        func compose(master: CVPixelBuffer?, slave: CVPixelBuffer?, view: ViewCommand, atRigMs: Int64, into destination: CVPixelBuffer) throws {}
+    }
+
+    /// SPK-04: la GPU por fotograma, el desgarro y lo que se pintó en cada instante.
+    func testCuentaLaGpuYLosDesgarrosDeCadaInstante() throws {
+        let ps = try partes(5)
+        let p = try pool()
+        let stage = MasterProgramStage(
+            masterSide: .left, frameDurationMs: frameMs, renderer: RenderConGpu(), composer: ComposicionConGpu(),
+            masterPool: p
+        )
+        let propio = try fotograma(p)
+        var desfase: Int64 = 3
+        stage.masterFrame = { ms in (propio, ms + desfase, {}) }
+        var pintados: [ComposedFrame] = []
+        stage.onComposed = { pintados.append($0) }
+        ps.forEach { stage.receive(part: $0, arrivalRigMs: $0.frameRigMs + 20) }
+        esperaDecodificadas(stage, 5)
+        let t1 = ps[1].frameRigMs
+        stage.tick(programRigMs: t1, nowRigMs: t1 + LinkConstants.partMaxWaitMs, masterView: vista(t1, id: 900))
+        desfase = 20  // en el anillo solo quedaba el fotograma de al lado
+        let t2 = ps[2].frameRigMs
+        stage.tick(programRigMs: t2, nowRigMs: t2 + LinkConstants.partMaxWaitMs, masterView: vista(t2, id: 901))
+        let t9 = t2 + 1000  // sin parte: una lente
+        stage.tick(programRigMs: t9, nowRigMs: t9 + LinkConstants.partMaxWaitMs, masterView: vista(t9, id: 902))
+
+        XCTAssertEqual(pintados.map(\.torn), [false, true, false])
+        XCTAssertEqual(stage.stats.tornFrames, 1)
+        XCTAssertEqual(pintados[0].source, .twoLens)
+        XCTAssertEqual(pintados[0].view, ps[1].view)
+        XCTAssertEqual(pintados[0].masterFrameRigMs, t1 + 3)
+        XCTAssertEqual(pintados[0].partFrameRigMs, t1)
+        XCTAssertEqual(pintados[0].gpuMs, 1.75, "render de la mitad propia más composición")
+        XCTAssertEqual(pintados[2].source, .masterOnly)
+        XCTAssertNil(pintados[2].partFrameRigMs)
+        XCTAssertEqual(pintados[2].view.viewId, 902)
+        XCTAssertEqual(stage.gpuMs.total, 3)
+        XCTAssertEqual(stage.gpuMs.percentile(0.5), 1.75)
+        XCTAssertEqual(stage.composeGpuMs.percentile(0.5), 0.5)
+        XCTAssertEqual(stage.halvesSkewMs.total, 2, "solo los de dos lentes")
     }
 
     func testSinParteATiempoUnaLenteConLaVistaDelMaestro() throws {

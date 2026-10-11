@@ -27,6 +27,30 @@ public protocol ProgramComposing: AnyObject {
         master: CVPixelBuffer?, slave: CVPixelBuffer?, view: ViewCommand, atRigMs: Int64,
         into destination: CVPixelBuffer
     ) throws
+    /// SPK-04: la GPU de la última composición, en ms; nil si no lo sabe.
+    var lastGpuMs: Double? { get }
+}
+
+extension ProgramComposing {
+    public var lastGpuMs: Double? { nil }
+}
+
+/// Lo que se pintó en un instante del programa (SPK-04): la vista de verdad, los
+/// fotogramas de cada móvil y la GPU. Con esto, la referencia de Python (REF-41) rehace
+/// el mismo fotograma desde las 4K.
+public struct ComposedFrame: Sendable {
+    public let programRigMs: Int64
+    public let source: ProgramSource
+    public let view: ViewCommand
+    /// El instante del fotograma propio usado; nil si no lo hubo o no se pintó.
+    public let masterFrameRigMs: Int64?
+    /// El de la parte del esclavo; nil sin parte.
+    public let partFrameRigMs: Int64?
+    /// La parte se pintó con una vista extrapolada (el esclavo no tenía la suya).
+    public let extrapolated: Bool
+    public let torn: Bool
+    /// Render de la mitad propia más composición, en ms de GPU; nil si no se supo.
+    public let gpuMs: Double?
 }
 
 /// La composición con el kernel de IOS-41, con el gráfico de Dart (IOS-47) y la franja
@@ -42,6 +66,7 @@ public final class MetalProgramComposer: ProgramComposing {
     private let masterSide: CameraSide
     private let width: Int
     private let height: Int
+    public private(set) var lastGpuMs: Double?
 
     public init(context: MetalContext, masterSide: CameraSide, width: Int, height: Int) throws {
         self.context = context
@@ -72,6 +97,7 @@ public final class MetalProgramComposer: ProgramComposing {
         )
         buffer.commit()
         buffer.waitUntilCompleted()
+        lastGpuMs = GpuTiming.milliseconds(buffer)
         // La GPU ya soltó las texturas de este fotograma: fuera las entradas muertas.
         context.flushTextureCache()
     }
@@ -88,6 +114,11 @@ public final class MasterProgramStage {
         /// Instantes sin fotograma propio cerca: no se puede pintar nada.
         public var withoutMasterFrame = 0
         public var composeFailures = 0
+        /// SPK-04: dos lentes con las mitades de vistas o instantes distintos (TearCheck).
+        public var tornFrames = 0
+        /// Dos lentes con la vista extrapolada por el esclavo (no es desgarro: las dos
+        /// mitades la usan; es una vista que el director no dio).
+        public var extrapolatedViewFrames = 0
 
         public init() {}
     }
@@ -107,6 +138,8 @@ public final class MasterProgramStage {
     /// La vista con la que viene cada parte decodificada, por su instante.
     private var viewsByRigMs: [Int64: ResolvedView] = [:]
     private var decoded: [Int64: CVPixelBuffer] = [:]
+    /// Las partes decodificadas que vinieron con la vista extrapolada, por su instante.
+    private var extrapolatedParts: Set<Int64> = []
     public private(set) var stats = Stats()
     /// IOS-43: la edad de cada parte al llegar (su llegada menos la captura del esclavo,
     /// los dos en el reloj del soporte), en ms.
@@ -115,6 +148,14 @@ public final class MasterProgramStage {
     /// que lo cierra, en ms.
     public private(set) var idrRecovery = LatencyHistogram(boundsMs: MasterProgramStage.partAgeBoundsMs)
     private var idrAskedMs: Int64?
+    /// SPK-04: la GPU por fotograma (render de la mitad propia + composición) y la de la
+    /// composición sola, en ms.
+    public private(set) var gpuMs = LatencyHistogram(boundsMs: GpuTiming.boundsMs)
+    public private(set) var composeGpuMs = LatencyHistogram(boundsMs: GpuTiming.boundsMs)
+    /// SPK-04: |captura del maestro − captura de la parte| en los de dos lentes, en ms (la
+    /// fase entre las cámaras; ADR 0012 la quiere ≤5 ms).
+    public private(set) var halvesSkewMs = LatencyHistogram()
+    private let frameDurationMs: Double
     /// Cubos de 5 ms hasta 150 (la aceptación de IOS-43 es p95 ≤60) y gruesos después.
     public static let partAgeBoundsMs: [Double] = stride(from: 5, through: 150, by: 5).map(Double.init)
         + [200, 300, 500, 1000, 2000]
@@ -131,8 +172,11 @@ public final class MasterProgramStage {
     private var waitWithPeer: Int64 = LinkConstants.partMaxWaitMs
 
     /// El fotograma propio más cercano a un instante, del FrameRing (IOS-09). Devuelve el
-    /// búfer y una función para soltarlo.
-    public var masterFrame: ((Int64) -> (CVPixelBuffer, () -> Void)?)?
+    /// búfer, su instante y una función para soltarlo.
+    public var masterFrame: ((Int64) -> (CVPixelBuffer, Int64, () -> Void)?)?
+
+    /// Cada instante pintado, con lo que llevó (SPK-04).
+    public var onComposed: ((ComposedFrame) -> Void)?
 
     /// Hay un hueco: hay que pedir un IDR al esclavo con este part_seq.
     public var onIdrRequest: ((UInt32) -> Void)?
@@ -158,6 +202,7 @@ public final class MasterProgramStage {
         maxWaitMs: Int64 = LinkConstants.partMaxWaitMs
     ) {
         self.masterSide = masterSide
+        self.frameDurationMs = frameDurationMs
         waitWithPeer = maxWaitMs
         sync = ProgramSync(frameDurationMs: frameDurationMs, maxWaitMs: maxWaitMs)
         self.decoder = decoder
@@ -217,6 +262,11 @@ public final class MasterProgramStage {
             lock.lock()
             if let vista = viewsByRigMs.removeValue(forKey: rigMs) {
                 decoded[rigMs] = f.pixelBuffer
+                if vista.extrapolated { extrapolatedParts.insert(rigMs) }
+                if extrapolatedParts.count > Self.decodedSlots {
+                    extrapolatedParts.sorted().prefix(extrapolatedParts.count - Self.decodedSlots)
+                        .forEach { extrapolatedParts.remove($0) }
+                }
                 sync.receive(PartInfo(frameRigMs: rigMs, view: vista))
                 stats.partsDecoded += 1
                 if decoded.count > Self.decodedSlots {
@@ -261,7 +311,7 @@ public final class MasterProgramStage {
         }
 
         let propioLease = masterFrame?(instantePropio)
-        defer { propioLease?.1() }
+        defer { propioLease?.2() }
         lock.lock()
         let fuente = ProgramClock.choose(
             masterFrame: propioLease != nil, slavePart: parte != nil, instantMs: t,
@@ -274,6 +324,8 @@ public final class MasterProgramStage {
         if fuente != anterior { onSourceChange?(fuente) }
 
         if fuente == .hold, let ultimo = lastProgram {
+            onComposed?(ComposedFrame(programRigMs: t, source: fuente, view: vista, masterFrameRigMs: nil,
+                                      partFrameRigMs: nil, extrapolated: false, torn: false, gpuMs: nil))
             onProgram?(ultimo, t)
             return decision
         }
@@ -288,14 +340,19 @@ public final class MasterProgramStage {
             // Solo se pinta la mitad propia si hay fotograma y la vista la pide (o es lo
             // único que hay): un encuadre que cae entero en el esclavo no lleva nada suyo.
             var conMaestro = false
-            if let (propio, _) = propioLease, parte == nil || vista.sides.contains(masterSide) {
+            var gpuMitad: Double? = 0
+            if let (propio, _, _) = propioLease, parte == nil || vista.sides.contains(masterSide) {
                 try renderer.render(source: propio, view: vista, into: mitad)
                 conMaestro = true
+                gpuMitad = renderer.lastGpuMs
             }
             // SIN SEÑAL: ni maestro ni parte; sale el gráfico (con la tarjeta) sobre negro.
             try composer.compose(
                 master: conMaestro ? mitad : nil, slave: parte, view: vista, atRigMs: t, into: programa
             )
+            noteComposed(t: t, source: fuente, decision: decision, view: vista,
+                         masterFrameRigMs: conMaestro ? propioLease?.1 : nil, withPart: parte != nil,
+                         gpuMs: gpuMitad.flatMap { m in composer.lastGpuMs.map { m + $0 } })
             if fuente != .noSignal { lastProgram = programa }
             onProgram?(programa, t)
         } catch {
@@ -304,5 +361,32 @@ public final class MasterProgramStage {
             lock.unlock()
         }
         return decision
+    }
+
+    /// Las cuentas de SPK-04 de un instante pintado: GPU, desgarro y fase entre mitades.
+    private func noteComposed(
+        t: Int64, source: ProgramSource, decision: ProgramFrame, view: ViewCommand,
+        masterFrameRigMs: Int64?, withPart: Bool, gpuMs gpu: Double?
+    ) {
+        var parteMs: Int64?
+        var extrapolada = false
+        var desgarro = false
+        lock.lock()
+        if let gpu { gpuMs.record(ms: gpu) }
+        if let c = composer.lastGpuMs { composeGpuMs.record(ms: c) }
+        if case let .twoLens(vistaParte, slaveMs) = decision, withPart {
+            parteMs = slaveMs
+            extrapolada = extrapolatedParts.remove(slaveMs) != nil
+            if extrapolada { stats.extrapolatedViewFrames += 1 }
+            if let propio = masterFrameRigMs {
+                halvesSkewMs.record(ms: abs(Double(propio - slaveMs)))
+                desgarro = TearCheck.isTorn(masterView: view, partView: vistaParte, masterFrameRigMs: propio,
+                                            partFrameRigMs: slaveMs, frameDurationMs: frameDurationMs)
+                if desgarro { stats.tornFrames += 1 }
+            }
+        }
+        lock.unlock()
+        onComposed?(ComposedFrame(programRigMs: t, source: source, view: view, masterFrameRigMs: masterFrameRigMs,
+                                  partFrameRigMs: parteMs, extrapolated: extrapolada, torn: desgarro, gpuMs: gpu))
     }
 }

@@ -139,6 +139,19 @@ public enum ProgramFrame: Equatable, Sendable {
     case oneLens(view: ViewCommand)
 }
 
+/// El contador de fotogramas desgarrados de SPK-04: un fotograma de dos lentes cuyas
+/// mitades salen de vistas distintas o de instantes que no son el mismo fotograma (más
+/// de medio fotograma entre las capturas de los dos móviles). Por construcción no pasa
+/// (ADR 0023 §5); el banco lo comprueba con lo que se pintó de verdad.
+public enum TearCheck {
+    public static func isTorn(
+        masterView: ViewCommand, partView: ViewCommand,
+        masterFrameRigMs: Int64, partFrameRigMs: Int64, frameDurationMs: Double
+    ) -> Bool {
+        masterView != partView || abs(Double(masterFrameRigMs - partFrameRigMs)) > frameDurationMs / 2
+    }
+}
+
 /// El lado del maestro: guarda las partes que llegan y compone cada instante en su
 /// tic T + PART_MAX_WAIT_MS.
 public final class ProgramSync {

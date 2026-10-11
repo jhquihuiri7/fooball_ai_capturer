@@ -13,10 +13,27 @@ final class SlavePartStageTests: XCTestCase {
     private final class RenderFalso: PartRendering {
         var vistas: [ViewCommand] = []
         var falla = false
+        var lastGpuMs: Double?
         func render(source: CVPixelBuffer, view: ViewCommand, into destination: CVPixelBuffer) throws {
             if falla { throw ReprojectKernelError.pipeline("falla a propósito") }
             vistas.append(view)
         }
+    }
+
+    func testLaGpuDeCadaRenderAlHistograma() throws {
+        let enc = try VideoEncoder(width: 320, height: 180, bitrateBps: 1_000_000, viewId: 1)
+        let render = RenderFalso()
+        let (s, _, _) = etapa(render, enc)
+        let f = try fuente()
+        s.receive(views: [vista(1000, id: 1), vista(1033, id: 2), vista(1067, id: 3)])
+        s.process(frame: f, frameRigMs: 1000, ptsNs: 0)              // sin GPU sabida: no cuenta
+        render.lastGpuMs = 1.1
+        s.process(frame: f, frameRigMs: 1033, ptsNs: 33_333_333)
+        render.lastGpuMs = 2.6
+        s.process(frame: f, frameRigMs: 1067, ptsNs: 66_666_667)
+        XCTAssertEqual(s.gpuMs.total, 2)
+        XCTAssertEqual(s.gpuMs.percentile(0.5), 1.25)
+        XCTAssertEqual(s.gpuMs.percentile(0.99), 2.75)
     }
 
     private func vista(_ t: Int64, id: UInt32, sides: [CameraSide] = [.left, .right]) -> ViewCommand {

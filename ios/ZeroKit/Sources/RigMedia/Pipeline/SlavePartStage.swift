@@ -32,6 +32,27 @@ extension VideoEncoder: PartEncoding {}
 /// Pinta la contribución de una cámara para una vista.
 public protocol PartRendering: AnyObject {
     func render(source: CVPixelBuffer, view: ViewCommand, into destination: CVPixelBuffer) throws
+    /// SPK-04: lo que tardó en la GPU el último render (`gpuEndTime − gpuStartTime` de su
+    /// command buffer), en ms; nil si no lo sabe.
+    var lastGpuMs: Double? { get }
+}
+
+extension PartRendering {
+    public var lastGpuMs: Double? { nil }
+}
+
+/// SPK-04: la GPU por fotograma en cada móvil. Cubos de 0,25 ms hasta 5 (la aceptación
+/// es ≤3 ms) y gruesos después.
+public enum GpuTiming {
+    public static let boundsMs: [Double] = stride(from: 0.25, through: 5, by: 0.25).map { $0 }
+        + [6, 8, 10, 15, 20, 33, 50]
+    static let msPerS = 1000.0
+
+    /// Lo que estuvo el command buffer en la GPU, en ms (tras `waitUntilCompleted`).
+    public static func milliseconds(_ buffer: MTLCommandBuffer) -> Double? {
+        let ms = (buffer.gpuEndTime - buffer.gpuStartTime) * msPerS
+        return buffer.status == .completed && ms >= 0 ? ms : nil
+    }
 }
 
 /// El render de la parte con el kernel de reproyección (IOS-40).
@@ -44,6 +65,7 @@ public final class MetalPartRenderer: PartRendering {
     private let height: Int
     private let blind: BlindRect?
     private let mountedUpsideDown: Bool
+    public private(set) var lastGpuMs: Double?
 
     /// `blind`: la franja del código de tiempo en el búfer de la cámara, si se pinta.
     /// `mountedUpsideDown`: el móvil va girado 180° en el soporte (CameraMount); por
@@ -84,6 +106,7 @@ public final class MetalPartRenderer: PartRendering {
         )
         buffer.commit()
         buffer.waitUntilCompleted()
+        lastGpuMs = GpuTiming.milliseconds(buffer)
     }
 }
 
@@ -107,6 +130,9 @@ public final class SlavePartStage {
     private let encoder: PartEncoding
     private let sendQueue: PartSendQueue
     private let lock = NSLock()
+
+    /// SPK-04: la GPU del render de cada parte, en ms.
+    public private(set) var gpuMs = LatencyHistogram(boundsMs: GpuTiming.boundsMs)
 
     /// La vista con la que se pintó cada fotograma en vuelo por el codificador.
     private var inFlight: [UInt64: ResolvedView] = [:]
@@ -183,6 +209,11 @@ public final class SlavePartStage {
         }
         do {
             try renderer.render(source: frame, view: resuelta.command, into: destino)
+            if let ms = renderer.lastGpuMs {
+                lock.lock()
+                gpuMs.record(ms: ms)
+                lock.unlock()
+            }
         } catch {
             lock.lock()
             stats.renderFailures += 1

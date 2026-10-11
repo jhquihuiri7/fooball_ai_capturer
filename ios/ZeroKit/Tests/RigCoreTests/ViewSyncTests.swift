@@ -131,3 +131,28 @@ final class ViewSyncTests: XCTestCase {
         XCTAssertNil(h.view(at: 0), "el anillo está acotado")
     }
 }
+
+final class TearCheckTests: XCTestCase {
+    private static let frameMs = 1000.0 / 30.0
+
+    private static func vista(_ yaw: Double) -> ViewCommand {
+        ViewCommand(targetRigMs: 1000, viewId: 30, yawRad: yaw, pitchRad: 0, hfovRad: 1, sides: [.left, .right],
+                    seamYawRad: 0, featherRad: 0.035, gains: .unity)
+    }
+
+    func testMismaVistaYMismoFotogramaNoEsDesgarro() {
+        let v = Self.vista(0.1)
+        XCTAssertFalse(TearCheck.isTorn(masterView: v, partView: v, masterFrameRigMs: 1003, partFrameRigMs: 1000,
+                                        frameDurationMs: Self.frameMs))
+        XCTAssertFalse(TearCheck.isTorn(masterView: v, partView: v, masterFrameRigMs: 984, partFrameRigMs: 1000,
+                                        frameDurationMs: Self.frameMs), "16 ms: la fase, medio fotograma")
+    }
+
+    func testOtraVistaUOtroFotogramaEsDesgarro() {
+        XCTAssertTrue(TearCheck.isTorn(masterView: Self.vista(0.1), partView: Self.vista(0.11),
+                                       masterFrameRigMs: 1000, partFrameRigMs: 1000, frameDurationMs: Self.frameMs))
+        let v = Self.vista(0.1)
+        XCTAssertTrue(TearCheck.isTorn(masterView: v, partView: v, masterFrameRigMs: 1020, partFrameRigMs: 1000,
+                                       frameDurationMs: Self.frameMs), "20 ms: ya es el fotograma de al lado")
+    }
+}
