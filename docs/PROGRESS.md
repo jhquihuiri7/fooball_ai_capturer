@@ -13,6 +13,36 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 ---
 
 
+
+## 2026-10-11 · SPK-04, la pasada en el trípode por Wi-Fi: 0 desgarros; la GPU del maestro y la latencia, por encima · 🚧
+
+Los dos iPhone en el trípode con `rig-tripode-20261011.json` (yaw ±40,7°), 10 min con el
+guion de SPK-04 (`RIG_SPLIT_SCRIPT=spk04`: barrido que cruza la costura cada 20 s y zoom
+40°→83°) y las dos 4K locales (`RIG_SPLIT_RECORD_4K=1`). Por Wi-Fi: no hay Ethernet.
+Datos en `bench/dos-moviles-20261011-1506` (programa .ts/.mov, `program-views-*.jsonl`, las
+dos 4K —izquierda 3,4 GB, derecha 7,3 GB— y los informes).
+
+| Criterio de SPK-04 | Objetivo | Medido | |
+|---|---|---|---|
+| Fotogramas desgarrados | 0 | **0** (desfase entre mitades p50 8 / p99 12 ms) | ✅ |
+| GPU por fotograma, esclavo (render de la parte) | ≤3 ms | p50 1,5 / p95 2,5 / p99 2,75 ms | ✅ |
+| GPU por fotograma, maestro (render de su mitad + composición) | ≤3 ms | p50 3 / p95 4,5 / p99 5 ms; la composición sola p99 3 ms | ❌ |
+| Latencia añadida p95 | ≤120 ms | 144 ms | ❌ por Wi-Fi |
+| PSNR en la rampa | ≥38 dB | pendiente: `tools/spk04_psnr.py` en football-ai | — |
+
+Lectura: el cosido no desgarra (lo que la tarjeta pone como condición de ABANDONO), y el
+esclavo cabe en su presupuesto de GPU. El maestro hace dos cosas en el mismo command buffer
+(su mitad y la composición) y pasa de 3 ms: o el presupuesto de la tarjeta es por pase, o
+hay que juntar los dos pases en un kernel. La latencia de 144 ms es la de la espera de 130
+ms por Wi-Fi (ADR 0023, enmienda del 2026-10-07); el ≤120 supone Ethernet (SPK-02 con hubs).
+El arranque, ya con la línea de tiempo de 8056f00: control a los 2,1 s, primera parte a los
+8,5 s. 10 410 de 18 000 fotogramas de una lente: con HFOV < 68° el guion cae entero en una
+lente, que es lo que quiere SPK-05.
+
+Siguiente, sin iPhone: el PSNR (`tools/spk04_psnr.py`) y el VMAF por mitades
+(`tools/vmaf_halves.sh`, SPK-05) sobre estas grabaciones; luego decidir lo de la GPU del
+maestro. La 4K del 16 Pro sale al doble de bytes (7,3 GB en 600 s): mirar su bitrate real.
+
 ## 2026-10-11 · 80 min con toda la carga en el trípode: la memoria del maestro plana (SPK-54)
 
 Los dos iPhone en el trípode, calibrados con los umbrales del repo en esa posición
