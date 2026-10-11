@@ -12,6 +12,133 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-11 · El arranque lento del 10-oct no fue el canal de medios: el esclavo abrió su enlace 100 s tarde · 🚧 falta una pasada con los tiempos nuevos
+
+**Diagnóstico.** Se cruzan los informes de las 18 pasadas split con los dos lados del 7 al
+10-oct, entre ellas `…-20261010-1035` (900 s, build recién instalada), y la de calibración
+de hoy, `…-20261011-1321` (60 s):
+
+| Pasada | El informe del esclavo, después del del maestro | El maestro ve al esclavo (`peer_states`) | Pareja de calibración |
+|---|---|---|---|
+| Las otras 16 | +9-12 s | a los 1,0-3,4 s (la de 90 min del 8-oct, a los 24 s) | — |
+| `…-20261010-1035` | +10 s | a los 2,0 s | a los 30 s |
+| **`…-20261010-1106`** | **+112 s** | **a los 102,5 s** | **ninguna** |
+| `…-20261011-1321` | +10 s | a los 1,3 s | a los 30,4 s |
+
+- **Cómo se leen los tiempos.**
+  - El nombre del informe es la hora Unix en que acaba, con el reloj de cada móvil.
+  - Cada banco dura su `RIG_SPLIT_S` desde que se crea, y se crea en `startLink`, justo
+    antes de `link.start()`.
+  - Los +10 s de siempre son los relojes de pared: el del 16 Pro va ~9-10 s por delante.
+    No puede ser un retraso, porque el maestro ve al esclavo a los ~2 s.
+- **En `…-1106` el esclavo abrió su enlace ~101 s más tarde de lo normal**, y el maestro
+  lo vio 100,5 s más tarde de lo normal.
+  - Desde que el esclavo abrió el enlace, el control, el apretón de manos y los latidos
+    por medios tardaron lo de siempre (1-2 s).
+  - **El transporte no tardó.** Los ~100 s se fueron antes del `startLink` del derecho, de
+    una de dos maneras:
+    1. El lanzamiento: el script lanza el derecho cuando `devicectl` vuelve del izquierdo.
+    2. La app antes de abrir el enlace. `prepare` de Dart pide la cámara (al instante), la
+       red local (≤ 20 s) y `configure` (≤ 3 s de medición). Nada de eso espera 100 s salvo
+       que la app estuviera suspendida, por ejemplo con la pantalla apagada.
+
+    Los informes no los distinguen; desde hoy, sí.
+- **Encaja con lo demás.**
+  - El esclavo mandó 4434 partes, sus 150 s enteros. El banco del maestro acabó 112 s antes
+    que el suyo, y el esclavo siguió mandando partes con la última vista.
+  - Las 1389 recibidas son los ~47 s en que los dos bancos corrieron a la vez. `parts_lost`
+    da 0 porque las demás llegaron después del informe del maestro.
+  - Los negros a los 40 y 75 s y el cosido bien a los 110 y 140 s caen igual.
+- **Sin pareja de calibración en `…-1106`.** `RIG_CALIB_AT_S` contaba desde que el maestro
+  toma su rol, y lo toma solo al arrancar. A los 30 s no había esclavo, `start` respondió
+  «solo el maestro con enlace calibra» y no volvió a intentarlo. Arreglado (abajo).
+- **El transporte, revisado** (0d10448 y c5a5506).
+  - Por Bonjour no hay vigía de silencio (`silenceTimeoutS` nil).
+  - El plazo para conectar sigue en 4 s.
+  - `keepUntilDrop` y el relevo de medios solo cambian algo con la conexión arriba o por
+    Wi-Fi Aware.
+  - El navegador prefiere el anuncio recién aparecido al de la caché, y su vigía de medios
+    prueba otro a los 3 s.
+  - Nada de esto puede tener los medios 100 s abajo con el control arriba, y los datos dicen
+    que no pasó.
+
+**Hecho**
+- **RigNet.**
+  - `LinkTransportStats.firstControlUpNs` y `firstPeerMediaNs`.
+  - `NWLinkTransport.createdNs` es público: es el cero de `events`.
+  - La línea de tiempo ya cuenta el canal de medios: la cita de medios publicada, cada
+    intento de conexión de control y de medios, `medios: conexión lista`,
+    `medios: llega una conexión` y `medios mudos: se prueba el anuncio i de n`.
+  - `medios: primera trama del otro` sale una vez por cada subida del control.
+  - Cuenta los anuncios que ve cada browser (`control: 2 anuncios (+1 −0)`): el viejo de la
+    caché se ve.
+  - Guarda los 40 primeros sucesos y los 80 últimos (`LinkEventLog`): en una pasada de
+    90 min el arranque ya no se pierde.
+- **`LinkStartupTimeline`.** La primera vez de cada hito, en ms desde que arranca el banco,
+  y `processStartUnixMs()` (sysctl).
+- **El informe de `program-split`** trae:
+  - `link_timeline_ms`, en ms desde que arranca el banco (−1 si nunca):
+    - `control_up` y `media_rx` (la primera trama del otro), de los dos lados;
+    - `session_up` (cada tic, unos 33 ms de resolución);
+    - en el maestro, `peer_up` y `first_part`;
+    - en el esclavo, `first_view` y `first_part_sent`.
+  - `transport_events`, con sus segundos desde `transport_t0_ms`.
+  - `launch_to_bench_ms`: del lanzamiento del proceso a `startLink`.
+  - `bench_start_unix_ms` y `bench_start_rig_ms`. Este último, en el reloj del soporte, se
+    resta entre los dos informes y da el desfase de arranque sin el de los relojes de pared.
+    Solo vale en el esclavo si el reloj llegó a sincronizarse.
+- **`tools/banco_dos_moviles.sh`** dice la hora de cada lanzamiento y lo que tardó
+  `devicectl`.
+- **La calibración automática** espera al enlace: dispara a los `RIG_CALIB_AT_S` segundos
+  de que haya enlace, como decía su comentario. Hasta entonces mira una vez por segundo.
+
+**Comprobado**
+- `swift test --skip ModelBench`: 372 tests, 1 saltado, 0 fallos. Es la ZeroKit de
+  fd5e88d (con SPK-04) más esto; sobre 7f17138, 363.
+- Los 7 de `LinkStartupTimelineTests`:
+  - el registro con su arranque y su final;
+  - los hitos, solo la primera vez;
+  - los del transporte, desde sus contadores;
+  - el arranque del proceso;
+  - por el loopback, los dos lados apuntan cuándo subieron el control y los medios, y la
+    línea de tiempo lo dice.
+- `tools/check_layers.sh`: limpio.
+- ZeroKit compilado para iOS con xcodebuild (derivedData temporal). Sin avisos nuevos;
+  queda el de `VtConcurrencyBench`.
+- El Runner, sin `flutter build` y sin tocar `build/ios`: `swiftc -typecheck` de todos sus
+  `.swift`, en dos estados. 0 errores en los dos, con los 32 avisos de antes:
+  - 7f17138 con esto;
+  - fd5e88d (SPK-04) con esto, que es lo que se sube.
+
+**Qué mirar en la próxima pasada** (vale cualquiera, `split` o con `SIN_INSTALAR=1`)
+
+```bash
+cd /Users/alexander/Trabajacion/fooball_ai_capturer
+d=$(ls -td bench/dos-moviles-* | head -1)
+for f in $(ls -t $d/izquierdo/bench/program-split-left-*.json | head -1) $(ls -t $d/derecho/bench/program-split-right-*.json | head -1); do
+  python3 -c 'import json,sys; d=json.load(open(sys.argv[1]))
+print(sys.argv[1], d["role"], "arranque (reloj del soporte)", d.get("bench_start_rig_ms"), "ms; lanzado→enlace", d.get("launch_to_bench_ms"), "ms")
+print("  hitos (ms desde el arranque):", d.get("link_timeline_ms"))
+print("  " + "\n  ".join(d.get("transport_events", [])[:30]))' "$f"
+done
+```
+
+- **Lo normal.** En la salida del script, los dos `… lanzado (N s)` a pocos segundos uno
+  del otro.
+  - `launch_to_bench_ms`: unos segundos.
+  - `control_up` y `media_rx`: 1-2 s. `peer_up` y `first_part` del maestro, poco después.
+  - La resta de los `bench_start_rig_ms`: unos segundos.
+- **Si vuelve a pasar,** la resta de los `bench_start_rig_ms` da ~100 s, y la causa sale así:
+
+  | Lo que se ve | Dónde está |
+  |---|---|
+  | `derecho lanzado (≈100 s)` | El lanzamiento (`devicectl`): mirar el bloqueo y la pantalla del derecho antes de lanzar. |
+  | `launch_to_bench_ms` ≈ 100 000 en el esclavo | La app antes del enlace: la pantalla, los permisos o la cámara. |
+  | Los arranques juntos, pero `control_up` o `media_rx` tarde | El transporte. `transport_events` dice qué anuncio probó y cuándo llegó lo primero por medios. |
+
+- **La pareja de calibración** sale en `calib/` aunque el esclavo llegue tarde, a los
+  `RIG_CALIB_AT_S` s del enlace.
+
 ## 2026-10-11 · SPK-04 — el banco del render repartido: guion, GPU, desgarros y las 4K · 🚧 falta la pasada con los dos iPhone
 
 Lo que hace falta para que la pasada de 10 min deje medida la aceptación: la latencia
