@@ -1815,10 +1815,26 @@ final class CalibrationPairs {
         run(targets: destinos, completion: completion)
     }
 
-    /// Con RIG_CALIB_AT_S, se arma una vez al conectar como maestro.
+    /// Con RIG_CALIB_AT_S, se arma una vez al tomar el rol de maestro y dispara a los <s>
+    /// segundos de que haya enlace. El maestro toma su rol al arrancar, solo: contar desde
+    /// ahí dejaba sin pareja la pasada en la que el esclavo llega tarde (`…-20261010-1106`,
+    /// a los 102 s: a los 30 no había con quién calibrar y no se volvía a intentar).
     func armAutoTrigger(environment: [String: String] = ProcessInfo.processInfo.environment) {
         guard let s = environment["RIG_CALIB_AT_S"].flatMap(Double.init), !autoArmed else { return }
         autoArmed = true
+        fireWhenLinked(afterS: s)
+    }
+
+    /// Cada cuánto se mira si ya hay enlace para empezar a contar el disparo automático.
+    private static let autoTriggerPollS = 1.0
+
+    private func fireWhenLinked(afterS s: Double) {
+        guard case .connected = session.state else {
+            DispatchQueue.global().asyncAfter(deadline: .now() + Self.autoTriggerPollS) { [weak self] in
+                self?.fireWhenLinked(afterS: s)
+            }
+            return
+        }
         DispatchQueue.global().asyncAfter(deadline: .now() + s) { [weak self] in
             guard let self, session.isMaster else { return }
             start { resumen in NSLog("[calib] maestro: %@", resumen) }
