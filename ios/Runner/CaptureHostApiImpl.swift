@@ -203,6 +203,7 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
         let link: PeerLinking
         if Self.useMultipeer {
             engine.rigClock = nil
+            AdHub.clock = nil
             link = RigLink(role: role)
         } else {
             guard let secreto = RigLinkNW.benchSecret() else {
@@ -221,6 +222,8 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
             // IOS-13: la cámara lee el reloj nativo por fotograma, sin pasar por
             // Pigeon; a Dart solo le llega la estimación, para la pantalla y la fase.
             engine.rigClock = nw.clock
+            // La franja, en el mismo reloj que el programa que la pide.
+            AdHub.clock = nw.clock
             // Hasta que el enlace diga su rol, esclavo: la 4K espera al reloj (el rol
             // llega en cuanto arranca la sesión, antes que el primer fotograma grabado).
             engine.setClockReference(false)
@@ -327,6 +330,7 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
         link?.stop()
         link = nil
         engine.rigClock = nil
+        AdHub.clock = nil
         engine.onLookLocked = nil
         engine.forgetMasterLook()
     }

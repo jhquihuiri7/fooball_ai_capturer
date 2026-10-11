@@ -14,6 +14,89 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 
 
+## 2026-10-11 · El maestro contesta la hora en el reloj del soporte: el que vuelve tras un relevo ya no se va 591 898 s (IOS-12, IOS-13, IOS-85; ADR 0023 §4, enmienda) · 🚧 falta el relevo de ida y vuelta con los dos iPhone
+
+**El fallo**, apuntado en la entrada de abajo («la 4K del esclavo») y confirmado en el código:
+- `RigLinkSession.handle(.clockPing)` contestaba `t2 = llegada` y `t3 = hostNowNs()`, en el
+  host crudo.
+- El promovido (`forceMaster`, IOS-85) conserva su `clock`. Los `clock_pong` solo los coge
+  el esclavo (`guard !isMaster`), así que al promoverse deja de recibir muestras: la recta
+  queda congelada y `offsetAt` sigue extrapolándola.
+- Todo lo demás del promovido va en host + recta: su cámara (`CaptureEngine`), el anillo,
+  las vistas (`SplitBench.rigNowMs`), la calibración (`CalibrationPairs.nowRigMs`) y el
+  `rigClockSnapshot` de Dart. El pong era lo único en host crudo.
+- El maestro de antes, al volver de esclavo, despejaba el host del promovido menos el suyo:
+  ~+591 898 s, en vez de ~0.
+
+**Arreglo**
+- **`RigLinkSession`:** `t2` y `t3` salen con `clock.toRigTimeNs(…)`. Sin muestras el
+  desfase es 0, así que un maestro que nunca fue esclavo contesta byte a byte lo mismo.
+- **`AdHub.nowRigMs`** (la franja, IOS-48) suponía lo mismo: «el soporte, en el maestro, es
+  su host».
+  - La lista y los overrides se fechaban en el host crudo, y la franja se pide con el
+    instante del programa, que va en el soporte.
+  - En un promovido se habría quedado sin anuncios o en un punto cualquiera de la lista.
+  - Ahora suma el desfase del reloj del enlace: `AdHub.clock`, que ponen `startLink` y
+    `stopLink`.
+- **El contrato** se enmienda en football-ai: ADR 0023 §4 y la fila de `clock_pong` de la
+  decisión 1, pendiente de la revisión del propietario.
+
+**Revisado y sin cambios.** Lo que cruza al otro móvil ya iba en el soporte o no lleva hora:
+- **El latido** no lleva sellos (rol, term, escalera, estado y el último seq). La salud usa
+  el host, pero solo dentro del móvil.
+- **Las vistas** (`targetRigMs`), **las partes y `no_part`** (`frameRigMs`) y **las
+  detecciones** van en el soporte.
+- **`pts_reply`** (`recentFramePtsNs`): los PTS ya llevan el desfase.
+- **La calibración** (`calibration_capture`): los destinos salen del anillo o de
+  `nowRigMs()`, con desfase, y el esclavo espera con el suyo.
+- **La réplica:** el cronómetro sale de `rigClockSnapshot` (host + desfase).
+- **La llegada de `onPart`** va en host, pero el banco split no la usa (usa `rigNowMs()`), y
+  el link-bench mide en uptime de punta a punta.
+- **El Multipeer** (`RigLink.swift`) también contesta en host crudo, pero allí no hay
+  relevo (el rol es el lado) ni RigClock nativo. Se queda como está.
+
+**Los casos compartidos del reloj** (`rig_clock_cases.json`, `lib/src/rig_clock.dart`) no
+cambian. Prueban la cuenta a partir de los cuatro sellos, y el dominio de `t2`/`t3` no
+entra. Dart recibe por `onClockStamps` los mismos sellos, ya en el soporte.
+
+**Comprobado**
+- `swift test --skip ModelBench`: 384 tests, 1 saltado, 0 fallos. Los 2 nuevos de
+  `RigLinkSessionTests` separan los dos relojes de host 591 898 s:
+  - **sin relevo:** el pong sale en el host del maestro (t1 − Δ < t2 ≤ t3 < t4 − Δ), el
+    esclavo despeja −591 898 s y el maestro no tiene muestras;
+  - **relevo:** A maestro y B esclavo sincronizado. Cae A y B hace `forceMaster`. Vuelve el
+    enlace, B manda por term 2 y A, ya de esclavo, cae en el soporte de B: diferencia
+    < 1 ms y desfase de A ≈ 0. La recta de B no recibe muestras. Sin el arreglo falla con
+    591 898 000 000 000 ns.
+- `tools/check_layers.sh`: limpio.
+- `flutter build ios --release --no-pub --dart-define=AUTO_ROLE=left
+  --dart-define=PREFERS_MASTER=true`: compila (Runner.app de 28,1 MB), sin instalar.
+
+**Qué mirar con los dos iPhone: el relevo de ida y vuelta.**
+- **La pasada.** Los dos con
+  `BANCO_EXTRA='{"RIG_SPLIT_SCRIPT": "spk04", "RIG_SPLIT_RECORD_4K": "1", "RIG_SPLIT_FORCE_AT_S": "100"}'`
+  y `tools/banco_dos_moviles.sh split <secreto> 600`.
+  1. A los ~90 s se mata la app del izquierdo (`xcrun devicectl device process terminate`).
+     El derecho se promueve a los 100 s.
+  2. A los ~170 s se relanza el izquierdo con el mismo entorno. Hacen falta ≥150 s tras la
+     vuelta: con 67 s, en la pasada del 6-oct, no llegó a conectar.
+  3. **La vuelta**, si da tiempo: se mata el derecho a los ~90 s del izquierdo relanzado. El
+     izquierdo se fuerza a sus 100 s y luego se relanza el derecho.
+- **El derecho, promovido:**
+  - `two_lens_frames` > 0 después de la vuelta, porque el guion de SPK-04 cruza la costura
+    cada 20 s;
+  - `torn_frames` 0;
+  - `part_age_ms` p50 ~90-150 ms. Con el fallo, la parte del que vuelve llegaba fechada
+    ~591 898 s lejos y no casaba con ninguna vista.
+- **El izquierdo, de vuelta como esclavo:**
+  - `rec4k.clock.clock_jump_segments` 0 y un solo segmento: arranca de maestro provisional
+    con desfase 0 y la primera muestra da ~0. Con el fallo, 1 segmento más por el salto;
+  - `ffprobe` de su 4K y de su programa da la duración real.
+- **Los `bench_start_rig_ms` de los dos informes** se separan lo que se tardó en relanzar
+  (~170 s), no ~591 898 s.
+- **Si se hace la vuelta,** lo mismo con los papeles cambiados. El derecho, al volver,
+  tiene que caer otra vez en ~−Δ, el desfase de su primera sincronización.
+
 ## 2026-10-11 · La 4K del esclavo decía durar 592 497 s: el reloj del soporte cambiaba a mitad de fichero (IOS-57, IOS-13, SPK-04) · 🚧 falta la pasada con los dos iPhone
 
 **Qué pasaba.** En la pasada de SPK-04 (`bench/dos-moviles-20261011-1506`), la 4K del esclavo

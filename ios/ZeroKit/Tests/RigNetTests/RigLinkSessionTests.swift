@@ -407,6 +407,108 @@ final class RigLinkSessionTests: XCTestCase {
         XCTAssertEqual(despues, antes)
     }
 
+    // MARK: - El reloj tras un relevo (ADR 0023 §4, enmienda del 2026-10-11)
+
+    /// Lo que separa los relojes de host de los dos iPhone: lo medido en la pasada de
+    /// SPK-04 (`bench/dos-moviles-20261011-1506`), en ns.
+    private static let hostGapNs: Int64 = 591_898 * 1_000_000_000
+    /// Lo que se le pide a una estimación con el reloj inyectado, en ns: muy por encima del
+    /// error del contador (decenas de ns) y muy por debajo de un cambio de dominio.
+    private static let clockToleranceNs: Int64 = 1_000_000
+
+    /// Un par con relojes de host distintos: el derecho va `hostGapNs` por delante. Devuelve
+    /// también el instante «de verdad», que es el host del izquierdo.
+    private func makePairWithHostGap()
+        -> (left: RigLinkSession, right: RigLinkSession, cableLeft: FakeLinkTransport,
+            cableRight: FakeLinkTransport, now: () -> Int64)
+    {
+        let (left, right, cableLeft, cableRight) = makePair()
+        let lock = NSLock()
+        nonisolated(unsafe) var t = Int64(1_000)
+        let verdad: () -> Int64 = {
+            lock.lock()
+            defer { lock.unlock() }
+            t += 10
+            return t
+        }
+        left.hostNowNs = verdad
+        right.hostNowNs = { verdad() + Self.hostGapNs }
+        return (left, right, cableLeft, cableRight, verdad)
+    }
+
+    func testSinRelevoElMaestroContestaConSuHostYElEsclavoCaeEnEl() {
+        // Un maestro que nunca fue esclavo no tiene muestras: su reloj del soporte es su
+        // host, y el pong sale igual que antes de la enmienda.
+        let (left, right, _, _, _) = makePairWithHostGap()
+        nonisolated(unsafe) var sellos: [(Int64, Int64, Int64, Int64)] = []
+        let lock = NSLock()
+        right.onStamps = { t1, t2, t3, t4 in lock.lock(); sellos.append((t1, t2, t3, t4)); lock.unlock() }
+        left.start()
+        right.start()
+        waitUntil { self.isConnected(left) && self.isConnected(right) }
+        waitUntil(3) { right.clock.estimate != nil }
+
+        XCTAssertTrue(left.isMaster)
+        XCTAssertTrue(left.clock.samples.isEmpty, "el maestro no alimenta su reloj")
+        lock.lock()
+        let vistos = sellos
+        lock.unlock()
+        for (t1, t2, t3, t4) in vistos {
+            // t2 y t3 en el host del izquierdo: entre la salida y la llegada del esclavo,
+            // pasadas a ese host.
+            XCTAssertLessThan(t1 - Self.hostGapNs, t2)
+            XCTAssertLessThanOrEqual(t2, t3)
+            XCTAssertLessThan(t3, t4 - Self.hostGapNs)
+        }
+        let desfase = right.clock.offsetAt(ns: right.hostNowNs())
+        XCTAssertLessThan(abs(desfase + Self.hostGapNs), Self.clockToleranceNs)
+    }
+
+    func testTrasUnRelevoElMaestroDeAntesSeSincronizaAlSoporteYNoAlHostDelPromovido() {
+        // A (izquierdo) maestro y B (derecho) esclavo sincronizado; cae A, B se promueve; A
+        // vuelve y queda de esclavo. Su reloj del soporte tiene que ser el de B, que sigue el
+        // dominio de A, y no el host de B (+591 898 s: lo que pasaba antes de la enmienda).
+        let (a, b, _, cableB, ahora) = makePairWithHostGap()
+        for s in [a, b] { s.matchId = "m1"; s.term = 1 }
+        a.claimedRole = .master
+        b.claimedRole = .slave
+        a.start()
+        b.start()
+        waitUntil { self.isConnected(a) && self.isConnected(b) }
+        waitUntil(3) { b.clock.estimate != nil }
+        XCTAssertLessThan(abs(b.clock.offsetAt(ns: b.hostNowNs()) + Self.hostGapNs), Self.clockToleranceNs)
+
+        // Cae A: B lo ve en su transporte y el operador pulsa «Este móvil dirige».
+        a.stop()
+        cableB.onState?(.listening)
+        waitUntil { b.state == .searching && a.state == .off }
+        let lock = NSLock()
+        nonisolated(unsafe) var nuevo: Int?
+        b.forceMaster { t in lock.lock(); nuevo = t; lock.unlock() }
+        waitUntil { lock.lock(); defer { lock.unlock() }; return nuevo != nil }
+        XCTAssertTrue(b.isMaster)
+        let congeladas = b.clock.samples.count
+
+        // Vuelve el enlace: B saluda primero y A, al arrancar, recibe su hello.
+        cableB.start()
+        waitUntil { b.state == .authenticating }
+        a.start()
+        waitUntil { self.isConnected(a) && self.isConnected(b) }
+        XCTAssertTrue(b.isMaster, "el term mayor manda")
+        XCTAssertFalse(a.isMaster)
+        XCTAssertEqual(a.term, 2)
+        waitUntil(3) { a.clock.estimate != nil }
+
+        let c = ahora()
+        let soporteEnA = a.clock.toRigTimeNs(c)
+        let soporteEnB = b.clock.toRigTimeNs(c + Self.hostGapNs)
+        XCTAssertLessThan(abs(soporteEnA - soporteEnB), Self.clockToleranceNs,
+                          "A y B en el mismo reloj del soporte")
+        XCTAssertLessThan(abs(a.clock.offsetAt(ns: c)), Self.clockToleranceNs,
+                          "el soporte sigue en el dominio de A: sin la enmienda saldrían +591 898 s")
+        XCTAssertEqual(b.clock.samples.count, congeladas, "la recta del promovido sigue congelada")
+    }
+
     // MARK: - PTS y órdenes
 
     func testPtsComeFromTheMasterOrTimeOutToEmpty() {

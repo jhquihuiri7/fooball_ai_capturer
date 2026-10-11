@@ -19,8 +19,18 @@ enum AdHub {
     }
     static let rotation: AdRotation? = store.map { AdRotation(store: $0) }
 
-    /// El instante del soporte en el maestro (su reloj de host).
-    static func nowRigMs() -> Int64 { RigLink.hostNowNs() / 1_000_000 }
+    /// El reloj del enlace de Network, o nil sin él (Multipeer, o sin enlace). Lo pone
+    /// `CaptureHostApiImpl.startLink` y lo quita `stopLink`.
+    static var clock: RigClock?
+
+    /// El instante del soporte en el maestro: su host más el desfase de su recta. En el
+    /// maestro de siempre el desfase es 0; en un promovido (IOS-85) es la recta congelada,
+    /// y la franja se pide con el instante del programa, que va en ese reloj (ADR 0023 §4,
+    /// enmienda del 2026-10-11).
+    static func nowRigMs() -> Int64 {
+        let ns = RigLink.hostNowNs()
+        return (ns + (clock?.offsetAt(ns: ns) ?? 0)) / 1_000_000
+    }
 
     /// Carga la lista: los anuncios de Documents/ads/<dir> y sus vueltas.
     static func apply(json: String) throws {

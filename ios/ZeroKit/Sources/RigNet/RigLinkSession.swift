@@ -67,7 +67,9 @@ public final class RigLinkSession {
     static let ptsTimeoutS = 1.5
 
     public var onState: ((State) -> Void)?
-    /// Los cuatro sellos de una pregunta de hora, en ns del reloj de host.
+    /// Los cuatro sellos de una pregunta de hora, en ns: `t1` y `t4` en el reloj de host
+    /// de este móvil; `t2` y `t3`, en el reloj del soporte del maestro (ADR 0023 §4,
+    /// enmienda del 2026-10-11).
     public var onStamps: ((Int64, Int64, Int64, Int64) -> Void)?
     /// Cada estimación nueva del reloj nativo (IOS-13). Solo la emite el esclavo, que
     /// es quien pregunta; la cámara lee `clock` directamente, sin pasar por aquí.
@@ -75,6 +77,8 @@ public final class RigLinkSession {
 
     /// El reloj del soporte, alimentado con cada clock_pong. Es seguro entre hilos: la
     /// cámara le pregunta el desfase por fotograma mientras esta cola añade muestras.
+    /// Un maestro no lo alimenta: el promovido se queda con la recta de cuando era
+    /// esclavo (congelada) y con ella sella y contesta los clock_ping (ADR 0023 §4).
     public let clock = RigClock()
     public var onLook: ((CameraLook) -> Void)?
     public var onCommand: ((RigWireCommand) -> Void)?
@@ -561,10 +565,15 @@ public final class RigLinkSession {
             guard isMaster else { return }
             var reader = BigEndianReader(data: frame.payload)
             guard let t1 = reader.read(Int64.self) else { return }
+            // t2 y t3 van en el reloj del soporte, no en el host crudo (ADR 0023 §4,
+            // enmienda del 2026-10-11). Un maestro de siempre no tiene muestras y su
+            // desfase es 0: no cambia nada. Un promovido sella con su host más la recta que
+            // congeló al promoverse; si contestara con el host crudo, el maestro de antes,
+            // al volver de esclavo, se sincronizaría a ese host y no al soporte.
             var payload = Data()
             payload.appendBigEndian(t1)
-            payload.appendBigEndian(llegada)          // t2
-            payload.appendBigEndian(hostNowNs())      // t3
+            payload.appendBigEndian(clock.toRigTimeNs(llegada))      // t2
+            payload.appendBigEndian(clock.toRigTimeNs(hostNowNs()))  // t3
             seqMedia &+= 1
             send(type: .clockPong, payload: payload, seq: seqMedia, channel: .media)
         case .clockPong:
