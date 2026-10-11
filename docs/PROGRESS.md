@@ -12,6 +12,29 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+
+## 2026-10-11 · 80 min con toda la carga en el trípode: la memoria del maestro plana (SPK-54)
+
+Los dos iPhone en el trípode, calibrados con los umbrales del repo en esa posición
+(`bench/dos-moviles-20261011-1321`: 75-100 inliers, residuo 0,06°, **yaw ±40,7°, roll del
+derecho −6,2°**; `docs/img/rig-tripode-20261011.json`, par en
+`docs/img/par-calibracion-tripode-20261011.jpg`). 80 min con director, CenterNet en los dos,
+micro, partes y esa geometría (`bench/dos-moviles-20261011-1340/manual`; los informes se
+trajeron a mano para no esperar a copiar 2,8 GB de .ts):
+
+| | 2026-10-08 (antes de c5a5506) | **2026-10-11** |
+|---|---|---|
+| Memoria del maestro | 389 → 629 MB, +1,25 MB/min | **506-545 MB, +0,27 MB/min** |
+| Esclavo | plano ~442 | plano ~452 |
+| Programa | 161 877 fot. (90 min) | 143704 fot. en 4800 s, sin el propio 0 |
+| Dos lentes / una | 135 561 / 26 316 | 116186 / 27518 |
+| Latencia añadida p95 | 144 ms | 143 ms |
+| Térmica | maestro fair, esclavo serious | ['fair', 'nominal'] los dos |
+
+La memoria se queda en 506-523 MB hasta el minuto 69, sube una vez a ~543 y no vuelve a
+crecer: la fuga queda cerrada en una pasada de partido. Con el trípode los dos se
+quedaron en fair (el 2026-10-08 el esclavo llegó a serious).
+
 ## 2026-10-11 · El arranque lento del 10-oct no fue el canal de medios: el esclavo abrió su enlace 100 s tarde · 🚧 falta una pasada con los tiempos nuevos
 
 **Diagnóstico.** Se cruzan los informes de las 18 pasadas split con los dos lados del 7 al
