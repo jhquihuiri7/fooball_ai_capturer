@@ -733,6 +733,12 @@ final class LinkPartsLoad {
 //   RIG_SPLIT_SWEEP_S       periodo del barrido (20)
 //   RIG_SPLIT_HFOV_DEG      el encuadre (60)
 //   RIG_SPLIT_DIRECTOR      1: dirige el DirectorService (IOS-73) con las detecciones
+//   RIG_SPLIT_SCRIPT        spk04: el director de guion de SPK-04 (Spk04Script: barrido que
+//                           cruza la costura cada 20 s y zoom de 40° a 83°, en el reloj del
+//                           soporte); manda sobre RIG_SPLIT_DIRECTOR y el barrido de siempre
+//   RIG_SPLIT_RECORD_4K     1: graba además la 4K HEVC local de cada móvil (IOS-57) en
+//                           Documents/bench4k/<t>/, con la reserva de la pasada y no la del
+//                           partido (RecordingPolicy.benchReserveBytes)
 //   RIG_NOMINAL_YAW_DEG     sin Documents/rig.json, la apertura de cada cámara (DEFAULT_RIG_YAW_DEG)
 //   RIG_NOMINAL_HFOV_DEG    y su HFOV (106, la ultra gran angular)
 //   RIG_NOMINAL_PITCH_DEG   y su pitch (DEFAULT_RIG_PITCH_DEG)
@@ -742,6 +748,12 @@ final class LinkPartsLoad {
 //   RIG_SPLIT_NO_VIEWS      1: el maestro no manda `view` (sin las vistas a 30 Hz; el
 //                           esclavo no pinta ni manda partes)
 //   RIG_SPLIT_NO_THUMBS     1: el esclavo no manda su miniatura por control (ThumbHub)
+//
+// SPK-04: el maestro escribe además Documents/bench/program-views-<t>.jsonl, una línea por
+// instante del programa con la vista de verdad, los fotogramas de cada móvil y la GPU (lo
+// que necesita la referencia de REF-41 para el PSNR), y el informe trae en `files` las
+// rutas (relativas a Documents) de todo lo grabado en la pasada, para que el banco del Mac
+// las recoja sin traer vídeos viejos.
 
 final class SplitBench {
     static func enabled(_ entorno: [String: String] = ProcessInfo.processInfo.environment) -> Bool {
@@ -784,6 +796,29 @@ final class SplitBench {
     private var director: DirectorService?
     /// IOS-75: el registro N0 del maestro (Documents/n0/<partido>-<lado>.jsonl).
     private var e0: E0Logger?
+    private var e0URL: URL?
+    /// SPK-04: el director de guion (RIG_SPLIT_SCRIPT=spk04).
+    private var spk04: Spk04Script?
+    /// SPK-04: una línea por instante del programa (program-views-<t>.jsonl).
+    private var viewsFile: FileHandle?
+    private var viewsURL: URL?
+    private var viewsPending = Data()
+    private var viewsLines = 0
+    /// Las líneas que se juntan antes de pasarlas al disco (1 s a 30 fps).
+    private static let viewsFlushEvery = 30
+    /// SPK-04: la 4K local de este móvil (RIG_SPLIT_RECORD_4K=1). Las abre y cierra el
+    /// CaptureEngine; el banco solo sabe la carpeta.
+    var startLocal4K: ((String, Int64) -> String)?
+    var stopLocal4K: (() -> Void)?
+    var local4KFrames: () -> Int64 = { 0 }
+    private var rec4kDir: URL?
+    private var rec4kStarted = false
+    private var rec4kPath = ""
+    private var diskFreeStartGb: Double?
+    /// La aceptación de SPK-04, para el informe: latencia añadida p95 (ms) y GPU (ms).
+    private static let spk04LatencyP95Ms = 120.0
+    private static let spk04GpuMs = 3.0
+    private static let bytesPerGb = 1e9
     private var e0Ticks = 0
     /// Los cambios de salud del esclavo, para el informe (IOS-81).
     private var peerStates: [String] = []
@@ -1041,12 +1076,15 @@ final class SplitBench {
             }
             m.masterFrame = { ms in
                 guard let lease = ring.acquire(nearest: ms, maxDistanceMs: Self.frameMatchMs) else { return nil }
-                return (lease.buffer, { ring.release(lease) })
+                return (lease.buffer, lease.rigMs, { ring.release(lease) })
             }
+            m.onComposed = { [weak self] f in self?.logComposed(f) }
             m.onIdrRequest = { [weak self] seq in self?.session.requestIdr(partSeq: seq) }
             // IOS-84: sin ninguna cámara, la tarjeta SIN SEÑAL (la sube Dart, oculta).
             m.onSourceChange = { fuente in OverlayHub.shared?.setVisible(.slate, fuente == .noSignal) }
-            if env["RIG_SPLIT_DIRECTOR"] == "1" {
+            if env["RIG_SPLIT_SCRIPT"] == "spk04" {
+                spk04 = Spk04Script(rig: modelo)
+            } else if env["RIG_SPLIT_DIRECTOR"] == "1" {
                 let loop = try DirectorLoop(
                     rig: modelo, canvas: CylindricalCanvas.fit(modelo, pitchLimitsRad: (-0.5, 0.1)),
                     width: Self.programWidth, height: Self.programHeight, plan: ShotPlan.at(),
@@ -1064,8 +1102,10 @@ final class SplitBench {
             if let docs = try? FileManager.default.url(for: .documentDirectory, in: .userDomainMask,
                                                        appropriateFor: nil, create: true) {
                 let id = "banco-\(Int(Date().timeIntervalSince1970))"
+                let url = docs.appendingPathComponent("n0/\(id)-\(side.rawValue).jsonl")
+                e0URL = url
                 e0 = try? E0Logger(
-                    url: docs.appendingPathComponent("n0/\(id)-\(side.rawValue).jsonl"),
+                    url: url,
                     header: .header(matchId: id, rigId: "banco",
                                     // El dominio del reloj de host de este arranque (ADR 0023 §4).
                                     clockDomain: "banco" + String(format: "%08x", UInt32.random(in: .min ... .max)),
@@ -1126,15 +1166,21 @@ final class SplitBench {
 
     // MARK: - Maestro
 
-    /// El barrido de guion: un seno en yaw que cruza la costura, a pitch y HFOV fijos.
+    /// El barrido de guion: un seno en yaw que cruza la costura, a pitch y HFOV fijos; con
+    /// RIG_SPLIT_SCRIPT=spk04, el de SPK-04 (Spk04Script), que además abre y cierra el zoom.
     private func scriptedView(_ t: Int64) -> ViewCommand {
         guard let rig else { fatalError("sin soporte") }
         let a = number("RIG_SPLIT_SWEEP_DEG", 30) * .pi / 180
         let periodo = number("RIG_SPLIT_SWEEP_S", 20)
-        let hfov = number("RIG_SPLIT_HFOV_DEG", 60) * .pi / 180
-        let costura = (rig.camera(.left).pose.yawRad + rig.camera(.right).pose.yawRad) / 2
-        let pitch = (rig.camera(.left).pose.pitchRad + rig.camera(.right).pose.pitchRad) / 2
-        let yaw = costura + a * sin(2 * .pi * Double(t) / 1000 / periodo)
+        var hfov = number("RIG_SPLIT_HFOV_DEG", 60) * .pi / 180
+        var costura = (rig.camera(.left).pose.yawRad + rig.camera(.right).pose.yawRad) / 2
+        var pitch = (rig.camera(.left).pose.pitchRad + rig.camera(.right).pose.pitchRad) / 2
+        var yaw = costura + a * sin(2 * .pi * Double(t) / 1000 / periodo)
+        if let guion = spk04 {
+            (yaw, hfov) = guion.pose(atRigMs: t)
+            costura = guion.seamYawRad
+            pitch = guion.pitchRad
+        }
         let lados: [CameraSide]
         if let v = try? RectilinearView(yawRad: yaw, pitchRad: pitch, hfovRad: hfov,
                                         width: Self.programWidth, height: Self.programHeight) {
@@ -1214,6 +1260,10 @@ final class SplitBench {
             // SPK-54: el estado térmico, una vez por minuto.
             thermalByMinute.append(Self.thermalName(ProcessInfo.processInfo.thermalState))
         }
+        // SPK-04: la 4K local, en cuanto hay cámara (antes, el CaptureEngine no sabe el tamaño).
+        if env["RIG_SPLIT_RECORD_4K"] == "1", !rec4kStarted, pipelineProvider() != nil {
+            startRecording4K()
+        }
         if case .connected = session.state, setUpIfNeeded() {
             colorTick(now: rigNowMs())
         }
@@ -1259,7 +1309,7 @@ final class SplitBench {
         if e0Ticks % Self.e0ViewEvery == 0 {
             let grados = 180 / Double.pi
             e0?.log(.view(rigMs: t, yawDeg: vistaPropia.yawRad * grados, pitchDeg: vistaPropia.pitchRad * grados,
-                          hfovDeg: vistaPropia.hfovRad * grados, shot: director == nil ? "script" : "director"))
+                          hfovDeg: vistaPropia.hfovRad * grados, shot: scriptName))
         }
         if t - (lastAdCueT ?? t - Self.adCueEveryMs) >= Self.adCueEveryMs, let (_, cue) = AdHub.rotation?.strip(atRigMs: t) {
             lastAdCueT = t
@@ -1270,6 +1320,122 @@ final class SplitBench {
         }
         drainProgram()
         detectTick()
+    }
+
+    /// Quién da las vistas: el guion de SPK-04, el director o el barrido de siempre.
+    private var scriptName: String {
+        spk04 != nil ? "spk04" : director != nil ? "director" : "script"
+    }
+
+    // MARK: - SPK-04: las vistas de cada instante y la 4K local
+
+    private func startRecording4K() {
+        rec4kStarted = true
+        diskFreeStartGb = Double(CaptureEngine.freeDiskBytes()) / Self.bytesPerGb
+        guard let start = startLocal4K,
+              let docs = try? FileManager.default.url(for: .documentDirectory, in: .userDomainMask,
+                                                      appropriateFor: nil, create: true)
+        else { return }
+        // Una carpeta por pasada: el banco del Mac recoge esta y no las viejas.
+        let dir = docs.appendingPathComponent("bench4k/\(Int(Date().timeIntervalSince1970))", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        rec4kDir = dir
+        rec4kPath = start(dir.path, RecordingPolicy.benchReserveBytes(durationS: durationS))
+        if rec4kPath.isEmpty { NSLog("[split] sin 4K: no queda libre la reserva de la pasada") }
+    }
+
+    /// Una línea por instante pintado: lo que REF-41 necesita para rehacerlo desde las 4K.
+    private func logComposed(_ f: ComposedFrame) {
+        if viewsURL == nil, let base = try? FileManager.default.url(for: .documentDirectory, in: .userDomainMask,
+                                                                    appropriateFor: nil, create: true)
+            .appendingPathComponent("bench", isDirectory: true) {
+            try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+            let url = base.appendingPathComponent("program-views-\(Int(Date().timeIntervalSince1970)).jsonl")
+            FileManager.default.createFile(atPath: url.path, contents: nil)
+            viewsURL = url
+            viewsFile = try? FileHandle(forWritingTo: url)
+        }
+        let v = f.view
+        func num(_ x: Double) -> String { String(format: "%.7f", x) }
+        func opt(_ x: Int64?) -> String { x.map(String.init) ?? "null" }
+        func lista(_ a: [Double]) -> String { "[" + a.map(num).joined(separator: ",") + "]" }
+        let lados = v.sides.map { "\"\($0.rawValue)\"" }.joined(separator: ",")
+        let linea = "{\"t\":\(f.programRigMs),\"src\":\"\(f.source.rawValue)\",\"view_id\":\(v.viewId)," +
+            "\"yaw_rad\":\(num(v.yawRad)),\"pitch_rad\":\(num(v.pitchRad)),\"hfov_rad\":\(num(v.hfovRad))," +
+            "\"seam_yaw_rad\":\(num(v.seamYawRad)),\"feather_rad\":\(num(v.featherRad)),\"sides\":[\(lados)]," +
+            "\"gains_left\":\(lista(v.gains.left)),\"gains_right\":\(lista(v.gains.right))," +
+            "\"master_frame_rig_ms\":\(opt(f.masterFrameRigMs)),\"part_frame_rig_ms\":\(opt(f.partFrameRigMs))," +
+            "\"extrapolated\":\(f.extrapolated),\"torn\":\(f.torn)," +
+            "\"gpu_ms\":\(f.gpuMs.map { String(format: "%.3f", $0) } ?? "null")}\n"
+        viewsPending.append(Data(linea.utf8))
+        viewsLines += 1
+        if viewsLines % Self.viewsFlushEvery == 0 { flushViews() }
+    }
+
+    private func flushViews() {
+        guard let fh = viewsFile, !viewsPending.isEmpty else { return }
+        let datos = viewsPending
+        viewsPending = Data()
+        writerQueue.async { try? fh.write(contentsOf: datos) }
+    }
+
+    /// p50/p95/p99 y cuántos, de un histograma.
+    private static func summary(_ h: LatencyHistogram) -> [String: Any] {
+        ["p50": h.percentile(0.5), "p95": h.percentile(0.95), "p99": h.percentile(0.99), "n": h.total]
+    }
+
+    /// Una ruta relativa a Documents, como la pide `devicectl device copy from`.
+    private static func documentsRelative(_ url: URL?) -> String? {
+        guard let url, let docs = try? FileManager.default.url(for: .documentDirectory, in: .userDomainMask,
+                                                                appropriateFor: nil, create: false)
+        else { return nil }
+        let raiz = docs.standardizedFileURL.path + "/"
+        let ruta = url.standardizedFileURL.path
+        return ruta.hasPrefix(raiz) ? String(ruta.dropFirst(raiz.count)) : nil
+    }
+
+    /// Lo grabado en esta pasada, relativo a Documents: el banco del Mac lo recoge de aquí.
+    private func recordedFiles() -> [String: Any] {
+        var f: [String: Any] = [:]
+        f["ts"] = Self.documentsRelative(tsURL)
+        if recorder != nil { f["mov"] = Self.documentsRelative(tsURL?.deletingPathExtension().appendingPathExtension("mov")) }
+        f["views"] = Self.documentsRelative(viewsURL)
+        if session.isMaster { f["e0"] = Self.documentsRelative(e0URL) }
+        if let dir = rec4kDir {
+            let movs = ((try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? [])
+                .filter { $0.hasSuffix(".mov") }.sorted()
+            f["rec4k"] = movs.compactMap { Self.documentsRelative(dir.appendingPathComponent($0)) }
+        }
+        return f
+    }
+
+    /// La 4K de la pasada: ficheros, tamaño, fotogramas y disco.
+    private func rec4kReport() -> [String: Any] {
+        guard env["RIG_SPLIT_RECORD_4K"] == "1" else { return ["requested": false] }
+        let movs = rec4kDir.flatMap { try? FileManager.default.contentsOfDirectory(at: $0, includingPropertiesForKeys: [.fileSizeKey]) }?
+            .filter { $0.pathExtension == "mov" } ?? []
+        let bytes = movs.reduce(Int64(0)) { $0 + Int64((try? $1.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0) }
+        return ["requested": true, "started": !rec4kPath.isEmpty, "segments": movs.count,
+                "bytes": bytes, "frames": local4KFrames(),
+                "reserve_gb": Double(RecordingPolicy.benchReserveBytes(durationS: durationS)) / Self.bytesPerGb,
+                "disk_free_gb_start": diskFreeStartGb ?? -1,
+                "disk_free_gb_end": Double(CaptureEngine.freeDiskBytes()) / Self.bytesPerGb]
+    }
+
+    /// La aceptación de SPK-04 con lo que se sabe en este móvil. El PSNR en la rampa sale
+    /// después, en el Mac (REF-41); la GPU del otro móvil, en su informe.
+    private func spk04Acceptance(addedLatencyP95: Double) -> [String: Any] {
+        if session.isMaster, let m = master {
+            let p95 = m.gpuMs.percentile(0.95), p99 = m.gpuMs.percentile(0.99)
+            return ["added_latency_ms_p95": addedLatencyP95,
+                    "added_latency_ok": addedLatencyP95 <= Self.spk04LatencyP95Ms,
+                    "gpu_ms_p95": p95, "gpu_ms_p99": p99, "gpu_ok": p99 <= Self.spk04GpuMs,
+                    "torn_frames": m.stats.tornFrames, "torn_ok": m.stats.tornFrames == 0,
+                    "psnr_ramp_db": "pendiente: REF-41 en el Mac (program-views + 4K + .ts)"]
+        }
+        guard let s = slave else { return [:] }
+        let p95 = s.gpuMs.percentile(0.95), p99 = s.gpuMs.percentile(0.99)
+        return ["gpu_ms_p95": p95, "gpu_ms_p99": p99, "gpu_ok": p99 <= Self.spk04GpuMs]
     }
 
     private static let footprintEveryS = 60.0
@@ -1419,6 +1585,8 @@ final class SplitBench {
         programEncoder?.flush()
         drainProgram()
         e0?.flush()
+        flushViews()
+        if rec4kStarted { stopLocal4K?() }
         let espera = DispatchSemaphore(value: 0)
         if let r = recorder { r.finish { _ in espera.signal() }; _ = espera.wait(timeout: .now() + 5) }
         // Después de lo que quede por escribir en su cola.
@@ -1427,7 +1595,12 @@ final class SplitBench {
         // ella) se pierde sin tirar la app, como pasó el 6-oct.
         let ts = tsFile
         tsFile = nil
-        writerQueue.sync { try? ts?.close() }
+        let vistas = viewsFile
+        viewsFile = nil
+        writerQueue.sync {
+            try? ts?.close()
+            try? vistas?.close()
+        }
         guard session.isMaster || slave != nil else { return }
         func pct(_ xs: [Double], _ q: Double) -> Double {
             let o = xs.sorted()
@@ -1438,7 +1611,38 @@ final class SplitBench {
         let link = master?.linkStats(nowRigMs: rigNowMs())
         let transporte = linkStats()
         let fpsTicks = tickIntervalsMs.map { 1000 / max($0, 0.001) }
+        let latenciaP95 = pct(composeLatencyMs, 0.95)
+        var guion: [String: Any] = [:]
+        if let g = spk04 {
+            guion = Spk04Script.parameters
+            guion["seam_yaw_deg"] = g.seamYawRad * 180 / .pi
+            guion["pitch_deg"] = g.pitchRad * 180 / .pi
+        }
+        var gpuPorFotograma: [String: Any] = [:]
+        var gpuComposicion: [String: Any] = [:]
+        var desfaseMitades: [String: Any] = [:]
+        if session.isMaster, let m = master {
+            gpuPorFotograma = Self.summary(m.gpuMs)
+            gpuPorFotograma["what"] = "render de la mitad propia + composición"
+            gpuComposicion = Self.summary(m.composeGpuMs)
+            desfaseMitades = Self.summary(m.halvesSkewMs)
+        } else if let e = slave {
+            gpuPorFotograma = Self.summary(e.gpuMs)
+            gpuPorFotograma["what"] = "render de la parte"
+        }
         let informe: [String: Any] = [
+            // SPK-04: quién dirige, la GPU por fotograma, los desgarros, lo grabado y la
+            // aceptación con lo que ya se sabe en este móvil.
+            "script": scriptName,
+            "spk04_script": guion,
+            "gpu_ms_per_frame": gpuPorFotograma,
+            "compose_gpu_ms": gpuComposicion,
+            "torn_frames": ms.tornFrames,
+            "extrapolated_view_frames": ms.extrapolatedViewFrames,
+            "halves_skew_ms": desfaseMitades,
+            "files": recordedFiles(),
+            "rec4k": rec4kReport(),
+            "spk04_acceptance": spk04Acceptance(addedLatencyP95: latenciaP95),
             "name": "program-split",
             "device": BenchRunner.machine(),
             "side": side.rawValue,
@@ -1514,7 +1718,7 @@ final class SplitBench {
             "tick_fps_p5": pct(fpsTicks, 0.05),
             "tick_fps_p50": pct(fpsTicks, 0.5),
             "added_latency_ms_p50": pct(composeLatencyMs, 0.5),
-            "added_latency_ms_p95": pct(composeLatencyMs, 0.95),
+            "added_latency_ms_p95": latenciaP95,
             "slave_parts": ss.parts,
             "slave_no_parts": ss.noParts,
             "slave_without_view": ss.withoutView,

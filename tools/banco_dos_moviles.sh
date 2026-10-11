@@ -15,6 +15,14 @@
 #   IZQ=<id devicectl del izquierdo>   DER=<id del derecho>
 # Más variables para los dos: BANCO_EXTRA='{"RIG_AUDIO": "1"}'.
 # Deja los informes en bench/dos-moviles-<fecha>/ (Documents/bench y Documents/calib de cada uno).
+#
+# SPK-04 (el render repartido): el director de guion y la 4K local de cada móvil, 10 min:
+#   BANCO_EXTRA='{"RIG_SPLIT_SCRIPT": "spk04", "RIG_SPLIT_RECORD_4K": "1"}' \
+#     tools/banco_dos_moviles.sh split <secreto> 600
+# Además de los informes, recoge lo que el informe de ESTA pasada dice que grabó (`files`):
+# el programa (.ts y .mov), sus vistas por instante (program-views-<t>.jsonl), el N0 del
+# maestro (n0/banco-<t>-<lado>.jsonl) y las 4K (bench4k/<t>/<lado>-<t>.mov, ~3,4 GB cada
+# una). SIN_4K=1 no trae las 4K (se quedan en el móvil).
 set -euo pipefail
 
 MODO=${1:?split o link90}
@@ -27,6 +35,7 @@ APP=com.logicielapplab.zero
 RAIZ=$(cd "$(dirname "$0")/.." && pwd)
 SALIDA="$RAIZ/bench/dos-moviles-$(date +%Y%m%d-%H%M)"
 mkdir -p "$SALIDA"
+INICIO=$(date +%s)  # los informes de esta pasada son posteriores: los viejos no se recogen
 
 # El entorno de lanzamiento, en JSON, sin pasar el secreto por la línea de órdenes.
 entorno() {  # $1 lado, $2 json extra
@@ -75,6 +84,15 @@ recoge() {  # $1 dispositivo, $2 nombre
   for f in $(echo "$lista" | grep -E '^Documents/(bench/[^/]+\.json|calib/.+)$') $ts; do
     xcrun devicectl device copy from --device "$1" --domain-type appDataContainer --domain-identifier $APP \
       --source "$f" --destination "$SALIDA/$2/${f#Documents/}" >/dev/null 2>&1 || true
+  done
+  # SPK-04: lo grabado según el informe program-split de esta pasada (no más viejo que
+  # INICIO), y nada de otras pasadas.
+  for f in $(python3 "$RAIZ/tools/ficheros_pasada.py" "$SALIDA/$2/bench" "$INICIO" "${SIN_4K:-}"); do
+    [ -e "$SALIDA/$2/$f" ] && continue
+    mkdir -p "$(dirname "$SALIDA/$2/$f")"
+    echo "  $2: $f"
+    xcrun devicectl device copy from --device "$1" --domain-type appDataContainer --domain-identifier $APP \
+      --source "Documents/$f" --destination "$SALIDA/$2/$f" >/dev/null 2>&1 || echo "  $2: no se pudo copiar $f"
   done
 }
 

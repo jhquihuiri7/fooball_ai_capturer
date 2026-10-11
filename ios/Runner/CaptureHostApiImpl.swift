@@ -265,6 +265,12 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
                     self?.engine.benchExposureBias(ev: ev) { r in s?.exposureApplied = r }
                 }
                 engine.onAacFrame = { [weak s] trama in s?.audio(trama) }
+                // SPK-04 (RIG_SPLIT_RECORD_4K=1): la 4K local de la pasada, con su reserva.
+                s.startLocal4K = { [weak self] carpeta, reserva in
+                    (try? self?.engine.startRecording(directory: carpeta, reserveBytes: reserva)) ?? ""
+                }
+                s.stopLocal4K = { [weak self] in self?.engine.stopRecording() }
+                s.local4KFrames = { [weak self] in self?.engine.recordedFrames ?? 0 }
                 s.start()
                 split = s
             }

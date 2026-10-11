@@ -108,6 +108,8 @@ final class CaptureEngine: NSObject {
     private let recentPtsCapacity = 30
 
     private(set) var droppedFrames: Int64 = 0
+    /// Fotogramas que entraron a la 4K desde que arrancó la app (el banco de SPK-04).
+    private(set) var recordedFrames: Int64 = 0
 
     /// IOS-15: lo que dice la grabación de prueba con el volcado activo. Solo se usa
     /// con NV12_DUMP_S puesto; se escribe en Documents/bench al parar.
@@ -387,12 +389,15 @@ final class CaptureEngine: NSObject {
 
     // MARK: - Grabación
 
-    func startRecording(directory: String) throws -> String {
+    /// `reserveBytes`: lo que tiene que quedar libre; el banco de SPK-04 pide solo lo de su
+    /// pasada (RecordingPolicy.benchReserveBytes).
+    func startRecording(directory: String,
+                        reserveBytes: Int64 = RecordingPolicy.phoneDiskReserveBytes) throws -> String {
         // IOS-57: la 4K no arranca sin la reserva de disco, y la emisión sigue sin ella
         // (devuelve "" y Dart lo avisa). Las grabaciones anteriores ya no se borran al
         // empezar: las borra la ingesta (ML-08) al confirmarlas, o el operador a mano.
         let libre = Self.freeDiskBytes()
-        guard RecordingPolicy.allowsLocalRecording(freeBytes: libre) else {
+        guard RecordingPolicy.allowsLocalRecording(freeBytes: libre, reserveBytes: reserveBytes) else {
             NSLog("[grabacion] sin 4K: quedan %lld bytes libres, menos que la reserva", libre)
             recordingWanted = false
             return ""
@@ -448,9 +453,7 @@ final class CaptureEngine: NSObject {
                 AVVideoWidthKey: applied.width,
                 AVVideoHeightKey: applied.height,
                 AVVideoCompressionPropertiesKey: [
-                    // 45 Mbit/s: el archivo local no comparte el limite de Starlink, y
-                    // es de donde sale el partido bueno si la emision se degrada.
-                    AVVideoAverageBitRateKey: 45_000_000,
+                    AVVideoAverageBitRateKey: RecordingPolicy.localBitrateBps,
                     AVVideoExpectedSourceFrameRateKey: Int(settings.fps),
                     AVVideoMaxKeyFrameIntervalKey: Int(settings.fps) * 2,
                 ],
@@ -740,7 +743,7 @@ final class CaptureEngine: NSObject {
         }
     }
 
-    private static func freeDiskBytes() -> Int64 {
+    static func freeDiskBytes() -> Int64 {
         let url = URL(fileURLWithPath: NSHomeDirectory())
         let values = try? url.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
         return values?.volumeAvailableCapacityForImportantUsage ?? 0
@@ -851,6 +854,7 @@ extension CaptureEngine: AVCaptureVideoDataOutputSampleBufferDelegate {
         }
         if let retimed = Self.retimed(sampleBuffer, to: rigTime), input.append(retimed) {
             dumpRunFrames += 1
+            recordedFrames += 1
         }
     }
 
