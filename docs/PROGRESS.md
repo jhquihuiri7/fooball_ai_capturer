@@ -17,6 +17,39 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 
 
+## 2026-10-14 · El tic de fcbafad, probado en los dos iPhone: fase p99 4,5 ms, sin huecos y la latencia plana · 🚧 la fase entre cámaras sigue sin medir; EMITIR desde la pantalla, sin hacer
+
+Pasada de 8 min (`bench/dos-moviles-20261014-1235`, maestro
+`program-split-left-1792003470.json`) con 00a5318, por Wi-Fi con router y con toda la carga
+menos la 4K y el SRT: director, CenterNet en los dos y micrófono.
+
+**El tic (fcbafad), ✅ en el iPhone**
+- `tick_phase_ms` p50 3,5 / p95 3,5 / **p99 4,5**.
+- `program_skipped_instants` **0**, `missing_director_views` **0**.
+- `added_latency_ms_by_minute`: p95 entre 143,0 y 143,7 en los 8 minutos (p50 ~141,7).
+  Latencia añadida p50 142 / p95 143. 14 399 fotogramas, `program_fps_p5` 29,2, **0
+  desgarros**.
+- El arreglo no corrige la deriva: la quita de raíz. Para ver que no vuelve el escalón
+  del minuto ~80 hace falta una pasada larga, la próxima de 90 min.
+
+**La fase entre las cámaras, sin dato.** El director miró todo el rato a la izquierda
+(yaw −1,1 rad, `sides` [left] en el 100 % de las vistas: había alguien sentado a ese lado).
+El esclavo no mandó parte más que 24 veces (`slave_no_parts` 14 365, como debe), y
+`halves_phase_by_minute` solo tiene 23 muestras del minuto 0 (`drift` −1, sin calcular). La
+deriva hay que medirla con la escena repartida entre las dos lentes, o con
+`RIG_SPLIT_SCRIPT=spk04` (vistas que cruzan la costura a la fuerza). Con ese dato se
+escribe el ADR del arreglo de la fase, que contradice el ADR 0012 y el §5 del 0023.
+
+**La memoria:** el maestro arranca en 358 MB y en el minuto 1 ya está en 479, plano hasta
+el final (483); `app_events` vacío, `camera_drops` en 0 y el pico de VideoToolbox, 2. El
+esclavo, plano en ~450. Térmica: el maestro, `fair`; el esclavo, `nominal`.
+
+**EMITIR desde la pantalla (IOS-58), sin hacer.** A las 12:03 quedó todo listo: el Runner
+sin `AUTO_ROLE` instalado en los dos, el secreto guardado en el Keychain y MediaMTX con el
+QR Soporte abierto en el Mac. Zero se abrió en el 17 pero el 17 no publicó, y en el 16 Pro
+no se abrió. A las 12:35, sin respuesta, se usó el tiempo para esta pasada. Para la próxima
+vez basta con `emitir_prep` (los pasos 1 a 4 de la entrada IOS-58) y los pasos 5 a 9.
+
 ## 2026-10-14 · Las tres anomalías del ensayo de 90 min por Wi-Fi Aware: el tic a la deriva (arreglado), la fase entre las cámaras (medida, pide ADR) y +180 MB sin reconexión (instrumentado) · 🚧 falta la pasada con los dos iPhone
 
 Datos: `bench/dos-moviles-20261014-1010` (maestro `program-split-left-1791999786.json`,
