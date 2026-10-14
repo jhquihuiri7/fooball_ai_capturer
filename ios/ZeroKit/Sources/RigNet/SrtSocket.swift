@@ -69,6 +69,11 @@ public struct SrtStats: Equatable, Sendable, CustomStringConvertible {
     public var sendBufferMs: Int32
     public var flightPackets: Int32
 
+    /// Todo a cero: lo que da un socket que aún no ha enviado nada (y las pruebas).
+    public init() {
+        self.init(SRT_TRACEBSTATS())
+    }
+
     init(_ s: SRT_TRACEBSTATS) {
         msTimeStamp = s.msTimeStamp
         packetsSent = s.pktSentTotal
@@ -194,6 +199,16 @@ public final class SrtSocket {
             }
             return sent
         }
+    }
+
+    /// Los milisegundos que abarca el búfer de envío (lo que el otro lado aún no ha
+    /// confirmado), con srt_getsndbuffer: más barato que `stats()`, para mirarlo antes de
+    /// cada envío (IOS-56). nil sin conexión.
+    public func sendBufferMs() -> Int? {
+        guard sock != SRT_INVALID_SOCK else { return nil }
+        var bloques = 0, bytes = 0
+        let ms = csrt_getsndbuffer(sock, &bloques, &bytes)
+        return ms < 0 ? nil : Int(ms)
     }
 
     /// srt_bstats. Con `clear`, los contadores de intervalo vuelven a cero (los totales no).
