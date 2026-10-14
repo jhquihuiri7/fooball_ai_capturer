@@ -1,0 +1,55 @@
+# MediaMTX en el Mac para el programa del soporte (IOS-56): lo que hace el del VPS con
+# `programa` (football-ai, deploy/mediamtx-vps.yml), sin usuarios: es un banco de la red
+# local, y la passphrase sí se comprueba.
+#
+#   MTX_PATHS_PROGRAMA_SRTPUBLISHPASSPHRASE=<frase de 10 a 79> mediamtx tools/mediamtx-programa.yml
+#
+# El maestro publica en srt://<IP-DEL-MAC>:8890 con `publish:programa:<user>:<pass>` (el
+# banco con RIG_SPLIT_PUBLISH=1 y RIG_SRT_HOST/USER/PASS/PASSPHRASE): cualquier usuario y
+# clave entran (el `any`), pero solo desde la LAN. Se lee en el propio Mac:
+#
+#   ffprobe -v error -rtsp_transport tcp -show_streams rtsp://127.0.0.1:8554/programa
+#
+# La passphrase va por entorno (nunca en este fichero ni en un log). La primera vez macOS
+# pregunta si mediamtx acepta conexiones entrantes: hay que permitirlo, o los iPhone no
+# llegan.
+
+logLevel: info
+logDestinations: [stdout]
+
+srt: yes
+srtAddress: 0.0.0.0:8890     # IPv4 explícito: en macOS, con «:8890», SRT solo escucha por IPv6
+rtsp: yes
+rtspAddress: 127.0.0.1:8554  # solo para leerlo en el Mac, como el `any` local del VPS
+rtspTransports: [tcp]
+
+rtmp: no
+hls: no
+webrtc: no
+api: no
+metrics: no
+pprof: no
+playback: no
+moq: no                      # viene encendido y abre tres puertos más
+
+authMethod: internal
+authInternalUsers:
+  - user: any
+    ips: ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '127.0.0.0/8']
+    permissions:
+      - action: publish
+        path: programa
+  - user: any
+    ips: ['127.0.0.0/8']
+    permissions:
+      - action: read
+        path: programa
+
+paths:
+  programa:
+    source: publisher
+    overridePublisher: yes     # como en el VPS: el maestro nuevo echa al viejo (ADR 0022 §8)
+    record: yes                # para mirar la SEI con ffprobe -show_frames después
+    recordPath: bench/programa-mediamtx/%path/%s-%f
+    recordFormat: fmp4
+    recordSegmentDuration: 60s

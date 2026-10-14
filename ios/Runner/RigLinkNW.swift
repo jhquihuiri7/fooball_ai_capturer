@@ -743,6 +743,11 @@ final class LinkPartsLoad {
 //   RIG_SPLIT_RECORD_4K     1: graba además la 4K HEVC local de cada móvil (IOS-57) en
 //                           Documents/bench4k/<t>/, con la reserva de la pasada y no la del
 //                           partido (RecordingPolicy.benchReserveBytes)
+//   RIG_SPLIT_PUBLISH       1: el maestro publica además el programa por SRT (IOS-56) al
+//                           destino del emparejado con el VPS (el QR Soporte del Keychain,
+//                           IOS-68), o al de RIG_SRT_HOST, RIG_SRT_PORT (8890), RIG_SRT_USER,
+//                           RIG_SRT_PASS y RIG_SRT_PASSPHRASE si se dan (pruebas). Ninguno de
+//                           esos valores sale en el log ni en el informe: solo host y puerto.
 //   RIG_NOMINAL_YAW_DEG     sin Documents/rig.json, la apertura de cada cámara (DEFAULT_RIG_YAW_DEG)
 //   RIG_NOMINAL_HFOV_DEG    y su HFOV (106, la ultra gran angular)
 //   RIG_NOMINAL_PITCH_DEG   y su pitch (DEFAULT_RIG_PITCH_DEG)
@@ -849,11 +854,18 @@ final class SplitBench {
     private var lastProgramT: Int64?
     /// El AAC del programa es estéreo (el micro mono va a los dos canales, IOS-54) y el
     /// PMT lo declara desde el primer paquete.
-    private let muxer = TsMuxer(
-        audio: CaptureEngine.audioEnabled
-            ? TsMuxer.AudioConfig(sampleRate: AudioConstants.sampleRate, channels: AudioConstants.programChannels)
-            : nil
-    )
+    private static let programAudio = CaptureEngine.audioEnabled
+        ? TsMuxer.AudioConfig(sampleRate: AudioConstants.sampleRate, channels: AudioConstants.programChannels)
+        : nil
+    private let muxer = TsMuxer(audio: SplitBench.programAudio)
+    /// IOS-56: el programa por SRT al VPS (RIG_SPLIT_PUBLISH=1), solo mientras se es maestro.
+    private var publisher: ProgramPublisher?
+    /// De dónde salió el destino («keychain» o «env») y su host:puerto, para el informe.
+    private var publishTarget: [String: Any] = [:]
+    /// Las estadísticas de cada tramo de maestro que publicó (un relevo abre otro).
+    private var publishSessions: [ProgramPublisher.Stats] = []
+    /// El puerto SRT de MediaMTX en el VPS (ADR 0022 §1), si RIG_SRT_PORT no dice otro.
+    static let srtDefaultPort: UInt16 = 8890
     /// El primer instante de vídeo del .ts: el audio de antes no entra (IOS-54).
     private var firstVideoT: Int64?
     private var tsFile: FileHandle?
@@ -928,6 +940,8 @@ final class SplitBench {
         queue.async { [weak self] in
             guard let self else { return }
             try? recorder?.append(audio: trama)
+            // IOS-56: al publicador, todas; él espera al primer IDR.
+            publisher?.audio(aacRaw: Data(trama.adts.dropFirst(Adts.headerLength)), rigMs: trama.rigMs)
             // IOS-54: el AAC también en el programa .ts, en el mismo eje que el vídeo
             // (rigMs × 90). El primer fotograma sale del codificador después de su
             // instante: hasta saberlo, las tramas esperan en una cola acotada (si se
@@ -1290,6 +1304,7 @@ final class SplitBench {
         if case .connected = session.state, setUpIfNeeded() {
             colorTick(now: rigNowMs())
         }
+        updatePublisher()
         // El esclavo detecta aquí; el maestro, después de componer: preparar la franja y
         // mandarla al runner antes de componer retrasaba el programa (latencia p95 de 114 a
         // 139 ms con los dos iPhone).
@@ -1589,6 +1604,7 @@ final class SplitBench {
             if f.isKeyframe, let fd = f.formatDescription {
                 avcc = H264ParameterSets.avccNals(from: fd) + avcc
             }
+            publisher?.video(avcc: avcc, isKeyframe: f.isKeyframe, rigMs: Double(f.ptsNs) / 1e6)
             let pts = f.ptsNs * 90 / 1_000_000
             if firstVideoT == nil { firstVideoT = f.ptsNs / 1_000_000 }
             let paquetes = muxer.muxVideo(avcc: avcc, parameterSets: [], isKeyframe: f.isKeyframe,
@@ -1599,6 +1615,69 @@ final class SplitBench {
         }
     }
 
+    // MARK: - IOS-56: el programa por SRT
+
+    /// Con RIG_SPLIT_PUBLISH=1, el maestro publica y el esclavo no: un maestro que deja de
+    /// serlo para su publicador, o MediaMTX (overridePublisher) se lo pasaría del uno al
+    /// otro cada 3 s (ADR 0022 §8).
+    private func updatePublisher() {
+        guard env["RIG_SPLIT_PUBLISH"] == "1" else { return }
+        if session.isMaster, publisher == nil, let enc = programEncoder, publishTarget["source"] == nil {
+            guard let (destino, origen) = Self.publishTarget(env) else {
+                publishTarget = ["source": "none"]
+                NSLog("[srt] RIG_SPLIT_PUBLISH=1 sin destino: ni RIG_SRT_HOST ni QR Soporte en el Keychain")
+                return
+            }
+            publishTarget = ["source": origen, "host": destino.host, "port": Int(destino.port)]
+            let p = ProgramPublisher(target: destino, audio: Self.programAudio, maximumBps: Self.programBitrateBps)
+            p.onIdrRequest = { [weak enc] in enc?.forceIDR() }
+            p.onBitrate = { [weak enc] bps in try? enc?.setBitrate(bps: bps) }
+            p.onLog = { NSLog("[srt] %@", $0) }
+            p.start()
+            publisher = p
+        } else if !session.isMaster, publisher != nil {
+            stopPublisher()
+            publishTarget = [:]  // si vuelve a ser maestro, publica otra vez
+        }
+    }
+
+    private func stopPublisher() {
+        guard let p = publisher else { return }
+        p.stop()
+        publishSessions.append(p.snapshot)
+        publisher = nil
+    }
+
+    /// El destino: el de las variables de entorno si hay RIG_SRT_HOST (pruebas), o el
+    /// bloque `srt` del QR Soporte del Keychain.
+    static func publishTarget(_ env: [String: String]) -> (ProgramSrtTarget, String)? {
+        if let host = env["RIG_SRT_HOST"] {
+            return (ProgramSrtTarget(host: host, port: env["RIG_SRT_PORT"].flatMap(UInt16.init) ?? srtDefaultPort,
+                                     user: env["RIG_SRT_USER"] ?? "", pass: env["RIG_SRT_PASS"] ?? "",
+                                     passphrase: env["RIG_SRT_PASSPHRASE"] ?? ""), "env")
+        }
+        do {
+            return try VpsPairingKeychain.load().map { ($0.srt, "keychain") }
+        } catch {
+            // Los errores de VpsPairing dicen el campo, nunca el valor.
+            NSLog("[srt] el QR Soporte del Keychain no vale: %@", "\(error)")
+            return nil
+        }
+    }
+
+    private func publishReport() -> [String: Any] {
+        guard env["RIG_SPLIT_PUBLISH"] == "1" else { return ["requested": false] }
+        let enc = JSONEncoder()
+        enc.keyEncodingStrategy = .convertToSnakeCase
+        let tramos = publishSessions.compactMap { s in
+            (try? enc.encode(s)).flatMap { try? JSONSerialization.jsonObject(with: $0) }
+        }
+        // Los fotogramas que VideoToolbox no entregó: con detalle de más para el bitrate y
+        // el QP en su tope, el modo de baja latencia los tira (visto en el Mac con ruido).
+        return ["requested": true, "target": publishTarget, "sessions": tramos,
+                "program_encode_failures": programEncoder?.encodeFailures ?? 0]
+    }
+
     // MARK: - Informe
 
     private func finish() {
@@ -1607,6 +1686,7 @@ final class SplitBench {
         timer?.cancel()
         programEncoder?.flush()
         drainProgram()
+        stopPublisher()
         e0?.flush()
         flushViews()
         if rec4kStarted { stopLocal4K?() }
@@ -1666,6 +1746,7 @@ final class SplitBench {
             "halves_skew_ms": desfaseMitades,
             "files": recordedFiles(),
             "rec4k": rec4kReport(),
+            "publish": publishReport(),
             "spk04_acceptance": spk04Acceptance(addedLatencyP95: latenciaP95),
             "name": "program-split",
             "device": BenchRunner.machine(),

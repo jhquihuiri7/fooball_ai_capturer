@@ -43,7 +43,8 @@ depende de IOS-50 e IOS-53 (✅) y de IOS-54, IOS-55 e IOS-68, que tienen el có
 siguen 🚧 solo por sus pruebas con el iPhone o el VPS. Se adelanta para llegar a la primera
 prueba de emisión en la cancha.
 
-**Hecho** (4a16e8e, ab2321e, f165519 y el commit de esta entrada)
+**Hecho** (4a16e8e, ab2321e, f165519 y el commit «IOS-56d», que trae el banco y
+`tools/mediamtx-programa.yml`; esta entrada entró antes, con 9a3306a)
 - **RigCore, la lógica pura:**
   - `ProgramSendQueue`: unidades de acceso (vídeo con la SEI, AAC), no TS. Lo que se tira
     no deja huecos en los contadores de continuidad.
