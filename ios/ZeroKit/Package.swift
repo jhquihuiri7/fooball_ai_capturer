@@ -72,7 +72,9 @@ let package = Package(
         ),
         .testTarget(
             name: "RigNetTests",
-            dependencies: ["RigNet"],
+            // RigMedia solo en las pruebas: el programa sintético de IOS-56 sale del
+            // VideoEncoder y el AacEncoder de verdad. RigNet sigue sin importarlo.
+            dependencies: ["RigNet", "RigMedia"],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
     ]
