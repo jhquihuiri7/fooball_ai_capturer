@@ -1193,6 +1193,11 @@ final class SplitBench {
             }
             if config.benchFiles { m.onComposed = { [weak self] f in self?.logComposed(f) } }
             m.onIdrRequest = { [weak self] seq in self?.session.requestIdr(partSeq: seq) }
+            // SPK-04 (2026-10-14): la fase entre las cámaras por minuto de la pasada.
+            m.halvesPhase = HalvesPhaseTracker(
+                startRigMs: (startHostNs + session.clock.offsetAt(ns: startHostNs)) / 1_000_000,
+                frameDurationMs: 1000 / Self.fps
+            )
             // IOS-84: sin ninguna cámara, la tarjeta SIN SEÑAL (la sube Dart, oculta).
             m.onSourceChange = { fuente in OverlayHub.shared?.setVisible(.slate, fuente == .noSignal) }
             if env["RIG_SPLIT_SCRIPT"] == "spk04" {
@@ -1925,6 +1930,10 @@ final class SplitBench {
         var gpuPorFotograma: [String: Any] = [:]
         var gpuComposicion: [String: Any] = [:]
         var desfaseMitades: [String: Any] = [:]
+        // 2026-10-14: la fase entre las cámaras por minuto, su deriva y cuánto falta para
+        // el cruce de medio fotograma (donde salen los desgarros).
+        let fase = master?.halvesPhase
+        let fasePorMinuto: [[Any]] = (fase?.buckets ?? []).map { [$0.index, $0.medianMs, $0.frames, $0.torn] }
         if session.isMaster, let m = master {
             gpuPorFotograma = Self.summary(m.gpuMs)
             gpuPorFotograma["what"] = "render de la mitad propia + composición"
@@ -1944,6 +1953,12 @@ final class SplitBench {
             "torn_frames": ms.tornFrames,
             "extrapolated_view_frames": ms.extrapolatedViewFrames,
             "halves_skew_ms": desfaseMitades,
+            // [minuto, mediana con signo (captura del maestro − de la parte, ms),
+            // fotogramas de dos lentes, desgarros]; la deriva en ms/min y los minutos que
+            // le quedaban a la última fase hasta ±½ fotograma (−1 sin dos lentes).
+            "halves_phase_by_minute": fasePorMinuto,
+            "halves_phase_drift_ms_per_min": fase?.driftMsPerMinute() ?? -1,
+            "halves_phase_minutes_to_half_frame": fase?.minutesToHalfFrame() ?? -1,
             // El tic: su fase frente a la rejilla (en el margen, ~2 ms), los instantes del
             // programa que se saltó, los que no tenían vista del director y la latencia
             // añadida de cada minuto [p50, p95].

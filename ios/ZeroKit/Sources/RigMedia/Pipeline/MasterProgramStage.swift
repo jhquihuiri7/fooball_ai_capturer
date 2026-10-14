@@ -155,6 +155,10 @@ public final class MasterProgramStage {
     /// SPK-04: |captura del maestro − captura de la parte| en los de dos lentes, en ms (la
     /// fase entre las cámaras; ADR 0012 la quiere ≤5 ms).
     public private(set) var halvesSkewMs = LatencyHistogram()
+    /// SPK-04 (2026-10-14): la misma fase con signo, minuto a minuto, con los desgarros de
+    /// cada minuto (HalvesPhaseTracker): la fase deriva y los desgarros salen al cruzar ½
+    /// fotograma. La pone quien sabe cuándo arrancó la pasada.
+    public var halvesPhase: HalvesPhaseTracker?
     private let frameDurationMs: Double
     /// Cubos de 5 ms hasta 150 (la aceptación de IOS-43 es p95 ≤60) y gruesos después.
     public static let partAgeBoundsMs: [Double] = stride(from: 5, through: 150, by: 5).map(Double.init)
@@ -383,6 +387,7 @@ public final class MasterProgramStage {
                 desgarro = TearCheck.isTorn(masterView: view, partView: vistaParte, masterFrameRigMs: propio,
                                             partFrameRigMs: slaveMs, frameDurationMs: frameDurationMs)
                 if desgarro { stats.tornFrames += 1 }
+                halvesPhase?.record(atRigMs: t, skewMs: Double(propio - slaveMs), torn: desgarro)
             }
         }
         lock.unlock()
