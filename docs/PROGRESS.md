@@ -15,6 +15,129 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 
 
+## 2026-10-14 · IOS-55 — libsrt directo y SrtSocket · 🚧 falta la pasada de 10 min contra el MediaMTX del VPS
+
+**Hecho** (dd88e5a, 13b096e, dc80bec y el commit de esta entrada)
+- **`tools/build_libsrt.sh` → `ios/ZeroKit/Frameworks/CSrt.xcframework`**:
+  - libsrt 1.5.7 y mbedTLS 3.6.7 LTS (solo `libmbedcrypto`), bajados con su SHA-256
+    fijado; iPhone, simulador y Mac (arm64), estático, 1,5 MB por rodaja.
+  - Sale igual byte a byte compilado en dos carpetas distintas (mismo Xcode 26.6): los
+    `__FILE__` van sin la ruta de trabajo. cmake del PATH o, si no hay, por `uvx`.
+  - El binario se commitea (4,5 MB) para que `swift test`, `git archive` y el Runner
+    funcionen sin pasos previos. Las licencias van en `Frameworks/licenses/`.
+- **Convive con el libsrt de SRTHaishinKit** (que no es el mismo: 1.5.4 con OpenSSL):
+  - Los dos exportan `srt_*` y `srt::*`. Con dos archivos estáticos, el primero en el
+    enlazado gana y, si el nuestro iba primero, salían símbolos duplicados (`g_Sync`,
+    `CHash::insert`): las piezas de uno y otro no casan.
+  - Cada rodaja es un solo objeto prelinkado que exporta solo la API C renombrada a
+    `csrt_*` (`csrt.h` la renombra para Swift). El C++, haicrypt y mbedTLS quedan
+    ocultos; el script falla si se escapa algo.
+  - Probado enlazando los dos archivos en los dos órdenes: limpio, y cada uno usa el
+    suyo. Esto dura hasta IOS-91, cuando se quite HaishinKit.
+- **RigCore/Wire/ProgramSrt.swift** (ADR 0022 §1-§3):
+  - las constantes: `programa`, 1500 ms, 1316 B, 512 caracteres, 2-5 partes, passphrase
+    de 10 a 79 y 5 s de timeout al conectar;
+  - `ProgramSrtTarget`, el bloque `srt` del QR Soporte, decodificable y sin secretos al
+    escribirlo en un log;
+  - `ProgramSrtStreamId`: compone `publish:programa:<user>:<pass>[:<query>]` y valida
+    cualquier streamid antes de salir.
+- **RigNet/SrtSocket.swift**: caller y live, IPv6 e IPv4, `SRTO_LATENCY`,
+  `SRTO_PASSPHRASE`, `SRTO_STREAMID`, envío sin bloquear en mensajes de 1316 B (devuelve lo
+  que entró si el búfer se llena) y `stats()` con `srt_bstats`. `SrtError` nunca lleva el
+  streamid ni la passphrase. `SrtLibrary` arranca libsrt una vez.
+- DEPENDENCIES.md: libsrt propio (MPL-2.0) y mbedTLS (Apache-2.0).
+
+**Decidido aquí** (pendiente de la revisión de Alexander)
+- **La passphrase «sacada del Keychain»:** SrtSocket la toma de `ProgramSrtTarget`, el
+  bloque `srt` del QR Soporte. Lo guarda en el Keychain IOS-68, que fija el formato del
+  ítem, e IOS-56 lo lee y se lo pasa. IOS-55 no escribe código de Keychain.
+- **`ProgramSrt.latencyMs` va escrito a mano** con la referencia a
+  `PROGRAM_SRT_LATENCY_MS`: ningún generador de football-ai lo exporta
+  (`export_overlay_spec` solo lleva el tamaño y los fps). Si SPK-07 lo cambia, hay que
+  cambiarlo aquí también; `ProgramSrtTests` lo fija en 1500.
+- **`SRTO_LATENCY`**, como dice la tarjeta, fija las dos latencias. Para el que envía la que
+  cuenta es `SRTO_PEERLATENCY`, y es la misma.
+- **El simulador solo en arm64**, sin x86_64.
+- **El binario en git y la API con prefijo `csrt_`** (arriba): lo pide la convivencia con
+  HaishinKit, y el prefijo se puede quitar en IOS-91 si se quiere.
+- **5 s de timeout al conectar** (`ProgramSrt.connectTimeoutMs`), no los 3 de SRT: ver
+  abajo lo de MediaMTX.
+
+**Lo que se aprendió de MediaMTX 1.21**
+- Contesta `SRT_REJ_PEER` (2) tanto a una passphrase mala como a un usuario o una clave
+  malos. Su log sí los distingue: «invalid passphrase» y «failed to authenticate».
+  libsrt en escucha (`srt-live-transmit`) da `BADSECRET` (10) y, sin passphrase,
+  `UNSECURE` (11).
+- **Espera 2 s antes de rechazar unas credenciales malas** (contra la fuerza bruta). Con
+  los 3 s de `SRTO_CONNTIMEO` por defecto, una de cada pocas veces llegaba como timeout
+  (con el Mac cargado). Por eso `ProgramSrt.connectTimeoutMs` es 5 s: el publicador
+  (IOS-56) tiene que poder decir «clave mala» y no «sin red». La cadencia de reconexión
+  es otra cosa.
+- En el Mac, con `srtAddress: :<puerto>`, escucha solo por IPv6: la prueba conecta a `::1`
+  y así cubre IPv6.
+- `srt-live-transmit` solo vacía su stdout al salir: el eco se para con SIGINT antes de
+  leerlo.
+
+**Comprobado**
+- `swift test --skip ModelBench`: 399 tests, 3 saltados (el del iPhone y los dos de
+  MediaMTX, que piden variable), 0 fallos; antes 384. Los nuevos:
+  - `ProgramSrtTests` (8): el streamid del VPS y el del banco, «:», «~» y espacios,
+    vacíos, 5 partes y 512 caracteres, la passphrase, el bloque del QR y las constantes;
+  - `SrtLibraryTests` (1): enlaza y es la 1.5.7;
+  - `SrtSocketTests` (4), contra `srt-live-transmit` en escucha con passphrase:
+    - 1 MB a ~8 Mbit/s vuelve byte a byte;
+    - las estadísticas cuadran;
+    - una passphrase errónea se rechaza (10), y también sin passphrase (11);
+    - el streamid y la passphrase se comprueban antes de salir;
+    - los errores no llevan secretos.
+- `RIG_SRT_MEDIAMTX=1 swift test --filter SrtMediaMtxTests` (MediaMTX 1.21.0 local, la
+  config del VPS reducida a SRT, usuario y clave y `srtPublishPassphrase`):
+  - 20 s de 720p30 H.264 a 6 Mbit/s CBR con AAC: 6,53 Mbit/s, 0 perdidos, 0 tirados;
+  - leído de vuelta con `read:programa:…`: ffprobe ve h264 y aac;
+  - passphrase y clave malas, rechazadas.
+- **Los 10 min contra el MediaMTX local** (`RIG_SRT_SOAK_S=600`, con el código y el binario
+  de estos commits):
+  - 600 s a 6,55 Mbit/s: 377 800 paquetes y 491 MB;
+  - 0 perdidos, 0 retransmitidos y 0 tirados;
+  - conectado y con `stats()` legible en cada segundo, y ningún `send` se quedó corto;
+  - leído de vuelta, h264 y aac;
+  - las dos credenciales malas, rechazadas.
+
+  Una primera pasada igual dio lo mismo en el envío, pero la clave mala llegó como
+  timeout con 3 s (el Mac compilaba a la vez). De ahí los 5 s.
+- `tools/check_layers.sh`: limpio.
+- RigNet compilado para iOS, en el iPhone y en el simulador, con xcodebuild (derivedData
+  temporal). Sin avisos.
+- **El Runner enlaza con los dos libsrt** sin `flutter build` y sin tocar `build/ios`:
+  - sobre una copia de `ios/` con las dos fases de Flutter anuladas, xcodebuild Release
+    para iOS con derivedData y paquetes propios: BUILD SUCCEEDED;
+  - sin avisos nuevos;
+  - el binario lleva los 13 `csrt_*` que usa RigNet y los 21 `srt_*` de HaishinKit.
+- El commit dc80bec, sacado con `git archive`, compila solo, con el xcframework
+  commiteado.
+
+**Pendiente**
+- **La aceptación contra el MediaMTX del VPS: 10 min.** Desde el Mac, con un MediaMTX y un
+  VPS de verdad:
+
+  ```bash
+  cd ios/ZeroKit
+  RIG_SRT_HOST=<FOOTBALL_VPS_DOMAIN> RIG_SRT_USER=<FOOTBALL_PROGRAM_USER> \
+  RIG_SRT_PASS=<FOOTBALL_PROGRAM_PASSWORD> RIG_SRT_PASSPHRASE=<FOOTBALL_PROGRAM_PASSPHRASE> \
+  RIG_SRT_SOAK_S=600 swift test --filter SrtMediaMtxTests
+  # en el VPS, mientras dura:
+  ffprobe -v error -show_streams rtsp://127.0.0.1:8554/programa
+  ```
+
+  - Allí `programa` no se lee de vuelta desde fuera: lo mira ffprobe en el VPS.
+  - Que sea sin relé (ninguna `FBAI_*_KEY`), o la carta de ajuste sale al aire.
+  - MediaMTX lo graba 48 h en `recordings/programa`.
+- El SrtSocket en el iPhone llega con IOS-56: el publicador, la cola, el IDR ante
+  congestión y la reconexión.
+
+**Siguiente paso**: IOS-56 (el publicador del programa). De sus dependencias faltan IOS-68
+(el QR Soporte en el Keychain) e IOS-54 en ✅.
+
 ## 2026-10-11 · SPK-04 y SPK-05 medidos en el Mac sobre la pasada del trípode: PSNR ✅, ΔVMAF intermedio
 
 Sobre `bench/dos-moviles-20261011-1506` (10 min del guion de SPK-04 por Wi-Fi, las dos 4K),

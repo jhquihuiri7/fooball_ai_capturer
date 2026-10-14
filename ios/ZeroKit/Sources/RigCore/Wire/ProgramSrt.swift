@@ -29,9 +29,12 @@ public enum ProgramSrt {
     /// usuario y clave, más la query.
     public static let streamIdParts = 2...5
 
-    /// Milisegundos que espera srt_connect a que conteste el servidor, por dirección: el
-    /// valor por defecto de SRT para un caller, y la cadencia de reconexión de IOS-56.
-    public static let connectTimeoutMs: Int32 = 3000
+    /// Milisegundos que espera srt_connect a que conteste el servidor, por dirección.
+    /// MediaMTX tarda 2 s en rechazar una clave mala (contra la fuerza bruta): con los 3 s
+    /// por defecto de SRT, un RTT malo o un servidor cargado lo convertían en un timeout, y
+    /// el publicador no sabría decir «clave mala». Es otra cosa que la cadencia de
+    /// reconexión de IOS-56.
+    public static let connectTimeoutMs: Int32 = 5000
 
     /// Longitud de la passphrase en caracteres: lo que acepta SRTO_PASSPHRASE.
     public static let passphraseLength = 10...79

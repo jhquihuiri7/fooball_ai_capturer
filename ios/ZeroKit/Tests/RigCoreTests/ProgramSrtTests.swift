@@ -85,5 +85,7 @@ final class ProgramSrtTests: XCTestCase {
         XCTAssertEqual(ProgramSrt.path, "programa")
         XCTAssertEqual(ProgramSrt.latencyMs, 1500)
         XCTAssertEqual(ProgramSrt.payloadBytes, 7 * TsFormat.packetSize)
+        // MediaMTX tarda 2 s en rechazar una clave mala: el timeout deja margen al RTT.
+        XCTAssertGreaterThanOrEqual(ProgramSrt.connectTimeoutMs, 4000)
     }
 }
