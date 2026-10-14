@@ -1,0 +1,5 @@
+module CSrt {
+    header "csrt.h"
+    link "c++"
+    export *
+}

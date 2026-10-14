@@ -5,7 +5,7 @@
 //              (decisión 17 del plan): es lo que se replica contra los dorados del
 //              servidor y lo que algún día correrá en Windows con el toolchain de Swift.
 //   RigMedia — lo que toca AVFoundation, Metal, Core ML y VideoToolbox.
-//   RigNet   — Network y, más adelante, libsrt.
+//   RigNet   — Network y libsrt (CSrt, IOS-55).
 //
 // Capas: RigCore no importa a nadie; RigMedia y RigNet solo a RigCore. Lo vigila
 // tools/check_layers.sh, la réplica del .importlinter del servidor.
@@ -42,10 +42,15 @@ let package = Package(
             ],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
+        // libsrt 1.5 con mbedTLS, estático, en un xcframework propio (IOS-55): lo deja
+        // tools/build_libsrt.sh. Módulo CSrt y librería libcsrt.a, para no chocar con el
+        // libsrt de SRTHaishinKit en el Runner hasta que se retire (IOS-91).
+        .binaryTarget(name: "CSrt", path: "Frameworks/CSrt.xcframework"),
         .target(
             name: "RigNet",
-            dependencies: ["RigCore"],
-            swiftSettings: [.swiftLanguageMode(.v5)]
+            dependencies: ["RigCore", "CSrt"],
+            swiftSettings: [.swiftLanguageMode(.v5)],
+            linkerSettings: [.linkedLibrary("c++")]
         ),
         .testTarget(
             name: "RigCoreTests",
