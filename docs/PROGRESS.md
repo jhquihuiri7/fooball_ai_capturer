@@ -16,6 +16,229 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 
 
+
+## 2026-10-14 · Wi-Fi Aware 25 min con el 16 Pro en iOS 27: sin cortes, y aguanta 30 Mbit/s (IOS-14, SPK-08)
+
+`link90` 1500 s con `RIG_LINK_INTERFACE=aware` (`bench/dos-moviles-20261014-0940`; la primera
+recogida con 51e23fd, que funcionó y dio su resumen). El emparejado sobrevivió a actualizar
+el 16 Pro a iOS 27.0.1.
+
+| | Wi-Fi Aware 2026-10-14 (25 min) | Wi-Fi con router, partes (2026-10-06 / hoy) |
+|---|---|---|
+| Cortes / reconexiones | 0 / 0 | — |
+| Órdenes / PTS | 748 de 748 / 747 de 750 | — |
+| Partes enviadas / recibidas / perdidas | 27 176 / 26 962 / 213 (**0,78 %**), con escalones 0/10/30 Mbit/s y picos de 39 | a 12 Mbit/s el 0,75 %; a 15 Mbit/s el 6,4 % |
+| RTT p50 / p90 / p99 | 5,5 / 7,8 / 10,8 ms | — |
+
+**Por Wi-Fi Aware caben 30 Mbit/s de partes con menos pérdida que 12 por la Wi-Fi del
+router.** Si se confirma en 90 min, la parte puede subir de 8 a 15-25 Mbit/s sin hubs, que
+es lo que SPK-05 pide para bajar el ΔVMAF (3,7 a 8 Mbit/s). Queda la medida a 25 Mbit/s con
+las 4K: hoy no cabían en el disco de la Mac ni del 16 Pro (8,85 GB libres, la reserva pide
+8,75).
+
+## 2026-10-14 · IOS-56 — el publicador del programa por SRT al VPS · 🚧 falta la pasada con los dos iPhone y los 30 min al VPS
+
+**Dependencias: excepción deliberada** (pendiente de la revisión de Alexander). La tarjeta
+depende de IOS-50 e IOS-53 (✅) y de IOS-54, IOS-55 e IOS-68, que tienen el código hecho y
+siguen 🚧 solo por sus pruebas con el iPhone o el VPS. Se adelanta para llegar a la primera
+prueba de emisión en la cancha.
+
+**Hecho** (4a16e8e, ab2321e, f165519 y el commit de esta entrada)
+- **RigCore, la lógica pura:**
+  - `ProgramSendQueue`: unidades de acceso (vídeo con la SEI, AAC), no TS. Lo que se tira
+    no deja huecos en los contadores de continuidad.
+    - Acotada a 1 s de espera y a 160 unidades.
+    - Ante congestión tira lo que espera y todo hasta el siguiente IDR, y lo pide una vez.
+    - El audio se tira con el vídeo.
+    - Empieza esperando un IDR.
+  - `AdaptiveRate`: el AdaptiveBitRate de StreamPublisher portado.
+    - `next`, backoff 0,8, un escalón de 0,6 Mbit/s cada 15 s tranquilos y suelo de
+      1 Mbit/s.
+    - El techo de la escalera (`setCeiling`) se aplica al momento.
+  - `ReconnectBackoff` y las constantes de `ProgramPublish`, con sus unidades.
+- **`RigNet/ProgramPublisher.swift`**: VideoEncoder + AacEncoder → TsMuxer → SrtSocket.
+  - Multiplexa justo al enviar, con un TsMuxer nuevo por conexión.
+  - Con el búfer de envío de SRT por encima de 750 ms no le mete más: retiene en la cola,
+    y la cola decide si tira.
+  - Un fotograma que SRT corta a medias también tira hasta el IDR.
+  - Una muestra de SRT por segundo (`mbpsSendRate`, `msSndBuf`) para el bitrate, que sale
+    por `onBitrate` hacia el codificador; el IDR sale por `onIdrRequest`.
+  - Reconecta a los 3 s.
+  - Las estadísticas (`Stats`, Codable):
+    - bitrate, envío, RTT y búfer;
+    - pérdidas, retransmisiones y tirados, por SRT y por la cola;
+    - conexiones, reconexiones, rechazos e IDR pedidos;
+    - `lastSentRigMs`, el `anchor` de IOS-65.
+- **`SrtSocket`**: `sendBufferMs()` (srt_getsndbuffer, para mirarlo antes de cada envío) y
+  `SrtStats()` a cero.
+- **El banco split**: `RIG_SPLIT_PUBLISH=1`.
+  - El maestro publica al bloque `srt` del QR Soporte del Keychain (`VpsPairingKeychain`,
+    IOS-68).
+  - Con `RIG_SRT_HOST`, en cambio, al destino de `RIG_SRT_PORT` (8890), `RIG_SRT_USER`,
+    `RIG_SRT_PASS` y `RIG_SRT_PASSPHRASE`.
+  - Solo publica mientras es maestro. Si deja de serlo, para.
+  - El log (`[srt] …`) y el informe solo llevan host y puerto, nunca usuario, clave ni
+    passphrase.
+  - El informe gana `publish`: el origen del destino, host y puerto, las `Stats` de cada
+    tramo de maestro y `program_encode_failures`.
+- **`tools/mediamtx-programa.yml`**: el MediaMTX del VPS para `programa`, en el Mac.
+  - SRT por IPv4 en 0.0.0.0:8890 y RTSP en 127.0.0.1:8554.
+  - Cualquier usuario desde la LAN, con la passphrase por entorno.
+  - Graba fMP4 en `bench/programa-mediamtx/` para mirar la SEI después.
+
+**Decidido aquí** (pendiente de la revisión de Alexander)
+- **Dos niveles ante congestión.** La tarjeta dice «búfer por encima del umbral: descarta
+  hasta el IDR». Con el búfer de SRT por encima de 750 ms (la mitad de la latencia) se
+  retiene; se tira hasta el IDR cuando la cola pasa de 1 s. Por encima de la latencia,
+  libsrt tira paquetes sueltos (TLPKTDROP) y rompe fotogramas a medias.
+- **La reconexión:** cada 3 s, como dice el ADR 0022 §8. El encargo pedía «backoff»: solo
+  tras rechazos seguidos (clave o passphrase), 3-6-12-24-30 s, porque reintentar no lo
+  arregla y a MediaMTX le cuesta 2 s cada intento. Un corte de red sigue a los 3 s. Un
+  streamid o una passphrase que no valen (`SrtError.invalid`) no se reintentan: `.failed`.
+- **Lo bajado durante un corte se deshace al reconectar.** Medido en el Mac: MediaMTX no
+  avisa al caer y SRT tarda ~5 s en dar la conexión por rota (`SRTO_PEERIDLETIMEO`).
+  Mientras, no sale nada y la regla del pod («sin salida, a la mitad») bajaba de 6 a
+  1 Mbit/s; luego tardaba dos minutos en volver a 6. Ahora `AdaptiveRate.reset` vuelve al
+  bitrate de antes del corte. Además, lo tirado en el corte ya no cuenta como congestión
+  en la primera muestra de la conexión nueva: antes bajaba de 6 a 4,9.
+- **Arranca al techo (6 Mbit/s).** El pod arrancaba a 4 por RTMP; aquí baja en un segundo
+  si no cabe.
+- **El suelo es 1 Mbit/s**, el del pod.
+- **Sin destino, no publica** (`publish.target.source: none`) y lo dice una vez en el log.
+  El puerto por defecto del entorno es 8890 (ADR 0022 §1).
+- **El codificador es el mismo** para el SRT y para el .ts y el .mov del banco. El bitrate
+  adaptativo baja también la copia local (IOS-57 tendrá que decidir si eso vale).
+
+**Lo que se vio en el Mac**
+- **La latencia ≤1,5 s no se puede cumplir con `SRTO_LATENCY` = 1500 ms.** TSBPD entrega
+  cada paquete 1500 ms después de enviarlo. Del codificador a la lectura por RTSP, la sonda
+  de NUBE-20 mide una mediana de **1582-1589 ms** con la red a 0 ms. En el maestro hay que
+  sumar la espera de la parte (130 ms) y la cámara: unos 1,75 s del cristal al VPS. Lo
+  decide SPK-07, que fija la latencia SRT; con 1000 ms saldrían ~1,25 s.
+- **En macOS, MediaMTX con `:8890` solo escucha SRT por IPv6.** Los iPhone necesitan
+  `0.0.0.0:8890`, que es lo que pone `tools/mediamtx-programa.yml`. El cortafuegos del Mac
+  está apagado.
+- **VideoToolbox tira fotogramas si no cabe.** Con un tercio del cuadro de ruido puro a
+  6 Mbit/s, el modo de baja latencia con el QP topado en 45 entregó 61 de 241 fotogramas
+  (`encodeFailures` 180). No baja la calidad: tira fotogramas. En el sintético se dejó en
+  1/8 del alto y ruido de 6 bits. En la cancha (césped con mucho detalle, lluvia) puede
+  pasar: por eso el informe trae `program_encode_failures`. Es de IOS-50; no se toca aquí.
+
+**Comprobado**
+- `swift test --skip ModelBench`: **452 tests, 4 saltados, 0 fallos**; antes, 422. Los
+  saltados son el del iPhone, los dos de MediaMTX de IOS-55 y el de MediaMTX de este. Los
+  nuevos:
+  - `AdaptiveRateTests` (10), con los 3 de AdaptiveBitRateTests portados;
+  - `ProgramSendQueueTests` (8);
+  - `ProgramPublisherTests` (10), contra un socket falso. Cubren el IDR al conectar; SRT
+    congestionado (retiene, a 1 s tira y pide IDR); el bitrate y el techo; el fotograma
+    cortado; la reconexión con un TS nuevo; lo tirado sin conexión; los rechazos y el
+    destino inválido; parar; y ningún secreto en estadísticas ni logs. Pasaron 20 veces
+    seguidas;
+  - `ProgramPublisherSrtTests`, contra el eco SRT con passphrase: 8 s del programa
+    sintético (VideoEncoder 1080p30 a 6 Mbit/s con SEI y AacEncoder estéreo).
+    - Llegan 241 de 241 fotogramas y 375 tramas, sin nada tirado.
+    - h264 y aac, y la SEI del rigMs en los 241, creciente.
+    - `ffprobe -show_frames` la ve en los 241.
+- **`RIG_SRT_MEDIAMTX=1 RIG_PUBLISH_S=120 swift test --filter ProgramPublisherSrtTests`**:
+  2 min contra MediaMTX 1.21.0 con SRT en 0.0.0.0, el programa sintético y MediaMTX
+  matado a los 40 s y relanzado a los 2 s.
+  - 6,45-6,69 Mbit/s enviados, 0 perdidos, 0 retransmitidos y 0 tirados por SRT.
+  - **Una sola reconexión, la del reinicio:** detectada a los ~5 s y reconectada 3 s
+    después.
+  - Tirados por el corte: 151 fotogramas en la cola y 90 sin conexión, unos 8 s. Al
+    reconectar, otra vez a 6 Mbit/s.
+  - **Leído de vuelta por RTSP** (20 s, `ffmpeg -c copy`): h264 y aac. La SEI del rigMs
+    está en los 549 fotogramas y `ffprobe -show_frames` ve `User Data Unregistered` en
+    549 de 549.
+  - **`tools/nube/sei_probe.py` de football-ai** sobre el mismo RTSP, sin tocar ese repo:
+    600 fotogramas, 600 con SEI, `sei_ok: true` y 0 hacia atrás. Desfase mediano 1582 ms;
+    parte variable p50 8 ms (el p95 es la ráfaga del GOP al engancharse).
+- `tools/check_layers.sh`: limpio.
+- ZeroKit compilado para iOS con xcodebuild (derivedData propio): BUILD SUCCEEDED.
+- **El Runner, sin `flutter build` y sin tocar `build/ios`:** `swiftc -typecheck` de todos
+  sus `.swift` contra ese ZeroKit y los módulos de HaishinKit y Flutter del DerivedData. 0
+  errores y los 32 avisos de antes.
+
+**Aceptación de la tarjeta**, hoy:
+
+| Criterio | En el Mac (sintético, MediaMTX local) | Con el iPhone y el VPS |
+|---|---|---|
+| 1080p30 a ~6 Mbit/s | ✅ 6,5 Mbit/s | pendiente |
+| Sin reconexiones sin causa | ✅ solo la del reinicio provocado | pendiente (30 min) |
+| ffprobe ve H.264 y AAC | ✅ | pendiente |
+| La SEI con el rigMs (ffprobe -show_frames y NUBE-20) | ✅ 100 % | pendiente |
+| Latencia del cristal al VPS ≤1,5 s | ❌ por construcción con SRT a 1500 ms (1,58 s sin red) | SPK-07 |
+
+**Pendiente**
+1. **Los dos iPhone contra el MediaMTX del Mac.** Con el build de estos commits: el banco
+   instala, salvo con `SIN_INSTALAR=1`. La IP del Mac hoy es 10.10.18.101.
+
+   ```bash
+   cd /Users/alexander/Trabajacion/fooball_ai_capturer
+   ( umask 077; openssl rand -hex 16 > /tmp/frase-programa )   # 32 caracteres, sin imprimirla
+   # Terminal 1, MediaMTX con SRT por IPv4 en :8890 y RTSP en 127.0.0.1:8554:
+   MTX_PATHS_PROGRAMA_SRTPUBLISHPASSPHRASE=$(cat /tmp/frase-programa) mediamtx tools/mediamtx-programa.yml
+   # Terminal 2, el banco de 10 min con el maestro publicando al Mac:
+   BANCO_EXTRA="{\"RIG_SPLIT_PUBLISH\": \"1\", \"RIG_SRT_HOST\": \"$(ipconfig getifaddr en0)\", \"RIG_SRT_USER\": \"maestro\", \"RIG_SRT_PASS\": \"banco\", \"RIG_SRT_PASSPHRASE\": \"$(cat /tmp/frase-programa)\"}" \
+     tools/banco_dos_moviles.sh split <secreto> 600
+   # Terminal 3, a partir del minuto 1:
+   ffprobe -v error -rtsp_transport tcp -show_entries stream=codec_name,width,height,avg_frame_rate,sample_rate,channels \
+     -of compact rtsp://127.0.0.1:8554/programa
+   (cd ../fooball_ai_streaming && uv run python tools/nube/sei_probe.py --source rtsp://127.0.0.1:8554/programa \
+     --seconds 120 --out /tmp/m20-banco.json)
+   # Al acabar:
+   python3 -c 'import json,sys; print(json.dumps(json.load(open(sys.argv[1]))["publish"], indent=1))' \
+     $(ls -t bench/dos-moviles-*/izquierdo/bench/program-split-left-*.json | head -1)
+   for f in bench/programa-mediamtx/programa/*.mp4; do echo "$f $(ffprobe -v error -select_streams v -show_frames \
+     -show_entries frame_side_data=side_data_type -of csv=p=0 "$f" | grep -c 'User Data Unregistered')"; done
+   ```
+
+   - `publish.sessions[0]`: `reconnects` 0, `congestions` 0, `bitrate_min_bps` 6000000,
+     `video_frames_sent` ≈ 18 000. También `rtt_ms`, `srt_packets_lost` y
+     `srt_packets_retransmitted`.
+   - `program_encode_failures` 0.
+   - La sonda: `sei_ok` true. Aquí el desfase no es latencia: el rigMs es el reloj del
+     iPhone.
+   - El programa (6 Mbit/s) va por la misma Wi-Fi que las partes (8): mirar `parts_lost` y
+     la latencia añadida frente a una pasada sin publicar.
+   - El esclavo no publica: `publish.sessions` vacío en su informe.
+2. **Los 30 min al VPS** (cuando haya VPS; sin relé, ninguna `FBAI_*_KEY`). Primero el
+   QR Soporte en los dos iPhone (IOS-68) y luego:
+
+   ```bash
+   BANCO_EXTRA='{"RIG_SPLIT_PUBLISH": "1"}' tools/banco_dos_moviles.sh split <secreto> 1800
+   # en el VPS, mientras dura:
+   ffprobe -v error -show_entries stream=codec_name -of csv=p=0 rtsp://127.0.0.1:8554/programa   # h264, aac
+   ffprobe -v error -read_intervals %+10 -select_streams v -show_frames -show_entries frame_side_data=side_data_type \
+     -of csv=p=0 rtsp://127.0.0.1:8554/programa | grep -c 'User Data Unregistered'
+   uv run python tools/nube/sei_probe.py --seconds 60        # NUBE-20, en football-ai
+   ```
+
+   Sin QR, por entorno: el mismo `BANCO_EXTRA` del paso 1 con `RIG_SRT_HOST` igual a
+   `FOOTBALL_VPS_DOMAIN`, y `RIG_SRT_USER`, `RIG_SRT_PASS` y `RIG_SRT_PASSPHRASE` iguales a
+   `FOOTBALL_PROGRAM_USER`, `_PASSWORD` y `_PASSPHRASE`. Sin iPhone, el sintético desde el
+   Mac:
+
+   ```bash
+   cd ios/ZeroKit
+   RIG_SRT_HOST=… RIG_SRT_USER=… RIG_SRT_PASS=… RIG_SRT_PASSPHRASE=… RIG_PUBLISH_S=1800 \
+     swift test --filter ProgramPublisherSrtTests/testPublicaElProgramaEnMediaMtx
+   ```
+
+3. **Lo que no cubre IOS-56** (de otras tarjetas):
+   - el 4409 que para el publicador (IOS-86);
+   - el `anchor` del túnel con `lastSentRigMs` (IOS-65);
+   - las `Stats` en la telemetría (IOS-89);
+   - la escalera, que llama a `setCeiling`: el banco no la corre y publica con el techo
+     de fábrica.
+
+   El publicador solo vive en el banco split, porque el programa solo se compone ahí. El
+   botón «Emitir» de verdad llega cuando el programa salga del banco.
+
+**Siguiente paso**: la pasada del paso 1 con los dos iPhone. Si da 0 reconexiones y la SEI
+al 100 %, los 30 min al VPS en cuanto esté desplegado.
+
 ## 2026-10-14 · Con los dos iPhone: el 16 Pro en iOS 27, la 4K del esclavo arreglada, la parte a 15 Mbit/s no cabe por Wi-Fi y el relevo de ida con a62d4ec
 
 **iOS 27.** El 16 Pro se actualizó a iOS 27.0.1 (el 17 sigue en 26.6.1; Xcode 26.6 con el SDK
