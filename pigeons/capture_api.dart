@@ -83,6 +83,23 @@ enum RigRole {
   slave,
 }
 
+/// Qué enlace abre `startLink` (IOS-58). Multipeer es el de siempre: cada móvil emite su
+/// cámara al pod. Los otros tres son el enlace de Network (ADR 0023) por ese medio, y con
+/// él la arquitectura B: el maestro compone el programa y lo sube al VPS. Si la app se
+/// lanza con RIG_LINK_MULTIPEER en el entorno (los bancos del Mac), manda el entorno.
+enum LinkMode {
+  multipeer,
+
+  /// El hub USB-C con Ethernet: el del campo.
+  ethernet,
+
+  /// La Wi-Fi de un router.
+  wifi,
+
+  /// Wi-Fi Aware entre los dos iPhone, sin router (IOS-14). Pide emparejarlos una vez.
+  aware,
+}
+
 /// Estado de la emisión al servidor (TASK A5).
 enum StreamState {
   /// No se emite: sin servidor configurado, o antes de GRABAR.
@@ -393,8 +410,10 @@ abstract class CaptureHostApi {
   /// El izquierdo se anuncia y es el maestro del reloj; el derecho lo busca, se conecta
   /// y le pregunta la hora. Los cuatro sellos de cada pregunta se toman en nativo, con
   /// el mismo reloj que los frames, y llegan a Dart por `onClockStamps`.
-  /// `prefersMaster` es «Este móvil dirige»: solo decide al empezar un partido.
-  void startLink(CameraRole role, bool prefersMaster);
+  /// `prefersMaster` es «Este móvil dirige»: solo decide al empezar un partido. `mode`,
+  /// el enlace elegido en la pantalla (IOS-58); el de Network pide el secreto del soporte,
+  /// que se guarda en el Keychain la primera vez que la app se lanza con RIG_LINK_SECRET.
+  void startLink(CameraRole role, bool prefersMaster, LinkMode mode);
 
   void stopLink();
 

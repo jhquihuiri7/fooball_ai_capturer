@@ -173,6 +173,20 @@ enum RigRole {
   slave;
 }
 
+/// Qué enlace abre `startLink` (IOS-58). Multipeer es el de siempre: cada móvil emite su
+/// cámara al pod. Los otros tres son el enlace de Network (ADR 0023) por ese medio, y con
+/// él la arquitectura B: el maestro compone el programa y lo sube al VPS. Si la app se
+/// lanza con RIG_LINK_MULTIPEER en el entorno (los bancos del Mac), manda el entorno.
+enum LinkMode {
+  multipeer,
+  /// El hub USB-C con Ethernet: el del campo.
+  ethernet,
+  /// La Wi-Fi de un router.
+  wifi,
+  /// Wi-Fi Aware entre los dos iPhone, sin router (IOS-14). Pide emparejarlos una vez.
+  aware;
+}
+
 /// Estado de la emisión al servidor (TASK A5).
 enum StreamState {
   /// No se emite: sin servidor configurado, o antes de GRABAR.
@@ -571,17 +585,20 @@ class _PigeonCodec extends StandardMessageCodec {
     }    else if (value is RigRole) {
       buffer.putUint8(134);
       writeValue(buffer, value.index);
-    }    else if (value is StreamState) {
+    }    else if (value is LinkMode) {
       buffer.putUint8(135);
       writeValue(buffer, value.index);
-    }    else if (value is CaptureSettings) {
+    }    else if (value is StreamState) {
       buffer.putUint8(136);
-      writeValue(buffer, value.encode());
-    }    else if (value is CaptureStatus) {
+      writeValue(buffer, value.index);
+    }    else if (value is CaptureSettings) {
       buffer.putUint8(137);
       writeValue(buffer, value.encode());
-    }    else if (value is ClockSample) {
+    }    else if (value is CaptureStatus) {
       buffer.putUint8(138);
+      writeValue(buffer, value.encode());
+    }    else if (value is ClockSample) {
+      buffer.putUint8(139);
       writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
@@ -611,12 +628,15 @@ class _PigeonCodec extends StandardMessageCodec {
         return value == null ? null : RigRole.values[value];
       case 135:
         final value = readValue(buffer) as int?;
-        return value == null ? null : StreamState.values[value];
+        return value == null ? null : LinkMode.values[value];
       case 136:
-        return CaptureSettings.decode(readValue(buffer)!);
+        final value = readValue(buffer) as int?;
+        return value == null ? null : StreamState.values[value];
       case 137:
-        return CaptureStatus.decode(readValue(buffer)!);
+        return CaptureSettings.decode(readValue(buffer)!);
       case 138:
+        return CaptureStatus.decode(readValue(buffer)!);
+      case 139:
         return ClockSample.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
@@ -1139,15 +1159,17 @@ class CaptureHostApi {
   /// El izquierdo se anuncia y es el maestro del reloj; el derecho lo busca, se conecta
   /// y le pregunta la hora. Los cuatro sellos de cada pregunta se toman en nativo, con
   /// el mismo reloj que los frames, y llegan a Dart por `onClockStamps`.
-  /// `prefersMaster` es «Este móvil dirige»: solo decide al empezar un partido.
-  Future<void> startLink(CameraRole role, bool prefersMaster) async {
+  /// `prefersMaster` es «Este móvil dirige»: solo decide al empezar un partido. `mode`,
+  /// el enlace elegido en la pantalla (IOS-58); el de Network pide el secreto del soporte,
+  /// que se guarda en el Keychain la primera vez que la app se lanza con RIG_LINK_SECRET.
+  Future<void> startLink(CameraRole role, bool prefersMaster, LinkMode mode) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.CaptureHostApi.startLink$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[role, prefersMaster]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[role, prefersMaster, mode]);
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     _extractReplyValueOrThrow(

@@ -44,6 +44,204 @@ List<Object?> wrapResponse({Object? result, PlatformException? error, bool empty
   }
   return <Object?>[error.code, error.message, error.details];
 }
+bool _deepEquals(Object? a, Object? b) {
+  if (identical(a, b)) {
+    return true;
+  }
+  if (a is double && b is double) {
+    if (a.isNaN && b.isNaN) {
+      return true;
+    }
+    return a == b;
+  }
+  if (a is List && b is List) {
+    return a.length == b.length &&
+        a.indexed
+            .every(((int, dynamic) item) => _deepEquals(item.$2, b[item.$1]));
+  }
+  if (a is Map && b is Map) {
+    if (a.length != b.length) {
+      return false;
+    }
+    for (final MapEntry<Object?, Object?> entryA in a.entries) {
+      bool found = false;
+      for (final MapEntry<Object?, Object?> entryB in b.entries) {
+        if (_deepEquals(entryA.key, entryB.key)) {
+          if (_deepEquals(entryA.value, entryB.value)) {
+            found = true;
+            break;
+          } else {
+            return false;
+          }
+        }
+      }
+      if (!found) {
+        return false;
+      }
+    }
+    return true;
+  }
+  return a == b;
+}
+
+int _deepHash(Object? value) {
+  if (value is List) {
+    return Object.hashAll(value.map(_deepHash));
+  }
+  if (value is Map) {
+    int result = 0;
+    for (final MapEntry<Object?, Object?> entry in value.entries) {
+      result += (_deepHash(entry.key) * 31) ^ _deepHash(entry.value);
+    }
+    return result;
+  }
+  if (value is double && value.isNaN) {
+    // Normalize NaN to a consistent hash.
+    return 0x7FF8000000000000.hashCode;
+  }
+  if (value is double && value == 0.0) {
+    // Normalize -0.0 to 0.0 so they have the same hash code.
+    return 0.0.hashCode;
+  }
+  return value.hashCode;
+}
+
+
+/// Cómo va EMITIR en la arquitectura B (IOS-58), para la pantalla de cada móvil. Lo que no
+/// toca a su papel va a cero o vacío: el esclavo no publica, el maestro no manda partes.
+class ProgramStatus {
+  ProgramStatus({
+    required this.running,
+    required this.master,
+    required this.programFps,
+    required this.programFrames,
+    required this.srtState,
+    required this.srtTarget,
+    required this.srtDetail,
+    required this.srtBitrateBps,
+    required this.srtRttMs,
+    required this.srtReconnects,
+    required this.partMbps,
+    required this.partFallbacks,
+    required this.partsLost,
+    required this.detectorRuns,
+    required this.detectorNote,
+    required this.problem,
+  });
+
+  /// Hay una pasada en marcha en este móvil.
+  bool running;
+
+  /// Este móvil compone y publica ahora (el rol puede cambiar con un relevo).
+  bool master;
+
+  /// Fotogramas del programa por segundo desde la lectura anterior, y en total.
+  double programFps;
+
+  int programFrames;
+
+  /// El publicador SRT: `stopped`, `connecting`, `publishing`, `waiting` o `failed`;
+  /// `none` sin destino (sin QR Soporte); vacío si este móvil no publica.
+  String srtState;
+
+  /// `host:puerto` del destino. Nunca usuario, clave ni passphrase.
+  String srtTarget;
+
+  /// Por qué espera o falló, en palabras; vacío si va bien.
+  String srtDetail;
+
+  int srtBitrateBps;
+
+  double srtRttMs;
+
+  int srtReconnects;
+
+  /// La parte del esclavo, en Mbit/s: la que llega (maestro) o la que sale (esclavo).
+  double partMbps;
+
+  /// Retrocesos: en el maestro, instantes que pedían las dos lentes y salieron de una
+  /// porque la parte no llegó a tiempo; en el esclavo, fotogramas pintados con la vista
+  /// extrapolada porque no había orden del maestro.
+  int partFallbacks;
+
+  /// Partes que no llegaron al maestro.
+  int partsLost;
+
+  /// Pasadas del detector de jugadores, y su nota (`sin modelo`, o el error al cargarlo).
+  int detectorRuns;
+
+  String detectorNote;
+
+  /// Lo que impidió montar el programa, si algo lo impidió.
+  String problem;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      running,
+      master,
+      programFps,
+      programFrames,
+      srtState,
+      srtTarget,
+      srtDetail,
+      srtBitrateBps,
+      srtRttMs,
+      srtReconnects,
+      partMbps,
+      partFallbacks,
+      partsLost,
+      detectorRuns,
+      detectorNote,
+      problem,
+    ];
+  }
+
+  Object encode() {
+    return _toList();  }
+
+  static ProgramStatus decode(Object result) {
+    result as List<Object?>;
+    return ProgramStatus(
+      running: result[0]! as bool,
+      master: result[1]! as bool,
+      programFps: result[2]! as double,
+      programFrames: result[3]! as int,
+      srtState: result[4]! as String,
+      srtTarget: result[5]! as String,
+      srtDetail: result[6]! as String,
+      srtBitrateBps: result[7]! as int,
+      srtRttMs: result[8]! as double,
+      srtReconnects: result[9]! as int,
+      partMbps: result[10]! as double,
+      partFallbacks: result[11]! as int,
+      partsLost: result[12]! as int,
+      detectorRuns: result[13]! as int,
+      detectorNote: result[14]! as String,
+      problem: result[15]! as String,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! ProgramStatus || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(running, other.running) && _deepEquals(master, other.master) && _deepEquals(programFps, other.programFps) && _deepEquals(programFrames, other.programFrames) && _deepEquals(srtState, other.srtState) && _deepEquals(srtTarget, other.srtTarget) && _deepEquals(srtDetail, other.srtDetail) && _deepEquals(srtBitrateBps, other.srtBitrateBps) && _deepEquals(srtRttMs, other.srtRttMs) && _deepEquals(srtReconnects, other.srtReconnects) && _deepEquals(partMbps, other.partMbps) && _deepEquals(partFallbacks, other.partFallbacks) && _deepEquals(partsLost, other.partsLost) && _deepEquals(detectorRuns, other.detectorRuns) && _deepEquals(detectorNote, other.detectorNote) && _deepEquals(problem, other.problem);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+
+  @override
+  String toString() {
+    return 'ProgramStatus(running: $running, master: $master, programFps: $programFps, programFrames: $programFrames, srtState: $srtState, srtTarget: $srtTarget, srtDetail: $srtDetail, srtBitrateBps: $srtBitrateBps, srtRttMs: $srtRttMs, srtReconnects: $srtReconnects, partMbps: $partMbps, partFallbacks: $partFallbacks, partsLost: $partsLost, detectorRuns: $detectorRuns, detectorNote: $detectorNote, problem: $problem)';
+  }
+}
 
 
 class _PigeonCodec extends StandardMessageCodec {
@@ -53,6 +251,9 @@ class _PigeonCodec extends StandardMessageCodec {
     if (value is int) {
       buffer.putUint8(4);
       buffer.putInt64(value);
+    }    else if (value is ProgramStatus) {
+      buffer.putUint8(129);
+      writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
     }
@@ -61,6 +262,8 @@ class _PigeonCodec extends StandardMessageCodec {
   @override
   Object? readValueOfType(int type, ReadBuffer buffer) {
     switch (type) {
+      case 129:
+        return ProgramStatus.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
     }
@@ -83,6 +286,69 @@ class RigHostApi {
 
   final String pigeonVar_messageChannelSuffix;
 
+
+  /// EMITIR en la arquitectura B (IOS-58): pone en marcha el programa de este móvil con el
+  /// enlace de Network abierto por `startLink`. En el maestro, la composición, el director,
+  /// el detector, la copia .mov y el SRT al destino del QR Soporte; en el esclavo, su
+  /// parte y su detector. La 4K va aparte, por `CaptureHostApi.start`. Devuelve "" o por
+  /// qué no arrancó.
+  Future<String> startProgram() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.RigHostApi.startProgram$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as String;
+  }
+
+  /// PARAR: cierra la copia, el SRT y la parte, y deja el informe en Documents/bench.
+  Future<void> stopProgram() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.RigHostApi.stopProgram$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
+  /// Cómo va. Con `running` a false si no hay pasada.
+  Future<ProgramStatus> programStatus() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.RigHostApi.programStatus$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as ProgramStatus;
+  }
 
   /// Lanza un banco por nombre (IOS-08) y devuelve la ruta del informe JSON que dejó
   /// en Documents/bench/. `paramsJson` son los parámetros del banco, tal cual se

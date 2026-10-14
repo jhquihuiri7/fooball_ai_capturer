@@ -254,6 +254,20 @@ enum RigRole: Int, CaseIterable {
   case slave = 1
 }
 
+/// Qué enlace abre `startLink` (IOS-58). Multipeer es el de siempre: cada móvil emite su
+/// cámara al pod. Los otros tres son el enlace de Network (ADR 0023) por ese medio, y con
+/// él la arquitectura B: el maestro compone el programa y lo sube al VPS. Si la app se
+/// lanza con RIG_LINK_MULTIPEER en el entorno (los bancos del Mac), manda el entorno.
+enum LinkMode: Int, CaseIterable {
+  case multipeer = 0
+  /// El hub USB-C con Ethernet: el del campo.
+  case ethernet = 1
+  /// La Wi-Fi de un router.
+  case wifi = 2
+  /// Wi-Fi Aware entre los dos iPhone, sin router (IOS-14). Pide emparejarlos una vez.
+  case aware = 3
+}
+
 /// Estado de la emisión al servidor (TASK A5).
 enum StreamState: Int, CaseIterable {
   /// No se emite: sin servidor configurado, o antes de GRABAR.
@@ -641,14 +655,20 @@ private class CaptureApiPigeonCodecReader: FlutterStandardReader {
     case 135:
       let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
       if let enumResultAsInt = enumResultAsInt {
-        return StreamState(rawValue: enumResultAsInt)
+        return LinkMode(rawValue: enumResultAsInt)
       }
       return nil
     case 136:
-      return CaptureSettings.fromList(self.readValue() as! [Any?])
+      let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
+      if let enumResultAsInt = enumResultAsInt {
+        return StreamState(rawValue: enumResultAsInt)
+      }
+      return nil
     case 137:
-      return CaptureStatus.fromList(self.readValue() as! [Any?])
+      return CaptureSettings.fromList(self.readValue() as! [Any?])
     case 138:
+      return CaptureStatus.fromList(self.readValue() as! [Any?])
+    case 139:
       return ClockSample.fromList(self.readValue() as! [Any?])
     default:
       return super.readValue(ofType: type)
@@ -676,17 +696,20 @@ private class CaptureApiPigeonCodecWriter: FlutterStandardWriter {
     } else if let value = value as? RigRole {
       super.writeByte(134)
       super.writeValue(value.rawValue)
-    } else if let value = value as? StreamState {
+    } else if let value = value as? LinkMode {
       super.writeByte(135)
       super.writeValue(value.rawValue)
-    } else if let value = value as? CaptureSettings {
+    } else if let value = value as? StreamState {
       super.writeByte(136)
-      super.writeValue(value.toList())
-    } else if let value = value as? CaptureStatus {
+      super.writeValue(value.rawValue)
+    } else if let value = value as? CaptureSettings {
       super.writeByte(137)
       super.writeValue(value.toList())
-    } else if let value = value as? ClockSample {
+    } else if let value = value as? CaptureStatus {
       super.writeByte(138)
+      super.writeValue(value.toList())
+    } else if let value = value as? ClockSample {
+      super.writeByte(139)
       super.writeValue(value.toList())
     } else {
       super.writeValue(value)
@@ -807,8 +830,10 @@ protocol CaptureHostApi {
   /// El izquierdo se anuncia y es el maestro del reloj; el derecho lo busca, se conecta
   /// y le pregunta la hora. Los cuatro sellos de cada pregunta se toman en nativo, con
   /// el mismo reloj que los frames, y llegan a Dart por `onClockStamps`.
-  /// `prefersMaster` es «Este móvil dirige»: solo decide al empezar un partido.
-  func startLink(role: CameraRole, prefersMaster: Bool) throws
+  /// `prefersMaster` es «Este móvil dirige»: solo decide al empezar un partido. `mode`,
+  /// el enlace elegido en la pantalla (IOS-58); el de Network pide el secreto del soporte,
+  /// que se guarda en el Keychain la primera vez que la app se lanza con RIG_LINK_SECRET.
+  func startLink(role: CameraRole, prefersMaster: Bool, mode: LinkMode) throws
   func stopLink() throws
   /// Empareja este móvil con el otro del soporte por Wi-Fi Aware, una sola vez (IOS-14):
   /// el izquierdo enseña un código y el derecho lo elige y lo teclea. Devuelve con quién
@@ -1248,15 +1273,18 @@ class CaptureHostApiSetup {
     /// El izquierdo se anuncia y es el maestro del reloj; el derecho lo busca, se conecta
     /// y le pregunta la hora. Los cuatro sellos de cada pregunta se toman en nativo, con
     /// el mismo reloj que los frames, y llegan a Dart por `onClockStamps`.
-    /// `prefersMaster` es «Este móvil dirige»: solo decide al empezar un partido.
+    /// `prefersMaster` es «Este móvil dirige»: solo decide al empezar un partido. `mode`,
+    /// el enlace elegido en la pantalla (IOS-58); el de Network pide el secreto del soporte,
+    /// que se guarda en el Keychain la primera vez que la app se lanza con RIG_LINK_SECRET.
     let startLinkChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.startLink\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       startLinkChannel.setMessageHandler { message, reply in
         let args = message as! [Any?]
         let roleArg = args[0] as! CameraRole
         let prefersMasterArg = args[1] as! Bool
+        let modeArg = args[2] as! LinkMode
         do {
-          try api.startLink(role: roleArg, prefersMaster: prefersMasterArg)
+          try api.startLink(role: roleArg, prefersMaster: prefersMasterArg, mode: modeArg)
           reply(wrapResult(nil))
         } catch {
           reply(wrapError(error))

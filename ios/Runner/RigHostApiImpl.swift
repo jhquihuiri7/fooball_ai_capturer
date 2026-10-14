@@ -132,6 +132,20 @@ final class RigHostApiImpl: NSObject, RigHostApi {
         AdHub.rotation?.set(override: clip, loops: max(1, Int(loops)), atRigMs: AdHub.nowRigMs())
     }
 
+    // IOS-58: EMITIR en la arquitectura B. La pasada vive con la cámara y el enlace.
+
+    func startProgram() throws -> String {
+        ProgramHub.capture?.startProgram() ?? "sin cámara"
+    }
+
+    func stopProgram() throws {
+        ProgramHub.capture?.stopProgramRun()
+    }
+
+    func programStatus() throws -> ProgramStatus {
+        ProgramHub.capture?.programStatus() ?? SplitBench.idleStatus
+    }
+
     func clearOverlay(layer: Int64) throws {
         guard let capa = OverlayLayer(rawValue: Int(layer)) else { return }
         OverlayHub.shared?.clear(capa)

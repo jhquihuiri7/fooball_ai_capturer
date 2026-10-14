@@ -53,6 +53,115 @@ enum RigApiPigeonInternal {
 
     return innerValue is NSNull
   }
+  static func doubleEquals(_ lhs: Double, _ rhs: Double) -> Bool {
+    return (lhs.isNaN && rhs.isNaN) || lhs == rhs
+  }
+
+  static func doubleHash(_ value: Double, _ hasher: inout Hasher) {
+    if value.isNaN {
+      hasher.combine(0x7FF8000000000000)
+    } else {
+      // Normalize -0.0 to 0.0
+      hasher.combine(value == 0 ? 0 : value)
+    }
+  }
+
+  static func deepEquals(_ lhs: Any?, _ rhs: Any?) -> Bool {
+    let cleanLhs = nilOrValue(lhs) as Any?
+    let cleanRhs = nilOrValue(rhs) as Any?
+    switch (cleanLhs, cleanRhs) {
+    case (nil, nil):
+      return true
+
+    case (nil, _), (_, nil):
+      return false
+
+    case (let lhs as AnyObject, let rhs as AnyObject) where lhs === rhs:
+      return true
+
+    case is (Void, Void):
+      return true
+
+    case (let lhsArray, let rhsArray) as ([Double], [Double]):
+      guard lhsArray.count == rhsArray.count else { return false }
+      for (index, element) in lhsArray.enumerated() {
+        if !doubleEquals(element, rhsArray[index]) {
+          return false
+        }
+      }
+      return true
+
+    case (let lhsArray, let rhsArray) as ([Any?], [Any?]):
+      guard lhsArray.count == rhsArray.count else { return false }
+      for (index, element) in lhsArray.enumerated() {
+        if !deepEquals(element, rhsArray[index]) {
+          return false
+        }
+      }
+      return true
+
+    case (let lhsDictionary, let rhsDictionary) as ([AnyHashable: Any?], [AnyHashable: Any?]):
+      guard lhsDictionary.count == rhsDictionary.count else { return false }
+      for (lhsKey, lhsValue) in lhsDictionary {
+        var found = false
+        for (rhsKey, rhsValue) in rhsDictionary {
+          if deepEquals(lhsKey, rhsKey) {
+            if deepEquals(lhsValue, rhsValue) {
+              found = true
+              break
+            } else {
+              return false
+            }
+          }
+        }
+        if !found { return false }
+      }
+      return true
+
+    case (let lhs as Double, let rhs as Double):
+      return doubleEquals(lhs, rhs)
+
+    case (let lhsHashable, let rhsHashable) as (AnyHashable, AnyHashable):
+      return lhsHashable == rhsHashable
+
+    default:
+      return false
+    }
+  }
+
+  static func deepHash(value: Any?, hasher: inout Hasher) {
+    let cleanValue = nilOrValue(value) as Any?
+    if let cleanValue = cleanValue {
+      if let doubleValue = cleanValue as? Double {
+        doubleHash(doubleValue, &hasher)
+      } else if let valueList = cleanValue as? [Any?] {
+        for item in valueList {
+          deepHash(value: item, hasher: &hasher)
+        }
+      } else if let valueList = cleanValue as? [Double] {
+        for item in valueList {
+          doubleHash(item, &hasher)
+        }
+      } else if let valueDict = cleanValue as? [AnyHashable: Any?] {
+        var result = 0
+        for (key, value) in valueDict {
+          var entryKeyHasher = Hasher()
+          deepHash(value: key, hasher: &entryKeyHasher)
+          var entryValueHasher = Hasher()
+          deepHash(value: value, hasher: &entryValueHasher)
+          result = result &+ ((entryKeyHasher.finalize() &* 31) ^ entryValueHasher.finalize())
+        }
+        hasher.combine(result)
+      } else if let hashableValue = cleanValue as? AnyHashable {
+        hasher.combine(hashableValue)
+      } else {
+        hasher.combine(String(describing: cleanValue))
+      }
+    } else {
+      hasher.combine(0)
+    }
+  }
+
 }
 
 private func nilOrValue<T>(_ value: Any?) -> T? {
@@ -61,10 +170,153 @@ private func nilOrValue<T>(_ value: Any?) -> T? {
 }
 
 
+/// Cómo va EMITIR en la arquitectura B (IOS-58), para la pantalla de cada móvil. Lo que no
+/// toca a su papel va a cero o vacío: el esclavo no publica, el maestro no manda partes.
+///
+/// Generated class from Pigeon that represents data sent in messages.
+struct ProgramStatus: Hashable, CustomStringConvertible {
+  /// Hay una pasada en marcha en este móvil.
+  var running: Bool
+  /// Este móvil compone y publica ahora (el rol puede cambiar con un relevo).
+  var master: Bool
+  /// Fotogramas del programa por segundo desde la lectura anterior, y en total.
+  var programFps: Double
+  var programFrames: Int64
+  /// El publicador SRT: `stopped`, `connecting`, `publishing`, `waiting` o `failed`;
+  /// `none` sin destino (sin QR Soporte); vacío si este móvil no publica.
+  var srtState: String
+  /// `host:puerto` del destino. Nunca usuario, clave ni passphrase.
+  var srtTarget: String
+  /// Por qué espera o falló, en palabras; vacío si va bien.
+  var srtDetail: String
+  var srtBitrateBps: Int64
+  var srtRttMs: Double
+  var srtReconnects: Int64
+  /// La parte del esclavo, en Mbit/s: la que llega (maestro) o la que sale (esclavo).
+  var partMbps: Double
+  /// Retrocesos: en el maestro, instantes que pedían las dos lentes y salieron de una
+  /// porque la parte no llegó a tiempo; en el esclavo, fotogramas pintados con la vista
+  /// extrapolada porque no había orden del maestro.
+  var partFallbacks: Int64
+  /// Partes que no llegaron al maestro.
+  var partsLost: Int64
+  /// Pasadas del detector de jugadores, y su nota (`sin modelo`, o el error al cargarlo).
+  var detectorRuns: Int64
+  var detectorNote: String
+  /// Lo que impidió montar el programa, si algo lo impidió.
+  var problem: String
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> ProgramStatus? {
+    let running = pigeonVar_list[0] as! Bool
+    let master = pigeonVar_list[1] as! Bool
+    let programFps = pigeonVar_list[2] as! Double
+    let programFrames = pigeonVar_list[3] as! Int64
+    let srtState = pigeonVar_list[4] as! String
+    let srtTarget = pigeonVar_list[5] as! String
+    let srtDetail = pigeonVar_list[6] as! String
+    let srtBitrateBps = pigeonVar_list[7] as! Int64
+    let srtRttMs = pigeonVar_list[8] as! Double
+    let srtReconnects = pigeonVar_list[9] as! Int64
+    let partMbps = pigeonVar_list[10] as! Double
+    let partFallbacks = pigeonVar_list[11] as! Int64
+    let partsLost = pigeonVar_list[12] as! Int64
+    let detectorRuns = pigeonVar_list[13] as! Int64
+    let detectorNote = pigeonVar_list[14] as! String
+    let problem = pigeonVar_list[15] as! String
+
+    return ProgramStatus(
+      running: running,
+      master: master,
+      programFps: programFps,
+      programFrames: programFrames,
+      srtState: srtState,
+      srtTarget: srtTarget,
+      srtDetail: srtDetail,
+      srtBitrateBps: srtBitrateBps,
+      srtRttMs: srtRttMs,
+      srtReconnects: srtReconnects,
+      partMbps: partMbps,
+      partFallbacks: partFallbacks,
+      partsLost: partsLost,
+      detectorRuns: detectorRuns,
+      detectorNote: detectorNote,
+      problem: problem
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      running,
+      master,
+      programFps,
+      programFrames,
+      srtState,
+      srtTarget,
+      srtDetail,
+      srtBitrateBps,
+      srtRttMs,
+      srtReconnects,
+      partMbps,
+      partFallbacks,
+      partsLost,
+      detectorRuns,
+      detectorNote,
+      problem,
+    ]
+  }
+  static func == (lhs: ProgramStatus, rhs: ProgramStatus) -> Bool {
+    if Swift.type(of: lhs) != Swift.type(of: rhs) {
+      return false
+    }
+    return RigApiPigeonInternal.deepEquals(lhs.running, rhs.running) && RigApiPigeonInternal.deepEquals(lhs.master, rhs.master) && RigApiPigeonInternal.deepEquals(lhs.programFps, rhs.programFps) && RigApiPigeonInternal.deepEquals(lhs.programFrames, rhs.programFrames) && RigApiPigeonInternal.deepEquals(lhs.srtState, rhs.srtState) && RigApiPigeonInternal.deepEquals(lhs.srtTarget, rhs.srtTarget) && RigApiPigeonInternal.deepEquals(lhs.srtDetail, rhs.srtDetail) && RigApiPigeonInternal.deepEquals(lhs.srtBitrateBps, rhs.srtBitrateBps) && RigApiPigeonInternal.deepEquals(lhs.srtRttMs, rhs.srtRttMs) && RigApiPigeonInternal.deepEquals(lhs.srtReconnects, rhs.srtReconnects) && RigApiPigeonInternal.deepEquals(lhs.partMbps, rhs.partMbps) && RigApiPigeonInternal.deepEquals(lhs.partFallbacks, rhs.partFallbacks) && RigApiPigeonInternal.deepEquals(lhs.partsLost, rhs.partsLost) && RigApiPigeonInternal.deepEquals(lhs.detectorRuns, rhs.detectorRuns) && RigApiPigeonInternal.deepEquals(lhs.detectorNote, rhs.detectorNote) && RigApiPigeonInternal.deepEquals(lhs.problem, rhs.problem)
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine("ProgramStatus")
+    RigApiPigeonInternal.deepHash(value: running, hasher: &hasher)
+    RigApiPigeonInternal.deepHash(value: master, hasher: &hasher)
+    RigApiPigeonInternal.deepHash(value: programFps, hasher: &hasher)
+    RigApiPigeonInternal.deepHash(value: programFrames, hasher: &hasher)
+    RigApiPigeonInternal.deepHash(value: srtState, hasher: &hasher)
+    RigApiPigeonInternal.deepHash(value: srtTarget, hasher: &hasher)
+    RigApiPigeonInternal.deepHash(value: srtDetail, hasher: &hasher)
+    RigApiPigeonInternal.deepHash(value: srtBitrateBps, hasher: &hasher)
+    RigApiPigeonInternal.deepHash(value: srtRttMs, hasher: &hasher)
+    RigApiPigeonInternal.deepHash(value: srtReconnects, hasher: &hasher)
+    RigApiPigeonInternal.deepHash(value: partMbps, hasher: &hasher)
+    RigApiPigeonInternal.deepHash(value: partFallbacks, hasher: &hasher)
+    RigApiPigeonInternal.deepHash(value: partsLost, hasher: &hasher)
+    RigApiPigeonInternal.deepHash(value: detectorRuns, hasher: &hasher)
+    RigApiPigeonInternal.deepHash(value: detectorNote, hasher: &hasher)
+    RigApiPigeonInternal.deepHash(value: problem, hasher: &hasher)
+  }
+
+  public var description: String {
+    return "ProgramStatus(running: \(String(describing: running)), master: \(String(describing: master)), programFps: \(String(describing: programFps)), programFrames: \(String(describing: programFrames)), srtState: \(String(describing: srtState)), srtTarget: \(String(describing: srtTarget)), srtDetail: \(String(describing: srtDetail)), srtBitrateBps: \(String(describing: srtBitrateBps)), srtRttMs: \(String(describing: srtRttMs)), srtReconnects: \(String(describing: srtReconnects)), partMbps: \(String(describing: partMbps)), partFallbacks: \(String(describing: partFallbacks)), partsLost: \(String(describing: partsLost)), detectorRuns: \(String(describing: detectorRuns)), detectorNote: \(String(describing: detectorNote)), problem: \(String(describing: problem)))"
+  }
+}
+
 private class RigApiPigeonCodecReader: FlutterStandardReader {
+  override func readValue(ofType type: UInt8) -> Any? {
+    switch type {
+    case 129:
+      return ProgramStatus.fromList(self.readValue() as! [Any?])
+    default:
+      return super.readValue(ofType: type)
+    }
+  }
 }
 
 private class RigApiPigeonCodecWriter: FlutterStandardWriter {
+  override func writeValue(_ value: Any) {
+    if let value = value as? ProgramStatus {
+      super.writeByte(129)
+      super.writeValue(value.toList())
+    } else {
+      super.writeValue(value)
+    }
+  }
 }
 
 private class RigApiPigeonCodecReaderWriter: FlutterStandardReaderWriter {
@@ -84,6 +336,16 @@ class RigApiPigeonCodec: FlutterStandardMessageCodec, @unchecked Sendable {
 
 /// Generated protocol from Pigeon that represents a handler of messages from Flutter.
 protocol RigHostApi {
+  /// EMITIR en la arquitectura B (IOS-58): pone en marcha el programa de este móvil con el
+  /// enlace de Network abierto por `startLink`. En el maestro, la composición, el director,
+  /// el detector, la copia .mov y el SRT al destino del QR Soporte; en el esclavo, su
+  /// parte y su detector. La 4K va aparte, por `CaptureHostApi.start`. Devuelve "" o por
+  /// qué no arrancó.
+  func startProgram() throws -> String
+  /// PARAR: cierra la copia, el SRT y la parte, y deja el informe en Documents/bench.
+  func stopProgram() throws
+  /// Cómo va. Con `running` a false si no hay pasada.
+  func programStatus() throws -> ProgramStatus
   /// Lanza un banco por nombre (IOS-08) y devuelve la ruta del informe JSON que dejó
   /// en Documents/bench/. `paramsJson` son los parámetros del banco, tal cual se
   /// guardan en el informe; `{}` si no hay.
@@ -118,6 +380,52 @@ class RigHostApiSetup {
   /// Sets up an instance of `RigHostApi` to handle messages through the `binaryMessenger`.
   static func setUp(binaryMessenger: FlutterBinaryMessenger, api: RigHostApi?, messageChannelSuffix: String = "") {
     let channelSuffix = messageChannelSuffix.count > 0 ? ".\(messageChannelSuffix)" : ""
+    /// EMITIR en la arquitectura B (IOS-58): pone en marcha el programa de este móvil con el
+    /// enlace de Network abierto por `startLink`. En el maestro, la composición, el director,
+    /// el detector, la copia .mov y el SRT al destino del QR Soporte; en el esclavo, su
+    /// parte y su detector. La 4K va aparte, por `CaptureHostApi.start`. Devuelve "" o por
+    /// qué no arrancó.
+    let startProgramChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.RigHostApi.startProgram\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      startProgramChannel.setMessageHandler { _, reply in
+        do {
+          let result = try api.startProgram()
+          reply(wrapResult(result))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      startProgramChannel.setMessageHandler(nil)
+    }
+    /// PARAR: cierra la copia, el SRT y la parte, y deja el informe en Documents/bench.
+    let stopProgramChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.RigHostApi.stopProgram\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      stopProgramChannel.setMessageHandler { _, reply in
+        do {
+          try api.stopProgram()
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      stopProgramChannel.setMessageHandler(nil)
+    }
+    /// Cómo va. Con `running` a false si no hay pasada.
+    let programStatusChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.RigHostApi.programStatus\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      programStatusChannel.setMessageHandler { _, reply in
+        do {
+          let result = try api.programStatus()
+          reply(wrapResult(result))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      programStatusChannel.setMessageHandler(nil)
+    }
     /// Lanza un banco por nombre (IOS-08) y devuelve la ruta del informe JSON que dejó
     /// en Documents/bench/. `paramsJson` son los parámetros del banco, tal cual se
     /// guardan en el informe; `{}` si no hay.

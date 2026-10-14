@@ -35,14 +35,14 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
     private var link: PeerLinking?
     /// El banco program-split, si se lanzó con RIG_SPLIT=1.
     private var split: SplitBench?
+    /// IOS-58: la pasada de EMITIR en la arquitectura B, entre startProgram y stopProgram.
+    private var program: SplitBench?
+    /// El medio del enlace de Network abierto, para el bitrate de la parte de EMITIR.
+    private var linkMedium: LinkMedium?
     /// La pareja de fotogramas para calibrar (IOS-70), con el enlace de Network.
     private var calibPairs: CalibrationPairs?
-
-    /// RIG_LINK_MULTIPEER=0 cambia al enlace nuevo sobre Network (IOS-12). El Multipeer
-    /// de hoy sigue siendo el predeterminado hasta la aceptación de campo con hubs.
-    private static var useMultipeer: Bool {
-        ProcessInfo.processInfo.environment["RIG_LINK_MULTIPEER"] != "0"
-    }
+    /// El lado del enlace de Network abierto.
+    private var currentRole: CameraRole?
 
     /// Dónde graba si Dart no dice otra cosa. `Documents` para que las grabaciones se
     /// puedan sacar por Finder sin instalar nada, que es lo que se va a querer hacer
@@ -56,6 +56,7 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
         super.init()
         CaptureHostApiSetup.setUp(binaryMessenger: binaryMessenger, api: self)
         observeInterruptions()
+        ProgramHub.capture = self
     }
 
     // MARK: - CaptureHostApi
@@ -232,26 +233,44 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
 
     // MARK: - Enlace entre móviles (TASK A3, A4)
 
-    func startLink(role: CameraRole, prefersMaster: Bool) throws {
+    /// Lo que pidió la pantalla (IOS-58), en el tipo de RigCore.
+    private static func choice(_ mode: LinkMode) -> LinkChoice {
+        switch mode {
+        case .multipeer: .multipeer
+        case .ethernet: .network(.ethernet)
+        case .wifi: .network(.wifi)
+        case .aware: .network(.aware)
+        }
+    }
+
+    func startLink(role: CameraRole, prefersMaster: Bool, mode: LinkMode) throws {
+        stopProgramRun()
         link?.stop()
         let link: PeerLinking
-        if Self.useMultipeer {
+        // El entorno de los bancos (RIG_LINK_MULTIPEER, RIG_LINK_INTERFACE) manda; sin él,
+        // lo elegido en la pantalla.
+        guard let eleccion = LinkChoice.resolve(environment: ProcessInfo.processInfo.environment,
+                                                requested: Self.choice(mode)) else {
+            throw PigeonError(
+                code: "link", message: "RIG_LINK_INTERFACE no es ethernet, wifi ni aware", details: nil
+            )
+        }
+        switch eleccion {
+        case .multipeer:
             engine.rigClock = nil
             AdHub.clock = nil
+            linkMedium = nil
             link = RigLink(role: role)
-        } else {
+        case let .network(medio):
             guard let secreto = RigLinkNW.benchSecret() else {
                 throw PigeonError(
                     code: "link",
-                    message: "sin secreto de enlace: define RIG_LINK_SECRET (IOS-97 lo llevará al Keychain)",
+                    message: "sin secreto del soporte: lanza la app una vez desde el Mac con RIG_LINK_SECRET "
+                        + "(se queda en el Keychain; IOS-97 lo pasará a un QR)",
                     details: nil
                 )
             }
-            guard let medio = RigLinkNW.medium() else {
-                throw PigeonError(
-                    code: "link", message: "RIG_LINK_INTERFACE no es ethernet, wifi ni aware", details: nil
-                )
-            }
+            linkMedium = medio
             let nw = RigLinkNW(role: role, secret: secreto, prefersMaster: prefersMaster, medium: medio)
             // IOS-13: la cámara lee el reloj nativo por fotograma, sin pasar por
             // Pigeon; a Dart solo le llega la estimación, para la pantalla y la fase.
@@ -272,6 +291,7 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
                 }
             }
             link = nw
+            currentRole = role
             let pares = CalibrationPairs(session: nw.session, side: role == .left ? .left : .right, engine: engine)
             calibPairs = pares
             // IOS-80: el rol negociado sube a Dart, que deja de suponer que manda el
@@ -297,26 +317,8 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
                 pipeline: { [weak self] in self?.engine.rigPipeline }, session: nw.session
             )
             if SplitBench.enabled() {
-                let s = SplitBench(
-                    session: nw.session, side: role == .left ? .left : .right,
-                    pipeline: { [weak self] in self?.engine.rigPipeline }
-                )
-                s.audioFormat = { [weak self] in self?.engine.audioFormatDescription }
-                s.captureClockSkew = { [weak self] in self?.engine.clockSkewByMinuteMs ?? [] }
-                s.linkStats = { [weak nw] in nw?.transportStats }
-                s.linkEvents = { [weak nw] in nw?.transportTimeline }
-                s.cameraSwitch = { [weak self] on in self?.engine.setCameraRunningForBench(on) }
-                s.exposureBias = { [weak self, weak s] ev in
-                    self?.engine.benchExposureBias(ev: ev) { r in s?.exposureApplied = r }
-                }
-                engine.onAacFrame = { [weak s] trama in s?.audio(trama) }
-                // SPK-04 (RIG_SPLIT_RECORD_4K=1): la 4K local de la pasada, con su reserva.
-                s.startLocal4K = { [weak self] carpeta, reserva in
-                    (try? self?.engine.startRecording(directory: carpeta, reserveBytes: reserva)) ?? ""
-                }
-                s.stopLocal4K = { [weak self] in self?.engine.stopRecording() }
-                s.local4KFrames = { [weak self] in self?.engine.recordedFrames ?? 0 }
-                s.local4KClock = { [weak self] in self?.engine.recordingClockReport() ?? [:] }
+                let s = makeProgramRun(nw: nw, role: role,
+                                       config: .bench(environment: ProcessInfo.processInfo.environment))
                 s.start()
                 split = s
             }
@@ -357,8 +359,10 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
     }
 
     func stopLink() throws {
+        stopProgramRun()
         split?.stop()
         split = nil
+        linkMedium = nil
         calibPairs = nil
         ThumbHub.shared.stop()
         link?.stop()
@@ -367,6 +371,65 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
         AdHub.clock = nil
         engine.onLookLocked = nil
         engine.forgetMasterLook()
+    }
+
+    // MARK: - El programa (banco split e IOS-58)
+
+    /// Una pasada del programa sobre el enlace de Network: el banco split o EMITIR. Junta
+    /// SplitBench con la cámara (audio, 4K del banco, reloj) y el transporte del enlace.
+    private func makeProgramRun(nw: RigLinkNW, role: CameraRole, config: ProgramRunConfig) -> SplitBench {
+        let s = SplitBench(
+            session: nw.session, side: role == .left ? .left : .right,
+            pipeline: { [weak self] in self?.engine.rigPipeline }, config: config
+        )
+        s.audioFormat = { [weak self] in self?.engine.audioFormatDescription }
+        s.captureClockSkew = { [weak self] in self?.engine.clockSkewByMinuteMs ?? [] }
+        s.linkStats = { [weak nw] in nw?.transportStats }
+        s.linkEvents = { [weak nw] in nw?.transportTimeline }
+        s.cameraSwitch = { [weak self] on in self?.engine.setCameraRunningForBench(on) }
+        s.exposureBias = { [weak self, weak s] ev in
+            self?.engine.benchExposureBias(ev: ev) { r in s?.exposureApplied = r }
+        }
+        engine.onAacFrame = { [weak s] trama in s?.audio(trama) }
+        // SPK-04 (RIG_SPLIT_RECORD_4K=1): la 4K local de la pasada, con su reserva.
+        s.startLocal4K = { [weak self] carpeta, reserva in
+            (try? self?.engine.startRecording(directory: carpeta, reserveBytes: reserva)) ?? ""
+        }
+        s.stopLocal4K = { [weak self] in self?.engine.stopRecording() }
+        s.local4KFrames = { [weak self] in self?.engine.recordedFrames ?? 0 }
+        s.local4KClock = { [weak self] in self?.engine.recordingClockReport() ?? [:] }
+        return s
+    }
+
+    /// EMITIR (IOS-58): "" o por qué no. Una sola pasada a la vez; con el banco split en
+    /// marcha no se mezcla otra.
+    func startProgram() -> String {
+        guard let nw = link as? RigLinkNW, let medio = linkMedium else {
+            return "sin el enlace de Network: elige Wi-Fi, Wi-Fi Aware o Ethernet al abrir la cámara"
+        }
+        guard split == nil else { return "el banco split está en marcha" }
+        guard program == nil else { return "" }
+        guard let lado = currentRole else { return "sin lado" }
+        engine.startRunning()
+        let s = makeProgramRun(nw: nw, role: lado,
+                               config: .production(medium: medio, detectorPackage: SplitBench.productionDetector()))
+        s.start()
+        program = s
+        return ""
+    }
+
+    /// PARAR. El cierre (vaciar el codificador, cerrar la copia .mov, parar el SRT y
+    /// escribir el informe) puede tardar segundos: va fuera del hilo principal, que es el
+    /// del canal de Pigeon y el de la pantalla.
+    func stopProgramRun() {
+        guard let s = program else { return }
+        program = nil
+        engine.onAacFrame = nil
+        DispatchQueue.global(qos: .userInitiated).async { s.stop() }
+    }
+
+    func programStatus() -> ProgramStatus {
+        program?.status() ?? SplitBench.idleStatus
     }
 
     /// IOS-14: el emparejado único por Wi-Fi Aware, con la hoja de DeviceDiscoveryUI.
@@ -504,6 +567,12 @@ enum VpsPairingKeychain {
     }
 }
 
+/// Por dónde llega `RigHostApi` a la pasada del programa (IOS-58): la cámara y el enlace
+/// viven en CaptureHostApiImpl, y el contrato del pipeline es el de RigHostApi.
+enum ProgramHub {
+    static weak var capture: CaptureHostApiImpl?
+}
+
 /// Un texto en el Keychain: el QR «Mando» (ADR 0017 de football-ai), el PIN del operador
 /// (IOS-62), el QR «Soporte» del VPS y el servidor del pod (IOS-68).
 ///
@@ -522,6 +591,9 @@ struct KeychainText {
                                          what: "el emparejado con el VPS")
     static let serverHost = KeychainText(service: "football-ai.servidor", account: "host",
                                          what: "el servidor")
+    /// El secreto del soporte S en base64 (ADR 0023 §3), hasta el QR de IOS-97 (IOS-58).
+    static let linkSecret = KeychainText(service: "football-ai.enlace", account: "secreto",
+                                         what: "el secreto del soporte")
 
     var service = "football-ai.mando"
     let account: String

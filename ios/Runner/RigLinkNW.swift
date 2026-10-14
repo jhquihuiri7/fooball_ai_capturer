@@ -109,15 +109,24 @@ final class RigLinkNW: PeerLinking {
         valor.flatMap(Int64.init).flatMap { $0 > 0 ? Duration.seconds($0) : nil }
     }
 
-    /// El secreto del soporte, mientras no exista la provisión del Keychain (IOS-97).
+    /// El secreto del soporte hasta que IOS-97 lo provisione con su QR: RIG_LINK_SECRET
+    /// manda y se guarda en el Keychain; sin él, el guardado (IOS-58: así la app abre el
+    /// enlace desde el icono, sin el Mac). Ni el valor ni su longitud salen al log.
     static func benchSecret() -> Data? {
-        guard let valor = ProcessInfo.processInfo.environment["RIG_LINK_SECRET"],
-              let secreto = Data(base64Encoded: valor),
-              !secreto.isEmpty
-        else {
-            return nil
+        let guardado: String?
+        do {
+            guardado = try KeychainText.linkSecret.read()
+        } catch {
+            NSLog("[enlace] no se pudo leer el secreto del soporte del Keychain")
+            guardado = nil
         }
-        return secreto
+        return RigSecretSource.resolve(
+            environment: ProcessInfo.processInfo.environment["RIG_LINK_SECRET"], stored: guardado
+        ) { nuevo in
+            do { try KeychainText.linkSecret.write(nuevo) } catch {
+                NSLog("[enlace] no se pudo guardar el secreto del soporte en el Keychain")
+            }
+        }
     }
 
     /// El secreto del mando del partido (ADR 0023 §3), derivado aquí para que S no salga
@@ -758,6 +767,12 @@ final class LinkPartsLoad {
 //                           esclavo no pinta ni manda partes)
 //   RIG_SPLIT_NO_THUMBS     1: el esclavo no manda su miniatura por control (ThumbHub)
 //
+// IOS-58: la misma clase es EMITIR en la arquitectura B, con `ProgramRunConfig.production`:
+// la arranca startProgram y la para stopProgram, sin fin propio, con el director, el
+// detector (si su paquete está en Documents/bench-resources) y el SRT; la copia del programa
+// va a Documents/program-<partido>-<t>.mov (IOS-57) y sin el .ts ni las vistas. Lo de medir
+// sigue leyéndose del entorno y sin él no hace nada.
+//
 // SPK-04: el maestro escribe además Documents/bench/program-views-<t>.jsonl, una línea por
 // instante del programa con la vista de verdad, los fotogramas de cada móvil y la GPU (lo
 // que necesita la referencia de REF-41 para el PSNR), y el informe trae en `files` las
@@ -783,6 +798,8 @@ final class SplitBench {
     private let side: CameraSide
     private let pipelineProvider: () -> RigPipeline?
     private let env: [String: String]
+    /// El banco (del entorno) o EMITIR (IOS-58).
+    private let config: ProgramRunConfig
     private let queue = DispatchQueue(label: "io.footballai.zero.split", qos: .userInteractive)
     /// El disco va aparte: escribir el .ts en la cola del tic retrasaba el programa
     /// (IOS-44: tic p5 29,43 fps). En serie, así el orden de los paquetes se conserva.
@@ -870,6 +887,21 @@ final class SplitBench {
     private var firstVideoT: Int64?
     private var tsFile: FileHandle?
     private var tsURL: URL?
+    /// La copia .mov del programa, donde quedó (el banco, junto al .ts; EMITIR, IOS-57).
+    private var movURL: URL?
+    /// IOS-58: el nombre de la pasada de EMITIR: el partido (si lo hay) y la hora.
+    private lazy var runId: String = {
+        let t = Int(Date().timeIntervalSince1970)
+        let partido = (session.matchId ?? "").filter { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" }
+        return partido.isEmpty ? "zero-\(t)" : "\(partido)-\(t)"
+    }()
+    /// IOS-58: lo que ve la pantalla, rehecho una vez por segundo en el tic.
+    private var partBytesSent = 0
+    private var partFallbacks = 0
+    private var programFpsMeter = RateMeter()
+    private var partBytesMeter = RateMeter()
+    private var lastStatusNs: UInt64 = 0
+    private var statusSnapshot = SplitBench.idleStatus
     // IOS-57: la copia local del programa en .mov (con el audio del micro si lo hay).
     private var recorder: ProgramRecorder?
     var audioFormat: () -> CMAudioFormatDescription? = { nil }
@@ -905,7 +937,7 @@ final class SplitBench {
     private var slaveRender = LatencyHistogram()
     /// La carga del detector de jugadores en el maestro (RIG_DETECT=<paquete>).
     private lazy var detect: BenchDetector? = {
-        guard let paquete = env["RIG_DETECT"] else { return nil }
+        guard let paquete = config.detectorPackage else { return nil }
         // RIG_DETECT_CHAIN=vision: la carga de Vision; por defecto, la cadena de producción.
         if env["RIG_DETECT_CHAIN"] == "vision" { return DetectLoad(package: paquete) }
         return MetalDetectLoad(package: paquete, side: side)
@@ -915,6 +947,8 @@ final class SplitBench {
     private let cpuStartS = SplitBench.processCpuSeconds()
     private var cameraOnDone = false
     private var finished = false
+    /// Por qué no se montó el programa (IOS-58: la pantalla lo dice).
+    private var setUpProblem = ""
 
     // Medidas
     private var tickIntervalsMs: [Double] = []
@@ -923,12 +957,14 @@ final class SplitBench {
     private var programFrames = 0
 
     init(session: RigLinkSession, side: CameraSide, pipeline: @escaping () -> RigPipeline?,
-         environment: [String: String] = ProcessInfo.processInfo.environment) {
+         environment: [String: String] = ProcessInfo.processInfo.environment, config: ProgramRunConfig? = nil) {
         self.session = session
         self.side = side
         pipelineProvider = pipeline
         env = environment
-        durationS = environment["RIG_SPLIT_S"].flatMap(Double.init) ?? 600
+        let ajustes = config ?? .bench(environment: environment)
+        self.config = ajustes
+        durationS = ajustes.durationS
     }
 
     private func number(_ key: String, _ def: Double) -> Double {
@@ -1044,9 +1080,7 @@ final class SplitBench {
             // Esclavo: su parte.
             let enc = try VideoEncoder(
                 width: Self.programWidth, height: Self.programHeight,
-                bitrateBps: env["RIG_SPLIT_PART_MBPS"].flatMap(Double.init).map { Int($0 * 1_000_000) }
-                    ?? (LinkMedium.parse(env["RIG_LINK_INTERFACE"]) ?? .ethernet).partBitrateBps,
-                viewId: side == .left ? 0 : 1
+                bitrateBps: config.partBitrateBps, viewId: side == .left ? 0 : 1
             )
             let s = SlavePartStage(
                 side: side,
@@ -1072,6 +1106,7 @@ final class SplitBench {
                 let rig = (ns + session.clock.offsetAt(ns: ns)) / 1_000_000
                 lock.lock()
                 sendAge.record(ms: Double(rig - p.frameRigMs))
+                partBytesSent += p.accessUnit.count
                 lock.unlock()
                 session.send(part: p)
             }
@@ -1114,13 +1149,13 @@ final class SplitBench {
                 guard let lease = ring.acquire(nearest: ms, maxDistanceMs: Self.frameMatchMs) else { return nil }
                 return (lease.buffer, lease.rigMs, { ring.release(lease) })
             }
-            m.onComposed = { [weak self] f in self?.logComposed(f) }
+            if config.benchFiles { m.onComposed = { [weak self] f in self?.logComposed(f) } }
             m.onIdrRequest = { [weak self] seq in self?.session.requestIdr(partSeq: seq) }
             // IOS-84: sin ninguna cámara, la tarjeta SIN SEÑAL (la sube Dart, oculta).
             m.onSourceChange = { fuente in OverlayHub.shared?.setVisible(.slate, fuente == .noSignal) }
             if env["RIG_SPLIT_SCRIPT"] == "spk04" {
                 spk04 = Spk04Script(rig: modelo)
-            } else if env["RIG_SPLIT_DIRECTOR"] == "1" {
+            } else if config.director {
                 let loop = try DirectorLoop(
                     rig: modelo, canvas: CylindricalCanvas.fit(modelo, pitchLimitsRad: (-0.5, 0.1)),
                     width: Self.programWidth, height: Self.programHeight, plan: ShotPlan.at(),
@@ -1137,14 +1172,17 @@ final class SplitBench {
             master = m
             if let docs = try? FileManager.default.url(for: .documentDirectory, in: .userDomainMask,
                                                        appropriateFor: nil, create: true) {
-                let id = "banco-\(Int(Date().timeIntervalSince1970))"
+                let produccion = config.purpose == .production
+                // IOS-58: en EMITIR, el partido y el dominio del reloj de verdad.
+                let id = produccion ? runId : "banco-\(Int(Date().timeIntervalSince1970))"
                 let url = docs.appendingPathComponent("n0/\(id)-\(side.rawValue).jsonl")
                 e0URL = url
                 e0 = try? E0Logger(
                     url: url,
-                    header: .header(matchId: id, rigId: "banco",
+                    header: .header(matchId: id, rigId: produccion ? "soporte" : "banco",
                                     // El dominio del reloj de host de este arranque (ADR 0023 §4).
-                                    clockDomain: "banco" + String(format: "%08x", UInt32.random(in: .min ... .max)),
+                                    clockDomain: produccion ? RigClockDomain.current()
+                                        : "banco" + String(format: "%08x", UInt32.random(in: .min ... .max)),
                                     appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0",
                                     models: [], rigSha: nil, pitchSha: nil, bandSha: nil)
                 )
@@ -1156,6 +1194,7 @@ final class SplitBench {
             return true
         } catch {
             NSLog("[split] no se pudo montar: %@", "\(error)")
+            setUpProblem = "no se pudo montar el programa: \(error)"
             return false
         }
     }
@@ -1296,8 +1335,9 @@ final class SplitBench {
             // SPK-54: el estado térmico, una vez por minuto.
             thermalByMinute.append(Self.thermalName(ProcessInfo.processInfo.thermalState))
         }
+        refreshStatus()
         // SPK-04: la 4K local, en cuanto hay cámara (antes, el CaptureEngine no sabe el tamaño).
-        if env["RIG_SPLIT_RECORD_4K"] == "1", !rec4kStarted, pipelineProvider() != nil {
+        if config.record4K, !rec4kStarted, pipelineProvider() != nil {
             startRecording4K()
         }
         if case .connected = session.state { linkTimeline.mark(.sessionUp) }
@@ -1353,8 +1393,10 @@ final class SplitBench {
             lastAdCueT = t
             adCues.append([t, cue.ad.name, cue.frame])
         }
-        if master.tick(programRigMs: t, nowRigMs: now, masterView: vistaPropia) != nil {
+        if let decision = master.tick(programRigMs: t, nowRigMs: now, masterView: vistaPropia) {
             composeLatencyMs.append(Double(now - t) + Double(DispatchTime.now().uptimeNanoseconds - inicio) / 1e6)
+            // IOS-58: un retroceso es una vista que pedía las dos lentes y salió de una.
+            if case .oneLens = decision, vistaPropia.sides.count > 1 { partFallbacks += 1 }
         }
         drainProgram()
         detectTick()
@@ -1436,7 +1478,7 @@ final class SplitBench {
     private func recordedFiles() -> [String: Any] {
         var f: [String: Any] = [:]
         f["ts"] = Self.documentsRelative(tsURL)
-        if recorder != nil { f["mov"] = Self.documentsRelative(tsURL?.deletingPathExtension().appendingPathExtension("mov")) }
+        if recorder != nil { f["mov"] = Self.documentsRelative(movURL) }
         f["views"] = Self.documentsRelative(viewsURL)
         if session.isMaster { f["e0"] = Self.documentsRelative(e0URL) }
         if let dir = rec4kDir {
@@ -1449,7 +1491,7 @@ final class SplitBench {
 
     /// La 4K de la pasada: ficheros, tamaño, fotogramas y disco.
     private func rec4kReport() -> [String: Any] {
-        guard env["RIG_SPLIT_RECORD_4K"] == "1" else { return ["requested": false] }
+        guard config.record4K else { return ["requested": false] }
         let movs = rec4kDir.flatMap { try? FileManager.default.contentsOfDirectory(at: $0, includingPropertiesForKeys: [.fileSizeKey]) }?
             .filter { $0.pathExtension == "mov" } ?? []
         let bytes = movs.reduce(Int64(0)) { $0 + Int64((try? $1.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0) }
@@ -1580,7 +1622,7 @@ final class SplitBench {
 
     private func drainProgram() {
         guard let enc = programEncoder else { return }
-        if tsFile == nil {
+        if config.benchFiles, tsFile == nil {
             let base = try? FileManager.default.url(for: .documentDirectory, in: .userDomainMask,
                                                     appropriateFor: nil, create: true)
                 .appendingPathComponent("bench", isDirectory: true)
@@ -1595,8 +1637,8 @@ final class SplitBench {
         while let f = enc.pop() {
             // RIG_SPLIT_NO_MOV=1 / RIG_SPLIT_NO_TS=1: sin la copia .mov o sin el .ts, para
             // separar de dónde crece la memoria del maestro.
-            if recorder == nil, env["RIG_SPLIT_NO_MOV"] != "1", let fd = f.formatDescription,
-               let url = tsURL?.deletingPathExtension().appendingPathExtension("mov") {
+            if recorder == nil, env["RIG_SPLIT_NO_MOV"] != "1", let fd = f.formatDescription, let url = programMovURL() {
+                movURL = url
                 recorder = try? ProgramRecorder(url: url, videoFormat: fd, audioFormat: audioFormat())
             }
             try? recorder?.append(video: f)
@@ -1607,12 +1649,94 @@ final class SplitBench {
             publisher?.video(avcc: avcc, isKeyframe: f.isKeyframe, rigMs: Double(f.ptsNs) / 1e6)
             let pts = f.ptsNs * 90 / 1_000_000
             if firstVideoT == nil { firstVideoT = f.ptsNs / 1_000_000 }
-            let paquetes = muxer.muxVideo(avcc: avcc, parameterSets: [], isKeyframe: f.isKeyframe,
-                                          pts90k: pts, dts90k: pts)
             if let ts = tsFile, !finished, env["RIG_SPLIT_NO_TS"] != "1" {
+                let paquetes = muxer.muxVideo(avcc: avcc, parameterSets: [], isKeyframe: f.isKeyframe,
+                                              pts90k: pts, dts90k: pts)
                 writerQueue.async { try? ts.write(contentsOf: paquetes) }
             }
         }
+    }
+
+    // MARK: - IOS-58: EMITIR, lo que ve la pantalla
+
+    /// Cada cuánto se rehace lo que ve la pantalla, en ns: Dart lo pide una vez por segundo.
+    private static let statusEveryNs: UInt64 = 1_000_000_000
+    private static let bitsPerByte = 8.0
+    private static let bitsPerMegabit = 1e6
+
+    /// Sin pasada en marcha.
+    static let idleStatus = ProgramStatus(
+        running: false, master: false, programFps: 0, programFrames: 0, srtState: "", srtTarget: "",
+        srtDetail: "", srtBitrateBps: 0, srtRttMs: 0, srtReconnects: 0, partMbps: 0, partFallbacks: 0,
+        partsLost: 0, detectorRuns: 0, detectorNote: "", problem: ""
+    )
+
+    /// La copia del programa: en el banco, junto al .ts; en EMITIR, Documents/program-<id>.mov.
+    private func programMovURL() -> URL? {
+        if config.benchFiles { return tsURL?.deletingPathExtension().appendingPathExtension("mov") }
+        return try? FileManager.default.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil,
+                                            create: true).appendingPathComponent("program-\(runId).mov")
+    }
+
+    /// El paquete del detector de EMITIR, si está en el móvil: RIG_DETECT si se lanzó con él;
+    /// si no, el de la ficha del plan B, o el primer CenterNet de Documents/bench-resources.
+    static func productionDetector(environment env: [String: String] = ProcessInfo.processInfo.environment) -> String? {
+        guard let dir = try? FileManager.default.url(for: .documentDirectory, in: .userDomainMask,
+                                                     appropriateFor: nil, create: false)
+            .appendingPathComponent("bench-resources", isDirectory: true)
+        else { return nil }
+        let hay = { (nombre: String) in FileManager.default.fileExists(atPath: dir.appendingPathComponent(nombre).path) }
+        if let pedido = env["RIG_DETECT"] { return hay(pedido) ? pedido : nil }
+        if hay(ProgramRunConfig.productionDetectorPackage) { return ProgramRunConfig.productionDetectorPackage }
+        let paquetes = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
+        return paquetes.filter { $0.hasSuffix(".mlpackage") && $0.lowercased().contains("centernet") }.sorted().first
+    }
+
+    /// Lo que ve la pantalla: la copia que rehace el tic.
+    func status() -> ProgramStatus {
+        lock.lock(); defer { lock.unlock() }
+        return statusSnapshot
+    }
+
+    /// En la cola del tic, una vez por segundo.
+    private func refreshStatus() {
+        let ahoraNs = DispatchTime.now().uptimeNanoseconds
+        guard ahoraNs - lastStatusNs >= Self.statusEveryNs else { return }
+        lastStatusNs = ahoraNs
+        let esMaestro = session.isMaster
+        let fps = programFpsMeter.rate(count: Double(programFrames), nowNs: ahoraNs)
+        lock.lock()
+        let enviados = partBytesSent
+        lock.unlock()
+        let bytesPorS = partBytesMeter.rate(count: Double(enviados), nowNs: ahoraNs)
+        let enlace = master?.linkStats(nowRigMs: rigNowMs())
+        let srt = publisher?.snapshot
+        var srtState = ""
+        if esMaestro, config.publish {
+            srtState = publishTarget["source"] as? String == "none" ? "none" : (srt?.state ?? "stopped")
+        }
+        let destino = (publishTarget["host"] as? String).map { "\($0):\(publishTarget["port"] as? Int ?? 0)" } ?? ""
+        let nota: String
+        if config.detectorPackage == nil {
+            nota = "sin modelo en Documents/bench-resources"
+        } else if let error = detect?.loadError, !error.isEmpty {
+            nota = error
+        } else {
+            nota = ""
+        }
+        let nuevo = ProgramStatus(
+            running: !finished, master: esMaestro, programFps: esMaestro ? fps : 0,
+            programFrames: Int64(programFrames), srtState: srtState, srtTarget: destino,
+            srtDetail: srt?.lastError ?? "", srtBitrateBps: Int64(srt?.bitrateBps ?? 0), srtRttMs: srt?.rttMs ?? 0,
+            srtReconnects: Int64(srt?.reconnects ?? 0),
+            partMbps: esMaestro ? (enlace?.mbps ?? 0) : bytesPorS * Self.bitsPerByte / Self.bitsPerMegabit,
+            partFallbacks: Int64(esMaestro ? partFallbacks : (slave?.stats.withoutView ?? 0)),
+            partsLost: Int64(enlace?.lost ?? 0), detectorRuns: Int64(detect?.runCount ?? 0),
+            detectorNote: nota, problem: setUpProblem
+        )
+        lock.lock()
+        statusSnapshot = nuevo
+        lock.unlock()
     }
 
     // MARK: - IOS-56: el programa por SRT
@@ -1621,11 +1745,11 @@ final class SplitBench {
     /// serlo para su publicador, o MediaMTX (overridePublisher) se lo pasaría del uno al
     /// otro cada 3 s (ADR 0022 §8).
     private func updatePublisher() {
-        guard env["RIG_SPLIT_PUBLISH"] == "1" else { return }
+        guard config.publish else { return }
         if session.isMaster, publisher == nil, let enc = programEncoder, publishTarget["source"] == nil {
             guard let (destino, origen) = Self.publishTarget(env) else {
                 publishTarget = ["source": "none"]
-                NSLog("[srt] RIG_SPLIT_PUBLISH=1 sin destino: ni RIG_SRT_HOST ni QR Soporte en el Keychain")
+                NSLog("[srt] publicar sin destino: ni RIG_SRT_HOST ni QR Soporte en el Keychain")
                 return
             }
             publishTarget = ["source": origen, "host": destino.host, "port": Int(destino.port)]
@@ -1666,7 +1790,7 @@ final class SplitBench {
     }
 
     private func publishReport() -> [String: Any] {
-        guard env["RIG_SPLIT_PUBLISH"] == "1" else { return ["requested": false] }
+        guard config.publish else { return ["requested": false] }
         let enc = JSONEncoder()
         enc.keyEncodingStrategy = .convertToSnakeCase
         let tramos = publishSessions.compactMap { s in
@@ -1749,6 +1873,9 @@ final class SplitBench {
             "publish": publishReport(),
             "spk04_acceptance": spk04Acceptance(addedLatencyP95: latenciaP95),
             "name": "program-split",
+            "purpose": config.purpose.rawValue,
+            "elapsed_s": Double(DispatchTime.now().uptimeNanoseconds - startNs) / 1e9,
+            "part_fallbacks": partFallbacks,
             "device": BenchRunner.machine(),
             "side": side.rawValue,
             "role": session.isMaster ? "master" : "slave",
@@ -2093,6 +2220,10 @@ enum RigClockDomain {
 /// Lo que el banco pide a un detector: ofrecerle un fotograma y su informe.
 protocol BenchDetector: AnyObject {
     var onDetections: (([PlayerDetection], Int64, Double) -> Void)? { get set }
+    /// Pasadas hechas y el error al montar, sin ordenar nada: la pantalla lo lee cada
+    /// segundo desde la cola del programa (IOS-58).
+    var runCount: Int { get }
+    var loadError: String { get }
     func offer(_ buffer: CVPixelBuffer, rigMs: Int64, release: @escaping () -> Void)
     func report() -> [String: Any]
 }
@@ -2116,6 +2247,8 @@ final class DetectLoad: BenchDetector {
     private var decodeMs: [Double] = []
     private let compileMs: Double
     private var layouts: [String: InputLayout] = [:]
+    var runCount: Int { lock.lock(); defer { lock.unlock() }; return runs }
+    let loadError = ""
 
     init?(package: String) {
         guard let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
@@ -2236,6 +2369,8 @@ final class MetalDetectLoad: BenchDetector {
     private var inferMs: [Double] = []
     private var loadMs = 0.0
     private var error = ""
+    var runCount: Int { lock.lock(); defer { lock.unlock() }; return runs }
+    var loadError: String { lock.lock(); defer { lock.unlock() }; return error }
 
     init?(package: String, side: CameraSide) {
         guard let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {

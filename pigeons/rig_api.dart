@@ -17,8 +17,85 @@ import 'package:pigeon/pigeon.dart';
     dartPackageName: 'football_ai_capture',
   ),
 )
+/// Cómo va EMITIR en la arquitectura B (IOS-58), para la pantalla de cada móvil. Lo que no
+/// toca a su papel va a cero o vacío: el esclavo no publica, el maestro no manda partes.
+class ProgramStatus {
+  ProgramStatus({
+    required this.running,
+    required this.master,
+    required this.programFps,
+    required this.programFrames,
+    required this.srtState,
+    required this.srtTarget,
+    required this.srtDetail,
+    required this.srtBitrateBps,
+    required this.srtRttMs,
+    required this.srtReconnects,
+    required this.partMbps,
+    required this.partFallbacks,
+    required this.partsLost,
+    required this.detectorRuns,
+    required this.detectorNote,
+    required this.problem,
+  });
+
+  /// Hay una pasada en marcha en este móvil.
+  final bool running;
+
+  /// Este móvil compone y publica ahora (el rol puede cambiar con un relevo).
+  final bool master;
+
+  /// Fotogramas del programa por segundo desde la lectura anterior, y en total.
+  final double programFps;
+  final int programFrames;
+
+  /// El publicador SRT: `stopped`, `connecting`, `publishing`, `waiting` o `failed`;
+  /// `none` sin destino (sin QR Soporte); vacío si este móvil no publica.
+  final String srtState;
+
+  /// `host:puerto` del destino. Nunca usuario, clave ni passphrase.
+  final String srtTarget;
+
+  /// Por qué espera o falló, en palabras; vacío si va bien.
+  final String srtDetail;
+  final int srtBitrateBps;
+  final double srtRttMs;
+  final int srtReconnects;
+
+  /// La parte del esclavo, en Mbit/s: la que llega (maestro) o la que sale (esclavo).
+  final double partMbps;
+
+  /// Retrocesos: en el maestro, instantes que pedían las dos lentes y salieron de una
+  /// porque la parte no llegó a tiempo; en el esclavo, fotogramas pintados con la vista
+  /// extrapolada porque no había orden del maestro.
+  final int partFallbacks;
+
+  /// Partes que no llegaron al maestro.
+  final int partsLost;
+
+  /// Pasadas del detector de jugadores, y su nota (`sin modelo`, o el error al cargarlo).
+  final int detectorRuns;
+  final String detectorNote;
+
+  /// Lo que impidió montar el programa, si algo lo impidió.
+  final String problem;
+}
+
 @HostApi()
 abstract class RigHostApi {
+  /// EMITIR en la arquitectura B (IOS-58): pone en marcha el programa de este móvil con el
+  /// enlace de Network abierto por `startLink`. En el maestro, la composición, el director,
+  /// el detector, la copia .mov y el SRT al destino del QR Soporte; en el esclavo, su
+  /// parte y su detector. La 4K va aparte, por `CaptureHostApi.start`. Devuelve "" o por
+  /// qué no arrancó.
+  String startProgram();
+
+  /// PARAR: cierra la copia, el SRT y la parte, y deja el informe en Documents/bench.
+  void stopProgram();
+
+  /// Cómo va. Con `running` a false si no hay pasada.
+  ProgramStatus programStatus();
+
   /// Lanza un banco por nombre (IOS-08) y devuelve la ruta del informe JSON que dejó
   /// en Documents/bench/. `paramsJson` son los parámetros del banco, tal cual se
   /// guardan en el informe; `{}` si no hay.

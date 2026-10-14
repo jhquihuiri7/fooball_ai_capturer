@@ -228,9 +228,13 @@ class FakeCaptureApi extends CaptureHostApi {
 
   bool? lastPrefersMaster;
 
+  /// IOS-58: el enlace que pidió la sesión.
+  LinkMode? lastLinkMode;
+
   @override
-  Future<void> startLink(CameraRole role, bool prefersMaster) async {
+  Future<void> startLink(CameraRole role, bool prefersMaster, LinkMode mode) async {
     lastPrefersMaster = prefersMaster;
+    lastLinkMode = mode;
     startLinkCalls++;
     linkRole = role;
   }

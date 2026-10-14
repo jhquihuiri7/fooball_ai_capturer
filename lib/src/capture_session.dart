@@ -83,6 +83,7 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
     bool? prefersMaster,
     this.masterHost,
     this.replicaStore,
+    this.linkMode = LinkMode.multipeer,
   })  : prefersMaster = prefersMaster ?? role == CameraRole.left,
         _api = api ?? CaptureHostApi(),
         _clock = clock ?? RigClock() {
@@ -171,6 +172,11 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
 
   /// La pizarra del maestro que guarda el esclavo (IOS-82).
   final ReplicaStore? replicaStore;
+
+  /// El enlace que se abre (IOS-58): Multipeer, cada móvil al pod; los de Network, la
+  /// arquitectura B. Los bancos lanzados con RIG_LINK_MULTIPEER en el entorno mandan en
+  /// nativo sobre esto.
+  final LinkMode linkMode;
 
   /// Quién manda en el soporte: el negociado si lo hay; si no, el izquierdo.
   bool get isRigMaster => rigRole == null ? role == CameraRole.left : rigRole == RigRole.master;
@@ -894,7 +900,7 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
       return false;
     }
     _linkOwner = this;
-    await _api.startLink(role, prefersMaster);
+    await _api.startLink(role, prefersMaster, linkMode);
     return true;
   }
 
