@@ -15,6 +15,38 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 
 
+
+## 2026-10-14 · Con los dos iPhone: el 16 Pro en iOS 27, la 4K del esclavo arreglada, la parte a 15 Mbit/s no cabe por Wi-Fi y el relevo de ida con a62d4ec
+
+**iOS 27.** El 16 Pro se actualizó a iOS 27.0.1 (el 17 sigue en 26.6.1; Xcode 26.6 con el SDK
+26.5). Instala, lanza y hace de esclavo sin cambios: 858 partes enviadas y 849 recibidas en
+la primera pasada corta (`bench/dos-moviles-20261014-0752`).
+
+**SPK-04 con la parte a 15 Mbit/s** (`bench/dos-moviles-20261014-0854`; el derecho recogido a
+mano: el script murió tras el izquierdo, arreglado en 51e23fd):
+- **La 4K del esclavo con de62055: 3,36 GB en 600 s, un segmento, 58 fotogramas descartados
+  esperando el reloj, 0 saltos** (el 2026-10-11 eran 7,3 GB y un salto de +591 898 s). La del
+  maestro, 600 s a 44,9 Mbit/s.
+- **La parte a 15 Mbit/s por Wi-Fi no cabe**: 722 partes perdidas de 11 261 (6,4 %) y 1018
+  peticiones de IDR, a 11,9 Mbit/s efectivos. Confirma los 8 Mbit/s de la enmienda del ADR
+  0023: para 15/25/35 hace falta Ethernet (SPK-02). El VMAF de SPK-05 a 15 queda para
+  entonces.
+- 0 desgarros; latencia añadida p95 144 ms; GPU del maestro p99 4,5 ms, del esclavo 3,25.
+- Una pasada anterior (`…-0817`) salió sin esclavo: su app seguía viva de la pasada de antes y
+  el lanzamiento nuevo no la reinició (tardó 25 s). Cerrar Zero en los dos y comprobar que no
+  queda ninguna antes de lanzar lo evitó.
+
+**El relevo de ida con a62d4ec** (`bench/relevo-20261014-0928`): el maestro izquierdo se cierra a
+los 94 s, el derecho se fuerza maestro y el izquierdo vuelve a los 172 s. El derecho, ya
+maestro, compone **9065 fotogramas de dos lentes** con las partes del que volvió (p50 100 ms),
+**0 desgarros**; las 4K de los dos, un segmento sin saltos. Con el `clock_pong` en host crudo,
+las partes del que volvía habrían ido a ~591 898 s de las vistas y no habría ni uno de dos
+lentes (lo que pasó, probablemente, el 2026-10-06). El viaje de vuelta queda por probar: al
+matar una app se pierde su informe (solo se escribe al final).
+
+**Cosido**: en el cuarto no calibra con los umbrales del repo (6-13 puntos en el solape, pared
+lisa y la cama a 2-3 m); se usa `rig-tripode-20261011.json`, del trípode.
+
 ## 2026-10-14 · banco — la recogida de `banco_dos_moviles.sh`, rápida y sin cortes · 🚧 probada con un devicectl falso; falta una pasada real
 
 `recoge` traía todo Documents/bench y Documents/calib (~10 min) y, con `set -e`, un listado vacío la cortaba en silencio (08:54, nada del derecho). Ahora trae solo lo de la pasada (`tools/recogida_pasada.py`, con su prueba): los .json con hora ≥ arranque − 30 s, su .ts (sin el vacío del esclavo), lo de `files` y las calib/<id>/ en la ventana `bench_start_rig_ms` de los informes; reintenta el listado 3 veces, apunta lo no copiado y termina con un resumen por lado.
