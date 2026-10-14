@@ -361,6 +361,12 @@ class CaptureReadout {
           p.detectorNote.isNotEmpty ? p.detectorNote : '${p.detectorRuns} pasadas',
           tone: p.detectorNote.isEmpty ? ZeroTone.neutral : ZeroTone.bad,
         ),
+      if (p != null && p.rigSource.isNotEmpty)
+        CaptureReading(
+          'Geometría',
+          p.rigSource == 'rig.json' ? 'calibrada · rig.json' : 'NOMINAL · sin Documents/rig.json',
+          tone: p.rigSource == 'rig.json' ? ZeroTone.ok : ZeroTone.bad,
+        ),
       if (p != null && p.problem.isNotEmpty) CaptureReading('Problema', p.problem, tone: ZeroTone.bad),
       CaptureReading(
         'Enlace',

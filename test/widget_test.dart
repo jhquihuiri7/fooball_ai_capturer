@@ -771,6 +771,7 @@ void main() {
       expect(find.text('Wi-Fi Aware · conectado con iPhone 16 Pro'), findsOneWidget);
       expect(find.text('L0 · todo encendido'), findsWidgets);
       expect(find.text('120 pasadas'), findsOneWidget);
+      expect(find.text('calibrada · rig.json'), findsOneWidget);
 
       await tester.tap(find.text('PARAR'));
       await tester.pump();
@@ -783,7 +784,9 @@ void main() {
     testWidgets('sin QR Soporte el programa se compone pero se avisa en rojo', (
       WidgetTester tester,
     ) async {
-      final FakeRigApi rig = FakeRigApi(status: fakeProgramStatus(srtState: 'none', srtTarget: ''));
+      final FakeRigApi rig = FakeRigApi(
+        status: fakeProgramStatus(srtState: 'none', srtTarget: '', rigSource: 'nominal'),
+      );
       final CaptureSession session = await openCapture(
         tester,
         role: CameraRole.left,
@@ -796,6 +799,8 @@ void main() {
 
       expect(find.text('SIN DESTINO'), findsOneWidget);
       expect(find.text('SIN DESTINO · escanea el QR Soporte del VPS'), findsOneWidget);
+      // Sin calibrar se emite igual, pero la costura no casa: se dice en rojo.
+      expect(find.text('NOMINAL · sin Documents/rig.json'), findsOneWidget);
       final ZeroChip chip = tester.widget<ZeroChip>(
         find.ancestor(of: find.text('SIN DESTINO'), matching: find.byType(ZeroChip)),
       );

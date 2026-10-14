@@ -205,6 +205,9 @@ struct ProgramStatus: Hashable, CustomStringConvertible {
   var detectorNote: String
   /// Lo que impidió montar el programa, si algo lo impidió.
   var problem: String
+  /// La geometría con la que se compone: `rig.json` (la calibración en Documents) o
+  /// `nominal` (sin calibrar: la costura no casará). Vacío antes de montar.
+  var rigSource: String
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
@@ -225,6 +228,7 @@ struct ProgramStatus: Hashable, CustomStringConvertible {
     let detectorRuns = pigeonVar_list[13] as! Int64
     let detectorNote = pigeonVar_list[14] as! String
     let problem = pigeonVar_list[15] as! String
+    let rigSource = pigeonVar_list[16] as! String
 
     return ProgramStatus(
       running: running,
@@ -242,7 +246,8 @@ struct ProgramStatus: Hashable, CustomStringConvertible {
       partsLost: partsLost,
       detectorRuns: detectorRuns,
       detectorNote: detectorNote,
-      problem: problem
+      problem: problem,
+      rigSource: rigSource
     )
   }
   func toList() -> [Any?] {
@@ -263,13 +268,14 @@ struct ProgramStatus: Hashable, CustomStringConvertible {
       detectorRuns,
       detectorNote,
       problem,
+      rigSource,
     ]
   }
   static func == (lhs: ProgramStatus, rhs: ProgramStatus) -> Bool {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return RigApiPigeonInternal.deepEquals(lhs.running, rhs.running) && RigApiPigeonInternal.deepEquals(lhs.master, rhs.master) && RigApiPigeonInternal.deepEquals(lhs.programFps, rhs.programFps) && RigApiPigeonInternal.deepEquals(lhs.programFrames, rhs.programFrames) && RigApiPigeonInternal.deepEquals(lhs.srtState, rhs.srtState) && RigApiPigeonInternal.deepEquals(lhs.srtTarget, rhs.srtTarget) && RigApiPigeonInternal.deepEquals(lhs.srtDetail, rhs.srtDetail) && RigApiPigeonInternal.deepEquals(lhs.srtBitrateBps, rhs.srtBitrateBps) && RigApiPigeonInternal.deepEquals(lhs.srtRttMs, rhs.srtRttMs) && RigApiPigeonInternal.deepEquals(lhs.srtReconnects, rhs.srtReconnects) && RigApiPigeonInternal.deepEquals(lhs.partMbps, rhs.partMbps) && RigApiPigeonInternal.deepEquals(lhs.partFallbacks, rhs.partFallbacks) && RigApiPigeonInternal.deepEquals(lhs.partsLost, rhs.partsLost) && RigApiPigeonInternal.deepEquals(lhs.detectorRuns, rhs.detectorRuns) && RigApiPigeonInternal.deepEquals(lhs.detectorNote, rhs.detectorNote) && RigApiPigeonInternal.deepEquals(lhs.problem, rhs.problem)
+    return RigApiPigeonInternal.deepEquals(lhs.running, rhs.running) && RigApiPigeonInternal.deepEquals(lhs.master, rhs.master) && RigApiPigeonInternal.deepEquals(lhs.programFps, rhs.programFps) && RigApiPigeonInternal.deepEquals(lhs.programFrames, rhs.programFrames) && RigApiPigeonInternal.deepEquals(lhs.srtState, rhs.srtState) && RigApiPigeonInternal.deepEquals(lhs.srtTarget, rhs.srtTarget) && RigApiPigeonInternal.deepEquals(lhs.srtDetail, rhs.srtDetail) && RigApiPigeonInternal.deepEquals(lhs.srtBitrateBps, rhs.srtBitrateBps) && RigApiPigeonInternal.deepEquals(lhs.srtRttMs, rhs.srtRttMs) && RigApiPigeonInternal.deepEquals(lhs.srtReconnects, rhs.srtReconnects) && RigApiPigeonInternal.deepEquals(lhs.partMbps, rhs.partMbps) && RigApiPigeonInternal.deepEquals(lhs.partFallbacks, rhs.partFallbacks) && RigApiPigeonInternal.deepEquals(lhs.partsLost, rhs.partsLost) && RigApiPigeonInternal.deepEquals(lhs.detectorRuns, rhs.detectorRuns) && RigApiPigeonInternal.deepEquals(lhs.detectorNote, rhs.detectorNote) && RigApiPigeonInternal.deepEquals(lhs.problem, rhs.problem) && RigApiPigeonInternal.deepEquals(lhs.rigSource, rhs.rigSource)
   }
 
   func hash(into hasher: inout Hasher) {
@@ -290,10 +296,11 @@ struct ProgramStatus: Hashable, CustomStringConvertible {
     RigApiPigeonInternal.deepHash(value: detectorRuns, hasher: &hasher)
     RigApiPigeonInternal.deepHash(value: detectorNote, hasher: &hasher)
     RigApiPigeonInternal.deepHash(value: problem, hasher: &hasher)
+    RigApiPigeonInternal.deepHash(value: rigSource, hasher: &hasher)
   }
 
   public var description: String {
-    return "ProgramStatus(running: \(String(describing: running)), master: \(String(describing: master)), programFps: \(String(describing: programFps)), programFrames: \(String(describing: programFrames)), srtState: \(String(describing: srtState)), srtTarget: \(String(describing: srtTarget)), srtDetail: \(String(describing: srtDetail)), srtBitrateBps: \(String(describing: srtBitrateBps)), srtRttMs: \(String(describing: srtRttMs)), srtReconnects: \(String(describing: srtReconnects)), partMbps: \(String(describing: partMbps)), partFallbacks: \(String(describing: partFallbacks)), partsLost: \(String(describing: partsLost)), detectorRuns: \(String(describing: detectorRuns)), detectorNote: \(String(describing: detectorNote)), problem: \(String(describing: problem)))"
+    return "ProgramStatus(running: \(String(describing: running)), master: \(String(describing: master)), programFps: \(String(describing: programFps)), programFrames: \(String(describing: programFrames)), srtState: \(String(describing: srtState)), srtTarget: \(String(describing: srtTarget)), srtDetail: \(String(describing: srtDetail)), srtBitrateBps: \(String(describing: srtBitrateBps)), srtRttMs: \(String(describing: srtRttMs)), srtReconnects: \(String(describing: srtReconnects)), partMbps: \(String(describing: partMbps)), partFallbacks: \(String(describing: partFallbacks)), partsLost: \(String(describing: partsLost)), detectorRuns: \(String(describing: detectorRuns)), detectorNote: \(String(describing: detectorNote)), problem: \(String(describing: problem)), rigSource: \(String(describing: rigSource)))"
   }
 }
 

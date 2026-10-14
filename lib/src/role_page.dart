@@ -64,6 +64,10 @@ class _RolePageState extends State<RolePage> {
   /// Apagado por defecto: encenderlo en un partido es grabar dos vídeos que no parean.
   bool _standalone = false;
 
+  /// El enlace entre los dos móviles (IOS-58). Se guarda; sin nada, el Multipeer de
+  /// siempre, con el que cada móvil emite al pod. Los otros tres son la arquitectura B.
+  LinkMode _linkMode = LinkMode.multipeer;
+
   bool _searching = false;
   _ServerOrigin _origin = _ServerOrigin.none;
 
@@ -161,8 +165,23 @@ class _RolePageState extends State<RolePage> {
       if (guardada != null && mounted) {
         setState(() => _prefersMaster = guardada);
       }
+      final String? enlace = prefs.getString(linkModeKey);
+      final LinkMode? modo = LinkMode.values.where((LinkMode m) => m.name == enlace).firstOrNull;
+      if (modo != null && mounted) {
+        setState(() => _linkMode = modo);
+      }
     } on Exception {
       // Sin almacenamiento (tests): manda el valor por defecto.
+    }
+  }
+
+  Future<void> _setLinkMode(LinkMode mode) async {
+    setState(() => _linkMode = mode);
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.setString(linkModeKey, mode.name);
+    } on Exception {
+      // Si no se guarda, vale para esta vez.
     }
   }
 
@@ -289,6 +308,7 @@ class _RolePageState extends State<RolePage> {
               standalone: _standalone,
               serverHost: _server.text.trim(),
               prefersMaster: _directs,
+              linkMode: _linkMode,
             ),
       ),
     );
@@ -471,6 +491,10 @@ class _RolePageState extends State<RolePage> {
                       value: _standalone,
                       onChanged: () => setState(() => _standalone = !_standalone),
                     ),
+                    const SizedBox(height: ZeroMetrics.innerGap),
+                    // IOS-58: el enlace decide qué hace EMITIR. Va junto a lo que la
+                    // arquitectura B necesita: emparejar sin cable y el VPS.
+                    _LinkCard(mode: _linkMode, onMode: (LinkMode m) => unawaited(_setLinkMode(m))),
                     const SizedBox(height: ZeroMetrics.innerGap),
                     // Una vez por soporte, con los dos móviles delante: el plan B si no
                     // hay cable ni router (IOS-14).
@@ -783,6 +807,62 @@ class _ServerCard extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// El enlace entre los dos móviles (IOS-58), y con él qué hace EMITIR: con Multipeer,
+/// cada móvil emite su cámara al servidor de arriba (el pod); con los otros tres, el
+/// maestro compone el programa y lo sube al VPS del QR Soporte (arquitectura B). Los dos
+/// móviles tienen que elegir el mismo.
+class _LinkCard extends StatelessWidget {
+  const _LinkCard({required this.mode, required this.onMode});
+
+  final LinkMode mode;
+  final ValueChanged<LinkMode> onMode;
+
+  static const List<(LinkMode, String)> _choices = <(LinkMode, String)>[
+    (LinkMode.multipeer, 'Pod'),
+    (LinkMode.wifi, 'Wi-Fi'),
+    (LinkMode.aware, 'Aware'),
+    (LinkMode.ethernet, 'Cable'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final String nota = switch (mode) {
+      LinkMode.multipeer => 'Multipeer: cada móvil emite su cámara al servidor de arriba.',
+      LinkMode.wifi => 'Por la Wi-Fi del router. El maestro compone y sube el programa al VPS.',
+      LinkMode.aware =>
+        'Wi-Fi Aware, sin router: empareja antes sin cable. El maestro sube el programa al VPS.',
+      LinkMode.ethernet => 'Hub USB-C con Ethernet. El maestro compone y sube el programa al VPS.',
+    };
+    return ZeroCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          const ZeroSectionHeader('Enlace y emisión'),
+          Row(
+            children: <Widget>[
+              for (final (LinkMode m, String label) in _choices) ...<Widget>[
+                if (m != _choices.first.$1) const SizedBox(width: 8),
+                // ZeroPill ya se expande en la fila.
+                ZeroPill(label: label, selected: mode == m, onTap: () => onMode(m)),
+              ],
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            nota,
+            style: ZeroType.data(
+              size: 11,
+              weight: FontWeight.w400,
+              color: ZeroColors.inkTertiary,
+              height: 1.5,
+            ),
           ),
         ],
       ),

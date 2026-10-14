@@ -17,6 +17,190 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 
 
+## 2026-10-14 · IOS-58 — EMITIR en la arquitectura B, desde la pantalla y sin el banco · 🚧 falta la pasada con los dos iPhone
+
+**Dependencias: excepción deliberada** (pendiente de la revisión de Alexander). La tarjeta
+depende de IOS-80 e IOS-73 (✅) y de IOS-56 e IOS-44, que tienen el código hecho y siguen 🚧
+solo por sus pruebas con hardware. Se adelanta para la primera emisión en una cancha.
+
+**Hecho** (81d496e, cdbc999, cf04738 y el commit de esta entrada, «IOS-58d»)
+- **El programa sale del banco sin romperlo.** EMITIR usa la misma orquestación que el banco
+  split (`SplitBench`: parte del esclavo, programa del maestro, director, detector, copias y
+  SRT), con sus ajustes en `ProgramRunConfig` (RigCore):
+  - `bench(environment:)` lee el entorno como siempre: `RIG_SPLIT_*`, `RIG_DETECT` y
+    `RIG_LINK_INTERFACE` no cambian, y `tools/banco_dos_moviles.sh` sigue igual;
+  - `production(medium:detectorPackage:)` es EMITIR: sin fin propio, con el director
+    (IOS-73), publicando al QR Soporte del Keychain (IOS-56/68), sin la 4K del banco y sin
+    sus ficheros de medir (.ts y vistas por instante). La copia del programa va a
+    `Documents/program-<partido>-<t>.mov` (IOS-57) y el informe, a `Documents/bench` como el
+    del banco, con `purpose: production`, `elapsed_s` y `part_fallbacks`.
+- **RigHostApi:** `startProgram()`, `stopProgram()` y `programStatus()` (`ProgramStatus`).
+  Llegan a `CaptureHostApiImpl` por `ProgramHub`, porque la cámara y el enlace viven ahí.
+  PARAR cierra fuera del hilo principal.
+- **`startLink(role, prefersMaster, mode)`** con `LinkMode` (multipeer, ethernet, wifi o
+  aware). El entorno de los bancos (`RIG_LINK_MULTIPEER`, `RIG_LINK_INTERFACE`) manda
+  (`LinkChoice`); sin él, lo elegido en la pantalla.
+- **El secreto del soporte en el Keychain** (`football-ai.enlace` / `secreto`):
+  `RIG_LINK_SECRET` manda y se guarda; sin él se usa el guardado (`RigSecretSource`). Basta
+  lanzar la app una vez desde el Mac con el secreto para abrirla después desde el icono.
+- **Dart (`CaptureSession`):**
+  - en el maestro, EMITIR llama a `CaptureHostApi.start` sin URL del pod (solo la 4K, si se
+    guarda), a `startProgram` y manda `record`/`recordAndSave` al esclavo. PARAR para el
+    programa, la 4K y manda `stop`;
+  - si el programa no arranca, se cierra la 4K, no se ordena nada y se dice por qué;
+  - el esclavo no emite solo («EMITE EL MAESTRO»): arranca con la orden (su parte, su
+    detector y su 4K) y puede parar el suyo;
+  - el esclavo que llega o vuelve con el programa en marcha recibe la orden otra vez;
+  - el estado del programa se lee cada segundo con el de la cámara.
+- **La pantalla:**
+  - en la de lado, la tarjeta «Enlace y emisión»: Pod (Multipeer, lo de siempre), Wi-Fi,
+    Aware o Cable. Se guarda (`zero.linkMode`) y va junto a «Emparejar sin cable» y al VPS;
+  - en la de captura, el botón dice EMITIR, el chip EMITIENDO, y la tarjeta Programa
+    sustituye a la de Emisión al pod. Sus filas: Programa (fps, Mbit/s y RTT del SRT), SRT
+    (destino y estado), Parte (Mbit/s, retrocesos y pérdidas), Detector, Geometría
+    (`rig.json` o NOMINAL), Enlace (medio y estado) y Escalera.
+- **`tools/qr_soporte_mac.sh`**: el QR Soporte de un «VPS» en el Mac (el MediaMTX de
+  `tools/mediamtx-programa.yml`) con el `support_payload` de football-ai, sin tocar ese
+  repo. El SVG lleva la passphrase: sale con permisos 600 en `$TMPDIR`. Comprobado que la
+  app lo acepta (`VpsPairing.parse`).
+
+**Decidido aquí** (pendiente de la revisión de Alexander)
+- **`startProgram()` no lleva `saveVideo`**, aunque la tarjeta lo escribe así. La 4K sigue
+  por `CaptureHostApi.start` (su reserva de disco y su aviso de IOS-57, ya probados), con la
+  URL vacía. La copia .mov del programa va siempre: 6 Mbit/s, ~2,7 GB/h.
+- **El modo B lo decide el enlace.** Con Multipeer, EMITIR es lo de hoy (cada cámara al pod),
+  y es el valor por defecto hasta el corte (REF-49). Con un enlace de Network, la
+  arquitectura B. Los dos móviles tienen que elegir el mismo.
+- **El secreto del enlace, del entorno al Keychain**, hasta el QR de un solo uso de IOS-97.
+  `ThisDeviceOnly`, sin sincronizar y nunca en el log. Un secreto del entorno que no es
+  base64 falla, no cae en el guardado.
+- **Retrocesos:** en el maestro, vistas que pedían las dos lentes y salieron de una (la
+  parte no llegó en `PART_MAX_WAIT_MS`); las vistas que caen enteras en la lente del maestro
+  no cuentan. En el esclavo, fotogramas con la vista extrapolada.
+- **El detector** se busca en `Documents/bench-resources`: `RIG_DETECT` si se lanzó con él;
+  si no, `players-centernet-mnv4.mlpackage` (el nombre de su ficha) o el primer
+  `*centernet*.mlpackage`. No hay modelo en el registro todavía. Sin modelo, el director
+  dirige sin detecciones y la fila Detector lo dice en rojo.
+- **El informe de EMITIR va a `Documents/bench`**, junto a los del banco, para recogerlo con
+  lo de siempre. El N0 lleva el partido y el `clock_domain` de verdad (`RigClockDomain`).
+- **Cada móvil enseña lo suyo.** El maestro no ve el estado de la parte del esclavo más que
+  por lo que recibe (Mbit/s, retrocesos y pérdidas).
+- **La escalera solo se enseña.** No actúa todavía sobre el programa ni llama a
+  `setCeiling` del publicador (anotado en IOS-56).
+- **EMITIR sube al VPS; salir en las plataformas** es `stream/start` en el VPS (NUBE-21).
+
+**Comprobado**
+- `flutter test --no-pub`: **425, todos bien** (antes, 411). Los nuevos: 8 en
+  `capture_session_test` (el enlace hasta `startLink`; sin programa con un solo móvil o en el
+  banco del enlace; un toque en el maestro y parar; el programa que no arranca; el esclavo
+  con la orden; la orden repetida al volver el esclavo; el estado cada segundo; calibrar
+  contra el pod no se ofrece), 3 en `widget_test` (la tarjeta del maestro, SIN DESTINO y
+  NOMINAL en rojo, el esclavo) y 3 en `role_page_test` (elegir y guardar el enlace, lo
+  guardado al abrir, un valor que ya no existe). Con `FakeRigApi`, la API falsa del pipeline.
+- `flutter analyze --no-pub`: sin avisos.
+- `swift test --skip ModelBench`: **463 tests, 4 saltados, 0 fallos** (antes, 452). Los
+  nuevos, `ProgramRunTests` (11).
+- `tools/check_layers.sh`: limpio.
+- ZeroKit compilado para iOS con xcodebuild (derivedData propio): BUILD SUCCEEDED.
+- **El Runner, sin `flutter build` y sin tocar `build/ios`:** `swiftc -typecheck` de todos sus
+  `.swift` contra ese ZeroKit y los módulos de HaishinKit y Flutter del DerivedData. 0
+  errores y los mismos 32 avisos que el Runner de f87b5a2 (comparados uno a uno).
+- Hecho en un worktree aparte: el árbol principal no se tocó mientras los iPhone estaban en
+  el ensayo.
+
+**Aceptación de la tarjeta**, hoy:
+
+| Criterio | Con fakes | Con los dos iPhone |
+|---|---|---|
+| Un toque en el maestro pone los dos en marcha | ✅ | pendiente |
+| Parar los para | ✅ | pendiente |
+| Los estados se ven en los dos móviles | ✅ | pendiente |
+
+**Pendiente: la pasada con los dos iPhone, desde la pantalla y sin el banco**
+1. **Instalar** (con los iPhone libres; sin `AUTO_ROLE`, para que salga la pantalla de lado):
+
+   ```bash
+   cd /Users/alexander/Trabajacion/fooball_ai_capturer && git pull --ff-only
+   IZQ=8FBBECC4-5239-59C4-BE22-5EEFB5958863; DER=11BE5E85-F450-5C4B-B19E-ADA3EF036831; APP=com.logicielapplab.zero
+   /Users/alexander/flutter_3.44.8/bin/flutter build ios --release
+   for d in $IZQ $DER; do xcrun devicectl device install app --device $d build/ios/iphoneos/Runner.app; done
+   ```
+
+2. **El secreto del soporte al Keychain, una vez:** cerrar Zero en los dos y lanzarla con
+   solo el secreto (el mismo fichero del banco):
+
+   ```bash
+   for d in $IZQ $DER; do xcrun devicectl device process launch --device $d \
+     --environment-variables "{\"RIG_LINK_SECRET\": \"$(cat <fichero_secreto>)\"}" $APP; done
+   ```
+
+   Después, cerrarla desde el selector de apps. A partir de aquí se abre desde el icono.
+3. **Lo que tiene que haber en cada iPhone** (de los bancos): `Documents/rig.json` (la
+   calibración) y el CenterNet en `Documents/bench-resources`:
+
+   ```bash
+   for d in $IZQ $DER; do xcrun devicectl device info files --device $d --domain-type appDataContainer \
+     --domain-identifier $APP 2>/dev/null | awk '{print $1}' | grep -E '^Documents/rig.json$|centernet[^/]*/Manifest.json$'; done
+   ```
+
+   Si falta el modelo se emite igual, sin detecciones (la fila Detector lo dice).
+4. **El MediaMTX del Mac y su QR Soporte:**
+
+   ```bash
+   ( umask 077; openssl rand -hex 16 > /tmp/frase-programa )
+   # Terminal 1:
+   MTX_PATHS_PROGRAMA_SRTPUBLISHPASSPHRASE=$(cat /tmp/frase-programa) mediamtx tools/mediamtx-programa.yml
+   # Terminal 2:
+   tools/qr_soporte_mac.sh /tmp/frase-programa && open "$TMPDIR/qr-soporte-mac.svg"
+   ```
+
+   Contra el VPS, en lugar de esto, el QR de `https://<dominio>/pair`.
+5. **En los dos iPhone, desde el icono:** el lado (17 IZQUIERDA, 16 Pro DERECHA; «Este móvil
+   dirige» en el 17), «Enlace y emisión» en **Wi-Fi** (o **Aware**, ya emparejados), «Escanear
+   QR Soporte» contra la pantalla del Mac («Emparejado con 10.10.18.101 · rig rig1») y «Abrir
+   cámara». Esperar a LISTA en los dos: Enlace conectado, Reloj y Fase. El esclavo enseña
+   «EMITE EL MAESTRO», sin poder pulsarlo.
+6. **EMITIR en el 17** (con «Guardar vídeo» como se quiera). En unos segundos:
+   - el maestro, EMITIENDO, y la tarjeta Programa: EN EL VPS, `30 fps · 6 Mbit/s · RTT … ms`,
+     `publicando a 10.10.18.101:8890`, Parte `~8 Mbit/s · … retrocesos · … perdidas`,
+     Detector `… pasadas`, Geometría `calibrada · rig.json`, Enlace y Escalera L0;
+   - el esclavo, EMITIENDO, y en su tarjeta PARTE: `~8 Mbit/s al maestro · … retrocesos`;
+   - en el Mac, a partir del minuto 1:
+
+     ```bash
+     ffprobe -v error -rtsp_transport tcp -show_entries stream=codec_name,width,height,avg_frame_rate \
+       -of compact rtsp://127.0.0.1:8554/programa
+     (cd ../fooball_ai_streaming && uv run python tools/nube/sei_probe.py --source rtsp://127.0.0.1:8554/programa \
+       --seconds 60 --out /tmp/m20-emitir.json)
+     ffplay -rtsp_transport tcp rtsp://127.0.0.1:8554/programa   # el cosido con el director, a ojo
+     ```
+
+7. **PARAR en el 17:** paran los dos (el esclavo vuelve a «EMITE EL MAESTRO») y MediaMTX
+   cierra la publicación. EMITIR y PARAR otra vez, sin reiniciar la app.
+8. **El esclavo que vuelve:** con el programa en marcha, cerrar Zero en el 16 Pro, abrirla y
+   «Abrir cámara»: el maestro sigue con una lente mientras tanto, y el esclavo arranca solo
+   al conectar.
+9. **Recoger los informes** (`purpose: production`):
+
+   ```bash
+   mkdir -p bench/emitir && for p in "$IZQ:left" "$DER:right"; do d=${p%%:*}; l=${p##*:}
+     f=$(xcrun devicectl device info files --device $d --domain-type appDataContainer --domain-identifier $APP \
+       2>/dev/null | awk '{print $1}' | grep -E "^Documents/bench/program-split-$l-[0-9]+\.json$" | sort | tail -1)
+     xcrun devicectl device copy from --device $d --domain-type appDataContainer --domain-identifier $APP \
+       --source "$f" --destination bench/emitir/; done
+   ```
+
+   En el del maestro: `publish.sessions` con 0 reconexiones, `program_frames`,
+   `part_fallbacks`, `detect` y `rig: rig.json`; la copia en `Documents/program-…-<t>.mov`.
+   Al acabar, borrar `$TMPDIR/qr-soporte-mac.svg` y `/tmp/frase-programa`.
+
+**Fuera de IOS-58:** el secreto por QR (IOS-97); la escalera actuando sobre el programa; el
+túnel y el `anchor` (IOS-65); salir en las plataformas (NUBE-21); un modelo del registro en
+lugar de `bench-resources`.
+
+**Siguiente paso**: la pasada de arriba con los dos iPhone (unos 15 min) y, si sale, la
+misma contra el VPS.
+
 ## 2026-10-14 · Wi-Fi Aware 25 min con el 16 Pro en iOS 27: sin cortes, y aguanta 30 Mbit/s (IOS-14, SPK-08)
 
 `link90` 1500 s con `RIG_LINK_INTERFACE=aware` (`bench/dos-moviles-20261014-0940`; la primera

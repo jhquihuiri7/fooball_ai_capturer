@@ -19,6 +19,7 @@ ProgramStatus fakeProgramStatus({
   int detectorRuns = 120,
   String detectorNote = '',
   String problem = '',
+  String rigSource = 'rig.json',
 }) {
   return ProgramStatus(
     running: running,
@@ -37,6 +38,7 @@ ProgramStatus fakeProgramStatus({
     detectorRuns: detectorRuns,
     detectorNote: detectorNote,
     problem: problem,
+    rigSource: rigSource,
   );
 }
 

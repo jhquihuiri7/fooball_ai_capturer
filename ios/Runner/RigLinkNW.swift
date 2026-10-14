@@ -1668,7 +1668,7 @@ final class SplitBench {
     static let idleStatus = ProgramStatus(
         running: false, master: false, programFps: 0, programFrames: 0, srtState: "", srtTarget: "",
         srtDetail: "", srtBitrateBps: 0, srtRttMs: 0, srtReconnects: 0, partMbps: 0, partFallbacks: 0,
-        partsLost: 0, detectorRuns: 0, detectorNote: "", problem: ""
+        partsLost: 0, detectorRuns: 0, detectorNote: "", problem: "", rigSource: ""
     )
 
     /// La copia del programa: en el banco, junto al .ts; en EMITIR, Documents/program-<id>.mov.
@@ -1732,7 +1732,7 @@ final class SplitBench {
             partMbps: esMaestro ? (enlace?.mbps ?? 0) : bytesPorS * Self.bitsPerByte / Self.bitsPerMegabit,
             partFallbacks: Int64(esMaestro ? partFallbacks : (slave?.stats.withoutView ?? 0)),
             partsLost: Int64(enlace?.lost ?? 0), detectorRuns: Int64(detect?.runCount ?? 0),
-            detectorNote: nota, problem: setUpProblem
+            detectorNote: nota, problem: setUpProblem, rigSource: rigSource
         )
         lock.lock()
         statusSnapshot = nuevo

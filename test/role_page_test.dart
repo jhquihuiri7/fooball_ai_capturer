@@ -12,7 +12,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
+import 'package:football_ai_capture/src/constants.dart';
 import 'package:football_ai_capture/src/role_page.dart';
+import 'package:football_ai_capture/src/widgets/zero_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'fake_capture_api.dart';
@@ -195,6 +197,46 @@ void main() {
       expect(api.vpsPairing, qr('del_vps'));
       expect(find.textContaining('clave-del-programa'), findsNothing);
       expect(find.text('Emparejado con vps.ejemplo.com'), findsOneWidget);
+    });
+  });
+  group('enlace y emisión (IOS-58)', () {
+    bool elegida(WidgetTester tester, String texto) => tester
+        .widget<ZeroPill>(find.ancestor(of: find.text(texto), matching: find.byType(ZeroPill)))
+        .selected;
+
+    testWidgets('por defecto el pod de siempre; elegir otro lo guarda', (WidgetTester tester) async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      await abrir(tester, FakeCaptureApi());
+
+      expect(elegida(tester, 'Pod'), isTrue);
+      expect(find.textContaining('cada móvil emite su cámara'), findsOneWidget);
+
+      await tester.ensureVisible(find.text('Aware'));
+      await tester.tap(find.text('Aware'));
+      await tester.pumpAndSettle();
+
+      expect(elegida(tester, 'Aware'), isTrue);
+      expect(elegida(tester, 'Pod'), isFalse);
+      expect(find.textContaining('empareja antes sin cable'), findsOneWidget);
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString(linkModeKey), 'aware');
+    });
+
+    testWidgets('lo guardado se elige al abrir', (WidgetTester tester) async {
+      SharedPreferences.setMockInitialValues(<String, Object>{linkModeKey: 'wifi'});
+      await abrir(tester, FakeCaptureApi());
+      await tester.pumpAndSettle();
+
+      expect(elegida(tester, 'Wi-Fi'), isTrue);
+      expect(find.textContaining('sube el programa al VPS'), findsOneWidget);
+    });
+
+    testWidgets('un valor que ya no existe deja el pod', (WidgetTester tester) async {
+      SharedPreferences.setMockInitialValues(<String, Object>{linkModeKey: 'nan'});
+      await abrir(tester, FakeCaptureApi());
+      await tester.pumpAndSettle();
+
+      expect(elegida(tester, 'Pod'), isTrue);
     });
   });
 }

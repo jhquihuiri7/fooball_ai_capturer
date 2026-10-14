@@ -37,6 +37,7 @@ class ProgramStatus {
     required this.detectorRuns,
     required this.detectorNote,
     required this.problem,
+    required this.rigSource,
   });
 
   /// Hay una pasada en marcha en este móvil.
@@ -79,6 +80,10 @@ class ProgramStatus {
 
   /// Lo que impidió montar el programa, si algo lo impidió.
   final String problem;
+
+  /// La geometría con la que se compone: `rig.json` (la calibración en Documents) o
+  /// `nominal` (sin calibrar: la costura no casará). Vacío antes de montar.
+  final String rigSource;
 }
 
 @HostApi()
