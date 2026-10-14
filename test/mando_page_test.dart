@@ -61,6 +61,7 @@ void main() {
       );
       await tester.pump();
       await tester.ensureVisible(find.text('Solo mando, sin cámara'));
+      await tester.pump(); // el desplazamiento se aplica en el siguiente frame
       await tester.tap(find.text('Solo mando, sin cámara'));
       await tester.pumpAndSettle();
       return api;

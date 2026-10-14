@@ -1,15 +1,24 @@
 /// «Emparejar sin cable» (IOS-14): el plan B del enlace por Wi-Fi Aware se empareja una
 /// vez desde la pantalla de lado. El lado elegido decide qué hoja saca el nativo (el
 /// izquierdo enseña el código, el derecho lo teclea), y lo que sale se dice debajo.
+///
+/// El VPS (IOS-68): el QR Soporte se escanea, se guarda en el Keychain y se ve con quién
+/// y hasta cuándo; un QR que no vale no se guarda.
 library;
+
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
 import 'package:football_ai_capture/src/role_page.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'fake_capture_api.dart';
 import 'zero_fonts.dart';
+
+const String _casosVps = 'ios/ZeroKit/Tests/RigCoreTests/Fixtures/vps_pairing_cases.json';
 
 void main() {
   setUpAll(loadZeroFonts);
@@ -72,5 +81,120 @@ void main() {
     );
     // El botón vuelve: se puede reintentar.
     expect(find.text('Emparejar sin cable'), findsOneWidget);
+  });
+
+  group('el VPS (IOS-68)', () {
+    const int caduca = 1800043200;
+    final Map<String, Object?> doc =
+        jsonDecode(File(_casosVps).readAsStringSync()) as Map<String, Object?>;
+    final List<Map<String, Object?>> casos =
+        (doc['cases']! as List<Object?>).cast<Map<String, Object?>>();
+    String qr(String nombre) =>
+        casos.firstWhere((Map<String, Object?> c) => c['name'] == nombre)['qr']! as String;
+    int ahora = 1800000000;
+
+    Future<void> abrirVps(WidgetTester tester, FakeCaptureApi api) async {
+      tester.view
+        ..physicalSize = const Size(402 * 3, 1200 * 3)
+        ..devicePixelRatio = 3.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(MaterialApp(home: RolePage(api: api, clockS: () => ahora)));
+      await tester.pump();
+    }
+
+    Future<void> tocar(WidgetTester tester, String texto) async {
+      await tester.ensureVisible(find.text(texto));
+      await tester.pump();
+      await tester.tap(find.text(texto));
+      await tester.pumpAndSettle();
+    }
+
+    setUp(() => ahora = 1800000000);
+
+    testWidgets('un escaneo lo guarda en el Keychain y dice con quién y hasta cuándo', (
+      WidgetTester tester,
+    ) async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final FakeCaptureApi api = FakeCaptureApi()..scannable = qr('del_vps');
+      await abrirVps(tester, api);
+      expect(find.text('Sin emparejar'), findsOneWidget);
+
+      await tocar(tester, 'Escanear QR Soporte');
+
+      expect(api.vpsPairing, qr('del_vps'));
+      expect(find.text('Emparejado con vps.ejemplo.com'), findsOneWidget);
+      expect(find.text('rig rig-01 · caduca en 12 h'), findsOneWidget);
+      // Solo al Keychain (el nativo): nada en shared_preferences ni en pantalla.
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      for (final String clave in prefs.getKeys()) {
+        expect('${prefs.get(clave)}', isNot(contains('clave-del-programa')));
+      }
+      expect(find.textContaining('frase-del-srt'), findsNothing);
+    });
+
+    testWidgets('otra versión o caducado no se guarda, y se dice por qué', (
+      WidgetTester tester,
+    ) async {
+      final FakeCaptureApi api = FakeCaptureApi()..scannable = qr('otra_version');
+      await abrirVps(tester, api);
+
+      await tocar(tester, 'Escanear QR Soporte');
+      expect(find.text('Ese QR Soporte es de otra versión: actualiza la app.'), findsOneWidget);
+
+      ahora = caduca;
+      api.scannable = qr('del_vps');
+      await tocar(tester, 'Escanear QR Soporte');
+      expect(find.text('Ese QR Soporte caducó: recarga /pair en el VPS.'), findsOneWidget);
+
+      api.scannable = 'https://pod.example/#mando=a.b';
+      await tocar(tester, 'Escanear QR Soporte');
+      expect(find.text('Ese QR no es el Soporte: en el panel del VPS, /pair.'), findsOneWidget);
+      expect(api.vpsPairing, isEmpty);
+      expect(find.text('Sin emparejar'), findsOneWidget);
+    });
+
+    testWidgets('lo guardado se ve al abrir, y desemparejar lo borra', (
+      WidgetTester tester,
+    ) async {
+      ahora = caduca - 35 * 60;
+      final FakeCaptureApi api = FakeCaptureApi()..vpsPairing = qr('del_vps');
+      await abrirVps(tester, api);
+      expect(find.text('Emparejado con vps.ejemplo.com'), findsOneWidget);
+      expect(find.text('rig rig-01 · caduca en 35 min'), findsOneWidget);
+
+      await tocar(tester, 'Desemparejar');
+
+      expect(api.vpsPairing, isEmpty);
+      expect(find.text('Sin emparejar'), findsOneWidget);
+    });
+
+    testWidgets('caducado en el Keychain sigue emparejado y pide escanear otra vez', (
+      WidgetTester tester,
+    ) async {
+      ahora = caduca;
+      final FakeCaptureApi api = FakeCaptureApi()..vpsPairing = qr('del_vps');
+      await abrirVps(tester, api);
+
+      expect(find.text('Emparejado con vps.ejemplo.com'), findsOneWidget);
+      expect(
+        find.text('rig rig-01 · la llave del túnel caducó: escanea otra vez'),
+        findsOneWidget,
+      );
+      expect(find.text('Escanear otra vez'), findsOneWidget);
+    });
+
+    testWidgets('el QR Soporte leído desde «Servidor» no acaba en el campo', (
+      WidgetTester tester,
+    ) async {
+      final FakeCaptureApi api = FakeCaptureApi()..scannable = qr('del_vps');
+      await abrirVps(tester, api);
+
+      await tocar(tester, 'Escanear QR');
+
+      expect(api.serverHost, isEmpty);
+      expect(api.vpsPairing, qr('del_vps'));
+      expect(find.textContaining('clave-del-programa'), findsNothing);
+      expect(find.text('Emparejado con vps.ejemplo.com'), findsOneWidget);
+    });
   });
 }

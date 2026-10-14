@@ -6,8 +6,10 @@
 ///     {"v":1, "srt":{"host","port","path","user","pass","passphrase"},
 ///      "tunnel":{"url":"wss://<dominio>/tunnel/v1"}, "rig_id", "rig_key"}
 ///
-/// Se valida aquí y, en Swift, con `VpsPairing` de RigCore: el publicador del programa
-/// (IOS-56) lo lee allí y el túnel (IOS-65) aquí.
+/// Se valida aquí y se guarda tal cual en el Keychain (`saveVpsPairing`, que lo vuelve a
+/// validar en nativo con `VpsPairing` de RigCore antes de escribir). Lo leen el túnel
+/// (IOS-65, con [VpsPairing.load]) y el publicador del programa (IOS-56, en Swift con
+/// `VpsPairingKeychain.load()`).
 ///
 /// `rig_key` es el token del soporte (`tools/control_token.py`): caduca a las 12 h y el
 /// VPS lo puede rotar. La app no tiene el secreto que lo firma: lee su rig y su caducidad
@@ -20,6 +22,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:football_ai_capture/src/constants.dart';
+import 'package:football_ai_capture/src/generated/capture_api.g.dart';
 import 'package:football_ai_capture/src/server/control_token.dart';
 
 /// Los nombres del VPS: `FOOTBALL_VPS_DOMAIN` (`[A-Za-z0-9.-]+` en pairing.py).
@@ -121,7 +124,7 @@ class VpsPairing {
   /// Cuándo caduca [rigKey], en segundos de hora de pared.
   final int rigKeyExpiresS;
 
-  /// El texto del QR sin espacios alrededor: lo que se guarda.
+  /// Lo que se guarda en el Keychain: el texto del QR sin espacios alrededor.
   final String qrText;
 
   /// Con quién está emparejado: el host del túnel.
@@ -204,6 +207,19 @@ class VpsPairing {
       rigKeyExpiresS: claims.expiresS,
       qrText: qr,
     );
+  }
+
+  /// Lo guardado en el Keychain, sin mirar la caducidad, o `null` si no hay o no se lee.
+  static Future<VpsPairing?> load(CaptureHostApi api) async {
+    final String text = await api.loadVpsPairing();
+    if (text.isEmpty) {
+      return null;
+    }
+    try {
+      return parse(text);
+    } on VpsPairingException {
+      return null;
+    }
   }
 
   /// Para los logs: con quién y hasta cuándo, sin secretos.

@@ -214,6 +214,18 @@ class FakeCaptureApi extends CaptureHostApi {
   @override
   Future<void> clearPanelPairing() async => panelPairing = '';
 
+  /// Lo que el nativo tiene en el Keychain como QR Soporte del VPS (IOS-68).
+  String vpsPairing = '';
+
+  @override
+  Future<String> loadVpsPairing() async => vpsPairing;
+
+  @override
+  Future<void> saveVpsPairing(String pairing) async => vpsPairing = pairing;
+
+  @override
+  Future<void> clearVpsPairing() async => vpsPairing = '';
+
   bool? lastPrefersMaster;
 
   @override

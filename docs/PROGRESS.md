@@ -15,6 +15,113 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 
 
+## 2026-10-14 · IOS-68 — el soporte emparejado con el VPS por el QR Soporte · 🚧 falta escanear el QR de un VPS real con el iPhone
+
+**La dependencia circular con NUBE-16, resuelta empezando por aquí.** La tarjeta depende de
+NUBE-16, que sigue 🚧 solo porque su aceptación («un escaneo configura el SRT y el túnel») es
+justo esta tarea. El lado del VPS está hecho (a1962d5 en football-ai) y fija el contrato; las
+dos se cierran juntas con la prueba del iPhone contra un VPS.
+
+**Hecho** (be07067 y el commit de esta entrada)
+- **El QR Soporte leído igual en Swift y en Dart:** `RigCore/Wire/VpsPairing.swift` y
+  `lib/src/vps_pairing.dart` validan `{v:1, srt, tunnel, rig_id, rig_key}` (ADR 0022 §3) en el
+  mismo orden.
+  - Otra `v`: «actualiza la app». Sin `v`, o algo que no es un objeto JSON (el QR Mando, el de
+    Cámaras): «no es el Soporte».
+  - Campo a campo, y el error dice el campo, nunca el valor:
+    - `srt`: host `[A-Za-z0-9.-]+`, puerto 1-65535, ruta sin «:», usuario y clave en
+      `[A-Za-z0-9._-]`, streamid ≤512 y passphrase de 10 a 79;
+    - `tunnel.url`: `wss`, con host y sin usuario;
+    - `rig_id`: el patrón del VPS;
+    - `rig_key`: un token cuyo `r` es el `rig_id` y que lleva el ámbito `tunnel`.
+  - Al escanear, un `rig_key` caducado (`e` ≤ ahora, en hora de pared) se rechaza. Leído del
+    Keychain, no: el SRT sigue valiendo, y el túnel lo dirá con el 4401.
+  - El token se lee sin firma: `peekClaims` en `control_token.dart` (el `peek_claims` de
+    Python) y su gemelo en Swift.
+- **39 casos compartidos** en `ios/ZeroKit/Tests/RigCoreTests/Fixtures/vps_pairing_cases.json`,
+  que leen `VpsPairingTests` y `test/vps_pairing_test.dart`. El QR bueno salió de
+  `support_payload` del VPS (a1962d5), con el entorno de sus tests.
+- **Keychain por Pigeon:** `loadVpsPairing`, `saveVpsPairing` y `clearVpsPairing`. Guardar
+  valida antes con `VpsPairing` de RigCore y, si no vale, falla con `vps_pairing` y el campo.
+- **El formato del ítem, el que leen IOS-56 e IOS-65:**
+  - genérico, servicio `football-ai.vps`, cuenta `soporte`;
+  - `AfterFirstUnlockThisDeviceOnly` y sin sincronizar;
+  - los datos son el JSON del QR tal cual, en UTF-8 y sin espacios alrededor.
+- **Cómo se lee:**
+  - en Swift (IOS-56), `VpsPairingKeychain.load()` en `CaptureHostApiImpl.swift` da
+    `VpsPairing?`, y su `.srt` es el `ProgramSrtTarget`, con streamid y passphrase ya
+    comprobados;
+  - en Dart (IOS-65), `VpsPairing.load(api)` da `tunnel` (`wss://…/tunnel/v1`), `rigKey` (el
+    Bearer) y `expiredAt(nowS)`.
+- **La tarjeta «VPS» de la pantalla de lado**, debajo de «Emparejar sin cable»:
+  - sin nada, «Sin emparejar» y «Escanear QR Soporte»;
+  - emparejado, «Emparejado con <dominio>» y «rig <id> · caduca en 11 h 59 min», o, en
+    rojo, «la llave del túnel caducó: escanea otra vez»;
+  - los botones «Escanear otra vez» y «Desemparejar»;
+  - un QR que no vale no toca lo guardado, y se dice por qué.
+- **El QR Soporte leído desde «Escanear QR» del servidor** va al emparejado y nunca al campo
+  «Servidor», que se ve en pantalla. El lector dice ahora «Apunta al QR del panel».
+- **El servidor del pod sale de `UserDefaults`**, la nota pendiente del ADR 0017 §4:
+  `loadServerHost` y `saveServerHost` usan el Keychain (`football-ai.servidor`, `host`) y
+  mudan lo que hubiera en `UserDefaults` la primera vez que se lee.
+- **Logs:** StreamPublisher ya no escribe la URL del pod con usuario, clave, streamid y
+  passphrase (`redactedForLog`), y el error de una URL no válida no la repite.
+
+**Decidido aquí** (pendiente de la revisión de Alexander)
+- **El Keychain guarda el texto del QR, no un formato propio.** Los dos lados lo leen con el
+  mismo código, y no hay nada que migrar si el QR crece dentro de la v1.
+- **Un campo de más dentro de la v1 se ignora:** lo incompatible lo marca `v`.
+- **Solo `wss`,** porque el `rig_key` va en la cabecera. Un banco con `ws://` necesitaría un
+  QR propio.
+- **No se comprueba la ruta del túnel**, se usa la que trae el QR, ni que el host del túnel y
+  el del SRT coincidan. El dominio que se enseña es el del túnel.
+- **La caducidad se mira al escanear y al pintar la pantalla.** No hay temporizador que avise.
+- **Rotar en el VPS no lo ve la app hasta el 4401 del túnel** (IOS-65); entonces se escanea
+  otra vez.
+- **Desemparejar no pide confirmación:** se vuelve a escanear en un momento.
+- **Los dos `mando_page_test` que pulsan «Solo mando»** necesitaban un `pump()` tras
+  `ensureVisible`: la tarjeta nueva lo deja fuera de los 1000 px de la prueba.
+
+**Comprobado**
+- `swift test --skip ModelBench`: 403 tests, 3 saltados (los mismos) y 0 fallos; antes, 399.
+  Los nuevos son `VpsPairingTests` (4): los casos compartidos, el Keychain sin caducidad,
+  ningún secreto en `description`, `debugDescription` ni en los errores, y el token como en
+  Python.
+- `flutter test --no-pub`: 411, todos bien; antes, 361. `vps_pairing_test` (45) y 5 en
+  `role_page_test`: escanear y guardar (nada en `shared_preferences` ni en pantalla), otra
+  versión, caducado y QR Mando sin guardar, lo guardado al abrir y desemparejar, caducado en el
+  Keychain, y el QR Soporte por «Escanear QR» del servidor.
+- `flutter analyze --no-pub`: sin avisos. `tools/check_layers.sh`: limpio.
+- ZeroKit compilado para iOS con xcodebuild (derivedData temporal): BUILD SUCCEEDED, con el
+  aviso de siempre de `VtConcurrencyBench`.
+- **El Runner, sin `flutter build` y sin tocar `build/ios`:** `swiftc -typecheck` de todos sus
+  `.swift` contra ese ZeroKit y los módulos de HaishinKit y Flutter del DerivedData
+  (`Debug-iphoneos`). 0 errores y los 32 avisos de antes.
+
+**Pendiente**
+- **La prueba en el iPhone contra un VPS real.** No hay VPS desplegado. Los pasos:
+  1. En el VPS, por la tubería de `deploy/vps.sh`: `FOOTBALL_VPS_DOMAIN`,
+     `FOOTBALL_PROGRAM_USER`, `_PASSWORD` y `_PASSPHRASE`, `FOOTBALL_TUNNEL_SECRET`,
+     `FOOTBALL_PANEL_PASSWORD` y, si se quiere, `FOOTBALL_RIG_ID`. Abrir
+     `https://<dominio>/pair` con la contraseña del panel.
+  2. En cada iPhone, en la pantalla de lado, «Escanear QR Soporte». Tiene que decir
+     «Emparejado con <dominio>» y «rig <id> · caduca en 12 h».
+  3. Cerrar la app y volver a abrirla: sigue emparejado.
+  4. «Rotar» en `/pair` y escanear el QR nuevo: lo sustituye.
+  5. «Desemparejar»: vuelve a «Sin emparejar».
+  6. Bajar el contenedor de la app (`xcrun devicectl device copy from … Library/Preferences`)
+     y comprobar que el plist no tiene la clave, la passphrase ni el `rig_key`; y la consola
+     de Xcode durante los pasos 2-5, lo mismo. El barrido automático es de IOS-97.
+- **«Un escaneo configura el SRT y el túnel», en sentido completo**, llega con IOS-56, que
+  publica con `VpsPairingKeychain.load()`, e IOS-65, que abre `tunnel` con `rigKey`. Los dos
+  tienen que leer el Keychain al arrancar y al reconectar: desemparejar hoy no corta nada,
+  porque no hay nada que cortar.
+- **Para la referencia** (football-ai; desde aquí no se toca): exportar un dorado del QR
+  (`support_payload` con un entorno fijo, con casos buenos y malos) que sustituya a
+  `vps_pairing_cases.json`, y anotar en NUBE-16 que la app ya lo lee.
+- **El Runner no tiene tests del Keychain ni de `redactedForLog`:** no hay target que corra
+  en el Mac. Lo cubren la prueba del iPhone y el barrido de IOS-97.
+
 ## 2026-10-14 · IOS-55 — libsrt directo y SrtSocket · 🚧 falta la pasada de 10 min contra el MediaMTX del VPS
 
 **Hecho** (dd88e5a, 13b096e, dc80bec y el commit de esta entrada)

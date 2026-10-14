@@ -908,6 +908,9 @@ class CaptureHostApi {
 
   /// El servidor al que se emite (host o IP), guardado en el móvil para no teclearlo
   /// en cada partido. Vacío si no se ha configurado: entonces solo se graba.
+  ///
+  /// En el Keychain (IOS-68): la dirección del pod lleva la clave de las cámaras
+  /// (`rtmp://rig:clave@…`). Lo que hubiera en `UserDefaults` se muda al leerlo.
   Future<String> loadServerHost() async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.CaptureHostApi.loadServerHost$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
@@ -967,11 +970,9 @@ class CaptureHostApi {
     return pigeonVar_replyValue! as String;
   }
 
-  /// Abre la cámara a pantalla completa para leer el QR que enseña el panel del
-  /// servidor (tarjeta «Cámaras»): lo que devuelve es lo que va en «Servidor», tal cual
-  /// (`10.0.0.5`, `rtmp://rig:clave@1.2.3.4:10248`). Vacío si el operador cancela.
-  /// Para el pod, cuya dirección cambia con cada despliegue y no se puede teclear en
-  /// la cancha.
+  /// Abre la cámara a pantalla completa para leer un QR del panel y lo devuelve tal
+  /// cual, o vacío si el operador cancela: el de «Cámaras» del pod (lo que va en
+  /// «Servidor», `rtmp://rig:clave@1.2.3.4:10248`), el de «Mando» o el «Soporte» del VPS.
   Future<String> scanServerQr() async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.CaptureHostApi.scanServerQr$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
@@ -1035,6 +1036,67 @@ class CaptureHostApi {
 
   Future<void> clearPanelPairing() async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.CaptureHostApi.clearPanelPairing$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
+  /// El emparejado con el VPS (IOS-68, ADR 0022 §3): el texto del QR «Soporte», el JSON
+  /// con el SRT del programa, el túnel y el `rig_key`, tal cual. Vacío si no hay.
+  ///
+  /// En el Keychain, solo en este iPhone. Guardar lo valida antes con `VpsPairing` de
+  /// RigCore y falla (`vps_pairing`) si no es un QR Soporte. El publicador del programa
+  /// lo lee en nativo con `VpsPairingKeychain.load()`.
+  Future<String> loadVpsPairing() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.CaptureHostApi.loadVpsPairing$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as String;
+  }
+
+  Future<void> saveVpsPairing(String pairing) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.CaptureHostApi.saveVpsPairing$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[pairing]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
+  Future<void> clearVpsPairing() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.CaptureHostApi.clearVpsPairing$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,

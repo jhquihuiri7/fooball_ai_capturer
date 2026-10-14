@@ -1,8 +1,8 @@
-// Lee el QR del panel con la dirección del servidor.
+// Lee un QR del panel y lo devuelve tal cual: el de «Cámaras» del pod, el de «Mando» o el
+// «Soporte» del VPS (IOS-68). Lo interpreta Dart.
 //
 // El pod cambia de dirección con cada despliegue, y `rtmp://rig:clave@1.2.3.4:10248` no
-// es algo para teclear en un móvil en la cancha. El panel la enseña como QR; esto la lee
-// con la cámara y la devuelve tal cual, para que vaya al campo «Servidor».
+// es algo para teclear en un móvil en la cancha; el QR Soporte, un JSON con claves, menos.
 //
 // Es una sesión de captura aparte, con la cámara gran angular normal (la ultra gran
 // angular del soporte ve demasiado y el QR le queda pequeño). Solo se abre desde la
@@ -37,7 +37,7 @@ final class QrScannerViewController: UIViewController, AVCaptureMetadataOutputOb
         view.layer.addSublayer(preview)
 
         let hint = UILabel()
-        hint.text = "Apunta al QR de la tarjeta «Cámaras» del panel"
+        hint.text = "Apunta al QR del panel"
         hint.textColor = .white
         hint.font = .systemFont(ofSize: 16, weight: .medium)
         hint.textAlignment = .center

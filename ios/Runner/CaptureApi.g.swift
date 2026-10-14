@@ -768,17 +768,18 @@ protocol CaptureHostApi {
   func setClockOffsetNs(offsetNs: Int64) throws
   /// El servidor al que se emite (host o IP), guardado en el móvil para no teclearlo
   /// en cada partido. Vacío si no se ha configurado: entonces solo se graba.
+  ///
+  /// En el Keychain (IOS-68): la dirección del pod lleva la clave de las cámaras
+  /// (`rtmp://rig:clave@…`). Lo que hubiera en `UserDefaults` se muda al leerlo.
   func loadServerHost() throws -> String
   func saveServerHost(host: String) throws
   /// Busca el servidor anunciado por Bonjour en la red local (`_footballai-srt._tcp`,
   /// el banco de pruebas). Devuelve su nombre `.local`, o vacío si no hay ninguno en
   /// unos segundos. El pod, al otro lado de Starlink, no se anuncia: ahí se teclea.
   func discoverServer() async throws -> String
-  /// Abre la cámara a pantalla completa para leer el QR que enseña el panel del
-  /// servidor (tarjeta «Cámaras»): lo que devuelve es lo que va en «Servidor», tal cual
-  /// (`10.0.0.5`, `rtmp://rig:clave@1.2.3.4:10248`). Vacío si el operador cancela.
-  /// Para el pod, cuya dirección cambia con cada despliegue y no se puede teclear en
-  /// la cancha.
+  /// Abre la cámara a pantalla completa para leer un QR del panel y lo devuelve tal
+  /// cual, o vacío si el operador cancela: el de «Cámaras» del pod (lo que va en
+  /// «Servidor», `rtmp://rig:clave@1.2.3.4:10248`), el de «Mando» o el «Soporte» del VPS.
   func scanServerQr() async throws -> String
   /// El emparejamiento con el panel como mando (ADR 0017 del repo football-ai): el texto
   /// del QR «Mando», `https://<panel>/#mando=<token>`, tal cual. Vacío si no hay.
@@ -788,6 +789,15 @@ protocol CaptureHostApi {
   func loadPanelPairing() throws -> String
   func savePanelPairing(pairing: String) throws
   func clearPanelPairing() throws
+  /// El emparejado con el VPS (IOS-68, ADR 0022 §3): el texto del QR «Soporte», el JSON
+  /// con el SRT del programa, el túnel y el `rig_key`, tal cual. Vacío si no hay.
+  ///
+  /// En el Keychain, solo en este iPhone. Guardar lo valida antes con `VpsPairing` de
+  /// RigCore y falla (`vps_pairing`) si no es un QR Soporte. El publicador del programa
+  /// lo lee en nativo con `VpsPairingKeychain.load()`.
+  func loadVpsPairing() throws -> String
+  func saveVpsPairing(pairing: String) throws
+  func clearVpsPairing() throws
   /// Manda una orden al otro móvil por el enlace. Solo el izquierdo la usa; en el
   /// derecho no hace nada. Sin enlace se pierde, y es lo correcto: quien está solo
   /// graba solo.
@@ -1055,6 +1065,9 @@ class CaptureHostApiSetup {
     }
     /// El servidor al que se emite (host o IP), guardado en el móvil para no teclearlo
     /// en cada partido. Vacío si no se ha configurado: entonces solo se graba.
+    ///
+    /// En el Keychain (IOS-68): la dirección del pod lleva la clave de las cámaras
+    /// (`rtmp://rig:clave@…`). Lo que hubiera en `UserDefaults` se muda al leerlo.
     let loadServerHostChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.loadServerHost\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       loadServerHostChannel.setMessageHandler { _, reply in
@@ -1101,11 +1114,9 @@ class CaptureHostApiSetup {
     } else {
       discoverServerChannel.setMessageHandler(nil)
     }
-    /// Abre la cámara a pantalla completa para leer el QR que enseña el panel del
-    /// servidor (tarjeta «Cámaras»): lo que devuelve es lo que va en «Servidor», tal cual
-    /// (`10.0.0.5`, `rtmp://rig:clave@1.2.3.4:10248`). Vacío si el operador cancela.
-    /// Para el pod, cuya dirección cambia con cada despliegue y no se puede teclear en
-    /// la cancha.
+    /// Abre la cámara a pantalla completa para leer un QR del panel y lo devuelve tal
+    /// cual, o vacío si el operador cancela: el de «Cámaras» del pod (lo que va en
+    /// «Servidor», `rtmp://rig:clave@1.2.3.4:10248`), el de «Mando» o el «Soporte» del VPS.
     let scanServerQrChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.scanServerQr\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       scanServerQrChannel.setMessageHandler { _, reply in
@@ -1166,6 +1177,53 @@ class CaptureHostApiSetup {
       }
     } else {
       clearPanelPairingChannel.setMessageHandler(nil)
+    }
+    /// El emparejado con el VPS (IOS-68, ADR 0022 §3): el texto del QR «Soporte», el JSON
+    /// con el SRT del programa, el túnel y el `rig_key`, tal cual. Vacío si no hay.
+    ///
+    /// En el Keychain, solo en este iPhone. Guardar lo valida antes con `VpsPairing` de
+    /// RigCore y falla (`vps_pairing`) si no es un QR Soporte. El publicador del programa
+    /// lo lee en nativo con `VpsPairingKeychain.load()`.
+    let loadVpsPairingChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.loadVpsPairing\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      loadVpsPairingChannel.setMessageHandler { _, reply in
+        do {
+          let result = try api.loadVpsPairing()
+          reply(wrapResult(result))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      loadVpsPairingChannel.setMessageHandler(nil)
+    }
+    let saveVpsPairingChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.saveVpsPairing\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      saveVpsPairingChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let pairingArg = args[0] as! String
+        do {
+          try api.saveVpsPairing(pairing: pairingArg)
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      saveVpsPairingChannel.setMessageHandler(nil)
+    }
+    let clearVpsPairingChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.clearVpsPairing\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      clearVpsPairingChannel.setMessageHandler { _, reply in
+        do {
+          try api.clearVpsPairing()
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      clearVpsPairingChannel.setMessageHandler(nil)
     }
     /// Manda una orden al otro móvil por el enlace. Solo el izquierdo la usa; en el
     /// derecho no hace nada. Sin enlace se pierde, y es lo correcto: quien está solo

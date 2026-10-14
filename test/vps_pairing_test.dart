@@ -12,6 +12,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:football_ai_capture/src/server/control_token.dart';
 import 'package:football_ai_capture/src/vps_pairing.dart';
 
+import 'fake_capture_api.dart';
+
 const String _casos = 'ios/ZeroKit/Tests/RigCoreTests/Fixtures/vps_pairing_cases.json';
 
 Map<String, Object?> _doc() =>
@@ -110,6 +112,20 @@ void main() {
     for (final String malo in <String>['', 'sin-punto', 'e30.firma', 'eyJ9.firma']) {
       expect(peekClaims(malo), isNull, reason: malo);
     }
+  });
+
+  group('load', () {
+    test('lee lo guardado en el Keychain', () async {
+      final FakeCaptureApi api = FakeCaptureApi()..vpsPairing = _qr('del_vps');
+      final VpsPairing? p = await VpsPairing.load(api);
+      expect(p?.domain, 'vps.ejemplo.com');
+      expect(p?.tunnel.toString(), 'wss://vps.ejemplo.com/tunnel/v1');
+    });
+
+    test('sin nada, o con algo que no se lee, es null', () async {
+      expect(await VpsPairing.load(FakeCaptureApi()), isNull);
+      expect(await VpsPairing.load(FakeCaptureApi()..vpsPairing = '{"v":2}'), isNull);
+    });
   });
 }
 

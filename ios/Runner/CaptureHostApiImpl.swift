@@ -6,6 +6,7 @@
 
 import AVFoundation
 import Flutter
+import RigCore
 import RigNet
 import Security
 
@@ -106,7 +107,8 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
 
         if !srtUrl.isEmpty {
             guard let url = URL(string: srtUrl) else {
-                throw PigeonError(code: "stream", message: "URL de emisión no válida: \(srtUrl)", details: nil)
+                // Sin la URL en el mensaje: lleva la clave de las cámaras (IOS-68).
+                throw PigeonError(code: "stream", message: "URL de emisión no válida", details: nil)
             }
             do {
                 try engine.startStreaming(to: url)
@@ -117,14 +119,25 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
         return path
     }
 
-    private static let serverHostKey = "serverHost"
+    /// Donde vivía el servidor antes de IOS-68: se muda al Keychain la primera vez que se lee.
+    private static let legacyServerHostKey = "serverHost"
 
     func loadServerHost() throws -> String {
-        UserDefaults.standard.string(forKey: Self.serverHostKey) ?? ""
+        if let host = try KeychainText.serverHost.read() {
+            return host
+        }
+        guard let viejo = UserDefaults.standard.string(forKey: Self.legacyServerHostKey) else { return "" }
+        try saveServerHost(host: viejo)
+        return viejo
     }
 
     func saveServerHost(host: String) throws {
-        UserDefaults.standard.set(host, forKey: Self.serverHostKey)
+        if host.isEmpty {
+            try KeychainText.serverHost.delete()
+        } else {
+            try KeychainText.serverHost.write(host)
+        }
+        UserDefaults.standard.removeObject(forKey: Self.legacyServerHostKey)
     }
 
     func discoverServer() async throws -> String {
@@ -147,6 +160,27 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
 
     func clearPanelPairing() throws {
         try KeychainText.panelPairing.delete()
+    }
+
+    // MARK: - Emparejado con el VPS por el QR Soporte (IOS-68, ADR 0022 §3)
+
+    func loadVpsPairing() throws -> String {
+        try KeychainText.vpsPairing.read() ?? ""
+    }
+
+    /// Solo entra en el Keychain un QR Soporte que se lee: el error dice qué campo falla,
+    /// nunca su valor. La caducidad del `rig_key` la mira Dart al escanear.
+    func saveVpsPairing(pairing: String) throws {
+        do {
+            _ = try VpsPairing.parse(pairing)
+        } catch {
+            throw PigeonError(code: "vps_pairing", message: "\(error)", details: nil)
+        }
+        try KeychainText.vpsPairing.write(pairing.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    func clearVpsPairing() throws {
+        try KeychainText.vpsPairing.delete()
     }
 
     // MARK: - La API del mando en el maestro (IOS-62, IOS-63)
@@ -460,25 +494,43 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
     }
 }
 
-/// Un texto en el Keychain: el QR «Mando» (ADR 0017 de football-ai) o el PIN del
-/// operador (IOS-62).
+/// El QR Soporte guardado, para quien publica o abre el túnel en nativo (IOS-56): su
+/// `srt` es el `ProgramSrtTarget` del programa. `nil` si no hay; no mira la caducidad del
+/// `rig_key`, que no afecta al SRT.
+enum VpsPairingKeychain {
+    static func load() throws -> VpsPairing? {
+        guard let texto = try KeychainText.vpsPairing.read() else { return nil }
+        return try VpsPairing.parse(texto)
+    }
+}
+
+/// Un texto en el Keychain: el QR «Mando» (ADR 0017 de football-ai), el PIN del operador
+/// (IOS-62), el QR «Soporte» del VPS y el servidor del pod (IOS-68).
 ///
-/// `ThisDeviceOnly`: los dos mueven el marcador de un partido y no pueden irse en la copia
-/// de seguridad a otro iPhone. `AfterFirstUnlock`: se leen con la pantalla bloqueada tras
-/// el primer desbloqueo, que es como vive el móvil en la banda. Ojo: el Keychain
-/// sobrevive a desinstalar la app; para olvidarlos están `clearPanelPairing` y
-/// `saveOperatorPin("")`.
-private struct KeychainText {
+/// `ThisDeviceOnly`: mueven el marcador o publican en nombre del soporte, y no pueden irse
+/// en la copia de seguridad a otro iPhone; sin `kSecAttrSynchronizable`, tampoco al
+/// llavero de iCloud. `AfterFirstUnlock`: se leen con la pantalla bloqueada tras el
+/// primer desbloqueo, que es como vive el móvil en la banda. Ojo: el Keychain sobrevive a
+/// desinstalar la app; para olvidarlos están los `clear…` y `saveOperatorPin("")`.
+///
+/// El QR Soporte va en `football-ai.vps` / `soporte`, en UTF-8, el JSON del QR tal cual
+/// (sin espacios alrededor): es el formato que leen IOS-56 e IOS-65.
+struct KeychainText {
     static let panelPairing = KeychainText(account: "panel", what: "el emparejamiento con el panel")
     static let operatorPin = KeychainText(account: "pin-operador", what: "el PIN del operador")
+    static let vpsPairing = KeychainText(service: "football-ai.vps", account: "soporte",
+                                         what: "el emparejado con el VPS")
+    static let serverHost = KeychainText(service: "football-ai.servidor", account: "host",
+                                         what: "el servidor")
 
+    var service = "football-ai.mando"
     let account: String
     let what: String
 
     private var base: [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: "football-ai.mando",
+            kSecAttrService as String: service,
             kSecAttrAccount as String: account,
         ]
     }

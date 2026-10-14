@@ -101,7 +101,7 @@ final class StreamPublisher {
         var errorDescription: String? {
             switch self {
             case let .unsupportedURL(url):
-                return "ninguna sesión sabe emitir a \(url.absoluteString)"
+                return "ninguna sesión sabe emitir a \(url.redactedForLog)"
             }
         }
     }
@@ -292,7 +292,7 @@ final class StreamPublisher {
 
     private func run(url: URL, video initialVideo: VideoCodecSettings, maximum: Int) async {
         await Self.registration.value
-        NSLog("[stream] emitiendo a %@", url.absoluteString)
+        NSLog("[stream] emitiendo a %@", url.redactedForLog)
         while wanted, !Task.isCancelled {
             do {
                 // El bitrate vigente, que puede haber bajado por calor desde el arranque.
@@ -326,7 +326,7 @@ final class StreamPublisher {
                 try await session.connect { [weak self] in
                     self?.withLock { self?.lostContinuation_?.yield() }
                 }
-                NSLog("[stream] conectado: %@", url.absoluteString)
+                NSLog("[stream] conectado: %@", url.redactedForLog)
                 withLock {
                     currentStream_ = stream
                     state_ = .streaming
@@ -407,5 +407,17 @@ final class StreamPublisher {
         lock.lock()
         body()
         lock.unlock()
+    }
+}
+
+private extension URL {
+    /// Para el log y los errores, sin usuario, clave ni query: la URL del pod lleva la clave
+    /// de las cámaras y la de SRT, el streamid y la passphrase (IOS-68).
+    var redactedForLog: String {
+        var partes = URLComponents(url: self, resolvingAgainstBaseURL: false)
+        partes?.user = nil
+        partes?.password = nil
+        partes?.query = nil
+        return partes?.string ?? scheme ?? "?"
     }
 }

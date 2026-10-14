@@ -341,6 +341,9 @@ abstract class CaptureHostApi {
 
   /// El servidor al que se emite (host o IP), guardado en el móvil para no teclearlo
   /// en cada partido. Vacío si no se ha configurado: entonces solo se graba.
+  ///
+  /// En el Keychain (IOS-68): la dirección del pod lleva la clave de las cámaras
+  /// (`rtmp://rig:clave@…`). Lo que hubiera en `UserDefaults` se muda al leerlo.
   String loadServerHost();
 
   void saveServerHost(String host);
@@ -351,11 +354,9 @@ abstract class CaptureHostApi {
   @async
   String discoverServer();
 
-  /// Abre la cámara a pantalla completa para leer el QR que enseña el panel del
-  /// servidor (tarjeta «Cámaras»): lo que devuelve es lo que va en «Servidor», tal cual
-  /// (`10.0.0.5`, `rtmp://rig:clave@1.2.3.4:10248`). Vacío si el operador cancela.
-  /// Para el pod, cuya dirección cambia con cada despliegue y no se puede teclear en
-  /// la cancha.
+  /// Abre la cámara a pantalla completa para leer un QR del panel y lo devuelve tal
+  /// cual, o vacío si el operador cancela: el de «Cámaras» del pod (lo que va en
+  /// «Servidor», `rtmp://rig:clave@1.2.3.4:10248`), el de «Mando» o el «Soporte» del VPS.
   @async
   String scanServerQr();
 
@@ -369,6 +370,18 @@ abstract class CaptureHostApi {
   void savePanelPairing(String pairing);
 
   void clearPanelPairing();
+
+  /// El emparejado con el VPS (IOS-68, ADR 0022 §3): el texto del QR «Soporte», el JSON
+  /// con el SRT del programa, el túnel y el `rig_key`, tal cual. Vacío si no hay.
+  ///
+  /// En el Keychain, solo en este iPhone. Guardar lo valida antes con `VpsPairing` de
+  /// RigCore y falla (`vps_pairing`) si no es un QR Soporte. El publicador del programa
+  /// lo lee en nativo con `VpsPairingKeychain.load()`.
+  String loadVpsPairing();
+
+  void saveVpsPairing(String pairing);
+
+  void clearVpsPairing();
 
   /// Manda una orden al otro móvil por el enlace. Solo el izquierdo la usa; en el
   /// derecho no hace nada. Sin enlace se pierde, y es lo correcto: quien está solo

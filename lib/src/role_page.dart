@@ -9,6 +9,7 @@
 library;
 
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -22,6 +23,7 @@ import 'package:football_ai_capture/src/theme/zero_colors.dart';
 import 'package:football_ai_capture/src/theme/zero_mark.dart';
 import 'package:football_ai_capture/src/theme/zero_metrics.dart';
 import 'package:football_ai_capture/src/theme/zero_type.dart';
+import 'package:football_ai_capture/src/vps_pairing.dart';
 import 'package:football_ai_capture/src/widgets/zero_widgets.dart';
 import 'package:football_ai_capture/src/zero_shell.dart';
 
@@ -31,13 +33,17 @@ import 'package:football_ai_capture/src/zero_shell.dart';
 enum _ServerOrigin { none, saved, bonjour, typed, scanned }
 
 class RolePage extends StatefulWidget {
-  const RolePage({this.api, this.mandoControl, super.key});
+  const RolePage({this.api, this.mandoControl, this.clockS, super.key});
 
   /// Inyectable para los tests.
   final CaptureHostApi? api;
 
   /// El mando que abre «Solo mando». Inyectable para los tests, como [api].
   final PanelControlFactory? mandoControl;
+
+  /// La hora de pared, en segundos, contra la que caduca el QR Soporte; sin ella,
+  /// [wallClockS]. Para los tests.
+  final int Function()? clockS;
 
   @override
   State<RolePage> createState() => _RolePageState();
@@ -69,11 +75,83 @@ class _RolePageState extends State<RolePage> {
   String? _pairingNote;
   bool _pairingFailed = false;
 
+  /// IOS-68: el emparejado con el VPS guardado en el Keychain, y por qué no se pudo
+  /// cambiar, si no se pudo.
+  VpsPairing? _vps;
+  String? _vpsProblem;
+
   @override
   void initState() {
     super.initState();
     unawaited(_loadServer());
     unawaited(_loadPreference());
+    unawaited(_loadVps());
+  }
+
+  int _nowS() => (widget.clockS ?? wallClockS)();
+
+  Future<void> _loadVps() async {
+    VpsPairing? guardado;
+    try {
+      guardado = await VpsPairing.load(_api);
+    } on Exception {
+      // Sin nativo (tests) no hay Keychain.
+    }
+    if (mounted) {
+      setState(() => _vps = guardado);
+    }
+  }
+
+  Future<void> _scanVps() async {
+    String found = '';
+    try {
+      found = await _api.scanServerQr();
+    } on Exception {
+      // Sin nativo no hay cámara.
+    }
+    if (found.trim().isNotEmpty && mounted) {
+      await _adoptVps(found);
+    }
+  }
+
+  /// El QR Soporte, comprobado (caducidad incluida) y guardado en el Keychain. Un QR
+  /// que no vale no toca lo que ya había.
+  Future<void> _adoptVps(String text) async {
+    final VpsPairing nuevo;
+    try {
+      nuevo = VpsPairing.parse(text, nowS: _nowS());
+    } on VpsPairingException catch (e) {
+      setState(() => _vpsProblem = e.message);
+      return;
+    }
+    String? problema;
+    try {
+      await _api.saveVpsPairing(nuevo.qrText);
+    } on Exception catch (e) {
+      final String? motivo = e is PlatformException ? e.message : null;
+      problema = 'No se pudo guardar en el Keychain: ${motivo ?? 'error'}';
+    }
+    if (mounted) {
+      setState(() {
+        _vps = problema == null ? nuevo : _vps;
+        _vpsProblem = problema;
+      });
+    }
+  }
+
+  Future<void> _unpairVps() async {
+    String? problema;
+    try {
+      await _api.clearVpsPairing();
+    } on Exception {
+      problema = 'No se pudo borrar del Keychain.';
+    }
+    if (mounted) {
+      setState(() {
+        _vps = problema == null ? null : _vps;
+        _vpsProblem = problema;
+      });
+    }
   }
 
   Future<void> _loadPreference() async {
@@ -152,6 +230,11 @@ class _RolePageState extends State<RolePage> {
       // Sin nativo (tests) no hay cámara.
     }
     if (found.trim().isEmpty || !mounted) {
+      return;
+    }
+    // El QR Soporte lleva las claves del VPS: nunca al campo, que se ve en pantalla.
+    if (VpsPairing.looksLike(found)) {
+      await _adoptVps(found);
       return;
     }
     setState(() {
@@ -409,6 +492,16 @@ class _RolePageState extends State<RolePage> {
                           ),
                         ),
                       ),
+                    // El VPS, después del otro emparejado: se hace una vez por soporte y el
+                    // QR se renueva cada 12 h (IOS-68).
+                    const SizedBox(height: ZeroMetrics.innerGap),
+                    _VpsCard(
+                      pairing: _vps,
+                      nowS: _nowS(),
+                      problem: _vpsProblem,
+                      onScan: () => unawaited(_scanVps()),
+                      onUnpair: () => unawaited(_unpairVps()),
+                    ),
                     const Spacer(),
                     const SizedBox(height: 20),
                     ZeroButton.primary(
@@ -694,6 +787,91 @@ class _ServerCard extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// El emparejado con el VPS (IOS-68): con quién y hasta cuándo vale la llave del túnel.
+/// El QR Soporte sale en `/pair` del VPS; sin él, el programa no sale al VPS.
+class _VpsCard extends StatelessWidget {
+  const _VpsCard({
+    required this.pairing,
+    required this.nowS,
+    required this.problem,
+    required this.onScan,
+    required this.onUnpair,
+  });
+
+  final VpsPairing? pairing;
+  final int nowS;
+  final String? problem;
+  final VoidCallback onScan;
+  final VoidCallback onUnpair;
+
+  @override
+  Widget build(BuildContext context) {
+    final VpsPairing? p = pairing;
+    final bool caducado = p != null && p.expiredAt(nowS);
+    final String nota =
+        problem ??
+        switch (p) {
+          null => 'Escanea el QR Soporte de /pair en el VPS.',
+          _ when caducado => 'rig ${p.rigId} · la llave del túnel caducó: escanea otra vez',
+          _ => 'rig ${p.rigId} · caduca en ${_remaining(p.validFor(nowS))}',
+        };
+    return ZeroCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          const ZeroSectionHeader('VPS'),
+          Text(
+            p == null ? 'Sin emparejar' : 'Emparejado con ${p.domain}',
+            style: ZeroType.data(
+              size: 15,
+              weight: FontWeight.w500,
+              color: ZeroColors.ink,
+              height: 1.2,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            nota,
+            style: ZeroType.data(
+              size: 11,
+              weight: FontWeight.w400,
+              color: problem != null || caducado ? ZeroColors.alarm : ZeroColors.inkTertiary,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: ZeroButton.secondary(
+                  label: p == null ? 'Escanear QR Soporte' : 'Escanear otra vez',
+                  onPressed: onScan,
+                ),
+              ),
+              if (p != null) ...<Widget>[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ZeroButton.secondary(label: 'Desemparejar', onPressed: onUnpair),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// «11 h 59 min», «12 h», «35 min».
+  static String _remaining(Duration d) {
+    final int horas = d.inHours;
+    final int minutos = d.inMinutes.remainder(Duration.minutesPerHour);
+    if (horas == 0) {
+      return '${math.max(1, minutos)} min';
+    }
+    return minutos == 0 ? '$horas h' : '$horas h $minutos min';
   }
 }
 
