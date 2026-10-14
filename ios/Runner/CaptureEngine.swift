@@ -11,6 +11,7 @@
 //      enlace que pierde paquetes cada 15 segundos; el fichero es la verdad (decisión 5).
 
 import AVFoundation
+import CallKit
 import RigCore
 import RigMedia
 import UIKit
@@ -37,8 +38,11 @@ final class CaptureEngine: NSObject {
     // retener más de un búfer de la cámara; sus consumidores llegan con IOS-23+.
     private var pipeline: RigPipeline?
 
-    // IOS-54: el micrófono, solo con RIG_AUDIO=1 hasta que se acepte el permiso en los
-    // dos móviles. Las tramas AAC van a Documents/bench/audio-<t>.aac, con su informe.
+    // IOS-54: el micrófono en la misma sesión. El programa lleva siempre su AAC: el del
+    // micro si hay permiso y, si no o mientras otro cliente lo tenga (una llamada), el
+    // silencio del vigilante (AudioCapture.keepAlive). RIG_AUDIO=0 lo quita del todo (los
+    // bancos «sin micro»); RIG_AUDIO=1 además deja las tramas en
+    // Documents/bench/audio-<t>.aac con su informe.
     private let audioOutput = AVCaptureAudioDataOutput()
     /// El primer fotograma visto (instante en el host y separación entre relojes), en ns.
     private var clockSkewStart: (atNs: Int64, skewNs: Int64)?
@@ -50,7 +54,22 @@ final class CaptureEngine: NSObject {
     private var audioFile: FileHandle?
     private var audioURL: URL?
     private var audioFrames = 0
-    static var audioEnabled: Bool { ProcessInfo.processInfo.environment["RIG_AUDIO"] == "1" }
+    /// La entrada del micro, mientras está en la sesión. Se toca en la cola de captura (y
+    /// en `configure`, con la sesión aún sin arrancar).
+    private var micInput: AVCaptureDeviceInput?
+    /// Permiso de micro concedido: se pregunta en `configure`.
+    private var micAllowed = false
+    /// Otro cliente tomó el micro y se quitó de la sesión para que el vídeo siga.
+    private var micSuspended = false
+    /// El vigilante del AAC, en la cola del audio.
+    private var silenceTimer: DispatchSourceTimer?
+    /// Las llamadas en curso: con una, el micro no se intenta recuperar.
+    private let callObserver = CXCallObserver()
+    private var audioObservers: [NSObjectProtocol] = []
+    /// El programa lleva AAC (con micro o con silencio). Lo mira también el banco.
+    static let audioEnabled = ProcessInfo.processInfo.environment["RIG_AUDIO"] != "0"
+    /// Las tramas AAC, además, a un fichero del banco (se mira en cada trama: una vez).
+    private static let audioBenchFile = ProcessInfo.processInfo.environment["RIG_AUDIO"] == "1"
 
     /// El pipeline, para los bancos que cuelgan etapas de él (program-split).
     var rigPipeline: RigPipeline? { pipeline }
@@ -170,6 +189,10 @@ final class CaptureEngine: NSObject {
             throw CameraSetupError.noUltraWideCamera
         }
 
+        // El permiso del micro, antes de tocar la sesión: sin él sigue sin micro y el
+        // programa va con silencio.
+        let conMicro = Self.audioEnabled ? await Self.microphoneAccess() : false
+
         session.beginConfiguration()
         // `inputPriority` es obligatorio antes de tocar `activeFormat`: con cualquier
         // preset, la sesión reescribe el formato al aplicar la configuración y todo el
@@ -183,6 +206,7 @@ final class CaptureEngine: NSObject {
         for input in session.inputs {
             session.removeInput(input)
         }
+        micInput = nil
         let input = try AVCaptureDeviceInput(device: device)
         guard session.canAddInput(input) else {
             session.commitConfiguration()
@@ -190,7 +214,8 @@ final class CaptureEngine: NSObject {
         }
         session.addInput(input)
         if Self.audioEnabled {
-            addMicrophone()
+            micAllowed = conMicro
+            setUpAudio()
         }
 
         if !session.outputs.contains(output) {
@@ -298,28 +323,138 @@ final class CaptureEngine: NSObject {
         }
     }
 
-    /// El micro en la misma sesión (IOS-54). Si falla, sigue sin audio y lo dice.
-    private func addMicrophone() {
+    /// El permiso del micro: lo pregunta la primera vez y después contesta al instante.
+    private static func microphoneAccess() async -> Bool {
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized: return true
+        case .notDetermined: return await AVCaptureDevice.requestAccess(for: .audio)
+        default: return false
+        }
+    }
+
+    /// El audio del programa (IOS-54), dentro de la configuración de la sesión: el
+    /// codificador y su vigilante una vez, y el micro si hay permiso. Sin él, o sin
+    /// micro, sigue sin audio de verdad y lo dice: el vigilante da el silencio.
+    private func setUpAudio() {
+        if audio == nil {
+            do {
+                let captura = try AudioCapture { [weak self] pts in
+                    guard let self else { return 0 }
+                    let ns = self.hostNs(pts)
+                    let offset = self.rigClock?.offsetAt(ns: ns) ?? self.clockOffsetNs
+                    return Double(ns + offset) / 1e6
+                }
+                captura.onFrame = { [weak self] trama in self?.writeAudio(trama) }
+                // La 4K se lleva el PCM ya en el eje del AAC: con el del micro tal cual, el
+                // escritor apila las muestras y la deriva del micro se acumula.
+                captura.onAlignedPcm = { [weak self] pcm, ms in self?.queue.async { self?.appendAudio(pcm, rigMs: ms) } }
+                audioOutput.setSampleBufferDelegate(captura, queue: audioQueue)
+                audio = captura
+                startSilenceWatch()
+                observeMicrophoneOwner()
+            } catch {
+                NSLog("[audio] sin codificador AAC: %@", error.localizedDescription)
+                return
+            }
+        }
+        micSuspended = false
+        guard micAllowed else {
+            NSLog("[audio] sin permiso de micrófono: el programa va con silencio")
+            return
+        }
+        attachMicrophone()
+    }
+
+    /// Pone el micro en la sesión; quien llama abre y cierra la configuración.
+    @discardableResult
+    private func attachMicrophone() -> Bool {
         guard let mic = AVCaptureDevice.default(for: .audio),
               let entrada = try? AVCaptureDeviceInput(device: mic), session.canAddInput(entrada)
         else {
-            NSLog("[audio] sin micrófono: sigue sin audio")
-            return
+            NSLog("[audio] sin micrófono: el programa va con silencio")
+            return false
         }
         session.addInput(entrada)
         if !session.outputs.contains(audioOutput), session.canAddOutput(audioOutput) {
             session.addOutput(audioOutput)
         }
-        let captura = AudioCapture { [weak self] pts in
-            guard let self else { return 0 }
-            let ns = self.hostNs(pts)
-            let offset = self.rigClock?.offsetAt(ns: ns) ?? self.clockOffsetNs
-            return Double(ns + offset) / 1e6
+        micInput = entrada
+        return true
+    }
+
+    /// El vigilante: cada `silenceTickMs`, con la cámara en marcha, el AAC sigue con
+    /// silencio si el micro lleva `micStallMs` callado.
+    private func startSilenceWatch() {
+        let t = DispatchSource.makeTimerSource(queue: audioQueue)
+        let periodo = DispatchTimeInterval.milliseconds(AudioConstants.silenceTickMs)
+        t.schedule(deadline: .now() + periodo, repeating: periodo)
+        t.setEventHandler { [weak self] in
+            guard let self, self.session.isRunning, let audio = self.audio else { return }
+            audio.keepAlive(nowRigMs: self.rigNowMs())
         }
-        captura.onFrame = { [weak self] trama in self?.writeAudio(trama) }
-        captura.onSampleBuffer = { [weak self] pcm in self?.queue.async { self?.appendAudio(pcm) } }
-        audioOutput.setSampleBufferDelegate(captura, queue: audioQueue)
-        audio = captura
+        t.resume()
+        silenceTimer = t
+    }
+
+    /// «Ahora» en ms del soporte: el host más el desfase, como los fotogramas.
+    private func rigNowMs() -> Double {
+        let ahora = CMClockGetTime(CMClockGetHostTimeClock())
+        let ns = CMTimeConvertScale(ahora, timescale: 1_000_000_000, method: .default).value
+        let offset = rigClock?.offsetAt(ns: ns) ?? clockOffsetNs
+        return Double(ns + offset) / 1e6
+    }
+
+    /// Quién tiene el micro. Si otro cliente lo toma (una llamada, una alarma), la sesión
+    /// ENTERA se para por él: se quita el micro para que siga el vídeo. Vuelve al acabar la
+    /// interrupción del audio o la última llamada.
+    private func observeMicrophoneOwner() {
+        let centro = NotificationCenter.default
+        audioObservers.append(centro.addObserver(
+            forName: AVCaptureSession.wasInterruptedNotification, object: session, queue: nil
+        ) { [weak self] aviso in
+            guard let raw = aviso.userInfo?[AVCaptureSessionInterruptionReasonKey] as? Int,
+                  AVCaptureSession.InterruptionReason(rawValue: raw) == .audioDeviceInUseByAnotherClient
+            else { return }
+            self?.yieldMicrophone()
+        })
+        audioObservers.append(centro.addObserver(
+            forName: AVAudioSession.interruptionNotification, object: nil, queue: nil
+        ) { [weak self] aviso in
+            guard let raw = aviso.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+                  AVAudioSession.InterruptionType(rawValue: raw) == .ended
+            else { return }
+            self?.reclaimMicrophone()
+        })
+        callObserver.setDelegate(self, queue: queue)
+    }
+
+    /// Otro cliente tiene el micro: fuera de la sesión, y la cámara sigue. El programa y la
+    /// pista de audio de la 4K siguen con el silencio del vigilante.
+    private func yieldMicrophone() {
+        queue.async { [self] in
+            guard let micInput else { return }
+            session.beginConfiguration()
+            session.removeInput(micInput)
+            session.commitConfiguration()
+            self.micInput = nil
+            micSuspended = true
+            if !session.isRunning { session.startRunning() }
+            NSLog("[audio] otro cliente tomó el micrófono: se quita para que siga el vídeo")
+        }
+    }
+
+    /// Vuelve el micro si se quitó por otro cliente y no queda ninguna llamada en curso.
+    private func reclaimMicrophone() {
+        queue.async { [self] in
+            guard micSuspended, micAllowed, !callObserver.calls.contains(where: { !$0.hasEnded }) else { return }
+            session.beginConfiguration()
+            let vuelve = attachMicrophone()
+            session.commitConfiguration()
+            if vuelve {
+                micSuspended = false
+                NSLog("[audio] el micrófono vuelve a la sesión")
+            }
+        }
     }
 
     /// Las tramas AAC del micro, además del fichero: el banco las mete en el programa.
@@ -328,6 +463,7 @@ final class CaptureEngine: NSObject {
 
     private func writeAudio(_ trama: AacFrame) {
         onAacFrame?(trama)
+        guard Self.audioBenchFile else { return }
         if audioFile == nil {
             let base = try? FileManager.default.url(for: .documentDirectory, in: .userDomainMask,
                                                     appropriateFor: nil, create: true)
@@ -344,8 +480,12 @@ final class CaptureEngine: NSObject {
         audioFrames += 1
         // Un resumen cada ~10 s, para el banco de 10 min.
         if audioFrames % 470 == 0, let url = audioURL, let a = audio {
+            let eje = a.syncStats
             let resumen: [String: Any] = ["frames": audioFrames, "buffers_in": a.buffersIn,
-                                          "gaps": a.gaps, "failures": a.failures, "last_rig_ms": trama.rigMs]
+                                          "gaps": a.gaps, "failures": a.failures, "last_rig_ms": trama.rigMs,
+                                          "silence_ticks": a.silenceTicks, "silence_samples": eje.silenceSamples,
+                                          "dropped_samples": eje.droppedSamples, "nudges": eje.nudges,
+                                          "reanchors": eje.reanchors]
             if let d = try? JSONSerialization.data(withJSONObject: resumen, options: [.sortedKeys]) {
                 try? d.write(to: url.deletingPathExtension().appendingPathExtension("json"))
             }
@@ -446,6 +586,7 @@ final class CaptureEngine: NSObject {
             "sessions_without_clock": g.sessionsWithoutClock,
             "out_of_order_frames": g.framesOutOfOrder,
             "audio_dropped_on_jump": g.audioDroppedOnJump,
+            "audio_not_ready": recordingAudioNotReady,
         ]
     }
 
@@ -581,11 +722,11 @@ final class CaptureEngine: NSObject {
             writer.add(input)
         }
         var audioInput: AVAssetWriterInput?
-        if audio != nil {
+        if audio != nil, micAllowed {
             let a = AVAssetWriterInput(mediaType: .audio, outputSettings: [
                 AVFormatIDKey: kAudioFormatMPEG4AAC,
                 AVSampleRateKey: AudioConstants.sampleRate,
-                AVNumberOfChannelsKey: Self.recordingAudioChannels,
+                AVNumberOfChannelsKey: AudioConstants.programChannels,
                 AVEncoderBitRateKey: AudioConstants.aacBitrateBps,
             ])
             a.expectsMediaDataInRealTime = true
@@ -717,30 +858,30 @@ final class CaptureEngine: NSObject {
         writerStarted = false
     }
 
-    /// Canales de la pista de audio de la 4K: el micro del iPhone es mono.
-    private static let recordingAudioChannels = 1
+    /// Trozos de PCM que la pista de audio de la 4K no aceptó a tiempo (se tiran: nunca se
+    /// encola). Cada uno adelanta lo que sigue, porque el escritor apila las muestras.
+    private(set) var recordingAudioNotReady: Int64 = 0
 
-    /// El PCM del micro a la pista de audio de la 4K, en la cola de captura y con el
-    /// mismo desfase al soporte que el vídeo. Antes del primer fotograma no hay sesión
-    /// abierta y se tira; si la pista va por detrás, también: nunca se encola. Y si el
-    /// desfase ya no es el del segmento (el reloj saltó y el vídeo aún no cortó), también:
-    /// alargaría el fichero hasta el dominio nuevo.
-    private func appendAudio(_ pcm: CMSampleBuffer) {
-        guard writerStarted, let writer, writer.status == .writing, let input = audioWriterInput,
-              input.isReadyForMoreMediaData
-        else { return }
-        let pts = CMSampleBufferGetPresentationTimeStamp(pcm)
-        let crudo = CMTimeConvertScale(pts, timescale: 1_000_000_000, method: .default).value
-        let ns = hostNs(pts)
-        let alSoporte = rigClock?.offsetAt(ns: ns) ?? clockOffsetNs
-        guard clockGate.audio(offsetNs: alSoporte) else {
+    /// El PCM del eje del AAC a la pista de audio de la 4K (estéreo, como el programa), en
+    /// la cola de captura. Va seguido y en el reloj del soporte: el silencio de los cortes
+    /// del micro incluido. Antes del primer fotograma no hay sesión abierta y se tira; si
+    /// la pista va por detrás, también: nunca se encola. Y si el desfase ya no es el del
+    /// segmento (el reloj saltó y el vídeo aún no cortó), también: alargaría el fichero
+    /// hasta el dominio nuevo.
+    private func appendAudio(_ pcm: AVAudioPCMBuffer, rigMs: Double) {
+        guard writerStarted, let writer, writer.status == .writing, let input = audioWriterInput else { return }
+        guard input.isReadyForMoreMediaData else {
+            recordingAudioNotReady += 1
+            return
+        }
+        let ahora = CMTimeConvertScale(CMClockGetTime(CMClockGetHostTimeClock()), timescale: 1_000_000_000,
+                                       method: .default).value
+        guard clockGate.audio(offsetNs: rigClock?.offsetAt(ns: ahora) ?? clockOffsetNs) else {
             publishClockGate()
             return
         }
-        // Del reloj de la sesión al del host, y de ahí al del soporte: como el vídeo.
-        let desfase = (ns - crudo) + alSoporte
-        if let copia = SampleRetime.shifted(pcm, byNs: desfase) {
-            input.append(copia)
+        if let muestra = AudioCapture.sampleBuffer(pcm, ptsNs: Int64((rigMs * 1_000_000).rounded())) {
+            input.append(muestra)
         }
     }
 
@@ -900,6 +1041,13 @@ extension CaptureEngine {
         if minutos >= clockSkewByMinuteMs.count {
             clockSkewByMinuteMs.append(Double(diferencia - inicio.skewNs) / 1e6)
         }
+    }
+}
+
+extension CaptureEngine: CXCallObserverDelegate {
+    /// Al acabar una llamada, el micro vuelve si se quitó por ella (y no queda otra).
+    func callObserver(_ callObserver: CXCallObserver, callChanged call: CXCall) {
+        if call.hasEnded { reclaimMicrophone() }
     }
 }
 

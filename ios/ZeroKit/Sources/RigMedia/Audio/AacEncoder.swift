@@ -1,24 +1,42 @@
 // El codificador AAC del programa (IOS-54).
 //
-// PCM de 48 kHz (Float32 o Int16, intercalado o no) → AVAudioConverter → AAC-LC a
-// 128 kbit/s → tramas con su cabecera ADTS en una BoundedQueue con descarte de lo viejo.
-// Cada trama son 1024 muestras (21,33 ms a 48 kHz) y lleva su rigMs: el de la primera
-// muestra que entró más las muestras ya codificadas, en el reloj del vídeo. Así el
-// desfase A/V se mide contra el mismo reloj y un hueco del micro se nota como un salto.
+// PCM de 48 kHz (Int16 o Float32, intercalado o no, mono o estéreo) → Float32 estéreo →
+// AVAudioConverter → AAC-LC a 128 kbit/s → tramas con su cabecera ADTS en una
+// BoundedQueue con descarte de lo viejo. Es el formato del contrato del programa
+// (football-ai/tools/program_contract.py): el relé lo copia sin recodificar (ADR 0011).
+//
+// Cada trama son 1024 muestras (21,33 ms) y lleva el rigMs de su primera muestra según
+// AudioTimeline, que sigue el sello del micro y no solo la cuenta de muestras: el reloj
+// del micro se separa ~45 ppm del del soporte. Al rigMs se le resta el cebado del
+// codificador (2112 muestras, 44 ms): el AAC sale con ellas delante y un decodificador de
+// TS (ffmpeg) no las quita, así que sin restarlas el audio sonaba 44 ms tarde.
 
 import AVFoundation
 import Foundation
 import RigCore
 
 public enum AudioConstants {
-    /// Frecuencia del programa, en Hz (la del micro del iPhone y la del relé).
+    /// Frecuencia del programa, en Hz: `PROGRAM_AUDIO_RATE_HZ` de
+    /// football-ai/tools/program_contract.py, escrito a mano (ningún generador lo exporta).
     public static let sampleRate = 48_000
-    /// AAC-LC a 128 kbit/s: estéreo del estadio con margen, un 2 % del programa.
+    /// Canales del AAC del programa: `PROGRAM_AUDIO_CHANNELS`, estéreo. El micro del
+    /// iPhone es mono y va igual a los dos canales.
+    public static let programChannels = 2
+    /// AAC-LC a 128 kbit/s: `PROGRAM_AUDIO_BITRATE_BPS`, un 2 % del programa.
     public static let aacBitrateBps = 128_000
     /// Muestras por trama AAC-LC.
     public static let samplesPerFrame = 1024
     /// Tramas que espera la cola de salida (~1,4 s): más es latencia, no audio.
     public static let encodedQueueSlots = 64
+    /// Sin búfer del micro durante este tiempo, en ms, el vigilante de AudioCapture
+    /// rellena con silencio hasta «ahora» menos esto: el AAC del programa no se corta
+    /// ni sin permiso, ni con el micro tomado por una llamada. Holgado sobre lo que tarda
+    /// un búfer del micro en llegar (una trama más la latencia de la entrada).
+    public static let micStallMs = 200.0
+    /// Cada cuánto mira el vigilante, en ms.
+    public static let silenceTickMs = 100
+    /// Muestras por búfer de silencio: el relleno va en trozos, no en uno de un segundo.
+    static let silenceChunk = 4096
 }
 
 /// Una trama AAC lista para el mux: ADTS + AAC crudo, y su instante.
@@ -34,45 +52,94 @@ public final class AacEncoder {
         case encode(String)
     }
 
+    /// Lo que el eje ha corregido desde el principio, para el informe del banco.
+    public struct SyncStats: Equatable, Sendable {
+        public let silenceSamples: Int
+        public let droppedSamples: Int
+        public let nudges: Int
+        public let reanchors: Int
+    }
+
     public let channels: Int
-    private let input: AVAudioFormat
+    /// Muestras de cebado del codificador (2112 en el AAC de Apple).
+    public let primingSamples: Int
+    /// Todo entra al AAC en este formato: Float32 sin intercalar, 48 kHz, `channels`.
+    private let canonical: AVAudioFormat
     private let output: AVAudioFormat
     private let converter: AVAudioConverter
+    /// Pasa el PCM del micro al canónico; se rehace si el formato de entrada cambia.
+    private var normalizer: AVAudioConverter?
+    private var timeline = AudioTimeline(sampleRate: AudioConstants.sampleRate)
     private var queue = BoundedQueue<AacFrame>(capacity: AudioConstants.encodedQueueSlots, policy: .dropOldest)
     private let lock = NSLock()
-    /// rigMs de la primera muestra de la sesión y muestras ya codificadas.
-    private var originMs: Double?
-    private var encodedSamples = 0
     /// Lo que entró y aún no se ha convertido (el convertidor pide de 1024 en 1024).
     private var pending: [AVAudioPCMBuffer] = []
     public private(set) var framesOut = 0
+    /// Cada trozo de PCM según entra al eje, ya corregido (silencio, recortes, muestra a
+    /// muestra), en el formato canónico y con el rigMs de su primera muestra: seguidos,
+    /// sin huecos ni solapes. Es la pista de audio de la 4K (IOS-57): AVAssetWriter escribe
+    /// las muestras seguidas sin mirar su PTS, así que con el PCM del micro tal cual la
+    /// deriva se acumulaba (medido en el Mac: a 300 ppm, 51 ms a los 3 min). Se llama con
+    /// el cerrojo tomado: rápido, y sin volver al codificador.
+    public var onAligned: ((AVAudioPCMBuffer, Double) -> Void)?
 
-    /// `input`: el formato del micro (AVCaptureAudioDataOutput da Int16 o Float32).
-    public init(input: AVAudioFormat, bitrateBps: Int = AudioConstants.aacBitrateBps) throws {
-        guard input.sampleRate == Double(AudioConstants.sampleRate) else { throw EncoderError.format }
-        channels = Int(input.channelCount)
+    public init(channels: Int = AudioConstants.programChannels, bitrateBps: Int = AudioConstants.aacBitrateBps) throws {
+        guard let canon = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32, sampleRate: Double(AudioConstants.sampleRate),
+            channels: AVAudioChannelCount(channels), interleaved: false
+        ) else { throw EncoderError.format }
         var desc = AudioStreamBasicDescription(
-            mSampleRate: input.sampleRate, mFormatID: kAudioFormatMPEG4AAC, mFormatFlags: 0,
+            mSampleRate: Double(AudioConstants.sampleRate), mFormatID: kAudioFormatMPEG4AAC, mFormatFlags: 0,
             mBytesPerPacket: 0, mFramesPerPacket: UInt32(AudioConstants.samplesPerFrame), mBytesPerFrame: 0,
-            mChannelsPerFrame: input.channelCount, mBitsPerChannel: 0, mReserved: 0
+            mChannelsPerFrame: UInt32(channels), mBitsPerChannel: 0, mReserved: 0
         )
         guard let out = AVAudioFormat(streamDescription: &desc) else { throw EncoderError.format }
-        guard let conv = AVAudioConverter(from: input, to: out) else { throw EncoderError.converter }
+        guard let conv = AVAudioConverter(from: canon, to: out) else { throw EncoderError.converter }
         // Tasa constante: el relé y el TS esperan un caudal estable, no un AAC que baje
         // a la mitad en un silencio y suba de golpe con el gol.
         conv.bitRateStrategy = AVAudioBitRateStrategy_Constant
         conv.bitRate = bitrateBps
-        self.input = input
+        self.channels = channels
+        primingSamples = Int(conv.primeInfo.leadingFrames)
+        canonical = canon
         output = out
         converter = conv
     }
 
-    /// Mete PCM cuyo primer frame es del instante `rigMs`. Codifica todo lo que pueda.
+    /// Mete PCM cuyo primer frame es del instante `rigMs` y codifica todo lo que pueda. Si
+    /// el sello no cae donde el eje espera, AudioTimeline dice si se rellena, se recorta o
+    /// se reancla. Solo 48 kHz: otra frecuencia lanza `.format`.
     public func append(_ buffer: AVAudioPCMBuffer, rigMs: Double) throws {
+        guard buffer.frameLength > 0 else { return }
         lock.lock()
         defer { lock.unlock() }
-        if originMs == nil { originMs = rigMs }
-        pending.append(buffer)
+        let pcm = try normalized(buffer)
+        let n = Int(pcm.frameLength)
+        switch timeline.place(rigMs: rigMs, frames: n) {
+        case .asIs, .reanchored:
+            feed(pcm)
+        case .repeatFirst:
+            feed(slice(pcm, from: 0, count: 1))
+            feed(pcm)
+        case .dropFirst:
+            feed(slice(pcm, from: 1, count: n - 1))
+        case let .silenceBefore(muestras):
+            feedSilence(muestras)
+            feed(pcm)
+        case let .dropLeading(muestras):
+            feed(slice(pcm, from: muestras, count: n - muestras))
+        }
+        try drain()
+    }
+
+    /// El vigilante: silencio hasta `rigMs` si el eje se ha quedado atrás (el micro calla).
+    /// Sin audio todavía, fija ahí el principio del eje.
+    public func appendSilence(untilRigMs rigMs: Double) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        let muestras = timeline.silence(until: rigMs)
+        guard muestras > 0 else { return }
+        feedSilence(muestras)
         try drain()
     }
 
@@ -112,6 +179,73 @@ public final class AacEncoder {
         return queue.dropped
     }
 
+    public var syncStats: SyncStats {
+        lock.lock(); defer { lock.unlock() }
+        return SyncStats(
+            silenceSamples: timeline.silenceSamples, droppedSamples: timeline.droppedSamples,
+            nudges: timeline.nudges, reanchors: timeline.reanchors
+        )
+    }
+
+    // MARK: - Por dentro (con el cerrojo tomado)
+
+    /// El búfer en el formato canónico. El mono va igual a los dos canales: es lo que hace
+    /// AVAudioConverter por defecto (channelMap [0, 0]).
+    private func normalized(_ buffer: AVAudioPCMBuffer) throws -> AVAudioPCMBuffer {
+        guard buffer.format.sampleRate == Double(AudioConstants.sampleRate) else { throw EncoderError.format }
+        if buffer.format == canonical { return buffer }
+        if normalizer?.inputFormat != buffer.format {
+            normalizer = AVAudioConverter(from: buffer.format, to: canonical)
+        }
+        guard let normalizer else { throw EncoderError.converter }
+        guard let salida = AVAudioPCMBuffer(pcmFormat: canonical, frameCapacity: buffer.frameLength) else {
+            throw EncoderError.format
+        }
+        do {
+            try normalizer.convert(to: salida, from: buffer)
+        } catch {
+            throw EncoderError.encode(error.localizedDescription)
+        }
+        return salida
+    }
+
+    /// `count` muestras de un búfer canónico desde `from`, o nil si no queda ninguna.
+    private func slice(_ pcm: AVAudioPCMBuffer, from inicio: Int, count: Int) -> AVAudioPCMBuffer? {
+        guard count > 0 else { return nil }
+        if inicio == 0, count == Int(pcm.frameLength) { return pcm }
+        guard let trozo = AVAudioPCMBuffer(pcmFormat: canonical, frameCapacity: AVAudioFrameCount(count)),
+              let origen = pcm.floatChannelData, let destino = trozo.floatChannelData
+        else { return nil }
+        trozo.frameLength = AVAudioFrameCount(count)
+        for c in 0..<channels {
+            destino[c].update(from: origen[c] + inicio, count: count)
+        }
+        return trozo
+    }
+
+    private func feed(_ pcm: AVAudioPCMBuffer?) {
+        guard let pcm, pcm.frameLength > 0 else { return }
+        if let onAligned, let ms = timeline.rigMs(ofSample: timeline.samples) { onAligned(pcm, ms) }
+        pending.append(pcm)
+        timeline.advance(by: Int(pcm.frameLength))
+    }
+
+    private func feedSilence(_ muestras: Int) {
+        var quedan = muestras
+        while quedan > 0 {
+            let n = min(quedan, AudioConstants.silenceChunk)
+            guard let b = AVAudioPCMBuffer(pcmFormat: canonical, frameCapacity: AVAudioFrameCount(n)),
+                  let datos = b.floatChannelData
+            else { return }
+            b.frameLength = AVAudioFrameCount(n)
+            for c in 0..<channels {
+                datos[c].update(repeating: 0, count: n)
+            }
+            feed(b)
+            quedan -= n
+        }
+    }
+
     private func drain() throws {
         while true {
             let salida = AVAudioCompressedBuffer(
@@ -133,8 +267,10 @@ public final class AacEncoder {
             let cabecera = try Adts.header(
                 payloadLength: bytes, sampleRate: AudioConstants.sampleRate, channels: channels
             )
-            let ms = (originMs ?? 0) + Double(encodedSamples) * 1000 / Double(AudioConstants.sampleRate)
-            encodedSamples += AudioConstants.samplesPerFrame
+            // La primera muestra de esta trama en el eje: el cebado va delante de todo.
+            let primera = framesOut * AudioConstants.samplesPerFrame - primingSamples
+            let ms = timeline.rigMs(ofSample: primera) ?? 0
+            timeline.prune(before: primera)
             framesOut += 1
             queue.push(AacFrame(adts: cabecera + crudo, rigMs: ms))
         }

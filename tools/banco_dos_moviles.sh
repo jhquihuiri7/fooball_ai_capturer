@@ -13,7 +13,8 @@
 # <fichero_secreto>: el secreto del soporte en base64, en un fichero (no se imprime nunca).
 # Los móviles, por variable de entorno o los de siempre:
 #   IZQ=<id devicectl del izquierdo>   DER=<id del derecho>
-# Más variables para los dos: BANCO_EXTRA='{"RIG_AUDIO": "1"}'.
+# Más variables para los dos: BANCO_EXTRA='{"RIG_AUDIO": "1"}' (el micro va siempre;
+# con 1 deja además audio-<t>.aac y su informe; con 0, sin micro ni AAC).
 # Deja los informes en bench/dos-moviles-<fecha>/ (Documents/bench y Documents/calib de cada uno).
 #
 # SPK-04 (el render repartido): el director de guion y la 4K local de cada móvil, 10 min:

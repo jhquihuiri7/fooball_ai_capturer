@@ -43,7 +43,7 @@
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Sincroniza el reloj con el otro movil del soporte por la red local.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Graba el sonido del partido y sirve para sincronizar los dos moviles.</string>
+	<string>El sonido del partido va con la emision y con la grabacion.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

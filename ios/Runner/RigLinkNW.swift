@@ -847,11 +847,12 @@ final class SplitBench {
     private var colorObservations = 0
     static let colorEveryMs: Int64 = 2000
     private var lastProgramT: Int64?
-    /// El micro del iPhone es mono: el PMT declara el AAC desde el primer paquete.
-    private static let micChannels = 1
+    /// El AAC del programa es estéreo (el micro mono va a los dos canales, IOS-54) y el
+    /// PMT lo declara desde el primer paquete.
     private let muxer = TsMuxer(
         audio: CaptureEngine.audioEnabled
-            ? TsMuxer.AudioConfig(sampleRate: AudioConstants.sampleRate, channels: micChannels) : nil
+            ? TsMuxer.AudioConfig(sampleRate: AudioConstants.sampleRate, channels: AudioConstants.programChannels)
+            : nil
     )
     /// El primer instante de vídeo del .ts: el audio de antes no entra (IOS-54).
     private var firstVideoT: Int64?
@@ -922,7 +923,7 @@ final class SplitBench {
         env[key].flatMap(Double.init) ?? def
     }
 
-    /// Una trama AAC del micro (con RIG_AUDIO=1): a la copia local del programa.
+    /// Una trama AAC del programa (micro o silencio; RIG_AUDIO=0 la quita): a la copia local.
     func audio(_ trama: AacFrame) {
         queue.async { [weak self] in
             guard let self else { return }

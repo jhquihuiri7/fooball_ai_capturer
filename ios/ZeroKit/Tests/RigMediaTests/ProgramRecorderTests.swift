@@ -25,7 +25,7 @@ final class ProgramRecorderTests: XCTestCase {
         while let f = enc.pop() { frames.append(f) }
         // Audio: 2 s de tono.
         let fmt = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 1)!
-        let aac = try AacEncoder(input: fmt)
+        let aac = try AacEncoder()
         var tramas: [AacFrame] = []
         for n in 0..<200 {
             let pcm = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: 480)!
