@@ -127,6 +127,23 @@ ControlClaims verifyToken(
   return claims;
 }
 
+/// Lo que dice `token` **sin comprobar la firma**, o `null` si no se puede leer
+/// (`peek_claims`). Para quien no tiene el secreto: la app lee la caducidad y el rig del
+/// `rig_key` del QR Soporte (IOS-68). Nunca abre nada: eso lo decide quien verifica.
+ControlClaims? peekClaims(String token) {
+  final int punto = token.indexOf('.');
+  if (punto < 0) {
+    return null;
+  }
+  try {
+    return _claims(_unb64(token.substring(0, punto)), controlQrName);
+  } on FormatException {
+    return null;
+  } on TokenError {
+    return null;
+  }
+}
+
 /// Lo firmado, ya comprobada la firma. Aun así se valida: un token de otra versión,
 /// firmado con el mismo secreto, no puede abrir con ámbitos que no existen.
 ControlClaims _claims(List<int> datos, String qr) {

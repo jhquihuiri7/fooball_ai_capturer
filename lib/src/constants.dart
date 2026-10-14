@@ -308,3 +308,27 @@ const String adsDirectoryName = 'ads';
 /// franja son decenas de KB; si en 30 s no llega nada, la red se cayó y se reintenta
 /// con el siguiente `ads_changed` o al reconectar.
 const Duration adDownloadTimeout = Duration(seconds: 30);
+
+// --------------------------------------------------------------------------- //
+// Emparejado con el VPS por el QR Soporte (IOS-68, ADR 0022 §3)
+// --------------------------------------------------------------------------- //
+
+/// La versión del JSON del QR Soporte (`PAIRING_VERSION` en tools/nube/pairing.py). Uno
+/// de otra versión se rechaza: hay que actualizar la app.
+const int vpsPairingVersion = 1;
+
+/// El esquema del túnel. Solo con TLS: la URL va con el `rig_key` en la cabecera.
+const String vpsTunnelScheme = 'wss';
+
+/// La ruta de MediaMTX del programa (`PROGRAM_SRT_PATH`; `ProgramSrt.path` en RigCore).
+const String programSrtPath = 'programa';
+
+/// Caracteres de la passphrase del SRT: lo que admite SRTO_PASSPHRASE (ADR 0022 §2).
+const int programSrtPassphraseMinChars = 10;
+const int programSrtPassphraseMaxChars = 79;
+
+/// Caracteres del streamid como mucho (ADR 0022 §1; `ProgramSrt.maxStreamIdLength`).
+const int programStreamIdMaxChars = 512;
+
+/// El mayor puerto UDP.
+const int maxPort = 65535;
