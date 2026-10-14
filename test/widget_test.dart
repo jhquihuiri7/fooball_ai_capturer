@@ -16,10 +16,12 @@ import 'package:football_ai_capture/src/capture_page.dart';
 import 'package:football_ai_capture/src/capture_session.dart';
 import 'package:football_ai_capture/src/constants.dart';
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
+import 'package:football_ai_capture/src/generated/rig_api.g.dart';
 import 'package:football_ai_capture/src/theme/zero_colors.dart';
 import 'package:football_ai_capture/src/widgets/zero_widgets.dart';
 
 import 'fake_capture_api.dart';
+import 'fake_rig_api.dart';
 import 'zero_fonts.dart';
 
 /// Un lienzo de móvil, que es donde vive esta app.
@@ -54,6 +56,8 @@ Future<CaptureSession> openCapture(
   bool standalone = false,
   String serverHost = '',
   double height = 874,
+  LinkMode linkMode = LinkMode.multipeer,
+  RigHostApi? rigApi,
 }) async {
   usePhone(tester, height: height);
   final CaptureSession session = CaptureSession(
@@ -61,6 +65,8 @@ Future<CaptureSession> openCapture(
     api: api ?? FakeCaptureApi(),
     standalone: standalone,
     serverHost: serverHost,
+    linkMode: linkMode,
+    rigApi: rigApi,
   );
   await tester.pumpWidget(wrap(CapturePage(role: role, session: session)));
   // Un pump vacía los microtasks: el `prepare` entero con una cámara falsa.
@@ -725,6 +731,112 @@ void main() {
       expect(find.byKey(capturePreviewHiddenKey), findsOneWidget);
       expect(api.screenDims, <bool>[true, false, true]);
 
+      await closeCapture(tester, session);
+    });
+  });
+  group('EMITIR en la arquitectura B (IOS-58)', () {
+    testWidgets('el maestro: EMITIR pone el programa en marcha y la tarjeta lo cuenta', (
+      WidgetTester tester,
+    ) async {
+      final FakeCaptureApi api = FakeCaptureApi();
+      final FakeRigApi rig = FakeRigApi();
+      final CaptureSession session = await openCapture(
+        tester,
+        api: api,
+        role: CameraRole.left,
+        linkMode: LinkMode.aware,
+        rigApi: rig,
+        height: 2400,
+      );
+      session.onLinkStateChanged(LinkState.connected, 'iPhone 16 Pro');
+      await tester.pump();
+
+      expect(find.text('PROGRAMA'), findsOneWidget);
+      expect(find.text('EMISIÓN'), findsNothing, reason: 'en la arquitectura B no hay pod');
+      expect(find.text('APAGADO'), findsOneWidget);
+      expect(buttonWith(tester, 'EMITIR').onPressed, isNotNull);
+
+      await tester.tap(find.text('EMITIR'));
+      await tester.pump();
+      expect(rig.startCalls, 1);
+      expect(api.peerCommands, contains(RigCommand.record));
+
+      // El refresco de cada segundo trae el estado del programa.
+      await tester.pump(statusRefreshInterval);
+      expect(find.text('EMITIENDO'), findsOneWidget);
+      expect(find.text('EN EL VPS'), findsOneWidget);
+      expect(find.text('30 fps · 6 Mbit/s · RTT 42 ms'), findsOneWidget);
+      expect(find.text('publicando a 192.0.2.7:8890'), findsOneWidget);
+      expect(find.text('7.9 Mbit/s · 3 retrocesos · 2 perdidas'), findsOneWidget);
+      expect(find.text('Wi-Fi Aware · conectado con iPhone 16 Pro'), findsOneWidget);
+      expect(find.text('L0 · todo encendido'), findsWidgets);
+      expect(find.text('120 pasadas'), findsOneWidget);
+
+      await tester.tap(find.text('PARAR'));
+      await tester.pump();
+      expect(rig.stopCalls, 1);
+      expect(api.peerCommands.last, RigCommand.stop);
+
+      await closeCapture(tester, session);
+    });
+
+    testWidgets('sin QR Soporte el programa se compone pero se avisa en rojo', (
+      WidgetTester tester,
+    ) async {
+      final FakeRigApi rig = FakeRigApi(status: fakeProgramStatus(srtState: 'none', srtTarget: ''));
+      final CaptureSession session = await openCapture(
+        tester,
+        role: CameraRole.left,
+        linkMode: LinkMode.wifi,
+        rigApi: rig,
+        height: 2400,
+      );
+      await tester.tap(find.text('EMITIR'));
+      await tester.pump(statusRefreshInterval);
+
+      expect(find.text('SIN DESTINO'), findsOneWidget);
+      expect(find.text('SIN DESTINO · escanea el QR Soporte del VPS'), findsOneWidget);
+      final ZeroChip chip = tester.widget<ZeroChip>(
+        find.ancestor(of: find.text('SIN DESTINO'), matching: find.byType(ZeroChip)),
+      );
+      expect(chip.foreground, ZeroColors.alarm);
+
+      await tester.tap(find.text('PARAR'));
+      await tester.pump();
+      await closeCapture(tester, session);
+    });
+
+    testWidgets('el esclavo espera la orden del maestro y enseña su parte', (
+      WidgetTester tester,
+    ) async {
+      final FakeRigApi rig = FakeRigApi(status: fakeProgramStatus(master: false, partFallbacks: 5));
+      final CaptureSession session = await openCapture(
+        tester,
+        linkMode: LinkMode.wifi,
+        rigApi: rig,
+        height: 2400,
+      );
+      session
+        ..onRigRole(RigRole.slave, 1, null)
+        ..phase = SessionPhase.lista;
+      await tester.pump();
+
+      expect(find.text('EMITE EL MAESTRO'), findsOneWidget);
+      expect(buttonWith(tester, 'EMITE EL MAESTRO').onPressed, isNull);
+      expect(find.text('apagado · lo pone en marcha el maestro'), findsOneWidget);
+
+      session.onPeerCommand(RigCommand.record);
+      await tester.pump();
+      await tester.pump(statusRefreshInterval);
+
+      expect(rig.startCalls, 1);
+      expect(find.text('PARTE'), findsOneWidget);
+      expect(find.text('7.9 Mbit/s al maestro · 5 retrocesos'), findsOneWidget);
+      expect(buttonWith(tester, 'PARAR').onPressed, isNotNull);
+
+      session.onPeerCommand(RigCommand.stop);
+      await tester.pump();
+      expect(rig.stopCalls, 1);
       await closeCapture(tester, session);
     });
   });

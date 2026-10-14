@@ -16,7 +16,9 @@
 library;
 
 import 'package:football_ai_capture/src/capture_session.dart';
+import 'package:football_ai_capture/src/constants.dart';
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
+import 'package:football_ai_capture/src/generated/rig_api.g.dart';
 import 'package:football_ai_capture/src/stream_url.dart';
 import 'package:football_ai_capture/src/widgets/zero_widgets.dart';
 
@@ -83,7 +85,7 @@ class CaptureReadout {
     SessionPhase.esperandoReloj => 'ESPERANDO RELOJ',
     SessionPhase.ajustandoFase => 'AJUSTANDO FASE',
     SessionPhase.lista => 'LISTA',
-    SessionPhase.grabando => 'GRABANDO',
+    SessionPhase.grabando => session.programMode ? 'EMITIENDO' : 'GRABANDO',
     SessionPhase.fallo => 'FALLO',
   };
 
@@ -260,6 +262,112 @@ class CaptureReadout {
           tone: applied.streamDroppedFrames == 0 ? ZeroTone.ok : ZeroTone.bad,
         ),
       CaptureReading('Red local', session.localNetworkLabel, tone: _localNetworkTone),
+    ];
+  }
+
+  // ------------------------------------------------------------------------- //
+  // Tarjeta PROGRAMA (IOS-58): la arquitectura B, en lugar de la emisión al pod
+  // ------------------------------------------------------------------------- //
+
+  ProgramStatus? get _program => session.program;
+
+  /// El enlace, en palabras de la cancha.
+  static String linkModeLabel(LinkMode mode) => switch (mode) {
+    LinkMode.multipeer => 'Multipeer',
+    LinkMode.ethernet => 'Ethernet',
+    LinkMode.wifi => 'Wi-Fi',
+    LinkMode.aware => 'Wi-Fi Aware',
+  };
+
+  /// `1,5 Mbit/s` con un decimal; `6 Mbit/s` sin él.
+  static String _mbps(double mbps) =>
+      mbps.toStringAsFixed(mbps >= 10 || mbps == mbps.roundToDouble() ? 0 : 1);
+
+  /// Lo que dice el chip de la tarjeta: lo que pasa con el programa.
+  String get programChipLabel {
+    final ProgramStatus? p = _program;
+    if (!session.recording || p == null || !p.running) {
+      return session.recording ? 'ARRANCANDO' : 'APAGADO';
+    }
+    if (!p.master) {
+      return 'PARTE';
+    }
+    return switch (p.srtState) {
+      'publishing' => 'EN EL VPS',
+      'connecting' => 'CONECTANDO',
+      'waiting' => 'RECONECTANDO',
+      'failed' => 'FALLO',
+      'none' => 'SIN DESTINO',
+      _ => 'COMPONIENDO',
+    };
+  }
+
+  bool get programIsUp => _program?.srtState == 'publishing';
+
+  bool get programInTrouble =>
+      session.recording &&
+      (_program?.problem.isNotEmpty == true ||
+          const <String>{'failed', 'none', 'waiting'}.contains(_program?.srtState));
+
+  /// `programa a 192.0.2.1:8890`, o qué le falta para salir al VPS.
+  String get _srtLabel {
+    final ProgramStatus p = _program!;
+    final String destino = p.srtTarget;
+    final String detalle = p.srtDetail.isEmpty ? '' : ' · ${p.srtDetail}';
+    final String reconexiones = p.srtReconnects > 0 ? ' · ${p.srtReconnects} reconexiones' : '';
+    return switch (p.srtState) {
+      'publishing' => 'publicando a $destino$reconexiones',
+      'connecting' => 'conectando a $destino…',
+      'waiting' => 'RECONECTANDO a $destino$detalle',
+      'failed' => 'FALLO$detalle',
+      'none' => 'SIN DESTINO · escanea el QR Soporte del VPS',
+      _ => 'arrancando',
+    };
+  }
+
+  List<CaptureReading> get programReadings {
+    final ProgramStatus? p = session.recording ? _program : null;
+    final int ladder = _status?.ladderLevel ?? 0;
+    return <CaptureReading>[
+      if (p == null)
+        CaptureReading(
+          'Programa',
+          session.isRigMaster
+              ? 'apagado · EMITIR compone y sube el programa'
+              : 'apagado · lo pone en marcha el maestro',
+        )
+      else if (p.master) ...<CaptureReading>[
+        CaptureReading(
+          'Programa',
+          '${p.programFps.round()} fps · ${CaptureSession.formatMbps(p.srtBitrateBps)} Mbit/s · '
+              'RTT ${p.srtRttMs.round()} ms',
+          tone: p.programFps >= programFpsFloor ? ZeroTone.ok : ZeroTone.bad,
+        ),
+        CaptureReading('SRT', _srtLabel, tone: programIsUp ? ZeroTone.ok : ZeroTone.bad),
+        CaptureReading(
+          'Parte',
+          '${_mbps(p.partMbps)} Mbit/s · ${p.partFallbacks} retrocesos · ${p.partsLost} perdidas',
+          tone: session.linkState == LinkState.connected ? ZeroTone.neutral : ZeroTone.bad,
+        ),
+      ] else
+        CaptureReading(
+          'Parte',
+          '${_mbps(p.partMbps)} Mbit/s al maestro · ${p.partFallbacks} retrocesos',
+          tone: p.partMbps > 0 ? ZeroTone.ok : ZeroTone.bad,
+        ),
+      if (p != null)
+        CaptureReading(
+          'Detector',
+          p.detectorNote.isNotEmpty ? p.detectorNote : '${p.detectorRuns} pasadas',
+          tone: p.detectorNote.isEmpty ? ZeroTone.neutral : ZeroTone.bad,
+        ),
+      if (p != null && p.problem.isNotEmpty) CaptureReading('Problema', p.problem, tone: ZeroTone.bad),
+      CaptureReading(
+        'Enlace',
+        '${linkModeLabel(session.linkMode)} · ${session.linkLabel}',
+        tone: _linkTone,
+      ),
+      CaptureReading('Escalera', _ladderLabel(ladder), tone: ladder >= 2 ? ZeroTone.bad : ZeroTone.ok),
     ];
   }
 

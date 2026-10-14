@@ -9,6 +9,7 @@ import 'package:football_ai_capture/src/constants.dart';
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
 
 import 'fake_capture_api.dart';
+import 'fake_rig_api.dart';
 
 Future<List<int>> _masterPts() async => <int>[0, frame30, 2 * frame30];
 
@@ -913,6 +914,157 @@ void main() {
       final CaptureSession session = await grabada(subida: _FakeUploader(), server: '');
 
       expect(session.canUploadForCalibration, isFalse);
+    });
+  });
+
+  group('EMITIR en la arquitectura B (IOS-58)', () {
+    CaptureSession maestro(FakeCaptureApi api, FakeRigApi rig, {String server = ''}) => CaptureSession(
+      role: CameraRole.left,
+      api: api,
+      rigApi: rig,
+      linkMode: LinkMode.aware,
+      serverHost: server,
+    );
+
+    test('el enlace elegido llega a startLink; por defecto, el Multipeer de siempre', () async {
+      final FakeCaptureApi api = FakeCaptureApi();
+      await CaptureSession(role: CameraRole.left, api: api).prepare();
+      expect(api.lastLinkMode, LinkMode.multipeer);
+
+      final FakeCaptureApi aware = FakeCaptureApi();
+      final CaptureSession b = maestro(aware, FakeRigApi());
+      await b.prepare();
+      expect(aware.lastLinkMode, LinkMode.aware);
+      expect(b.programMode, isTrue);
+      expect(CaptureSession(role: CameraRole.left, api: api).programMode, isFalse);
+    });
+
+    test('con un solo móvil o en el banco del enlace no hay programa', () {
+      for (final CaptureSession s in <CaptureSession>[
+        CaptureSession(role: CameraRole.left, api: FakeCaptureApi(), linkMode: LinkMode.wifi, standalone: true),
+        CaptureSession(role: CameraRole.left, api: FakeCaptureApi(), linkMode: LinkMode.wifi, linkOnly: true),
+      ]) {
+        expect(s.programMode, isFalse);
+      }
+    });
+
+    test('un toque en el maestro: la 4K sin pod, el programa y la orden al esclavo; parar, todo', () async {
+      final FakeCaptureApi api = FakeCaptureApi();
+      final FakeRigApi rig = FakeRigApi();
+      // Aunque haya un pod guardado, en la arquitectura B no se le manda nada.
+      final CaptureSession session = maestro(api, rig, server: '10.0.0.5');
+      session.onLinkStateChanged(LinkState.connected, 'iPhone (derecha)');
+
+      session.setSaveVideo(true);
+      await session.toggleRecording();
+
+      expect(session.recording, isTrue);
+      expect(api.lastSrtUrl, '');
+      expect(api.lastSaveVideo, isTrue);
+      expect(rig.startCalls, 1);
+      expect(api.peerCommands.last, RigCommand.recordAndSave);
+
+      await session.toggleRecording();
+
+      expect(session.recording, isFalse);
+      expect(rig.stopCalls, 1);
+      expect(api.stopCalls, 1);
+      expect(api.peerCommands.last, RigCommand.stop);
+      expect(session.program, isNull);
+    });
+
+    test('si el programa no arranca, se cierra la 4K, no se ordena nada y se dice por qué', () async {
+      final FakeCaptureApi api = FakeCaptureApi();
+      final FakeRigApi rig = FakeRigApi(startProblem: 'sin el enlace de Network');
+      final CaptureSession session = maestro(api, rig);
+      session.onLinkStateChanged(LinkState.connected, 'iPhone (derecha)');
+
+      await session.toggleRecording();
+
+      expect(session.recording, isFalse);
+      expect(session.phase, SessionPhase.lista);
+      expect(session.problem, 'no se pudo emitir: sin el enlace de Network');
+      expect(api.stopCalls, 1);
+      expect(api.peerCommands, isEmpty);
+    });
+
+    test('el esclavo no emite solo: arranca con la orden del maestro y para con la suya', () async {
+      final FakeCaptureApi api = FakeCaptureApi();
+      final FakeRigApi rig = FakeRigApi(status: fakeProgramStatus(master: false));
+      final CaptureSession esclavo = CaptureSession(
+        role: CameraRole.right,
+        api: api,
+        rigApi: rig,
+        linkMode: LinkMode.wifi,
+        autoSortPhase: false,
+      );
+      esclavo.onRigRole(RigRole.slave, 1, null);
+      esclavo.phase = SessionPhase.lista;
+
+      expect(esclavo.waitsForMaster, isTrue);
+      expect(esclavo.canRecord, isFalse);
+
+      esclavo.onPeerCommand(RigCommand.record);
+      await Future<void>.delayed(Duration.zero);
+      expect(esclavo.recording, isTrue);
+      expect(rig.startCalls, 1);
+      expect(api.lastSrtUrl, '');
+      expect(api.lastSaveVideo, isFalse);
+      // Emitiendo, el esclavo sí puede parar el suyo.
+      expect(esclavo.canRecord, isTrue);
+
+      esclavo.onPeerCommand(RigCommand.stop);
+      await Future<void>.delayed(Duration.zero);
+      expect(esclavo.recording, isFalse);
+      expect(rig.stopCalls, 1);
+      expect(api.peerCommands, isEmpty, reason: 'el esclavo nunca manda');
+    });
+
+    test('el esclavo que llega con el programa en marcha recibe la orden otra vez', () async {
+      final FakeCaptureApi api = FakeCaptureApi();
+      final CaptureSession session = maestro(api, FakeRigApi());
+
+      await session.toggleRecording();
+      expect(api.peerCommands, isEmpty, reason: 'sin enlace no hay a quién');
+
+      session.onLinkStateChanged(LinkState.connected, 'iPhone (derecha)');
+      await Future<void>.delayed(Duration.zero);
+      expect(api.peerCommands, <RigCommand>[RigCommand.record]);
+
+      // Un aviso repetido de «conectado» no la repite.
+      session.onLinkStateChanged(LinkState.connected, 'iPhone (derecha)');
+      await Future<void>.delayed(Duration.zero);
+      expect(api.peerCommands, <RigCommand>[RigCommand.record]);
+
+      // Con el Multipeer de siempre, nada cambia.
+      final FakeCaptureApi pod = FakeCaptureApi();
+      final CaptureSession viejo = CaptureSession(role: CameraRole.left, api: pod, serverHost: '10.0.0.5');
+      await viejo.toggleRecording();
+      viejo.onLinkStateChanged(LinkState.connected, 'iPhone (derecha)');
+      await Future<void>.delayed(Duration.zero);
+      expect(pod.peerCommands, isEmpty);
+    });
+
+    test('mientras emite, el estado del programa se lee con el de la cámara', () async {
+      final FakeCaptureApi api = FakeCaptureApi();
+      final FakeRigApi rig = FakeRigApi();
+      final CaptureSession session = maestro(api, rig);
+      await session.prepare();
+
+      await session.refreshStatus();
+      expect(rig.statusCalls, 0, reason: 'sin emitir no hay programa que leer');
+
+      await session.toggleRecording();
+      await session.refreshStatus();
+      expect(rig.statusCalls, 1);
+      expect(session.program?.srtState, 'publishing');
+    });
+
+    test('calibrar con el pod no se ofrece en la arquitectura B', () async {
+      final CaptureSession session = maestro(FakeCaptureApi(), FakeRigApi(), server: '10.0.0.5');
+      await session.prepare();
+      expect(session.phase, SessionPhase.lista);
+      expect(session.canCalibrate, isFalse);
     });
   });
 }

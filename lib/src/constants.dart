@@ -76,6 +76,15 @@ const int exposurePhaseMaxAttempts = 6;
 const Duration statusRefreshInterval = Duration(seconds: 1);
 
 // --------------------------------------------------------------------------- //
+// EMITIR en la arquitectura B (IOS-58)
+// --------------------------------------------------------------------------- //
+
+/// Fotogramas por segundo del programa por debajo de los cuales la fila va en rojo. El
+/// programa marca 30 (ADR 0019 §1) y la aceptación de IOS-44 pide p5 ≥29,5; en una lectura
+/// de un segundo se ven 29 o 31 por redondeo, así que el aviso es a partir de 28.
+const int programFpsFloor = 28;
+
+// --------------------------------------------------------------------------- //
 // Emisión al servidor (ADR 0012; TASK A5)
 // --------------------------------------------------------------------------- //
 

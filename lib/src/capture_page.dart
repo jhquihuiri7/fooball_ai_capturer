@@ -59,10 +59,15 @@ class CapturePage extends StatefulWidget {
     this.autoRecordSeconds = 0,
     this.prefersMaster,
     this.onMasterHost,
+    this.linkMode = LinkMode.multipeer,
     super.key,
   });
 
   final CameraRole role;
+
+  /// El enlace elegido en la pantalla de lado (IOS-58): con uno de Network, EMITIR es la
+  /// arquitectura B.
+  final LinkMode linkMode;
 
   /// Avisa del servidor del mando de este móvil, si lo hay: la pestaña Partido del
   /// maestro enseña su partido (IOS-87).
@@ -160,6 +165,7 @@ class _CapturePageState extends State<CapturePage> {
         serverHost: widget.serverHost,
         linkOnly: widget.linkOnly,
         prefersMaster: widget.prefersMaster,
+        linkMode: widget.linkMode,
         masterHost: _host,
         replicaStore: _host == null
             ? null
@@ -309,15 +315,27 @@ class _CapturePageState extends State<CapturePage> {
                   const SizedBox(height: ZeroMetrics.innerGap),
                   _ReadingCard(title: 'Soporte', readings: r.rigReadings),
                   const SizedBox(height: ZeroMetrics.cardGap),
-                  _ReadingCard(
-                    title: 'Emisión',
-                    readings: r.streamReadings,
-                    trailing: r.streamIsUp
-                        ? ZeroChip.accent(r.streamChipLabel)
-                        : r.streamInTrouble
-                        ? ZeroChip.danger(r.streamChipLabel)
-                        : ZeroChip.mutedOnCard(r.streamChipLabel),
-                  ),
+                  // IOS-58: en la arquitectura B no hay emisión al pod: el programa.
+                  if (_session.programMode)
+                    _ReadingCard(
+                      title: 'Programa',
+                      readings: r.programReadings,
+                      trailing: r.programIsUp
+                          ? ZeroChip.accent(r.programChipLabel)
+                          : r.programInTrouble
+                          ? ZeroChip.danger(r.programChipLabel)
+                          : ZeroChip.mutedOnCard(r.programChipLabel),
+                    )
+                  else
+                    _ReadingCard(
+                      title: 'Emisión',
+                      readings: r.streamReadings,
+                      trailing: r.streamIsUp
+                          ? ZeroChip.accent(r.streamChipLabel)
+                          : r.streamInTrouble
+                          ? ZeroChip.danger(r.streamChipLabel)
+                          : ZeroChip.mutedOnCard(r.streamChipLabel),
+                    ),
                   if (r.cameraReadings.isNotEmpty) ...<Widget>[
                     const SizedBox(height: ZeroMetrics.cardGap),
                     _ReadingCard(title: 'Cámara', readings: r.cameraReadings),
@@ -720,6 +738,12 @@ class _RecordButton extends StatelessWidget {
         ? () => unawaited(session.toggleRecording())
         : null;
 
+    // IOS-58: en la arquitectura B el botón es EMITIR, y en el esclavo lo pulsa el maestro.
+    final String start = !session.programMode
+        ? 'GRABAR'
+        : session.waitsForMaster
+        ? 'EMITE EL MAESTRO'
+        : 'EMITIR';
     return session.recording
         ? ZeroButton.destructive(
             label: 'PARAR',
@@ -728,7 +752,7 @@ class _RecordButton extends StatelessWidget {
             textStyle: style,
           )
         : ZeroButton.primary(
-            label: 'GRABAR',
+            label: start,
             onPressed: onPressed,
             height: ZeroMetrics.recordHeight,
             textStyle: style,

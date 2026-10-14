@@ -17,10 +17,12 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:football_ai_capture/src/calibration_upload.dart';
 import 'package:football_ai_capture/src/constants.dart';
 import 'package:football_ai_capture/src/exposure_phase.dart';
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
+import 'package:football_ai_capture/src/generated/rig_api.g.dart';
 import 'package:football_ai_capture/src/rig_clock.dart';
 import 'package:football_ai_capture/src/server/master_host.dart';
 import 'package:football_ai_capture/src/server/replica.dart';
@@ -84,8 +86,10 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
     this.masterHost,
     this.replicaStore,
     this.linkMode = LinkMode.multipeer,
+    RigHostApi? rigApi,
   })  : prefersMaster = prefersMaster ?? role == CameraRole.left,
         _api = api ?? CaptureHostApi(),
+        _rig = rigApi ?? RigHostApi(),
         _clock = clock ?? RigClock() {
     if (clockSamples != null) {
       _clockSubscription = clockSamples.listen(_onClockSample);
@@ -119,6 +123,9 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
 
   final CaptureHostApi _api;
   final RigClock _clock;
+
+  /// El pipeline del soporte (IOS-58): el programa de la arquitectura B.
+  final RigHostApi _rig;
 
   /// La última estimación del reloj nativo (IOS-13), si el enlace corre sobre
   /// Network. Cuando está, manda sobre `_clock` en la etiqueta: la cuenta buena vive
@@ -178,6 +185,18 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
   /// nativo sobre esto.
   final LinkMode linkMode;
 
+  /// La arquitectura B (IOS-58): con el enlace de Network, EMITIR no manda cada cámara al
+  /// pod: el maestro compone el programa y lo sube al VPS, y el esclavo le manda su parte.
+  /// Con un solo móvil o en el banco del enlace no hay programa.
+  bool get programMode => linkMode != LinkMode.multipeer && !standalone && !linkOnly;
+
+  /// En la arquitectura B, EMITIR lo pulsa el maestro y pone en marcha los dos: el
+  /// esclavo solo arranca por su orden, aunque puede parar el suyo.
+  bool get waitsForMaster => programMode && !isRigMaster && !recording;
+
+  /// Cómo va el programa de este móvil, leído cada segundo mientras emite. null si no hay.
+  ProgramStatus? program;
+
   /// Quién manda en el soporte: el negociado si lo hay; si no, el izquierdo.
   bool get isRigMaster => rigRole == null ? role == CameraRole.left : rigRole == RigRole.master;
 
@@ -199,7 +218,8 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
 
   /// Solo se graba con la cámara lista. Dejar grabar antes es la forma más fácil de
   /// volver a casa con dos vídeos que no parean.
-  bool get canRecord => phase == SessionPhase.lista || phase == SessionPhase.grabando;
+  bool get canRecord =>
+      (phase == SessionPhase.lista || phase == SessionPhase.grabando) && !waitsForMaster;
 
   String get modeLabel =>
       standalone ? 'un solo móvil · SIN RELOJ' : 'soporte de dos móviles';
@@ -258,6 +278,7 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
   bool get canCalibrate =>
       isClockMaster &&
       !standalone &&
+      !programMode &&
       !recording &&
       panelUri != null &&
       phase == SessionPhase.lista &&
@@ -581,6 +602,13 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
       // segundo siguiente sin asustar a nadie.
       return;
     }
+    if (programMode && recording) {
+      try {
+        program = await _rig.programStatus();
+      } on Exception {
+        // Igual que el estado de la cámara: al segundo siguiente.
+      }
+    }
     notifyListeners();
   }
 
@@ -674,6 +702,9 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
     _toggling = true;
     try {
       if (recording) {
+        if (programMode) {
+          await _stopProgram();
+        }
         await _api.stop();
         _recordingClock.stop();
         _set(SessionPhase.lista);
@@ -681,8 +712,18 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
         return;
       }
       final bool guardar = save ?? saveVideo;
-      final String file = await _api.start(srtUrl ?? streamUrl, recordingDirectory, guardar);
+      // En la arquitectura B nada sale al pod: `start` solo abre la 4K, si se guarda.
+      final String file =
+          await _api.start(programMode ? '' : (srtUrl ?? streamUrl), recordingDirectory, guardar);
       recordingFile = file.isEmpty ? null : file;
+      if (programMode) {
+        final String? motivo = await _startProgram();
+        if (motivo != null) {
+          await _api.stop();
+          _set(SessionPhase.lista, problem: 'no se pudo emitir: $motivo');
+          return;
+        }
+      }
       // El nativo no abre la 4K sin la reserva de disco, y la emisión sigue: se avisa.
       final String? sin4k = guardar && file.isEmpty ? noLocalRecordingProblem : null;
       // Con el soporte montado, el izquierdo manda: poner a grabar los dos a mano es
@@ -700,6 +741,31 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
     } finally {
       _toggling = false;
     }
+  }
+
+  /// El programa de este móvil (IOS-58). null si arrancó; si no, por qué.
+  Future<String?> _startProgram() async {
+    String motivo;
+    try {
+      motivo = await _rig.startProgram();
+    } on Exception catch (error) {
+      motivo = error is PlatformException ? (error.message ?? error.code) : '$error';
+    }
+    if (motivo.isNotEmpty) {
+      return motivo;
+    }
+    program = null;
+    return null;
+  }
+
+  /// Parar el programa no puede impedir parar la 4K: un fallo del canal se calla.
+  Future<void> _stopProgram() async {
+    try {
+      await _rig.stopProgram();
+    } on Exception {
+      // El nativo lo cierra igual al cerrar el enlace.
+    }
+    program = null;
   }
 
   /// Manda una orden al otro móvil. Solo el izquierdo manda, y solo con enlace: el que
@@ -797,8 +863,14 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
 
   @override
   void onLinkStateChanged(LinkState state, String peerName) {
+    final bool vuelve = state == LinkState.connected && linkState != LinkState.connected;
     linkState = state;
     linkPeer = peerName;
+    // IOS-58: el esclavo que llega (o vuelve) con el programa ya en marcha recibe la orden
+    // otra vez; si ya emitía, no hace nada.
+    if (vuelve && programMode && recording) {
+      unawaited(_orderPeer(saveVideo ? RigCommand.recordAndSave : RigCommand.record));
+    }
     notifyListeners();
   }
 

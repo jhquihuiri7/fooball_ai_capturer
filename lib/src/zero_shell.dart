@@ -33,8 +33,12 @@ class ZeroShell extends StatefulWidget {
     this.prefersMaster,
     this.session,
     this.match,
+    this.linkMode = LinkMode.multipeer,
     super.key,
   });
+
+  /// El enlace elegido en la pantalla de lado (IOS-58).
+  final LinkMode linkMode;
 
   final CameraRole role;
 
@@ -147,6 +151,7 @@ class _ZeroShellState extends State<ZeroShell> {
             autoRecordSeconds: widget.autoRecordSeconds,
             prefersMaster: widget.prefersMaster,
             onMasterHost: _onMasterHost,
+            linkMode: widget.linkMode,
           ),
           _matchPage(),
         ],
