@@ -15,6 +15,10 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 
 
+## 2026-10-14 · banco — la recogida de `banco_dos_moviles.sh`, rápida y sin cortes · 🚧 probada con un devicectl falso; falta una pasada real
+
+`recoge` traía todo Documents/bench y Documents/calib (~10 min) y, con `set -e`, un listado vacío la cortaba en silencio (08:54, nada del derecho). Ahora trae solo lo de la pasada (`tools/recogida_pasada.py`, con su prueba): los .json con hora ≥ arranque − 30 s, su .ts (sin el vacío del esclavo), lo de `files` y las calib/<id>/ en la ventana `bench_start_rig_ms` de los informes; reintenta el listado 3 veces, apunta lo no copiado y termina con un resumen por lado.
+
 ## 2026-10-14 · IOS-54 — audio del micrófono: captura y AAC · 🚧 falta la pasada en el iPhone (10 min, palmadas y una llamada)
 
 **Lo que ya estaba** (entradas del 2026-10-04 al 07): AudioCapture en la misma sesión que la

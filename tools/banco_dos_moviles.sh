@@ -15,7 +15,8 @@
 #   IZQ=<id devicectl del izquierdo>   DER=<id del derecho>
 # Más variables para los dos: BANCO_EXTRA='{"RIG_AUDIO": "1"}' (el micro va siempre;
 # con 1 deja además audio-<t>.aac y su informe; con 0, sin micro ni AAC).
-# Deja los informes en bench/dos-moviles-<fecha>/ (Documents/bench y Documents/calib de cada uno).
+# Deja en bench/dos-moviles-<fecha>/<lado>/ solo lo de esta pasada: sus informes de
+# Documents/bench, su .ts, su calibración (calib/<id>/) y, al final, un resumen por lado.
 #
 # SPK-04 (el render repartido): el director de guion y la 4K local de cada móvil, 10 min:
 #   BANCO_EXTRA='{"RIG_SPLIT_SCRIPT": "spk04", "RIG_SPLIT_RECORD_4K": "1"}' \
@@ -79,26 +80,72 @@ lanza() {  # $1 dispositivo, $2 lado, $3 json extra
   rm -f "$f"
 }
 
-recoge() {  # $1 dispositivo, $2 nombre
-  # Solo lo de esta pasada: los informes (.json), el último programa (.ts) y la
-  # calibración. Copiar la carpeta entera arrastra los vídeos de pasadas viejas.
-  mkdir -p "$SALIDA/$2/bench" "$SALIDA/$2/calib"
-  local lista; lista=$(xcrun devicectl device info files --device "$1" --domain-type appDataContainer \
-    --domain-identifier $APP 2>/dev/null | awk '{print $1}')
-  local ts; ts=$(echo "$lista" | grep -E '^Documents/bench/program-split-[0-9]+\.ts$' | sort | tail -1)
-  for f in $(echo "$lista" | grep -E '^Documents/(bench/[^/]+\.json|calib/.+)$') $ts; do
-    xcrun devicectl device copy from --device "$1" --domain-type appDataContainer --domain-identifier $APP \
-      --source "$f" --destination "$SALIDA/$2/${f#Documents/}" >/dev/null 2>&1 || true
+# Los nombres llevan la hora del reloj de cada móvil, que va unos segundos por delante o
+# detrás del de la Mac: lo de esta pasada es lo que lleva una hora no anterior a DESDE. El
+# margen es menor que los 45 s que separan el último informe de una pasada del arranque
+# de la siguiente.
+MARGEN_RELOJ_S=30
+DESDE=$(( INICIO - MARGEN_RELOJ_S ))
+# El listado del contenedor a veces sale vacío o falla (el derecho, iOS 27, 2026-10-14 08:54).
+LISTADO_INTENTOS=3
+LISTADO_TIMEOUT_S=180   # s que puede tardar un listado, con miles de fotos de calibración
+LISTADO_PAUSA_S=10      # s entre un intento y el siguiente
+
+copia() {  # $1 dispositivo, $2 lado, $3 ruta relativa a Documents; lo que falla, a no-copiados.txt
+  mkdir -p "$(dirname "$SALIDA/$2/$3")"
+  xcrun devicectl device copy from --device "$1" --domain-type appDataContainer --domain-identifier $APP \
+    --source "Documents/$3" --destination "$SALIDA/$2/$3" >/dev/null 2>&1 && return 0
+  echo "  $2: NO se pudo copiar $3"
+  echo "$3" >> "$SALIDA/$2/no-copiados.txt"
+}
+
+lista() {  # $1 dispositivo, $2 lado: el listado del contenedor, en $SALIDA/$2/listado.txt
+  local n=1
+  while [ "$n" -le $LISTADO_INTENTOS ]; do
+    xcrun devicectl device info files --device "$1" --domain-type appDataContainer --domain-identifier $APP \
+      --timeout $LISTADO_TIMEOUT_S > "$SALIDA/$2/listado.txt" 2> "$SALIDA/$2/listado.err" || true
+    if grep -q 'Documents/' "$SALIDA/$2/listado.txt"; then return 0; fi
+    echo "  $2: el listado del móvil salió vacío o falló (intento $n de $LISTADO_INTENTOS)"
+    if [ "$n" -lt $LISTADO_INTENTOS ]; then sleep $LISTADO_PAUSA_S; fi
+    n=$(( n + 1 ))
   done
-  # SPK-04: lo grabado según el informe program-split de esta pasada (no más viejo que
-  # INICIO), y nada de otras pasadas.
-  for f in $(python3 "$RAIZ/tools/ficheros_pasada.py" "$SALIDA/$2/bench" "$INICIO" "${SIN_4K:-}"); do
+  return 1
+}
+
+recoge() {  # $1 dispositivo, $2 lado
+  # Solo lo de esta pasada (tools/recogida_pasada.py): sus informes .json, su programa .ts y
+  # lo que el informe program-split dice que grabó (tools/ficheros_pasada.py: .mov, vistas,
+  # N0 y 4K). Copiar todo Documents/bench y Documents/calib tardaba ~10 min. La calibración
+  # va aparte (recoge_calib), cuando ya están los informes de los dos lados.
+  mkdir -p "$SALIDA/$2/bench"
+  : > "$SALIDA/$2/no-copiados.txt"
+  if ! lista "$1" "$2"; then
+    echo "  $2: SIN LISTADO tras $LISTADO_INTENTOS intentos: no se recoge nada de este lado (ver $2/listado.err)"
+    echo "sin listado del contenedor tras $LISTADO_INTENTOS intentos" > "$SALIDA/$2/sin-listado.txt"
+    return 0
+  fi
+  local f
+  for f in $(python3 "$RAIZ/tools/recogida_pasada.py" informes "$SALIDA/$2/listado.txt" "$DESDE" || true); do
+    copia "$1" "$2" "$f"
+  done
+  # El esclavo deja un program-split-<t>.ts vacío: no sirve.
+  find "$SALIDA/$2/bench" -name 'program-split-*.ts' -size 0 -delete || true
+  for f in $(python3 "$RAIZ/tools/ficheros_pasada.py" "$SALIDA/$2/bench" "$DESDE" "${SIN_4K:-}" || true); do
     [ -e "$SALIDA/$2/$f" ] && continue
-    mkdir -p "$(dirname "$SALIDA/$2/$f")"
     echo "  $2: $f"
-    xcrun devicectl device copy from --device "$1" --domain-type appDataContainer --domain-identifier $APP \
-      --source "Documents/$f" --destination "$SALIDA/$2/$f" >/dev/null 2>&1 || echo "  $2: no se pudo copiar $f"
+    copia "$1" "$2" "$f"
   done
+}
+
+recoge_calib() {  # $1 dispositivo, $2 lado: las carpetas calib/<id>/ de esta pasada
+  [ -e "$SALIDA/$2/sin-listado.txt" ] && return 0
+  local f fotos
+  fotos=$(python3 "$RAIZ/tools/recogida_pasada.py" calib "$SALIDA/$2/listado.txt" "$DESDE" "$SALIDA"/*/bench || true)
+  if [ -z "$fotos" ]; then
+    echo "  $2: sin calibración de esta pasada (o sin informe program-split que la feche)"
+    return 0
+  fi
+  for f in $fotos; do copia "$1" "$2" "$f"; done
 }
 
 espera() {  # $1 segundos
@@ -141,7 +188,14 @@ case "$MODO" in
   *) echo "modo desconocido: $MODO" >&2; exit 2 ;;
 esac
 
-recoge "$IZQ" izquierdo
-recoge "$DER" derecho
-echo "informes en $SALIDA"
-find "$SALIDA" -name "*.json" -newer "$0" | head -20 || true  # con más de 20, head corta la tubería (SIGPIPE, 141)
+# Llamadas con ||, un fallo dentro de un lado no corta el script (set -e no aplica dentro).
+echo "$(date +%T) recogiendo"
+recoge "$IZQ" izquierdo || echo "  izquierdo: la recogida falló a medias"
+recoge "$DER" derecho || echo "  derecho: la recogida falló a medias"
+recoge_calib "$IZQ" izquierdo || echo "  izquierdo: la calibración falló a medias"
+recoge_calib "$DER" derecho || echo "  derecho: la calibración falló a medias"
+echo "$(date +%T) informes en $SALIDA"
+for lado in izquierdo derecho; do
+  python3 "$RAIZ/tools/recogida_pasada.py" resumen "$SALIDA/$lado" "$DESDE" "${SIN_4K:-}" \
+    || echo "$lado: sin resumen"
+done
