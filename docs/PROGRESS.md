@@ -15,6 +15,150 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 
 
+## 2026-10-14 · IOS-54 — audio del micrófono: captura y AAC · 🚧 falta la pasada en el iPhone (10 min, palmadas y una llamada)
+
+**Lo que ya estaba** (entradas del 2026-10-04 al 07): AudioCapture en la misma sesión que la
+cámara, AacEncoder (AAC-LC 128 kbit/s en ADTS), el AAC en el .ts y el .mov del banco, la pista
+de la 4K (IOS-57) y el PTS del micro pasado al reloj del host (`hostNs`). Todo detrás de
+RIG_AUDIO=1, en mono, y medido: 84 374 tramas de 84 375 en 30 min, 0 huecos. Faltaban el
+formato del contrato, el desfase A/V, la interrupción y el texto del permiso.
+
+**Tres fallos de sincronía encontrados al medir en el Mac**
+- **El cebado del codificador: el audio sonaba 44 ms tarde.** El AAC de Apple sale con 2112
+  muestras de cebado delante y se sellaba la trama 0 en el instante de la primera muestra.
+  Un decodificador de TS no las quita (ffmpeg 9.0.1 y AVAudioConverter: el chasquido de la
+  muestra 48 000 vuelve en la 50 112). Ahora cada trama se sella 2112 muestras antes.
+- **La deriva del micro: 2,67 ms/min, 240 ms a los 90 min.** El AAC se sellaba contando
+  muestras, que van con el reloj del dispositivo de audio, ~45 ppm frente al del host (el de
+  `capture_clock_skew_ms`, 2,8 ms/min). En el programa de 30 min del 2026-10-07
+  (`bench/dos-moviles-20261007-1020`), el PTS del audio frente al del vídeo, en el orden del
+  fichero, pasa de 184,7 ms en el minuto 0 a 263,4 ms en el 29: 2,67 ms cada minuto.
+- **La 4K deriva igual.** AVAssetWriter apila las muestras del PCM sin mirar su PTS: con el
+  micro a 300 ppm, el chasquido llega 3, 18, 36 y 51 ms tarde a los 10, 60, 120 y 170 s.
+
+**Hecho** (3f8998d, 23738f2 y el commit de esta entrada)
+- **`RigCore/Media/AudioTimeline.swift`, el eje del AAC.** Compara cada búfer con su sello y
+  dice cómo meterlo:
+  - hasta 1 ms, tal cual;
+  - hasta 10 ms, una muestra por búfer (se repite o se quita), que absorbe la deriva sin
+    oírse;
+  - más, silencio delante o recorte;
+  - más de 1 s, se reancla.
+
+  Da también el silencio que pide el vigilante.
+- **AacEncoder:**
+  - estéreo 48 kHz 128 kbit/s, el contrato (`PROGRAM_AUDIO_*` de `tools/program_contract.py`,
+    escritos a mano y fijados por un test); el micro mono va igual a los dos canales;
+  - acepta Int16 o Float32, intercalado o no, y 48 kHz o lanza `.format`;
+  - el rigMs ya descuenta el cebado y sigue el eje;
+  - `syncStats` (silencio, recortes, correcciones finas, saltos) y `onAligned`.
+- **AudioCapture:**
+  - el codificador existe desde el principio, haya micro o no;
+  - `keepAlive(nowRigMs:)`, el vigilante: si el micro calla 200 ms, el AAC sigue con silencio
+    hasta «ahora − 200 ms»; cuando vuelve, el eje rellena hasta su sello;
+  - las derivaciones `onPcm` (el PCM del micro con su rigMs, para el silbato de IOS-76) y
+    `onAlignedPcm` (el PCM ya en el eje, para la 4K).
+- **CaptureEngine:**
+  - el micro va por defecto: `configure` pide el permiso; sin él, el programa va con
+    silencio. RIG_AUDIO=0 lo quita del todo (los bancos «sin micro» lo necesitan ahora);
+    RIG_AUDIO=1 deja además `audio-<t>.aac` y su informe, que gana `silence_ticks`,
+    `silence_samples`, `dropped_samples`, `nudges` y `reanchors`;
+  - el vigilante corre cada 100 ms en la cola del audio, con la cámara en marcha;
+  - `audioDeviceInUseByAnotherClient` (una llamada, una alarma) para la sesión ENTERA. Ahora
+    se quita el micro para que siga el vídeo, y vuelve al acabar la llamada
+    (`CXCallObserver`) o la interrupción del audio (`AVAudioSession`);
+  - la 4K graba `onAlignedPcm`, en estéreo, con el silencio de los cortes incluido;
+    `recordingClockReport` gana `audio_not_ready`.
+- El .ts del banco declara el AAC estéreo.
+- `NSMicrophoneUsageDescription`: «El sonido del partido va con la emision y con la
+  grabacion.» (sin tildes, como los otros textos del Info.plist). Ya no habla de sincronizar
+  los móviles.
+- **`tools/av_clap.py`, el desfase A/V con palmadas.**
+  - El audio da el arranque de cada palmada.
+  - El vídeo da el contacto con resolución de submuestra: el último intervalo que se mueve
+    tras el de más movimiento, en la parte que se movió.
+  - Saca la mediana total y la de cada minuto (palmadas al principio y al final dicen si
+    deriva) y, con `--hojas`, una tira de fotogramas por palmada.
+
+**Decidido aquí** (pendiente de la revisión de Alexander)
+- **Estéreo = el mono duplicado.** La captura estéreo de verdad
+  (`AVCaptureDeviceInput.multichannelAudioMode = .stereo`, iOS 18) traería además
+  `windNoiseRemovalEnabled`, que vendría bien con viento en el mástil. Cambia la captura y
+  hay que medirla en el iPhone: queda propuesta.
+- **El micro por defecto y, sin permiso, silencio.** El programa lleva siempre AAC y el relé
+  puede ir en `--audio source`.
+- **Los umbrales del eje** (1 ms, 10 ms, 1 s) y **los del vigilante** (200 ms y cada
+  100 ms) son míos. El relleno máximo cabe en la cola de 64 tramas.
+- **Sin reintento periódico del micro.** Si el micro sigue ocupado, un reintento volvería a
+  parar el vídeo. Vuelve solo con el fin de la llamada o de la interrupción.
+- **Sin aviso «sin micro» en la pantalla.** Pediría tocar Pigeon y Dart (IOS-68 estaba en
+  `lib/`). Queda en el log (`[audio] …`) y en el informe del banco.
+- `SampleRetime` ya no lo usa el Runner; sigue en RigMedia con su test.
+
+**Visto y no arreglado**
+- **El .mov de la copia del programa** (ProgramRecorder, AAC sin recodificar): AVFoundation
+  lo lee en su sitio, pero ffmpeg lo lee 44 ms tarde. Probado sin las tramas de antes del
+  origen, con 44 ms de más y con `TrimDurationAtStart`: siempre 44 ms entre los dos. El .ts,
+  que es lo que sale al VPS, lo lee bien ffmpeg. `av_clap.py` mide el .ts o la 4K.
+
+**Comprobado**
+- `swift test --skip ModelBench`: 422 tests, 3 saltados (el del iPhone y los dos de
+  MediaMTX), 0 fallos; antes, 403. Los nuevos:
+  - `AudioTimelineTests` (8): 90 min a ±150 ppm sin pasar de 1,05 ms;
+  - `AacEncoderTests` (9, antes 2): estéreo, el chasquido en su instante (±0,2 ms), 3 min a
+    150 ppm (±1,3 ms), un hueco de 500 ms, solo silencio, el PCM alineado y el contrato;
+  - `AudioCaptureTests` (4): el micro callado 2 s con el vigilante (AAC sin huecos), sin
+    micro, PCM ⇄ CMSampleBuffer y la pista de la 4K con AVAssetWriter a 300 ppm (±2 ms).
+- **De punta a punta en el Mac:**
+  - un .ts como el del programa (VideoEncoder, AacEncoder y TsMuxer) con 10 palmadas
+    sintéticas: `av_clap.py` da +3,6 ms con desfase 0 y +17,9 ms con +15;
+  - un .mov con PCM: +1,6, +13,6 y −23,6 ms para 0, +12 y −25;
+  - antes del arreglo, el .ts habría dado unos +47 ms.
+- `tools/check_layers.sh`: limpio.
+- ZeroKit compilado para iOS con xcodebuild (derivedData temporal): BUILD SUCCEEDED, sin
+  avisos nuevos.
+- **El Runner, sin `flutter build` y sin tocar `build/ios`:** `swiftc -typecheck` de todos
+  sus `.swift` contra ese ZeroKit y los módulos de HaishinKit y Flutter del DerivedData.
+  0 errores y los 32 avisos de antes.
+
+**Pendiente: la aceptación en el iPhone** (con el build de estos commits; los dos ya
+aceptaron el permiso del micro con RIG_AUDIO=1)
+1. **10 min con palmadas** delante de la lente del maestro, al principio y al final: unas
+   10 cada vez, a un metro.
+
+   ```bash
+   BANCO_EXTRA='{"RIG_AUDIO": "1", "RIG_SPLIT_RECORD_4K": "1"}' \
+     tools/banco_dos_moviles.sh split <secreto> 600
+   python3 tools/av_clap.py bench/dos-moviles-<fecha>/izquierdo/bench/program-split-<t>.ts --hojas /tmp/palmadas
+   python3 tools/av_clap.py bench/dos-moviles-<fecha>/izquierdo/bench4k/<t>/left-<t>.mov
+   ```
+
+   - **A/V ±20 ms** en el .ts y en la 4K, y la misma mediana el minuto 0 y el 9 (sin deriva).
+   - **AAC continuo:** en `audio-<t>.json`, `gaps`, `failures` y `reanchors` a 0; `nudges`,
+     unas 1300 (2,7 ms/min); `silence_samples`, solo el arranque. En el .ts:
+
+     ```bash
+     ffprobe -v error -select_streams a -show_entries packet=pts -of csv=p=0 program-split-<t>.ts \
+       | awk 'NR>1 && ($1-p>1921 || $1-p<1919) {n++} {p=$1} END {print n+0, "saltos"}'
+     ```
+
+   - **Los fps intactos:** tic p5/p50 del informe como antes (29,4/30).
+2. **Una llamada al maestro** durante un banco (teléfono o FaceTime de audio), 30 s, y
+   colgar. Debe salir:
+   - en el log, «[audio] otro cliente tomó el micrófono» y «el micrófono vuelve»;
+   - el programa sin hueco en el vídeo, y el AAC continuo con silencio mientras dure;
+   - la 4K en un segmento nuevo.
+
+   No está comprobado que AVCaptureSession siga con el vídeo al quitarle el micro durante la
+   interrupción: Apple no lo promete. Si no sigue, queda lo de antes (vídeo parado hasta
+   colgar), y la recomendación de poner los dos móviles en «No molestar».
+3. **Un móvil sin permiso de micro** (quitarlo en Ajustes): el programa sale con AAC de
+   silencio y la 4K sin pista de audio.
+
+**Siguiente paso**: la pasada en el iPhone de arriba. IOS-56 (el publicador) depende de
+IOS-54 ✅. El código del publicador ya puede usar `AudioCapture.onFrame`: tramas estéreo con
+su rigMs, también sin micro.
+
 ## 2026-10-14 · IOS-68 — el soporte emparejado con el VPS por el QR Soporte · 🚧 falta escanear el QR de un VPS real con el iPhone
 
 **La dependencia circular con NUBE-16, resuelta empezando por aquí.** La tarjeta depende de
