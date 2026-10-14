@@ -173,4 +173,22 @@ final class VideoEncoderTests: XCTestCase {
         let idr = salida.first { $0.rigMs == 17 }
         XCTAssertEqual(idr?.isKeyframe, true, "el fotograma pedido tiene que salir IDR")
     }
+
+    /// 2026-10-14: lo que VideoToolbox tiene sin devolver (y con ello búferes del pool).
+    func testCuentaLoQueQuedaEnVideoToolbox() throws {
+        let encoder = try VideoEncoder(width: ancho, height: alto, bitrateBps: 6_000_000, viewId: 0)
+        let pool = try XCTUnwrap(encoder.pixelBufferPool)
+        XCTAssertEqual(encoder.inFlight, 0)
+        XCTAssertEqual(encoder.takeInFlightPeak(), 0)
+        for i in 0..<10 {
+            encoder.encode(try makeFrame(i, pool: pool), ptsNs: Int64(i) * intervaloNs, rigMs: UInt64(i))
+        }
+        encoder.flush()
+        while encoder.pop() != nil {}
+        XCTAssertEqual(encoder.inFlight, 0, "tras vaciarlo no queda nada dentro")
+        let pico = encoder.takeInFlightPeak()
+        XCTAssertGreaterThanOrEqual(pico, 1)
+        XCTAssertLessThanOrEqual(pico, 10)
+        XCTAssertEqual(encoder.takeInFlightPeak(), 0, "el pico vuelve a contar desde lo que hay")
+    }
 }

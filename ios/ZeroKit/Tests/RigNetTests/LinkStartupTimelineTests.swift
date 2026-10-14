@@ -119,6 +119,11 @@ final class LinkStartupTimelineTests: XCTestCase {
         }
         XCTAssertTrue(escucha.events.contains { $0.hasSuffix(" medios: llega una conexión") }, "\(escucha.events)")
         XCTAssertTrue(conecta.events.contains { $0.hasSuffix(" medios: conexión lista") }, "\(conecta.events)")
+        // 2026-10-14: cada suceso con la huella del proceso, «12.3 [306 MB] control arriba».
+        let conHuella = try NSRegularExpression(pattern: #"^\d+\.\d \[\d+ MB\] "#)
+        for e in escucha.events + conecta.events {
+            XCTAssertNotNil(conHuella.firstMatch(in: e, range: NSRange(e.startIndex..., in: e)), e)
+        }
 
         let r = timeline.report(transport: conecta.statsSnapshot)
         XCTAssertGreaterThanOrEqual(try XCTUnwrap(r["control_up"]), 0)

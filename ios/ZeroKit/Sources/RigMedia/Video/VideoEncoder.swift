@@ -44,6 +44,14 @@ public final class VideoEncoder {
     private var forceNextIDR = false
     /// Fotogramas que el codificador devolvió con error o vacíos.
     public private(set) var encodeFailures = 0
+    /// 2026-10-14: fotogramas entregados a VideoToolbox que aún no han vuelto, y lo más
+    /// que llegaron a ser. Cada uno retiene su búfer del pool de quien lo pinta: un
+    /// codificador atascado hace crecer ese pool (el salto de +180 MB del maestro en el
+    /// ensayo de 90 min sigue sin causa; esto dice si fue eso).
+    private var submitted = 0
+    private var completed = 0
+    private var submitErrors = 0
+    private var inFlightMax = 0
 
     public init(width: Int, height: Int, bitrateBps: Int, viewId: UInt8) throws {
         self.viewId = viewId
@@ -128,6 +136,10 @@ public final class VideoEncoder {
             properties = [kVTEncodeFrameOptionKey_ForceKeyFrame: true] as CFDictionary
         }
         let pts = CMTime(value: ptsNs, timescale: 1_000_000_000)
+        lock.lock()
+        submitted += 1
+        inFlightMax = max(inFlightMax, submitted - completed - submitErrors)
+        lock.unlock()
         let status = VTCompressionSessionEncodeFrame(
             session,
             imageBuffer: pixelBuffer,
@@ -141,8 +153,26 @@ public final class VideoEncoder {
         if status != noErr {
             lock.lock()
             encodeFailures += 1
+            submitErrors += 1
             lock.unlock()
         }
+    }
+
+    /// Fotogramas en VideoToolbox ahora mismo.
+    public var inFlight: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return max(0, submitted - completed - submitErrors)
+    }
+
+    /// Lo más que hubo en VideoToolbox desde la última vez que se preguntó (o desde el
+    /// principio), y vuelve a empezar a contar desde lo que hay ahora.
+    public func takeInFlightPeak() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        let pico = inFlightMax
+        inFlightMax = max(0, submitted - completed - submitErrors)
+        return pico
     }
 
     /// Vacía lo pendiente del codificador (fin de la emisión o un test).
@@ -185,6 +215,9 @@ public final class VideoEncoder {
     }
 
     private func finish(status: OSStatus, sampleBuffer: CMSampleBuffer?, ptsNs: Int64, rigMs: UInt64) {
+        lock.lock()
+        completed += 1
+        lock.unlock()
         guard status == noErr,
               let sampleBuffer,
               let blockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer)

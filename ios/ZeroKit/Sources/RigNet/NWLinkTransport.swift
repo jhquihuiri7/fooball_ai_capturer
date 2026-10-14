@@ -239,10 +239,13 @@ public final class NWLinkTransport: LinkTransport {
     /// Cuándo se creó el transporte, en ns de uptime: el cero de `events`.
     public let createdNs = DispatchTime.now().uptimeNanoseconds
 
-    /// Apunta un suceso en la línea de tiempo. En la cola del transporte.
+    /// Apunta un suceso en la línea de tiempo, con la huella del proceso en ese momento
+    /// (2026-10-14: una caída y su vuelta dicen si dejaron memoria retenida). En la cola
+    /// del transporte.
     private func note(_ texto: String) {
         let s = Double(DispatchTime.now().uptimeNanoseconds &- createdNs) / 1e9
-        eventos.append(String(format: "%.1f", s) + " " + texto)
+        let huella = ProcessFootprint.megabytes().map { String(format: " [%.0f MB]", $0) } ?? ""
+        eventos.append(String(format: "%.1f", s) + huella + " " + texto)
     }
 
     /// Los anuncios que ve un browser: cuántos hay y cuántos acaban de aparecer o irse

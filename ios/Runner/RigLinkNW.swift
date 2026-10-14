@@ -888,6 +888,18 @@ final class SplitBench {
     /// un fotograma entero al final de la pasada.
     private var latencyByMinute: [[Double]] = []
     private var latencyMinuteFrom = 0
+    /// Los saltos de la huella, mirada cada `footprintCheckEveryS`, con lo que pasaba.
+    private var footprintJumps = FootprintJumps()
+    private var footprintJumpContexts: [[String: Any]] = []
+    private var nextFootprintCheckS = 0.0
+    /// Lo más que tuvo dentro el codificador del programa (búferes del pool retenidos).
+    private var programEncoderInFlightPeak = 0
+    /// La huella en cada cambio de salud del esclavo, en paralelo a `peerStates`.
+    private var peerStatesFootprintMb: [Double] = []
+    /// Lo que le pasa a la app (avisos de memoria, primer plano y fondo), con su segundo y
+    /// la huella: el salto del ensayo coincidió con alguien junto al soporte.
+    private var appEvents: [String] = []
+    private var appObservers: [NSObjectProtocol] = []
     /// El AAC del programa es estéreo (el micro mono va a los dos canales, IOS-54) y el
     /// PMT lo declara desde el primer paquete.
     private static let programAudio = CaptureEngine.audioEnabled
@@ -1038,6 +1050,7 @@ final class SplitBench {
         timer = t
         armTick(t)
         t.resume()
+        observeApp()
         session.onViews = { [weak self] vistas in
             self?.linkTimeline.mark(.firstView)
             self?.slave?.receive(views: vistas)
@@ -1054,6 +1067,7 @@ final class SplitBench {
             self?.queue.async {
                 guard let self, self.session.isMaster else { return }
                 self.peerStates.append("\(self.rigNowMs()):\(estado.rawValue)")
+                self.peerStatesFootprintMb.append(Self.footprintMb())
                 if estado == .up { self.linkTimeline.mark(.peerUp) }
                 let caido = estado == .down
                 self.master?.peerDown = caido
@@ -1090,6 +1104,72 @@ final class SplitBench {
         let ns = RigLink.hostNowNs()
         let espera = tickPhase.delayToNextTickNs(nowRigNs: ns + session.clock.offsetAt(ns: ns))
         t.schedule(deadline: .now() + .nanoseconds(Int(espera)), leeway: .milliseconds(1))
+    }
+
+    // MARK: - 2026-10-14: la huella con su instante
+
+    /// Avisos de memoria y cambios de primer plano, con su segundo y la huella.
+    private func observeApp() {
+        let sucesos: [(Notification.Name, String)] = [
+            (UIApplication.didReceiveMemoryWarningNotification, "aviso de memoria"),
+            (UIApplication.willResignActiveNotification, "deja de estar activa"),
+            (UIApplication.didBecomeActiveNotification, "activa"),
+            (UIApplication.didEnterBackgroundNotification, "al fondo"),
+            (UIApplication.willEnterForegroundNotification, "vuelve del fondo"),
+        ]
+        for (nombre, texto) in sucesos {
+            appObservers.append(NotificationCenter.default.addObserver(forName: nombre, object: nil, queue: nil) {
+                [weak self] _ in
+                self?.queue.async { self?.noteAppEvent(texto) }
+            })
+        }
+    }
+
+    private func noteAppEvent(_ texto: String) {
+        guard appEvents.count < Self.maxAppEvents else { return }
+        let s = Double(DispatchTime.now().uptimeNanoseconds - startNs) / 1e9
+        appEvents.append(String(format: "%.1f [%.0f MB] ", s, Self.footprintMb()) + texto)
+    }
+
+    /// Cada `footprintCheckEveryS`: la huella y, si saltó, lo que pasaba en ese momento.
+    private func sampleFootprint(_ transcurrido: Double) {
+        guard transcurrido >= nextFootprintCheckS else { return }
+        nextFootprintCheckS = transcurrido + Self.footprintCheckEveryS
+        let picoPrograma = programEncoder?.takeInFlightPeak() ?? 0
+        let picoParte = slaveEncoder?.takeInFlightPeak() ?? 0
+        programEncoderInFlightPeak = max(programEncoderInFlightPeak, picoPrograma)
+        guard let salto = footprintJumps.sample(mb: Self.footprintMb(), atS: transcurrido) else { return }
+        var contexto: [String: Any] = [
+            "s": salto.atS, "rig_ms": rigNowMs(), "from_mb": salto.fromMb, "to_mb": salto.toMb,
+            "role": session.isMaster ? "master" : "slave",
+            "thermal": Self.thermalName(ProcessInfo.processInfo.thermalState),
+            "peer": peerStates.last ?? "",
+            // Lo más que tuvieron dentro los codificadores en estos segundos: cada fotograma
+            // retiene un búfer del pool de quien lo pintó.
+            "program_encoder_in_flight_peak": picoPrograma,
+            "part_encoder_in_flight_peak": picoParte,
+            "program_frames": programFrames,
+            "program_skipped_instants": programSkippedInstants,
+            "missing_director_views": missingDirectorViews,
+            "detect_runs": detect?.runCount ?? 0,
+            "overlay_uploads": OverlayHub.shared?.uploads ?? 0,
+            "app_events": Array(appEvents.suffix(Self.appEventsInJump)),
+        ]
+        if let m = master {
+            let st = m.stats
+            contexto["two_lens_frames"] = st.twoLensFrames
+            contexto["one_lens_frames"] = st.oneLensFrames
+            contexto["parts_decoded"] = st.partsDecoded
+            contexto["idr_requests"] = st.idrRequests
+            contexto["compose_failures"] = st.composeFailures
+            contexto["without_master_frame"] = st.withoutMasterFrame
+        }
+        if let s = slave {
+            contexto["slave_parts"] = s.stats.parts
+            contexto["slave_no_parts"] = s.stats.noParts
+        }
+        footprintJumpContexts.append(contexto)
+        NSLog("[split] la huella saltó de %.0f a %.0f MB a los %.0f s", salto.fromMb, salto.toMb, salto.atS)
     }
 
     /// Cierra la latencia añadida del minuto que acaba: [p50, p95] en ms ([] sin programa).
@@ -1384,6 +1464,7 @@ final class SplitBench {
             // SPK-54: el estado térmico, una vez por minuto.
             thermalByMinute.append(Self.thermalName(ProcessInfo.processInfo.thermalState))
         }
+        sampleFootprint(transcurrido)
         refreshStatus()
         // SPK-04: la 4K local, en cuanto hay cámara (antes, el CaptureEngine no sabe el tamaño).
         if config.record4K, !rec4kStarted, pipelineProvider() != nil {
@@ -1594,6 +1675,12 @@ final class SplitBench {
     }
 
     private static let footprintEveryS = 60.0
+    /// Cada cuánto se mira si la huella saltó (2026-10-14), en s: el salto queda situado
+    /// a 5 s y `task_info` cuesta microsegundos.
+    private static let footprintCheckEveryS = 5.0
+    /// Sucesos de la app que se guardan como mucho, y los últimos que van con cada salto.
+    private static let maxAppEvents = 64
+    private static let appEventsInJump = 4
     /// Instantes que el director recupera como mucho si el tic se los saltó: más de
     /// cuatro (133 ms) es un parón, no un tic tarde, y se sigue desde el último.
     private static let directorCatchUpInstants = 4
@@ -1888,6 +1975,8 @@ final class SplitBench {
         guard !finished else { return }
         finished = true
         timer?.cancel()
+        appObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        appObservers.removeAll()
         if latencyMinuteFrom < composeLatencyMs.count { closeLatencyMinute() }
         programEncoder?.flush()
         drainProgram()
@@ -1966,6 +2055,14 @@ final class SplitBench {
             "program_skipped_instants": programSkippedInstants,
             "missing_director_views": missingDirectorViews,
             "added_latency_ms_by_minute": latencyByMinute,
+            // La huella: cada salto de ≥20 MB entre dos muestras de 5 s con lo que pasaba,
+            // la huella en cada cambio del esclavo (en paralelo a `peer_states`), los
+            // sucesos de la app y lo más que tuvo dentro el codificador del programa.
+            "footprint_jumps": footprintJumpContexts,
+            "footprint_jumps_dropped": footprintJumps.dropped,
+            "peer_states_footprint_mb": peerStatesFootprintMb,
+            "app_events": appEvents,
+            "program_encoder_in_flight_peak": programEncoderInFlightPeak,
             "files": recordedFiles(),
             "rec4k": rec4kReport(),
             "publish": publishReport(),
@@ -2583,8 +2680,17 @@ final class MetalDetectLoad: BenchDetector {
             let o = xs.sorted()
             return o.isEmpty ? 0 : o[min(o.count - 1, Int(q * Double(o.count)))]
         }
+        // 2026-10-14: la inferencia por tramos de ~1 min (450 pasadas a 7,5 Hz): si Core ML
+        // cambia de unidad de cálculo a mitad (y con ello la memoria), se ve en el tramo.
+        let tramos = stride(from: 0, to: inferMs.count, by: Self.runsPerMinute).map {
+            p(Array(inferMs[$0..<min(inferMs.count, $0 + Self.runsPerMinute)]), 0.5)
+        }
         return ["chain": "metal", "runs": runs, "skipped": skipped, "failures": failures, "detections": detections,
                 "load_ms": loadMs, "error": error, "p50_ms": p(totalMs, 0.5), "p90_ms": p(totalMs, 0.9),
-                "p99_ms": p(totalMs, 0.99), "infer_p50_ms": p(inferMs, 0.5), "infer_p99_ms": p(inferMs, 0.99)]
+                "p99_ms": p(totalMs, 0.99), "infer_p50_ms": p(inferMs, 0.5), "infer_p99_ms": p(inferMs, 0.99),
+                "infer_p50_ms_by_minute": tramos]
     }
+
+    /// Pasadas del detector en un minuto: una cada 4 tics del programa a 30 fps (7,5 Hz).
+    private static let runsPerMinute = 450
 }
