@@ -208,6 +208,10 @@ Hipótesis, por orden:
    pintada al lanzar y aquí no lo estaba hasta que alguien tocó o despertó el 17.
    **Pregunta para Alexander:** ¿se tocó o se miró el 17 hacia el minuto 44-45? ¿Y al
    lanzar esta pasada estaba la pantalla de la app a la vista?
+   **Respuesta (Alexander, 12:50):** sí, a esa hora se movieron los móviles, que se
+   caían del soporte de mesa, y se pasó el cargador de uno al otro; el 17 casi seguro. Cuadra
+   con la hipótesis 1 y con `color_series` en el minuto 44,7. La pasada de las 12:36
+   arrancó con la app a la vista y no tuvo salto (358 → 479 MB en el primer minuto).
 2. **El pool de la cámara.** Si alguien retiene sus búferes 4K NV12 (12,4 MB cada uno), el
    pool crece ~15 (≈186 MB) y no vuelve a bajar. didDrop con «sin búferes» lo diría
    (`camera_drops`, 87c9fca).
