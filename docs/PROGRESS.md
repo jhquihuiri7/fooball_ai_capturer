@@ -17,6 +17,55 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 
 
+## 2026-10-14 · IOS-56 — la primera emisión desde los dos iPhone: 10 min por SRT al MediaMTX del Mac, sin reconexiones y con la SEI al 100 % · 🚧 faltan los 30 min al VPS
+
+El paso 1 de la entrada IOS-56 de abajo, con los dos iPhone en el soporte de mesa (17 a la
+izquierda y maestro; 16 Pro a la derecha), por Wi-Fi con router y con toda la carga: el
+director, el CenterNet en los dos, el micrófono, la copia .ts y el maestro publicando el
+programa por SRT (latencia 1500 ms) al MediaMTX de `tools/mediamtx-programa.yml` en el Mac
+(10.10.18.101). La passphrase, de prueba, se generó y se borró sin imprimirse. Datos:
+`bench/dos-moviles-20261014-1146` (maestro `program-split-left-1792000717.json`).
+
+**Lo que llega al Mac**
+- `ffprobe` del RTSP a los 6 s de lanzar: **h264 1920×1080 y aac 48 kHz estéreo**.
+- `sei_probe.py`, 120 s: **3600 de 3600 fotogramas con SEI** (30 fps justos), `sei_ok`,
+  `rig_ms_backwards` 0. Solo `view_ids` [0]: en el cuarto no hay jugadores y el director no
+  sale del plano general. La llegada respecto al rigMs: p50 6 ms, p95 12 ms, p99 455 ms y
+  máx. 1,65 s (las rachas de la Wi-Fi, que SRT recupera con su latencia).
+- 20 s grabados del RTSP: 583 fotogramas y 938 de audio; la imagen sale con el marcador, la
+  franja de anuncios y «CÁMARA IA AUTO». MediaMTX lo grabó también en
+  `bench/programa-mediamtx/programa/` (fMP4 de 60 s).
+
+**El informe del maestro** (`publish.sessions[0]`)
+- `connects` 1, **`reconnects` 0, `congestions` 0, `connect_failures` 0,
+  `program_encode_failures` 0**.
+- `video_frames_sent` **17 999 de 17 999**, `video_dropped` 0; `audio_frames_sent` 28 121
+  (2 descartados antes de conectar).
+- `bitrate_bps` 6 000 000 sin cambios (`bitrate_min_bps` igual); `send_rate_mbps` 3,9 (la
+  escena quieta no llena los 6).
+- SRT: `rtt_ms` 7,9 (máx. 100), `srt_packets_lost` 342 de 266 584 (0,13 %),
+  `srt_packets_retransmitted` 333, **`srt_packets_dropped` 0**, `send_buffer_ms_max` 124.
+
+**El programa, con el SRT encima de las partes** (la misma Wi-Fi para las dos cosas)
+- 17 999 fotogramas, `program_fps_p5` 29,05, `program_interval_ms_p99` 35. `masterOnly`
+  13 329 y `twoLens` 4 670; `part_fallbacks` 248.
+- **`torn_frames` 2**; latencia añadida p50 142 ms y **p95 144 ms**, lo mismo que sin
+  publicar. `part_age_ms` p50 90 / p95 120 / p99 200.
+- Partes 4 861 recibidas y 7 perdidas (0,14 %); 17 IDR pedidos. El enlace: un `down` de
+  0,2 s a los 45 s y 8 `suspect` sueltos que vuelven a `up` en menos de 0,3 s.
+- Detector en los dos: 4 495 pasadas, 0 saltadas, p99 30 ms.
+- GPU del maestro p50 3 / p95 4,5 / p99 5 ms (la composición, p99 3).
+- Memoria: el maestro, plana en ~497 MB tras el primer minuto; el esclavo, en ~450.
+- Térmica: el maestro, `fair` todo el rato. **El esclavo, `serious` desde el minuto 0**:
+  el 16 Pro venía caliente del ensayo de 90 min y no le dio tiempo a enfriarse.
+- El esclavo: `publish.sessions` vacío (no publica), 4 908 partes y 8 descartadas.
+
+**Aceptación del paso 1**: ✅ 0 reconexiones, ✅ SEI al 100 %, ✅ ~18 000 fotogramas
+enviados, ✅ las partes y la latencia como sin publicar.
+
+**Siguiente paso**: los 30 min al VPS cuando esté desplegado (paso 2 de abajo), y EMITIR
+desde la pantalla (IOS-58).
+
 ## 2026-10-14 · IOS-58 — EMITIR en la arquitectura B, desde la pantalla y sin el banco · 🚧 falta la pasada con los dos iPhone
 
 **Dependencias: excepción deliberada** (pendiente de la revisión de Alexander). La tarjeta
