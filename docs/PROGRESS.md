@@ -17,6 +17,246 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 
 
+## 2026-10-14 · Las tres anomalías del ensayo de 90 min por Wi-Fi Aware: el tic a la deriva (arreglado), la fase entre las cámaras (medida, pide ADR) y +180 MB sin reconexión (instrumentado) · 🚧 falta la pasada con los dos iPhone
+
+Datos: `bench/dos-moviles-20261014-1010` (maestro `program-split-left-1791999786.json`,
+esclavo `…-right-1791999796.json`). `program-views-1791994386.jsonl` **sí se grabó**
+(156 024 líneas, una por instante) y es lo que dio el diagnóstico. Todo con
+`RIG_SPLIT_NO_MOV`/`NO_TS`, director y CenterNet en los dos.
+
+**El enlace no se cayó en toda la pasada.** `transport_events` no tiene ningún «control
+caído»: las citas caducaron a los 120 s con `keepUntilDrop` y nada más. Los
+`suspect`/`down`/`up` de `peer_states` son latidos perdidos durante 100-300 ms (minutos
+28,7, 46,0, 46,8, 74,2, 82,8, 87,5 y 88,4) y no rehacen nada (revisado en el código: solo cambian la espera de la parte y los límites
+del director). `parts_lost` 19 de 44 684.
+
+### 1. Latencia añadida p95 169 ms, huecos y vistas perdidas: el tic a la deriva · arreglado (fcbafad)
+
+Lo que dicen las vistas por minuto:
+
+| | Minutos | Pico | Total |
+|---|---|---|---|
+| Instantes sin vista del director (salían con el **barrido de guion**: un salto de plano de un fotograma, HFOV 60°) | 23-61 | 541-581/min en 37-41 | 5027 |
+| Fotogramas de una lente con vista de dos (el esclavo tampoco tenía esa vista: «no_part») | los mismos | ~230/min | 2751 |
+| **Huecos del programa** (instantes sin componer) | 63-89 | 546-571/min en 77-84: **el programa a ~20 fps** | 5973 |
+
+Las tres cosas y la latencia son lo mismo. El tic se armaba con un temporizador de GCD que
+se repetía cada `1.0 / 30`. GCD pasa el intervalo a ticks de mach (24 MHz) **truncando**:
+33 333 333 ns son 799 999 ticks, 41,7 ns menos por tic (−1,25 ppm). La fase del tic frente
+a la rejilla del programa se iba **0,075 ms por minuto**, 6,75 ms en un partido. Arrancó a
+~2,7 ms detrás de un punto de la rejilla (el margen de e92edd0) y:
+- **hacia el minuto 40** llegó a la frontera del instante del director, `rejilla(ahora +
+  67)`. Con el jitter del disparo, uno de cada tres tics daba el mismo instante que el
+  anterior y el siguiente se saltaba uno. El instante sin vista se pintaba con
+  `scriptedView` y el esclavo, sin ella, mandaba `no_part`;
+- **hacia el 80** llegó a la del instante que se compone, `rejilla(ahora − 130)`: los
+  mismos saltos, ahora huecos en el programa;
+- **pasada esa frontera, la espera es un fotograma más.** Antes: 133,3 + fase + composición
+  ≈ 136-140 ms (p50 139,7). Después: 133,3 + ~30 + composición ≈ 165-169 ms, en los
+  últimos ~10 min, más del 5 % de la pasada. **De ahí los 25 ms de más del p95**, no de
+  Wi-Fi Aware: la parte llegó antes que por el router (`part_age` p50 80 / p95 85 / p99 90
+  ms, frente a 90 / 115 / 125) y la espera sigue en 130.
+
+Una simulación del temporizador de antes (90 min, mismo arranque y 0-0,8 ms de jitter) da
+los picos de vistas perdidas en 36-37, los de huecos en 76-77 y el p95 en 163 + composición:
+lo medido. En el banco del 2026-10-11 (80 min, p95 143) la fase de arranque debió de ser
+otra y no llegó a cruzar (no hay vistas por instante de esa pasada para comprobarlo).
+
+**Hecho**
+- **RigCore:**
+  - `ProgramTickPhase`: el retraso hasta el siguiente punto de la rejilla más el margen, y
+    la fase de un tic. En aritmética entera de ns: en coma flotante el instante justo del
+    tic caía a veces en el fotograma anterior.
+  - `ProgramClock.gridIndex`, `instant(index:)` y `gridInstants(after:through:limit:)`.
+  - `ViewHistory.view(atOrBefore:)`.
+- **SplitBench:**
+  - el temporizador se rearma en cada disparo, en el reloj del soporte. No hay intervalo
+    que acumule deriva, y tras un relevo el siguiente disparo ya va con el reloj nuevo;
+  - el director da vista también a los instantes que un tic tarde se saltó (como mucho 4);
+  - un instante sin vista del director se pinta con la anterior, no con el barrido.
+- **El informe:** `tick_phase_ms` (p50/p95/p99), `program_skipped_instants`,
+  `missing_director_views` y `added_latency_ms_by_minute` ([p50, p95] de cada minuto).
+- **Tests:** `ProgramTickTests` (4). Con 90 min simulados, el temporizador de antes da más
+  de 100 vistas y 100 instantes perdidos y la latencia de 162 ms; rearmado, ninguno y ≤137.
+  Además, la vista anterior en `ViewSyncTests`.
+
+### 2. 471 fotogramas desgarrados: la fase entre las cámaras deriva · medida (14ed93a); el arreglo pide un ADR
+
+Captura del maestro menos captura de la parte (mediana por minuto, en ms), de las vistas:
+
+| Minuto | 0 | 5 | 10 | 15 | 20 | 21 | 22 | 36 | 43 | 44 | 64 | 72 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Fase | −1 | 2 | 7 | 11 | 15 | 16 | **−16** | −5 | 0 | 1 | −16 | −10 |
+
+**+0,8 ms por minuto (~13 ppm entre los dos sensores), cruzando ½ fotograma cada ~42 min.**
+Los 471 desgarros son **todos** de los minutos 21 (4) y 22 (467), el primer cruce. El
+segundo (63-64) cayó sin dos lentes. En el cruce, los dos fotogramas propios vecinos de la
+parte están a 17 ms (16,7 redondeado al ms) y TearCheck, con razón, lo cuenta. No es:
+- el enlace, que no cayó;
+- el reloj tras reconectar: no hubo reconexión, y `part_age` (llegada − captura de la
+  parte, en el reloj del soporte) no se movió más de ~10 ms en 90 min. Con el RigClock
+  derivando 0,8 ms/min se habría abierto 70 ms;
+- la extrapolación: 0 de los 471 llevaban vista extrapolada.
+
+El ADR 0012 (TASK A4) sortea la fase al arrancar suponiendo «un desfase constante», y el
+ADR 0023 §5 dice que no hay desgarro «por construcción (la fase está a ≤5 ms)». Medido,
+no se queda: con una deriva así, la fase pasa ~70 % del partido por encima de 5 ms
+(`halves_skew_ms` p50 8 / p95 16) y cruza ½ fotograma unas dos veces. En 10 min no se
+veía (SPK-04: 0 desgarros, desfase p99 12 ms).
+
+**Hecho:** `HalvesPhaseTracker` (RigCore). Lo alimenta `MasterProgramStage` y lo leen los
+informes, también los de EMITIR, que no graban las vistas:
+- `halves_phase_by_minute`: [minuto, mediana con signo, fotogramas de dos lentes,
+  desgarros];
+- `halves_phase_drift_ms_per_min`: la deriva, desenrollada a través del cruce;
+- `halves_phase_minutes_to_half_frame`.
+
+Tests: `HalvesPhaseTests` (3; la deriva del ensayo con su cruce da 0,8 ms/min) y la fase
+en `MasterProgramStageTests`.
+
+**Para un ADR** (enmienda al 0012 y al 0023 §5; no se toca la arquitectura aquí). Opciones,
+por orden:
+1. **Mantener la fase alargando fotogramas** del móvil que va adelantado:
+   `activeVideoMin/MaxFrameDuration` un ~0,1 % más largos durante unos segundos cada vez que
+   la fase pase de ~3 ms.
+   - A 30 fps el formato solo deja alargar. Por eso se frena siempre al que adelanta, que
+     puede ser el maestro (su fase frente a la rejilla no importa: usa su fotograma más
+     cercano a ≤20 ms).
+   - Antes hace falta un spike en el iPhone: si el sensor cumple duraciones finas y cuánto
+     tarda en aplicarlas.
+2. **Volver a sortear** (`restartForPhase`) al pasar de 5 ms: corta la cámara 1-2 s y la 4K
+   del esclavo. Solo valdría en el descanso, y no basta: la deriva da ~36 ms por parte.
+3. **Suavizar el cruce:** histéresis en el emparejado del maestro, para no alternar entre
+   los dos fotogramas vecinos cerca de ½ fotograma. Quita el tirón de la mitad del maestro;
+   el desfase sigue ahí.
+
+### 3. +180 MB en el maestro entre los minutos 44 y 45 · no fue el enlace ni una fuga; instrumentado (115062b, 87c9fca)
+
+`footprint_mb` está plano en 305-310 MB hasta la muestra del minuto 44. En la del 45 ya
+marca 487 y sigue plano hasta el final (493). El esclavo, plano en 444-452.
+- **No fue una reconexión.** No hubo ninguna. El primer latido perdido (minuto 28,7) no
+  movió la memoria, y el del 46,0 llegó 1-2 min **después** del salto.
+- **El código de la reconexión no retiene nada grande.** Revisado:
+  - `retiredListeners`, la cita guardada con `keepUntilDrop` y la conexión de medios
+    sustituida (se cancela);
+  - el reensamblador (4 tramas a medias, ≤4 MiB), la cola del espaciado y el `controlReader`;
+  - el decodificador, que solo se rehace si cambian el SPS/PPS e invalida el viejo;
+  - `setUpIfNeeded`, que monta una vez.
+  
+  Lo único que se rehace con un suceso del enlace es un cambio de papel, y no lo hubo.
+  Confirmado de paso el aviso del 2026-10-10: la lectura pendiente de un control viejo
+  puede tirar el nuevo. Es un fallo funcional, no de memoria, y aquí no saltó: no hay
+  ningún «control caído».
+- **Lo que coincide:** alguien junto al soporte.
+  - `color_series` se dispara a los 2680-2690 s (minuto 44,7): la diferencia de luma en
+    bruto baja de 0,22 a 0,11-0,13, algo delante de una lente.
+  - Entre los minutos 42 y 44 el director se fue al centro (yaw −21°, dos lentes), con gente
+    en la escena.
+- **No es una fuga: son ~180 MB que la app suele tener desde el principio.** En todos los
+  informes del maestro (`footprint_mb[0]`, a ~2 s de lanzar la app, frente a `[1]`) la
+  huella sube 80-235 MB en el primer minuto y luego se queda. Lo que cambia es dónde
+  arranca:
+
+  | Pasada | A los 2 s | Minuto 1 | Después |
+  |---|---|---|---|
+  | Emisión de las 11:46 (`…-1792000717`, director y detector, sin .mov) | 420 | 498 | plana, 497 |
+  | Banco del 2026-10-11 en el trípode (`…-1791752445`, 80 min) | 386 | 506 | 506-535 |
+  | **Este ensayo** | **215** | **306** | **+181 entre el minuto 44 y el 45**, luego plana en 487-493 |
+
+  Este ensayo arrancó ~200 MB por debajo de una pasada igual (420) y alcanzó el nivel de
+  siempre (~490) entre el 44 y el 45, de una vez. A los 2 s de lanzar el banco aún no ha montado
+  nada (el enlace sube a los 3,3 s): la diferencia ya estaba en la app, antes del programa.
+  El 2026-10-10 hubo otro escalón igual, y sin partes ni decodificador
+  (`…-1791648761`, 381 → 288 → +169 en el minuto 2 → 457). Es una reserva que suele
+  ocurrir al arrancar y que esta vez llegó tarde.
+
+Hipótesis, por orden:
+1. **La UI de Flutter** (el motor, sus superficies y la vista previa), que suele estar
+   pintada al lanzar y aquí no lo estaba hasta que alguien tocó o despertó el 17.
+   **Pregunta para Alexander:** ¿se tocó o se miró el 17 hacia el minuto 44-45? ¿Y al
+   lanzar esta pasada estaba la pantalla de la app a la vista?
+2. **El pool de la cámara.** Si alguien retiene sus búferes 4K NV12 (12,4 MB cada uno), el
+   pool crece ~15 (≈186 MB) y no vuelve a bajar. didDrop con «sin búferes» lo diría
+   (`camera_drops`, 87c9fca).
+3. **El pool del programa.** `masterPool` no tiene tope y da dos búferes por tic. Si el
+   codificador del programa se atasca ~1 s, retiene ~60 búferes 1080p NV12 de 3,1 MB,
+   ≈186 MB, y el pool se queda con ellos (`program_encoder_in_flight_peak`).
+4. **Core ML**, que cambie de unidad o recompile el detector (el maestro estaba en `fair`
+   desde el minuto 12): `infer_p50_ms_by_minute`.
+
+**Hecho** (para que la próxima pasada lo diga):
+- **`FootprintJumps` (RigCore):** la huella se mira cada 5 s, y cada subida de ≥20 MB va a
+  `footprint_jumps` con:
+  - el segundo, el `rig_ms`, el papel, la térmica y el último estado del esclavo;
+  - lo más que tuvieron dentro los codificadores del programa y de la parte;
+  - las cuentas del programa, los huecos y las vistas sin director;
+  - las pasadas del detector, las subidas del gráfico y los últimos sucesos de la app.
+- **`app_events`:** los avisos de memoria, deja de estar activa, activa, al fondo y vuelve
+  del fondo, cada uno con su segundo y su huella.
+- **`peer_states_footprint_mb`:** la huella en cada cambio del esclavo, en paralelo a
+  `peer_states`.
+- **`VideoEncoder.inFlight` y `takeInFlightPeak()`:** lo que tiene dentro VideoToolbox. El
+  informe trae `program_encoder_in_flight_peak`.
+- **`ProcessFootprint` (RigNet):** cada suceso del transporte lleva la huella,
+  `12.3 [306 MB] control arriba`.
+- **El detector:** `infer_p50_ms_by_minute`.
+- **Los descartes de la cámara por motivo** (didDrop: sin búferes, tarde, otros):
+  `camera_drops`, en el informe y en cada salto (87c9fca).
+- **Tests:** `FootprintJumpsTests` (3), `ProcessFootprintTests` (1), la huella en la línea
+  de tiempo del loopback y lo que queda en VideoToolbox (`VideoEncoderTests`).
+
+**Comprobado** (en el worktree `../wt-reconexion`; el árbol principal no se tocó)
+- `swift test --skip ModelBench`: **476 tests, 4 saltados, 0 fallos** (antes, 463).
+- `tools/check_layers.sh`: limpio.
+- ZeroKit compilado para iOS con xcodebuild (derivedData propio): BUILD SUCCEEDED.
+- **El Runner, sin `flutter build`:** `swiftc -typecheck` de todos sus `.swift` contra ese
+  ZeroKit y los módulos de HaishinKit y Flutter del DerivedData (copiados aparte). 0 errores
+  y los mismos 32 avisos que 68d63d3, comparados uno a uno, en cada uno de los cuatro
+  commits.
+
+**La próxima pasada con los dos iPhone** (la misma orden del ensayo, con este build; si se
+puede, apuntar la hora a la que alguien toque el 17):
+
+```bash
+python3 -c 'import json,sys; d=json.load(open(sys.argv[1]))
+print("latencia p50/p95", d["added_latency_ms_p50"], d["added_latency_ms_p95"], "fase del tic", d["tick_phase_ms"])
+print("huecos", d["program_skipped_instants"], "sin vista del director", d["missing_director_views"])
+print("latencia por minuto", d["added_latency_ms_by_minute"])
+print("fase entre cámaras", d["halves_phase_by_minute"])
+print("deriva", d["halves_phase_drift_ms_per_min"], "min hasta medio fotograma", d["halves_phase_minutes_to_half_frame"])
+print("saltos de huella", json.dumps(d["footprint_jumps"], indent=1, ensure_ascii=False))
+print("app", d["app_events"], "pico en VideoToolbox", d["program_encoder_in_flight_peak"], "cámara", d["camera_drops"])
+print("esclavo", list(zip(d["peer_states"], d["peer_states_footprint_mb"])))
+print("detector por minuto", d["detect"].get("infer_p50_ms_by_minute"))
+print("\n".join(d["transport_events"]))' $(ls -t bench/dos-moviles-*/izquierdo/bench/program-split-left-*.json | head -1)
+```
+
+- **El tic:**
+  - `tick_phase_ms` p99 en ~3-4 ms (el margen y el despertar), igual en el minuto 1 que en
+    el 90;
+  - `program_skipped_instants` y `missing_director_views` en ~0;
+  - `added_latency_ms_by_minute` con el p95 en ~140-145 todos los minutos, sin el escalón
+    de +33 al final. El p95 global, ~144: lo que pide la espera de 130 por Wi-Fi.
+- **La fase entre cámaras:**
+  - `halves_phase_drift_ms_per_min` otra vez en ~±0,8; el signo puede cambiar con el papel
+    o el par;
+  - desgarros solo en los minutos del cruce. Con eso se decide el ADR.
+- **La huella:**
+  - el nivel: `footprint_mb[0]` y `[1]`. Si arranca en ~400-500 no habrá salto, y es lo
+    normal;
+  - si `footprint_jumps` trae un salto, su `s` y `app_events` dicen si coincidió con tocar
+    el móvil (hipótesis 1);
+  - `camera_drops.out_of_buffers` que sube en ese salto apunta al pool de la cámara
+    (hipótesis 2);
+  - `program_encoder_in_flight_peak` de más de ~10 apunta a un atasco de VideoToolbox
+    (hipótesis 3);
+  - un cambio en `infer_p50_ms_by_minute` en ese minuto apunta a Core ML (hipótesis 4);
+  - los sucesos del transporte llevan su huella: si hay una caída y una vuelta, dicen si
+    dejaron algo.
+
+**Siguiente paso**: esa pasada (90 min, o 30 para el tic y la huella). Con la deriva
+confirmada, el ADR de la fase y el spike de la duración de fotograma en el iPhone.
+
 ## 2026-10-14 · IOS-56 — la primera emisión desde los dos iPhone: 10 min por SRT al MediaMTX del Mac, sin reconexiones y con la SEI al 100 % · 🚧 faltan los 30 min al VPS
 
 El paso 1 de la entrada IOS-56 de abajo, con los dos iPhone en el soporte de mesa (17 a la
