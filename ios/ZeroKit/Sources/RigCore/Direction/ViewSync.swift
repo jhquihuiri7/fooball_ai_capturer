@@ -39,6 +39,12 @@ public final class ViewHistory {
     public func view(at rigMs: Int64) -> ViewCommand? {
         ring.last { $0.targetRigMs == rigMs }
     }
+
+    /// La vista más reciente que no pasa de `rigMs`. Para un instante sin vista del
+    /// director: mejor la de un fotograma antes que un plano de otro sitio.
+    public func view(atOrBefore rigMs: Int64) -> ViewCommand? {
+        ring.filter { $0.targetRigMs <= rigMs }.max { $0.targetRigMs < $1.targetRigMs }
+    }
 }
 
 /// La vista con la que el esclavo pinta un fotograma, y si tuvo que inventarla.

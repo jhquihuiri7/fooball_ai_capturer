@@ -130,6 +130,17 @@ final class ViewSyncTests: XCTestCase {
         XCTAssertEqual(h.message().map(\.viewId), [7, 8, 9])
         XCTAssertNil(h.view(at: 0), "el anillo está acotado")
     }
+
+    /// Un instante sin vista del director (2026-10-14: un tic que se lo saltó) se pinta
+    /// con la del instante anterior, no con un plano de otro sitio.
+    func testLaVistaAnteriorParaUnInstanteSinVista() {
+        let h = ViewHistory(capacity: 8)
+        for t: Int64 in [1000, 1033, 1100] { h.append(Self.vista(t, id: UInt32(t))) }
+        XCTAssertNil(h.view(at: 1067))
+        XCTAssertEqual(h.view(atOrBefore: 1067)?.targetRigMs, 1033)
+        XCTAssertEqual(h.view(atOrBefore: 1100)?.targetRigMs, 1100)
+        XCTAssertNil(h.view(atOrBefore: 999), "antes de la primera, nada")
+    }
 }
 
 final class TearCheckTests: XCTestCase {

@@ -869,6 +869,25 @@ final class SplitBench {
     private var colorObservations = 0
     static let colorEveryMs: Int64 = 2000
     private var lastProgramT: Int64?
+    /// 2026-10-14: el tic en fase con la rejilla, rearmado en cada disparo
+    /// (ProgramTickPhase). Con un intervalo repetido la fase se iba 0,075 ms/min.
+    private let tickPhase = ProgramTickPhase(framesPerSecond: Int(SplitBench.fps),
+                                             marginMs: SplitBench.tickPhaseMarginMs)
+    /// La fase de cada tic del maestro frente a la rejilla, en ms: tiene que quedarse en
+    /// el margen (2 ms más lo que tarde en despertar).
+    private var tickPhaseHist = LatencyHistogram(boundsMs: SplitBench.tickPhaseBoundsMs)
+    /// Instantes del programa que no se compusieron porque el tic llegó más de un
+    /// fotograma tarde (el ensayo del 2026-10-14 llegó a 570 por minuto).
+    private var programSkippedInstants = 0
+    /// Instantes del programa sin vista del director: se pintan con la anterior, no con el
+    /// barrido de guion (que salía como un salto de plano de un fotograma).
+    private var missingDirectorViews = 0
+    /// El último instante al que se le pidió vista al director.
+    private var lastDirectorT: Int64?
+    /// La latencia añadida de cada minuto, [p50, p95] en ms: con la fase a la deriva subía
+    /// un fotograma entero al final de la pasada.
+    private var latencyByMinute: [[Double]] = []
+    private var latencyMinuteFrom = 0
     /// El AAC del programa es estéreo (el micro mono va a los dos canales, IOS-54) y el
     /// PMT lo declara desde el primer paquete.
     private static let programAudio = CaptureEngine.audioEnabled
@@ -1004,19 +1023,20 @@ final class SplitBench {
     func start() {
         // .strict: el sistema no agrupa los disparos para ahorrar energía.
         let t = DispatchSource.makeTimerSource(flags: .strict, queue: queue)
-        // El primer disparo, justo después de un punto de la rejilla del programa: el tic
+        // Cada disparo, justo después de un punto de la rejilla del programa: el tic
         // compone `rejilla(ahora − espera)`, y si cae a mitad de fotograma la latencia
-        // añadida crece hasta un fotograma entero, fijado al azar al arrancar (p50 de 107 a
-        // 137 ms entre pasadas iguales). Con la fase alineada queda en la espera más el
-        // margen.
-        let ahora = rigNowMs()
-        let reloj = ProgramClock(frameDurationMs: 1000 / Self.fps)
-        let siguiente = reloj.gridInstant(atOrBefore: ahora) + Int64((1000 / Self.fps).rounded(.up))
-        let retrasoMs = Double(siguiente - ahora) + Self.tickPhaseMarginMs
-        t.schedule(deadline: .now() + .microseconds(Int(retrasoMs * 1000)), repeating: 1.0 / Self.fps,
-                   leeway: .milliseconds(1))
-        t.setEventHandler { [weak self] in self?.tick() }
+        // añadida crece hasta un fotograma entero (p50 de 107 a 137 ms entre pasadas
+        // iguales). Se rearma en cada disparo para el siguiente punto más el margen
+        // (ProgramTickPhase): con `repeating`, GCD trunca el intervalo a ticks de mach y la
+        // fase se iba 0,075 ms por minuto (2026-10-14: a los 40 min se perdían vistas del
+        // director, a los 80 instantes del programa, y la latencia subía 33 ms).
+        t.setEventHandler { [weak self, weak t] in
+            guard let self else { return }
+            self.tick()
+            if let t { self.armTick(t) }
+        }
         timer = t
+        armTick(t)
         t.resume()
         session.onViews = { [weak self] vistas in
             self?.linkTimeline.mark(.firstView)
@@ -1060,6 +1080,28 @@ final class SplitBench {
     func rigNowMs() -> Int64 {
         let ns = RigLink.hostNowNs()
         return (ns + session.clock.offsetAt(ns: ns)) / 1_000_000
+    }
+
+    /// El siguiente disparo del tic: el próximo punto de la rejilla del programa más el
+    /// margen, en el reloj del soporte. Uno cada vez, sin intervalo que acumule deriva; y
+    /// si el reloj del soporte cambia (un relevo), el siguiente ya va con el nuevo.
+    private func armTick(_ t: DispatchSourceTimer) {
+        guard !finished else { return }
+        let ns = RigLink.hostNowNs()
+        let espera = tickPhase.delayToNextTickNs(nowRigNs: ns + session.clock.offsetAt(ns: ns))
+        t.schedule(deadline: .now() + .nanoseconds(Int(espera)), leeway: .milliseconds(1))
+    }
+
+    /// Cierra la latencia añadida del minuto que acaba: [p50, p95] en ms ([] sin programa).
+    private func closeLatencyMinute() {
+        let tramo = composeLatencyMs[latencyMinuteFrom...].sorted()
+        latencyMinuteFrom = composeLatencyMs.count
+        guard !tramo.isEmpty else {
+            latencyByMinute.append([])
+            return
+        }
+        func q(_ p: Double) -> Double { tramo[min(tramo.count - 1, Int(p * Double(tramo.count)))] }
+        latencyByMinute.append([q(0.5), q(0.95)])
     }
 
     // MARK: - Montaje
@@ -1331,6 +1373,8 @@ final class SplitBench {
             }
         }
         if transcurrido >= Double(footprintMb.count) * Self.footprintEveryS {
+            // 2026-10-14: la latencia del minuto que acaba (la primera muestra abre el 0).
+            if !footprintMb.isEmpty { closeLatencyMinute() }
             footprintMb.append(Self.footprintMb())
             // SPK-54: el estado térmico, una vez por minuto.
             thermalByMinute.append(Self.thermalName(ProcessInfo.processInfo.thermalState))
@@ -1358,14 +1402,26 @@ final class SplitBench {
         if let previo = lastTickNs { tickIntervalsMs.append(Double(ahora - previo) / 1e6) }
         lastTickNs = ahora
 
-        let now = rigNowMs()
+        let ahoraNs = RigLink.hostNowNs()
+        let ahoraRigNs = ahoraNs + session.clock.offsetAt(ns: ahoraNs)
+        let now = ahoraRigNs / 1_000_000
+        tickPhaseHist.record(ms: tickPhase.phaseMs(nowRigNs: ahoraRigNs))
         // La rejilla del programa: instantes k · 33,3 ms (ProgramClock, IOS-84).
         let reloj = ProgramClock(frameDurationMs: 1000 / Self.fps)
         let rejilla = { (ms: Int64) in reloj.gridInstant(atOrBefore: ms) }
         if let director {
             director.setGains(matcher.gains)
-            if let (_, hist) = try? director.tick(targetRigMs: rejilla(now + Self.viewLeadMs)) {
-                hist.forEach { if history.view(at: $0.targetRigMs) == nil { history.append(ViewWire.quantized($0)) } }
+            // Un instante de la rejilla por vista: si el tic se saltó alguno (llegó tarde),
+            // el director da también los de en medio. Si el reloj del soporte va hacia atrás
+            // (un relevo), se empieza de nuevo.
+            let objetivo = rejilla(now + Self.viewLeadMs)
+            if let ultimo = lastDirectorT, objetivo < ultimo { lastDirectorT = nil }
+            for instante in reloj.gridInstants(after: lastDirectorT, through: objetivo,
+                                               limit: Self.directorCatchUpInstants) {
+                if let (_, hist) = try? director.tick(targetRigMs: instante) {
+                    hist.forEach { if history.view(at: $0.targetRigMs) == nil { history.append(ViewWire.quantized($0)) } }
+                }
+                lastDirectorT = instante
             }
         } else {
             history.append(scriptedView(rejilla(now + Self.viewLeadMs)))
@@ -1380,9 +1436,23 @@ final class SplitBench {
         // caído, lo que cambia es que MasterProgramStage no espera sus partes.
         let t = rejilla(now - partWaitMs)
         guard t != lastProgramT else { return }
+        if let previo = lastProgramT, t > previo {
+            let saltados = Int((Double(t - previo) * Self.fps / 1000).rounded()) - 1
+            if saltados > 0 { programSkippedInstants += saltados }
+        }
         lastProgramT = t
         let inicio = DispatchTime.now().uptimeNanoseconds
-        let vistaPropia = history.view(at: t) ?? scriptedView(t)
+        let vistaPropia: ViewCommand
+        if let v = history.view(at: t) {
+            vistaPropia = v
+        } else if director != nil, let v = history.view(atOrBefore: t) {
+            // Sin vista del director para este instante: la del anterior. El barrido de
+            // guion es de otro sitio y salía como un salto de plano de un fotograma.
+            missingDirectorViews += 1
+            vistaPropia = v
+        } else {
+            vistaPropia = scriptedView(t)
+        }
         e0Ticks += 1
         if e0Ticks % Self.e0ViewEvery == 0 {
             let grados = 180 / Double.pi
@@ -1519,6 +1589,11 @@ final class SplitBench {
     }
 
     private static let footprintEveryS = 60.0
+    /// Instantes que el director recupera como mucho si el tic se los saltó: más de
+    /// cuatro (133 ms) es un parón, no un tic tarde, y se sigue desde el último.
+    private static let directorCatchUpInstants = 4
+    /// Cubos de la fase del tic, en ms: de medio en medio hasta un fotograma.
+    private static let tickPhaseBoundsMs: [Double] = stride(from: 0.5, through: 33.5, by: 0.5).map { $0 }
     /// Lo que el tic espera detrás de cada punto de la rejilla, en ms: lo justo para que
     /// el punto ya haya pasado aunque el temporizador se adelante un poco.
     private static let tickPhaseMarginMs = 2.0
@@ -1808,6 +1883,7 @@ final class SplitBench {
         guard !finished else { return }
         finished = true
         timer?.cancel()
+        if latencyMinuteFrom < composeLatencyMs.count { closeLatencyMinute() }
         programEncoder?.flush()
         drainProgram()
         stopPublisher()
@@ -1868,6 +1944,13 @@ final class SplitBench {
             "torn_frames": ms.tornFrames,
             "extrapolated_view_frames": ms.extrapolatedViewFrames,
             "halves_skew_ms": desfaseMitades,
+            // El tic: su fase frente a la rejilla (en el margen, ~2 ms), los instantes del
+            // programa que se saltó, los que no tenían vista del director y la latencia
+            // añadida de cada minuto [p50, p95].
+            "tick_phase_ms": Self.summary(tickPhaseHist),
+            "program_skipped_instants": programSkippedInstants,
+            "missing_director_views": missingDirectorViews,
+            "added_latency_ms_by_minute": latencyByMinute,
             "files": recordedFiles(),
             "rec4k": rec4kReport(),
             "publish": publishReport(),
