@@ -938,6 +938,8 @@ final class SplitBench {
     var audioFormat: () -> CMAudioFormatDescription? = { nil }
     /// La separación entre el reloj de la sesión de captura y el del host, por minuto (ms).
     var captureClockSkew: () -> [Double] = { [] }
+    /// 2026-10-14: los descartes de la cámara por motivo (sin búferes, tarde, otros).
+    var cameraDrops: () -> [String: Int64] = { [:] }
     /// Los contadores del transporte del enlace, para el informe (nil sin enlace de Network).
     var linkStats: () -> LinkTransportStats? = { nil }
     /// Lo que el maestro espera la parte del esclavo, en ms: `PART_MAX_WAIT_MS` del ADR
@@ -1153,6 +1155,7 @@ final class SplitBench {
             "missing_director_views": missingDirectorViews,
             "detect_runs": detect?.runCount ?? 0,
             "overlay_uploads": OverlayHub.shared?.uploads ?? 0,
+            "camera_drops": cameraDrops(),
             "app_events": Array(appEvents.suffix(Self.appEventsInJump)),
         ]
         if let m = master {
@@ -2063,6 +2066,7 @@ final class SplitBench {
             "peer_states_footprint_mb": peerStatesFootprintMb,
             "app_events": appEvents,
             "program_encoder_in_flight_peak": programEncoderInFlightPeak,
+            "camera_drops": cameraDrops(),
             "files": recordedFiles(),
             "rec4k": rec4kReport(),
             "publish": publishReport(),

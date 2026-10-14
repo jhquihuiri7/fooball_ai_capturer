@@ -384,6 +384,10 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
         )
         s.audioFormat = { [weak self] in self?.engine.audioFormatDescription }
         s.captureClockSkew = { [weak self] in self?.engine.clockSkewByMinuteMs ?? [] }
+        s.cameraDrops = { [weak self] in
+            guard let e = self?.engine else { return [:] }
+            return ["out_of_buffers": e.cameraDropsOutOfBuffers, "late": e.cameraDropsLate, "other": e.cameraDropsOther]
+        }
         s.linkStats = { [weak nw] in nw?.transportStats }
         s.linkEvents = { [weak nw] in nw?.transportTimeline }
         s.cameraSwitch = { [weak self] on in self?.engine.setCameraRunningForBench(on) }

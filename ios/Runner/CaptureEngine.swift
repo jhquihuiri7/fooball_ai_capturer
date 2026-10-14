@@ -159,6 +159,12 @@ final class CaptureEngine: NSObject {
     private let recentPtsCapacity = 30
 
     private(set) var droppedFrames: Int64 = 0
+    /// 2026-10-14: los descartes de la cámara por su motivo (didDrop). «Sin búferes» dice
+    /// que alguien retuvo los de su pool, que entonces crece y no vuelve a bajar: una de
+    /// las sospechas del salto de +180 MB del maestro en el ensayo de 90 min.
+    private(set) var cameraDropsOutOfBuffers: Int64 = 0
+    private(set) var cameraDropsLate: Int64 = 0
+    private(set) var cameraDropsOther: Int64 = 0
     /// Fotogramas que entraron a la 4K desde que arrancó la app (el banco de SPK-04).
     private(set) var recordedFrames: Int64 = 0
 
@@ -1156,6 +1162,15 @@ extension CaptureEngine: AVCaptureVideoDataOutputSampleBufferDelegate {
         from connection: AVCaptureConnection
     ) {
         droppedFrames += 1
+        let motivo = CMGetAttachment(sampleBuffer, key: kCMSampleBufferAttachmentKey_DroppedFrameReason,
+                                     attachmentModeOut: nil) as? String
+        if motivo == String(kCMSampleBufferDroppedFrameReason_OutOfBuffers) {
+            cameraDropsOutOfBuffers += 1
+        } else if motivo == String(kCMSampleBufferDroppedFrameReason_FrameWasLate) {
+            cameraDropsLate += 1
+        } else {
+            cameraDropsOther += 1
+        }
     }
 
     /// Copia el buffer cambiándole el sello al tiempo del soporte.
