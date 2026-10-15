@@ -161,6 +161,10 @@ public final class MasterProgramStage {
     /// cada minuto (HalvesPhaseTracker): la fase deriva y los desgarros salen al cruzar ½
     /// fotograma. La pone quien sabe cuándo arrancó la pasada.
     public var halvesPhase: HalvesPhaseTracker?
+    /// 2026-10-15: lo mismo en cubos de 10 s (HalvesPhaseTracker.fineBucketMs), para ver
+    /// moverse la fase cuando un móvil alarga sus fotogramas (el spike de la duración de
+    /// fotograma). La pone quien sabe cuándo arrancó la pasada.
+    public var halvesPhaseBy10s: HalvesPhaseTracker?
     private let frameDurationMs: Double
     /// Cubos de 5 ms hasta 150 (la aceptación de IOS-43 es p95 ≤60) y gruesos después.
     public static let partAgeBoundsMs: [Double] = stride(from: 5, through: 150, by: 5).map(Double.init)
@@ -390,6 +394,7 @@ public final class MasterProgramStage {
                                             partFrameRigMs: slaveMs, frameDurationMs: frameDurationMs)
                 if desgarro { stats.tornFrames += 1 }
                 halvesPhase?.record(atRigMs: t, skewMs: Double(propio - slaveMs), torn: desgarro)
+                halvesPhaseBy10s?.record(atRigMs: t, skewMs: Double(propio - slaveMs), torn: desgarro)
             }
         }
         lock.unlock()

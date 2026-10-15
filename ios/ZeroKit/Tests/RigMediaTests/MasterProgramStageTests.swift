@@ -138,6 +138,9 @@ final class MasterProgramStageTests: XCTestCase {
         stage.onComposed = { pintados.append($0) }
         let fase = HalvesPhaseTracker(startRigMs: 0, frameDurationMs: frameMs)
         stage.halvesPhase = fase
+        let fina = HalvesPhaseTracker(startRigMs: 0, frameDurationMs: frameMs,
+                                      bucketMs: HalvesPhaseTracker.fineBucketMs)
+        stage.halvesPhaseBy10s = fina
         ps.forEach { stage.receive(part: $0, arrivalRigMs: $0.frameRigMs + 20) }
         esperaDecodificadas(stage, 5)
         let t1 = ps[1].frameRigMs
@@ -164,6 +167,9 @@ final class MasterProgramStageTests: XCTestCase {
         XCTAssertEqual(stage.halvesSkewMs.total, 2, "solo los de dos lentes")
         // 2026-10-14: la fase con signo y el desgarro, al minuto de la pasada.
         XCTAssertEqual(fase.buckets, [HalvesPhaseTracker.Bucket(index: 0, medianMs: 20, frames: 2, torn: 1)])
+        // 2026-10-15: y en los cubos de 10 s, lo mismo.
+        XCTAssertEqual(fina.buckets.map(\.frames).reduce(0, +), 2)
+        XCTAssertEqual(fina.buckets.map(\.torn).reduce(0, +), 1)
     }
 
     func testSinParteATiempoUnaLenteConLaVistaDelMaestro() throws {

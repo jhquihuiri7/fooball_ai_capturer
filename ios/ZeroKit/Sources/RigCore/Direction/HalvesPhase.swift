@@ -118,8 +118,24 @@ public final class HalvesPhaseTracker {
         return Bucket(index: index, medianMs: o[o.count / 2], frames: o.count, torn: torn)
     }
 
+    /// Dónde empieza el cubo `b`, en el reloj del soporte.
+    public func startRigMs(of b: Bucket) -> Int64 {
+        startRigMs + Int64(b.index) * bucketMs
+    }
+
+    /// `rigMs` llevado al múltiplo de `bucketMs` de antes: con él de arranque, los cubos caen
+    /// en la rejilla del reloj del soporte, como los del spike de la duración de fotograma.
+    public static func gridStart(_ rigMs: Int64, bucketMs: Int64) -> Int64 {
+        let r = rigMs % bucketMs
+        return rigMs - (r < 0 ? r + bucketMs : r)
+    }
+
     public static let minuteMs: Int64 = 60_000
     public static let defaultMaxBuckets = 600
+    /// 2026-10-15: los cubos finos, de 10 s, para ver moverse la fase al alargar fotogramas
+    /// (el spike de la duración de fotograma), y los que se guardan: 2 h.
+    public static let fineBucketMs: Int64 = 10_000
+    public static let fineMaxBuckets = 720
     /// Un cubo con menos fotogramas de dos lentes (≈1 s a 30 fps) no entra en la deriva:
     /// su mediana es ruido.
     public static let minFramesForDrift = 30
