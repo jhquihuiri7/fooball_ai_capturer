@@ -12,6 +12,56 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-15 · El plan B enlaza (4ca370b, 8ab8f86, f0df022), la escalera forzada responde y el spike de la duración de fotograma, medido · ✅ plan B · 🚧 el spike, con dos cosas que mirar
+
+Los dos iPhone en el soporte de mesa, por Wi-Fi Aware, lanzado desde el Mac.
+
+**1. El plan B otra vez, con el arreglo del enlace** (`tools/plan_b_cancha.sh preparar` y
+`lanzar <secreto> 600`, sin 4K; `bench/partido-20261015-1022`). Justo después de la hora
+de EMITIR, como la vez que falló.
+- **Los dos enlazados** («enlace: arriba (aware)» en el veredicto de los dos), **dos lentes
+  en el 75 %** (13 527 de 17 975), 0 desgarros, latencia p95 144 ms, `part_age` p50 75 /
+  p95 80, partes 13 772 y 1 perdida.
+- **El esclavo deja su informe final** (8ab8f86): 13 811 partes enviadas.
+- La copia .mov del maestro con el 100 % del programa. Memoria plana en los dos. El 16 Pro,
+  a batería: −33 %/h (55 → 50 %).
+
+**2. La escalera forzada, con la tabla de 2358dcb** (L2 en el esclavo de 120 a 300 s;
+`bench/dos-moviles-20261015-1035`).
+- El esclavo pasa a L2 a los 121 s y **la detección para en los dos**
+  (`detect_runs_by_minute`: 297, 300, 3, 0, 0, 0, 298… en el esclavo; 296, 300, 79, 0, 0,
+  0, 287… en el maestro). El maestro lo recoge a los 136 s (15 s de retraso: el nivel del
+  otro llega con el latido).
+- Al acabar el forzado (300 s) el esclavo se queda en L2 los 60 s de la histéresis y a los
+  360 s vuelven los dos a L1 (5 Hz). 93 órdenes de cadencia enviadas y recibidas.
+- **El programa sigue:** 17 977 fotogramas, dos lentes 13 508, 2 desgarros, p95 144 ms.
+- A mirar: `director_pairing` 1 185 completos de 1 862 ciclos (677 huérfanos del maestro),
+  frente al 99,8 % de la hora de EMITIR. Parte son los 15 s de retraso; el resto, sin
+  explicar.
+
+**3. El spike de la duración de fotograma (f4ce90d, f5e0671)**, ADR 0024: el derecho a
+33 367 µs durante 20 s de cada 120, 10 min, spk04 sin director, con su 4K
+(`bench/dos-moviles-20261015-1023`).
+- **La cámara da lo pedido:** `readback_min`/`max` 33367/1000000, formato el mismo
+  (`1/30..1/1`), 0 rechazos. Medido entre PTS (en el reloj del host), el periodo pasa de
+  **33 316,8 µs a 33 364,2 µs**: +47,4 µs por fotograma (+0,142 %, 1,4 veces lo pedido
+  sobre el nominal: el nominal del sensor no es 33 333,3 en ese reloj).
+- **Lo aplica en 4 fotogramas** (~110-120 ms) al alargar y al volver; `apply_ms` 2-5 ms.
+- **No pierde nada:** `did_drop` 0, `camera_drops` 0; la exposición (9,984 ms) y el ISO
+  (55,3), iguales 3 s después de cada cambio.
+- **La fase se mueve lo que dice el periodo:** cada ventana de 20 s la baja **−27,5 ms**
+  (se ve +5,8 porque la fase se envuelve a ±½ fotograma), igual en las tres ventanas
+  medidas (600 fotogramas × 47,4 µs = 28,4 ms). La predicción del ADR (−20 ± 2) suponía el
+  nominal exacto; el lazo tiene que usar la ganancia medida.
+- **Dos cosas que mirar:**
+  - **la parte se retrasa con el spike:** `part_age` p50 120 / p95 200 y `parts_jitter_ms`
+    30,6, frente a 85/90 y 1,4 sin spike en la misma configuración (la pasada de las 08:06).
+    La latencia añadida no se movió (p95 144);
+  - **la 4K del esclavo**, en 2 segmentos (`clock_jump_segments` 1, 1 201 fotogramas
+    esperando el reloj al arrancar): parece el arranque lento del enlace, no el spike, pero
+    no está separado.
+- 200 desgarros: las ventanas empujaron la fase a través de ±½ fotograma, como se esperaba.
+
 ## 2026-10-15 · EMITIR de producción, 60 min por Wi-Fi Aware y sin destino, en los dos iPhone (AUTO_EMITIR): ✅ programa completo y estable · 🚧 falta el dedo en el botón y una escena con dos lentes
 
 `tools/emitir_auto.sh <secreto> 3600 --link aware` (2358dcb: con la escalera actuando y la
