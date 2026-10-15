@@ -676,14 +676,27 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
   /// Lo que se pone por defecto con este disco libre.
   static bool defaultSaveVideo(int freeDiskBytes) => freeDiskBytes >= phoneDiskReserveBytes;
 
+  /// El interruptor «Guardar vídeo».
+  ///
+  /// En la arquitectura B ([programMode]) solo cambia el ajuste: lo lleva al esclavo EMITIR,
+  /// con `record` o `recordAndSave`. Mandar la orden aquí lo ponía a emitir (su parte y su
+  /// 4K) sin que nadie pulsara EMITIR, porque el esclavo la toma como EMITIR. Emitiendo no
+  /// se cambia, como el interruptor de la pantalla, que se apaga: la 4K de los dos ya se
+  /// abrió (o no), y el esclavo que vuelve recibe la orden con lo que se emitió.
+  /// Con Multipeer, lo de siempre: la orden sale al momento.
   void setSaveVideo(bool value) {
+    if (programMode && recording) {
+      return;
+    }
     _saveVideoChosen = true;
     if (saveVideo == value) {
       return;
     }
     saveVideo = value;
     notifyListeners();
-    unawaited(_orderPeer(value ? RigCommand.recordAndSave : RigCommand.record));
+    if (!programMode) {
+      unawaited(_orderPeer(value ? RigCommand.recordAndSave : RigCommand.record));
+    }
   }
 
   /// Mientras dura el clip de calibración, `toggleRecording` no manda nada al otro

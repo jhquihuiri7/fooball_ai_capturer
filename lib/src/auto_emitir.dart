@@ -158,8 +158,8 @@ class AutoEmitir {
       _timeout = Timer(config.readyTimeout, _onTimeout);
       return;
     }
-    // El campo y no `setSaveVideo`: el interruptor, sin grabar, manda `record` al esclavo
-    // y lo pone a emitir antes que el maestro. EMITIR lo lee igual (`save ?? saveVideo`).
+    // El campo, justo antes de EMITIR, que lo lee igual (`save ?? saveVideo`) y se lo lleva
+    // al esclavo con su orden.
     session.saveVideo = config.save4k;
     log('auto-emitir: EMITIR');
     await session.toggleRecording();

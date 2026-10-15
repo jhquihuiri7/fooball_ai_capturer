@@ -973,6 +973,57 @@ void main() {
       expect(session.program, isNull);
     });
 
+    test('«Guardar vídeo» antes de EMITIR solo cambia el ajuste: EMITIR lo lleva al esclavo', () async {
+      final FakeCaptureApi api = FakeCaptureApi();
+      final CaptureSession session = maestro(api, FakeRigApi());
+      session.onLinkStateChanged(LinkState.connected, 'iPhone (derecha)');
+
+      // El esclavo toma `record`/`recordAndSave` como EMITIR: el interruptor no lo manda.
+      session.setSaveVideo(true);
+      session.setSaveVideo(false);
+      session.setSaveVideo(true);
+      await Future<void>.delayed(Duration.zero);
+      expect(session.saveVideo, isTrue);
+      expect(api.peerCommands, isEmpty);
+
+      await session.toggleRecording();
+      expect(api.lastSaveVideo, isTrue);
+      expect(api.peerCommands, <RigCommand>[RigCommand.recordAndSave]);
+
+      // Emitiendo no se cambia, como el interruptor apagado de la pantalla.
+      session.setSaveVideo(false);
+      await Future<void>.delayed(Duration.zero);
+      expect(session.saveVideo, isTrue);
+      expect(api.peerCommands, <RigCommand>[RigCommand.recordAndSave]);
+
+      // Y el esclavo que vuelve recibe lo que se emitió.
+      session.onLinkStateChanged(LinkState.searching, 'iPhone (derecha)');
+      session.onLinkStateChanged(LinkState.connected, 'iPhone (derecha)');
+      await Future<void>.delayed(Duration.zero);
+      expect(api.peerCommands, <RigCommand>[RigCommand.recordAndSave, RigCommand.recordAndSave]);
+
+      // Después de PARAR se vuelve a poder cambiar, sin orden.
+      await session.toggleRecording();
+      session.setSaveVideo(false);
+      await Future<void>.delayed(Duration.zero);
+      expect(session.saveVideo, isFalse);
+      expect(api.peerCommands.last, RigCommand.stop);
+    });
+
+    test('con Multipeer, «Guardar vídeo» manda la orden al momento, lo de siempre', () async {
+      final FakeCaptureApi api = FakeCaptureApi();
+      final CaptureSession session =
+          CaptureSession(role: CameraRole.left, api: api, serverHost: '10.0.0.5');
+      session.onLinkStateChanged(LinkState.connected, 'iPhone (derecha)');
+
+      session.setSaveVideo(true);
+      await Future<void>.delayed(Duration.zero);
+      expect(api.peerCommands, <RigCommand>[RigCommand.recordAndSave]);
+      session.setSaveVideo(false);
+      await Future<void>.delayed(Duration.zero);
+      expect(api.peerCommands, <RigCommand>[RigCommand.recordAndSave, RigCommand.record]);
+    });
+
     test('si el programa no arranca, se cierra la 4K, no se ordena nada y se dice por qué', () async {
       final FakeCaptureApi api = FakeCaptureApi();
       final FakeRigApi rig = FakeRigApi(startProblem: 'sin el enlace de Network');

@@ -452,6 +452,12 @@ dirige», ni el servidor tecleado) ni por el botón (`canRecord`, el doble toque
   de EMITIR (`onPeerCommand` → `toggleRecording`): en la arquitectura B, tocar «Guardar vídeo»
   en el 17 arranca la parte del 16 Pro antes de EMITIR (el paso 6 de `sesion_emitir.sh`). No se
   ha cambiado; el modo automático pone el campo `saveVideo` sin pasar por ahí.
+  **Arreglado después** (`fix(captura): «Guardar vídeo» ya no pone a emitir al esclavo`): en la B (`programMode`) el interruptor
+  solo cambia el ajuste y no manda nada; EMITIR lleva `record`/`recordAndSave`. Con Multipeer,
+  lo de siempre. *Decidido (pendiente de revisión):* emitiendo en la B, `setSaveVideo` se
+  ignora (como el interruptor de la pantalla, ya apagado), y el esclavo que vuelve recibe lo
+  que se emitió. 2 tests nuevos en `capture_session_test`; `flutter test --no-pub`: 435 bien;
+  `flutter analyze --no-pub`: sin avisos. Sin probar en los iPhone.
 
 **Comprobado**
 - `flutter test --no-pub`: **433, todos bien** (425 antes; 8 nuevos en `auto_emitir_test`: el
