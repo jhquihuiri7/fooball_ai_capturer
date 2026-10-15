@@ -410,6 +410,12 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
         s.stopLocal4K = { [weak self] in self?.engine.stopRecording() }
         s.local4KFrames = { [weak self] in self?.engine.recordedFrames ?? 0 }
         s.local4KClock = { [weak self] in self?.engine.recordingClockReport() ?? [:] }
+        // 2026-10-15: el spike de la duración de fotograma (RIG_SPIKE_FRAME_*).
+        s.frameSpikeArm = { [weak self] fps in self?.engine.armFrameCadence(fps: fps) }
+        s.frameDurationRequest = { [weak self] pedida, benchS, rigMs in
+            self?.engine.benchFrameDuration(pedida, benchS: benchS, rigMs: rigMs)
+        }
+        s.frameSpikeReport = { [weak self] in self?.engine.frameSpikeReport() ?? [:] }
         // IOS-06: la escalera de la pasada lee los sensores de la cámara, actúa y es la que
         // enseña la pantalla mientras dura.
         s.ladderSensors = { [weak self] in self?.engine.ladderSensorTarget() ?? .l0 }

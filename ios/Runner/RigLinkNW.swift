@@ -772,6 +772,21 @@ final class LinkPartsLoad {
 //                           esclavo no pinta ni manda partes)
 //   RIG_SPLIT_NO_THUMBS     1: el esclavo no manda su miniatura por control (ThumbHub)
 //
+// El spike de la duración de fotograma (2026-10-15; la propuesta del ADR 0024 de football-ai:
+// mantener la fase entre las cámaras alargando un ~0,1 % los fotogramas del que adelanta).
+// Con RIG_SPIKE_FRAME_US el CaptureEngine de un lado alarga su duración de fotograma en
+// ventanas del reloj del soporte (FrameDurationSpikePlan):
+//   RIG_SPIKE_FRAME_US      la duración alargada: µs (33367) o valor/escala de CMTime
+//                           (1001/30000); varias con comas, una por ventana y por turnos
+//   RIG_SPIKE_FRAME_SIDE    left | right | alternate (obligatorio)
+//   RIG_SPIKE_FRAME_ON_S    lo que dura cada ventana (20)
+//   RIG_SPIKE_FRAME_EVERY_S cada cuánto empieza una, en múltiplos del reloj del soporte (120)
+//   RIG_SPIKE_FRAME_AFTER_S ninguna antes de estos s de pasada (60)
+// El informe de cada lado trae `frame_duration_spike`: la cadencia de su cámara cada 10 s
+// (`cadence_by_10s`) y cada cambio pedido con lo que dio la cámara y cuánto tardó
+// (`transitions`); el del maestro, además, las ventanas con el movimiento de fase previsto y
+// el medido (`windows`) y `halves_phase_by_10s`, la fase en cubos de 10 s de la misma rejilla.
+//
 // IOS-58: la misma clase es EMITIR en la arquitectura B, con `ProgramRunConfig.production`:
 // la arranca startProgram y la para stopProgram, sin fin propio, con el director, el
 // detector (si su paquete está en Documents/bench-resources) y el SRT; la copia del programa
@@ -987,6 +1002,16 @@ final class SplitBench {
     private var forceDone = false
     /// IOS-38: el desajuste de exposición del esclavo (RIG_SPLIT_EV a los RIG_SPLIT_EV_AT_S s).
     var exposureBias: ((Double) -> Void)?
+    /// 2026-10-15: el spike de la duración de fotograma (RIG_SPIKE_FRAME_*): el plan, o por
+    /// qué no se armó, y lo que se le pidió a la cámara de este lado. Lo aplica el
+    /// CaptureEngine: armarlo con los fps nominales, pedir una duración (nil: la nominal) en
+    /// el segundo de pasada y el instante del soporte, y leer lo que midió.
+    private var frameSpikePlan: FrameDurationSpikePlan?
+    private var frameSpikeError = ""
+    private var frameSpikeCurrent: FrameDuration?
+    var frameSpikeArm: ((Int) -> Void)?
+    var frameDurationRequest: ((FrameDuration?, Double, Int64) -> Void)?
+    var frameSpikeReport: () -> [String: Any] = { [:] }
     /// Lo que el desajuste aplicó de verdad (ISO y obturación antes y después).
     var exposureApplied: [String: Double] = [:]
     private var evDone = false
@@ -1092,6 +1117,12 @@ final class SplitBench {
         self.config = ajustes
         durationS = ajustes.durationS
         governor = LadderGovernor(force: ajustes.ladderForce.flatMap { $0.applies(to: side) ? $0 : nil })
+        do {
+            frameSpikePlan = try FrameDurationSpikePlan.parse(environment: environment)
+        } catch {
+            frameSpikeError = "\(error)"
+            NSLog("[split] spike de la duración de fotograma sin armar: %@", frameSpikeError)
+        }
     }
 
     private func number(_ key: String, _ def: Double) -> Double {
@@ -1129,6 +1160,8 @@ final class SplitBench {
     private var tsAudioFrames = 0
 
     func start() {
+        // El spike de la duración de fotograma: la cadencia de la cámara se mide desde ya.
+        if frameSpikePlan != nil { frameSpikeArm?(Int(Self.fps)) }
         // .strict: el sistema no agrupa los disparos para ahorrar energía.
         let t = DispatchSource.makeTimerSource(flags: .strict, queue: queue)
         // Cada disparo, justo después de un punto de la rejilla del programa: el tic
@@ -1389,10 +1422,15 @@ final class SplitBench {
             }
             if config.benchFiles { m.onComposed = { [weak self] f in self?.logComposed(f) } }
             m.onIdrRequest = { [weak self] seq in self?.session.requestIdr(partSeq: seq) }
-            // SPK-04 (2026-10-14): la fase entre las cámaras por minuto de la pasada.
-            m.halvesPhase = HalvesPhaseTracker(
-                startRigMs: (startHostNs + session.clock.offsetAt(ns: startHostNs)) / 1_000_000,
-                frameDurationMs: 1000 / Self.fps
+            // SPK-04 (2026-10-14): la fase entre las cámaras por minuto de la pasada; y
+            // (2026-10-15) en cubos de 10 s de la rejilla del reloj del soporte, los mismos que
+            // la cadencia del spike de la duración de fotograma.
+            let inicioFase = (startHostNs + session.clock.offsetAt(ns: startHostNs)) / 1_000_000
+            m.halvesPhase = HalvesPhaseTracker(startRigMs: inicioFase, frameDurationMs: 1000 / Self.fps)
+            m.halvesPhaseBy10s = HalvesPhaseTracker(
+                startRigMs: HalvesPhaseTracker.gridStart(inicioFase, bucketMs: HalvesPhaseTracker.fineBucketMs),
+                frameDurationMs: 1000 / Self.fps, bucketMs: HalvesPhaseTracker.fineBucketMs,
+                maxBuckets: HalvesPhaseTracker.fineMaxBuckets
             )
             // IOS-84: sin ninguna cámara, la tarjeta SIN SEÑAL (la sube Dart, oculta).
             m.onSourceChange = { fuente in OverlayHub.shared?.setVisible(.slate, fuente == .noSignal) }
@@ -1580,6 +1618,7 @@ final class SplitBench {
             }
         }
         stepLadder(transcurrido)
+        stepFrameSpike(transcurrido)
         if transcurrido >= Double(footprintMb.count) * Self.footprintEveryS {
             // 2026-10-14: la latencia del minuto que acaba (la primera muestra abre el 0).
             if !footprintMb.isEmpty { closeLatencyMinute() }
@@ -2309,6 +2348,55 @@ final class SplitBench {
         ]
     }
 
+    // MARK: - El spike de la duración de fotograma (2026-10-15)
+
+    /// En cada tic, en los dos móviles: lo que pide el plan a este lado ahora; si cambia, se
+    /// le pide a la cámara.
+    private func stepFrameSpike(_ transcurrido: Double) {
+        guard let plan = frameSpikePlan else { return }
+        let ahora = rigNowMs()
+        let pedida = plan.duration(for: side, atRigMs: ahora, benchS: transcurrido)
+        guard pedida != frameSpikeCurrent else { return }
+        frameSpikeCurrent = pedida
+        frameDurationRequest?(pedida, transcurrido, ahora)
+    }
+
+    /// La fase del maestro cada 10 s: [inicio del cubo en el reloj del soporte, mediana con
+    /// signo (ms), fotogramas de dos lentes, desgarros].
+    private func phaseBy10s() -> [[Any]] {
+        guard let f = master?.halvesPhaseBy10s else { return [] }
+        return f.buckets.map { [f.startRigMs(of: $0), $0.medianMs, $0.frames, $0.torn] }
+    }
+
+    /// El spike, para el informe: el plan, lo que midió la cámara de este lado y, en el
+    /// maestro, cada ventana de la pasada con lo que debería mover la fase (captura del
+    /// maestro − de la parte: baja si se alarga el esclavo, sube si se alarga el maestro) y
+    /// lo que la movió, del cubo de 10 s de antes de la ventana al de después.
+    private func frameSpikeSection() -> [String: Any] {
+        if !frameSpikeError.isEmpty { return ["error": frameSpikeError] }
+        guard let plan = frameSpikePlan else { return [:] }
+        var s = frameSpikeReport()
+        s["plan"] = plan.report
+        s["side"] = side.rawValue
+        guard session.isMaster, let f = master?.halvesPhaseBy10s else { return s }
+        let nominal = FrameDuration.nominal(fps: Int(Self.fps))
+        let inicio = (startHostNs + session.clock.offsetAt(ns: startHostNs)) / 1_000_000
+        let fases = f.buckets.filter { $0.frames >= HalvesPhaseTracker.minFramesForDrift }
+            .map { (startRigMs: f.startRigMs(of: $0), medianMs: $0.medianMs) }
+        let primera = inicio + Int64((plan.afterS * 1000).rounded())
+        s["windows_columns"] = ["start_rig_ms", "end_rig_ms", "side", "duration_us", "predicted_phase_shift_ms",
+                                "measured_phase_shift_ms"]
+        s["windows"] = plan.windows(fromRigMs: primera, toRigMs: rigNowMs()).map { w -> [Any] in
+            let retraso = plan.predictedShiftMs(w.duration, nominal: nominal)
+            let medida = FrameDurationSpikePlan.measuredShiftMs(
+                phases: fases, window: w, bucketMs: HalvesPhaseTracker.fineBucketMs, frameDurationMs: 1000 / Self.fps
+            )
+            return [w.startRigMs, w.endRigMs, w.side.rawValue, w.duration.microseconds,
+                    w.side == side ? retraso : -retraso, medida.map { $0 as Any } ?? NSNull()]
+        }
+        return s
+    }
+
     // MARK: - Informe
 
     private func finish() {
@@ -2324,6 +2412,11 @@ final class SplitBench {
         e0?.flush()
         flushViews()
         if rec4kStarted { stopLocal4K?() }
+        // El spike no deja la cámara alargada al acabar.
+        if frameSpikeCurrent != nil {
+            frameSpikeCurrent = nil
+            frameDurationRequest?(nil, Double(DispatchTime.now().uptimeNanoseconds - startNs) / 1e9, rigNowMs())
+        }
         let espera = DispatchSemaphore(value: 0)
         if let r = recorder { r.finish { _ in espera.signal() }; _ = espera.wait(timeout: .now() + 5) }
         // Después de lo que quede por escribir en su cola.
@@ -2388,6 +2481,10 @@ final class SplitBench {
             "halves_phase_by_minute": fasePorMinuto,
             "halves_phase_drift_ms_per_min": fase?.driftMsPerMinute() ?? -1,
             "halves_phase_minutes_to_half_frame": fase?.minutesToHalfFrame() ?? -1,
+            // 2026-10-15: lo mismo cada 10 s: [inicio del cubo en el reloj del soporte,
+            // mediana con signo (ms), fotogramas de dos lentes, desgarros].
+            "halves_phase_by_10s": phaseBy10s(),
+            "frame_duration_spike": frameSpikeSection(),
             // El tic: su fase frente a la rejilla (en el margen, ~2 ms), los instantes del
             // programa que se saltó, los que no tenían vista del director y la latencia
             // añadida de cada minuto [p50, p95].

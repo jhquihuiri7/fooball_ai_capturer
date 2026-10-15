@@ -12,6 +12,77 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-15 · El spike de la duración de fotograma: mantener la fase entre las cámaras alargando un 0,1 % al que adelanta (ADR 0024 de football-ai, propuesta) · 🚧 hecho en código, sin medir en los iPhone
+
+La fase entre las capturas deriva (§2 de «Las tres anomalías…», 2026-10-14). La pasada de hoy
+por Wi-Fi Aware (`bench/dos-moviles-20261015-0805`, 30 min, guion spk04) lo repite:
+- de +9 ms en el minuto 0 a +16 en el 8, el cruce en el 8-9 y de −16 a +1 hasta el 29: **+0,86
+  ms/min**, el mismo signo que el ensayo (+0,8). El 16 Pro (derecho) va ~14 ppm más rápido;
+- **294 desgarros**, todos entre los segundos 492 y 594: ~100 s en que la fase redondea a ±17
+  ms y el emparejado salta de vecino;
+- `halves_skew_ms` p50 12 / p95 16 / p99 22.
+
+El arreglo que propone el ADR 0024 es alargar un ~0,1 % los fotogramas del que va adelantado.
+Antes hace falta saber si el sensor lo cumple, y eso es esto: solo para bancos, y sin
+RIG_SPIKE_FRAME_US no hace nada.
+
+**Hecho**
+- **RigCore, `Runtime/FrameDurationSpike.swift`:**
+  - `FrameDuration`, en µs o en valor/escala de CMTime;
+  - `FrameDurationSpikePlan`, el entorno: ventanas de `ON_S` cada `EVERY_S` en la rejilla del
+    reloj del soporte, como Spk04Script, así que el maestro sabe cuándo se alargó el otro.
+    Lado `left`, `right` o `alternate`, varias duraciones por turnos, `AFTER_S` de base, el
+    retraso previsto y `measuredShiftMs`: lo que movió la fase una ventana, desenrollado
+    cubo a cubo (20 ms pasan de ½ fotograma);
+  - `FrameCadenceTracker`, cada 10 s: el periodo medio, p50 y p99, los huecos, didDrop, lo
+    que entró a la 4K y lo pedido;
+  - `FrameDurationEffect`, los fotogramas y los ms hasta que se nota.
+- **`HalvesPhaseTracker`:** `gridStart` y `startRigMs(of:)`. **`MasterProgramStage`:**
+  `halvesPhaseBy10s`.
+- **CaptureEngine:**
+  - `benchFrameDuration`: `lockForConfiguration` como `lockSettings`, con mínima ≤ máxima en
+    todo momento. Antes mira el rango del formato, porque fuera de él AVFoundation lanza una
+    excepción de ObjC. Después lee lo que quedó: la duración, el formato, la exposición y el
+    ISO, también 3 s después;
+  - la cadencia, en cada fotograma y cada didDrop.
+- **SplitBench:** pide en cada tic, en los dos móviles, y vuelve a la nominal al acabar. El
+  informe trae `halves_phase_by_10s` y `frame_duration_spike`.
+- **Tests:** `FrameDurationSpikeTests` (14) y la fase de 10 s en `MasterProgramStageTests`.
+  `swift test --skip ModelBench`: 516, 4 saltados, 0 fallos. `check_layers` en verde. ZeroKit
+  para iOS con xcodebuild (derivedData propio): BUILD SUCCEEDED. El Runner, con `swiftc
+  -typecheck` contra ese ZeroKit y los módulos copiados de `build/ios`: 0 errores.
+
+**La pasada** (10 min por Aware, director apagado, guion spk04 para que haya dos lentes, el
+derecho alargado a 33 367 µs 20 s de cada 120):
+
+    BANCO_EXTRA='{"RIG_LINK_INTERFACE": "aware", "RIG_SPLIT_SCRIPT": "spk04", "RIG_SPLIT_DIRECTOR": "0", "RIG_SPLIT_RECORD_4K": "1", "RIG_SPIKE_FRAME_US": "33367", "RIG_SPIKE_FRAME_SIDE": "right", "RIG_SPIKE_FRAME_ON_S": "20", "RIG_SPIKE_FRAME_EVERY_S": "120"}' \
+      tools/banco_dos_moviles.sh split <secreto> 600
+
+Con `SIN_4K=1` la 4K se queda en el móvil, y la recogida va más rápida.
+
+Qué mirar:
+- **El derecho**, `frame_duration_spike`:
+  - en `transitions`, que no haya `rejected` y que `readback_min`/`max` den lo pedido. Además,
+    `apply_ms`, `frames_to_effect` y `ms_to_effect`, lo que tarda; `periods_us`, los 90
+    primeros periodos; la exposición y el ISO de antes y de 3 s después; `format_kept`;
+  - en `cadence_by_10s`, que `mean_us` dé ~33 367 dentro de las ventanas y ~33 333 fuera, con
+    `gaps` y `did_drop` en 0 y `frames_4k` en ~300;
+  - además, `camera_drops`, `rec4k` y `capture_clock_skew_ms`.
+- **El izquierdo**, `frame_duration_spike.windows`: el `measured_phase_shift_ms` de cada
+  ventana frente al previsto (−20,2: alargar el esclavo baja la fase). Además:
+  - `halves_phase_by_10s`, ~−10 ms por cubo dentro de cada ventana y plana fuera (+0,14 ms por
+    cubo de deriva);
+  - `torn_frames`: con 4 o 5 ventanas la fase cruza ±½ fotograma 2 o 3 veces. Cada cruce dura
+    1-2 s, no los ~100 de la deriva sola: si hay desgarros, que sean pocos y caigan en las
+    ventanas;
+  - `part_age_ms` y `added_latency_ms_p95`, que no se muevan.
+
+**Siguiente:** la pasada. Con sus cifras, el ADR 0024 va a la decisión de Alexander. Si
+cumple, lo mismo con el izquierdo (`alternate`) y con 1001/30000 y 33 667 (1 %, para corregir
+rápido al arrancar). El lazo cerrado (la orden `frame_trim` y el controlador del maestro) no se
+escribe hasta que el ADR se acepte.
+
+
 ## 2026-10-15 · IOS-06 — la escalera actúa en el banco split y en EMITIR (la IA, el programa y la parte) · 🚧 sin probar en los iPhone
 
 En el ensayo de 90 min (2026-10-14) el 16 Pro, de esclavo, pasó 71 min en `serious`, y la

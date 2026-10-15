@@ -171,6 +171,26 @@ final class CaptureEngine: NSObject {
     /// Fotogramas que entraron a la 4K desde que arrancó la app (el banco de SPK-04).
     private(set) var recordedFrames: Int64 = 0
 
+    // 2026-10-15: el spike de la duración de fotograma (RIG_SPIKE_FRAME_*, solo bancos; la
+    // propuesta del ADR 0024 de football-ai). El banco split lo arma y pide las duraciones;
+    // aquí se aplican como en `lockSettings` y se mide lo que da la cámara. Se toca en la
+    // cola de captura; el informe se lee fuera, tras `frameSpikeLock`.
+    private struct FrameSpikeTransition {
+        var info: [String: Any]
+        var effect: FrameDurationEffect
+    }
+
+    /// Armado: cada fotograma pasa por la cadencia. Solo en la cola de captura.
+    private var frameSpikeArmed = false
+    private let frameSpikeLock = NSLock()
+    /// La duración nominal, la de `lockSettings` (1/fps); la fija quien arma el spike.
+    private var frameSpikeNominal: FrameDuration?
+    private var frameSpikeRequested: FrameDuration?
+    private var frameCadence: FrameCadenceTracker?
+    private var frameTransitions: [FrameSpikeTransition] = []
+    /// Los cambios que se guardan como mucho: 8 h a dos por ventana de 120 s.
+    private static let frameSpikeMaxTransitions = 480
+
     /// IOS-15: lo que dice la grabación de prueba con el volcado activo. Solo se usa
     /// con NV12_DUMP_S puesto; se escribe en Documents/bench al parar.
     private var dumpRunFrames: Int64 = 0
@@ -530,6 +550,161 @@ final class CaptureEngine: NSObject {
             }
         }
     }
+
+    // MARK: - El spike de la duración de fotograma (2026-10-15)
+
+    /// El banco split trae plan (RIG_SPIKE_FRAME_*): desde ahora se mide la cadencia de la
+    /// cámara, también antes de la primera ventana, que es la base.
+    func armFrameCadence(fps: Int) {
+        queue.async { [self] in
+            frameSpikeLock.lock()
+            defer { frameSpikeLock.unlock() }
+            guard frameCadence == nil else { return }
+            let nominal = FrameDuration.nominal(fps: fps)
+            frameSpikeNominal = nominal
+            frameCadence = FrameCadenceTracker(nominalUs: nominal.microseconds)
+            frameSpikeArmed = true
+        }
+    }
+
+    /// El banco pide una duración de fotograma (nil: la nominal). Como `lockSettings`: con
+    /// `lockForConfiguration` y la mínima igual a la máxima (sin cadencia variable), en un
+    /// orden que deja siempre mínima ≤ máxima. Lo que el formato activo no admite no se toca
+    /// (AVFoundation lanzaría una excepción de ObjC, que tira la app) y queda en el informe.
+    /// `benchS` y `rigMs`: cuándo lo pidió el banco, para casarlo con la fase del maestro.
+    func benchFrameDuration(_ pedida: FrameDuration?, benchS: Double, rigMs: Int64) {
+        queue.async { [self] in
+            frameSpikeLock.lock()
+            let armado = frameSpikeNominal
+            let pedidaAntes = frameSpikeRequested
+            frameSpikeLock.unlock()
+            guard let nominal = armado else { return }  // sin armar no se mide: no se toca
+            let antes = pedidaAntes ?? nominal
+            let objetivo = pedida ?? nominal
+            var info: [String: Any] = [
+                "bench_s": benchS, "rig_ms": rigMs, "requested": objetivo.description,
+                "requested_us": objetivo.microseconds, "from_us": antes.microseconds,
+            ]
+            guard let device else {
+                info["rejected"] = "sin cámara"
+                return noteFrameTransition(info, effect: nil, requested: nil)
+            }
+            let cm = CMTime(value: objetivo.value, timescale: objetivo.timescale)
+            let formato = device.activeFormat
+            let rangos = formato.videoSupportedFrameRateRanges
+            info["format_ranges"] = rangos.map { Self.text($0.minFrameDuration) + ".." + Self.text($0.maxFrameDuration) }
+            guard rangos.contains(where: {
+                CMTimeCompare(cm, $0.minFrameDuration) >= 0 && CMTimeCompare(cm, $0.maxFrameDuration) <= 0
+            }) else {
+                info["rejected"] = "fuera de las duraciones del formato"
+                return noteFrameTransition(info, effect: nil, requested: nil)
+            }
+            info["exposure_ms_before"] = CMTimeGetSeconds(device.exposureDuration) * Self.msPerS
+            info["iso_before"] = Double(device.iso)
+            let t0 = RigLink.hostNowNs()
+            do {
+                try device.lockForConfiguration()
+                if CMTimeCompare(cm, device.activeVideoMaxFrameDuration) > 0 {
+                    device.activeVideoMaxFrameDuration = cm
+                    device.activeVideoMinFrameDuration = cm
+                } else {
+                    device.activeVideoMinFrameDuration = cm
+                    device.activeVideoMaxFrameDuration = cm
+                }
+                device.unlockForConfiguration()
+            } catch {
+                info["rejected"] = "lockForConfiguration: \(error.localizedDescription)"
+                return noteFrameTransition(info, effect: nil, requested: nil)
+            }
+            let t1 = RigLink.hostNowNs()
+            info["apply_ms"] = Double(t1 - t0) / Self.nsPerMs
+            // Lo que dice la cámara que quedó: AVFoundation acepta peticiones que luego no cumple.
+            info["readback_min"] = Self.text(device.activeVideoMinFrameDuration)
+            info["readback_max"] = Self.text(device.activeVideoMaxFrameDuration)
+            info["format_kept"] = device.activeFormat == formato
+            info["exposure_mode"] = device.exposureMode.rawValue
+            info["session_running"] = session.isRunning
+            let efecto = FrameDurationEffect(fromUs: antes.microseconds, toUs: objetivo.microseconds,
+                                             requestedAtHostNs: t1)
+            noteFrameTransition(info, effect: efecto, requested: .some(pedida))
+            NSLog("[spike] duración de fotograma %@ (%.2f µs) a los %.0f s, en %.2f ms", objetivo.description,
+                  objetivo.microseconds, benchS, Double(t1 - t0) / Self.nsPerMs)
+        }
+    }
+
+    /// Anota un cambio pedido; con `requested`, además, lo que pide la cámara desde ahora.
+    private func noteFrameTransition(_ info: [String: Any], effect: FrameDurationEffect?,
+                                     requested: FrameDuration??) {
+        frameSpikeLock.lock()
+        defer { frameSpikeLock.unlock() }
+        if let requested {
+            frameSpikeRequested = requested
+            frameCadence?.setRequested(us: requested?.microseconds)
+        }
+        // Un cambio rechazado se anota con un efecto vacío: nunca se cumple.
+        let e = effect ?? FrameDurationEffect(fromUs: 0, toUs: 0, requestedAtHostNs: 0)
+        frameTransitions.append(FrameSpikeTransition(info: info, effect: e))
+        if frameTransitions.count > Self.frameSpikeMaxTransitions {
+            frameTransitions.removeFirst(frameTransitions.count - Self.frameSpikeMaxTransitions)
+        }
+    }
+
+    /// Cada fotograma con el spike armado: a la cadencia de su cubo de 10 s y, si hay un
+    /// cambio pedido reciente, a lo que tarda en notarse. Sin reloj del soporte (el esclavo
+    /// al arrancar), solo el sello.
+    private func noteFrameCadence(hostNs: Int64, rigNs: Int64) {
+        let conReloj = recordingClockState() != .waiting
+        frameSpikeLock.lock()
+        defer { frameSpikeLock.unlock() }
+        guard let c = frameCadence,
+              let periodo = c.record(frameHostNs: hostNs, rigMs: conReloj ? rigNs / Self.nsPerMsInt : nil,
+                                     recordedTotal: recordedFrames),
+              let i = frameTransitions.indices.last,
+              !frameTransitions[i].effect.isComplete,
+              frameTransitions[i].info["rejected"] == nil,
+              hostNs > frameTransitions[i].effect.requestedAtHostNs
+        else { return }
+        frameTransitions[i].effect.observe(periodUs: periodo, frameHostNs: hostNs)
+        if frameTransitions[i].effect.isComplete, let device {
+            // ¿Tocó la exposición? Lo que hay 3 s después del cambio.
+            frameTransitions[i].info["exposure_ms_after_3s"] = CMTimeGetSeconds(device.exposureDuration) * Self.msPerS
+            frameTransitions[i].info["iso_after_3s"] = Double(device.iso)
+        }
+    }
+
+    /// Lo medido, para el informe del banco: la cadencia cada 10 s del reloj del soporte y
+    /// cada cambio pedido con lo que tardó en notarse. [:] sin spike.
+    func frameSpikeReport() -> [String: Any] {
+        frameSpikeLock.lock()
+        defer { frameSpikeLock.unlock() }
+        guard let c = frameCadence, let nominal = frameSpikeNominal else { return [:] }
+        func r(_ x: Double) -> Double { (x * Self.reportScale).rounded() / Self.reportScale }
+        return [
+            "nominal": nominal.description,
+            "nominal_us": nominal.microseconds,
+            "cadence_columns": ["start_rig_ms", "intervals", "mean_us", "p50_us", "p99_us", "gaps", "did_drop",
+                                "frames_4k", "requested_us"],
+            "cadence_by_10s": c.buckets.map { b -> [Any] in
+                [b.startRigMs, b.intervals, r(b.meanUs), r(b.p50Us), r(b.p99Us), b.gaps, b.drops, b.recorded,
+                 r(b.requestedUs)]
+            },
+            "transitions": frameTransitions.map { t -> [String: Any] in
+                var d = t.info
+                d["frames_to_effect"] = t.effect.framesToEffect ?? -1
+                d["ms_to_effect"] = t.effect.msToEffect.map(r) ?? -1
+                d["periods_us"] = t.effect.periodsUs.map(r)
+                return d
+            },
+        ]
+    }
+
+    /// Una duración de CMTime como «valor/escala», sin redondear.
+    private static func text(_ t: CMTime) -> String { "\(t.value)/\(t.timescale)" }
+    private static let msPerS = 1000.0
+    private static let nsPerMs = 1e6
+    private static let nsPerMsInt: Int64 = 1_000_000
+    /// Dos decimales en el informe: centésimas de µs y de ms.
+    private static let reportScale = 100.0
 
     /// El banco de IOS-84 para y reanuda la cámara a propósito (como una interrupción).
     func setCameraRunningForBench(_ on: Bool) {
@@ -1111,6 +1286,7 @@ extension CaptureEngine: AVCaptureVideoDataOutputSampleBufferDelegate {
         let offsetNs = rigClock?.offsetAt(ns: originalNs) ?? clockOffsetNs
         let rigNs = originalNs + offsetNs
         let rigTime = CMTime(value: rigNs, timescale: 1_000_000_000)
+        if frameSpikeArmed { noteFrameCadence(hostNs: originalNs, rigNs: rigNs) }
 
         recentPts.append(rigNs)
         if recentPts.count > recentPtsCapacity {
@@ -1201,6 +1377,11 @@ extension CaptureEngine: AVCaptureVideoDataOutputSampleBufferDelegate {
         from connection: AVCaptureConnection
     ) {
         droppedFrames += 1
+        if frameSpikeArmed {
+            frameSpikeLock.lock()
+            frameCadence?.recordDrop()
+            frameSpikeLock.unlock()
+        }
         let motivo = CMGetAttachment(sampleBuffer, key: kCMSampleBufferAttachmentKey_DroppedFrameReason,
                                      attachmentModeOut: nil) as? String
         if motivo == String(kCMSampleBufferDroppedFrameReason_OutOfBuffers) {
