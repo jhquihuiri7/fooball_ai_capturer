@@ -25,6 +25,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:football_ai_capture/src/ads/ad_director.dart';
 import 'package:football_ai_capture/src/ads/ad_pack_downloader.dart';
 import 'package:football_ai_capture/src/capture_labels.dart';
+import 'package:football_ai_capture/src/auto_emitir.dart';
 import 'package:football_ai_capture/src/capture_session.dart';
 import 'package:football_ai_capture/src/constants.dart';
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
@@ -60,10 +61,15 @@ class CapturePage extends StatefulWidget {
     this.prefersMaster,
     this.onMasterHost,
     this.linkMode = LinkMode.multipeer,
+    this.autoEmitir,
     super.key,
   });
 
   final CameraRole role;
+
+  /// EMITIR sin tocar la pantalla (dart-define `AUTO_EMITIR`, ver `AutoEmitir`). null: la
+  /// pantalla de siempre.
+  final AutoEmitirConfig? autoEmitir;
 
   /// El enlace elegido en la pantalla de lado (IOS-58): con uno de Network, EMITIR es la
   /// arquitectura B.
@@ -198,10 +204,24 @@ class _CapturePageState extends State<CapturePage> {
       unawaited(Future<void>.microtask(() => widget.onMasterHost?.call(host)));
     }
     _refresh = Timer.periodic(statusRefreshInterval, (_) => unawaited(_session.refreshStatus()));
+    final AutoEmitirConfig? auto = widget.autoEmitir;
+    if (auto != null) {
+      _auto = AutoEmitir(
+        session: _session,
+        config: auto,
+        log: widget.session == null
+            ? AutoEmitirLog.inDocuments(appDocumentsPath(), widget.role).call
+            : AutoEmitirLog(null).call,
+      )..start();
+    }
   }
+
+  /// El modo de prueba sin toques, si se lanzó con él.
+  AutoEmitir? _auto;
 
   @override
   void dispose() {
+    _auto?.dispose();
     _peekTimer?.cancel();
     _refresh?.cancel();
     unawaited(_adPacks.dispose());

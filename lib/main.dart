@@ -14,6 +14,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
+import 'package:football_ai_capture/src/auto_emitir.dart';
 import 'package:football_ai_capture/src/bench_page.dart';
 import 'package:football_ai_capture/src/role_page.dart';
 import 'package:football_ai_capture/src/theme/zero_theme.dart';
@@ -42,6 +43,19 @@ const String _prefersMaster = String.fromEnvironment('PREFERS_MASTER');
 /// cámara está lista y para sola a los AUTO_RECORD_S segundos. 0 = no graba.
 const bool _standalone = bool.fromEnvironment('STANDALONE');
 const int _autoRecordS = int.fromEnvironment('AUTO_RECORD_S');
+
+/// EMITIR sin tocar la pantalla (2026-10-15, `tools/emitir_auto.sh`): con AUTO_ROLE y
+/// AUTO_EMITIR=true, el camino de producción de los toques —el lado, «Este móvil dirige» en
+/// el izquierdo, el enlace AUTO_LINK (aware o wifi) de «Enlace y emisión», «Abrir cámara» y,
+/// en el maestro con LISTA, el mismo EMITIR del botón—, y no el banco split. AUTO_EMITIR_4K
+/// enciende «Guardar vídeo»; AUTO_EMITIR_S > 0 llama a PARAR a esos segundos de EMITIR.
+/// Los interruptores valen `1` o `true`.
+const String _autoEmitirDefine = String.fromEnvironment('AUTO_EMITIR');
+const bool _autoEmitir = _autoEmitirDefine == '1' || _autoEmitirDefine == 'true';
+const String _autoLink = String.fromEnvironment('AUTO_LINK', defaultValue: 'aware');
+const String _autoEmitir4kDefine = String.fromEnvironment('AUTO_EMITIR_4K');
+const bool _autoEmitir4k = _autoEmitir4kDefine == '1' || _autoEmitir4kDefine == 'true';
+const int _autoEmitirS = int.fromEnvironment('AUTO_EMITIR_S');
 
 /// IOS-08: `flutter run --dart-define=BENCH=<nombre>` abre el modo banco, que corre
 /// solo y deja su informe en Documents/bench/. Vacío en producción.
@@ -78,6 +92,14 @@ class CaptureApp extends StatelessWidget {
           ? BenchPage(name: _bench, paramsJson: _benchParams)
           : _autoRole.isEmpty
           ? RolePage(api: api)
+          : _autoEmitir
+          ? autoEmitirShell(
+              role: _autoRole,
+              link: _autoLink,
+              save4k: _autoEmitir4k,
+              stopAfterS: _autoEmitirS,
+              prefersMaster: _prefersMaster,
+            )
           : ZeroShell(
               role: _autoRole == 'right' ? CameraRole.right : CameraRole.left,
               linkOnly: _linkOnly,
@@ -87,4 +109,30 @@ class CaptureApp extends StatelessWidget {
             ),
     );
   }
+}
+
+/// La pantalla de captura del modo sin toques, como la abre «Abrir cámara» desde la de lado
+/// (`RolePage._open`): sin servidor del pod (el programa va al QR Soporte del Keychain, o
+/// SIN DESTINO), «Este móvil dirige» en el izquierdo salvo PREFERS_MASTER, y el enlace pedido
+/// (aware por defecto; wifi o ethernet; nunca Multipeer, que no tiene programa).
+ZeroShell autoEmitirShell({
+  required String role,
+  required String link,
+  required bool save4k,
+  required int stopAfterS,
+  String prefersMaster = '',
+}) {
+  final CameraRole lado = role == 'right' ? CameraRole.right : CameraRole.left;
+  final LinkMode modo =
+      LinkMode.values.where((LinkMode m) => m.name == link && m != LinkMode.multipeer).firstOrNull ??
+      LinkMode.aware;
+  return ZeroShell(
+    role: lado,
+    prefersMaster: prefersMaster.isEmpty ? lado == CameraRole.left : prefersMaster == 'true',
+    linkMode: modo,
+    autoEmitir: AutoEmitirConfig(
+      save4k: save4k,
+      stopAfter: stopAfterS > 0 ? Duration(seconds: stopAfterS) : null,
+    ),
+  );
 }
