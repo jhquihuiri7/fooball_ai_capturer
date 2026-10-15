@@ -12,6 +12,132 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-15 · IOS-06 — la escalera actúa en el banco split y en EMITIR (la IA, el programa y la parte) · 🚧 sin probar en los iPhone
+
+En el ensayo de 90 min (2026-10-14) el 16 Pro, de esclavo, pasó 71 min en `serious`, y la
+escalera de IOS-06 en el camino de la arquitectura B solo se enseñaba. La cancha será al sol
+90-120 min. Ahora suelta lo que dice la tarjeta, en el orden del propietario: primero la IA,
+después la calidad del programa, después la emisión de ese móvil; la grabación local nunca.
+
+**Hecho** (en un worktree aparte; ZeroKit y el Runner, sin Dart)
+- **`RigCore/Runtime/LadderGovernor.swift`** (lógica pura): la escalera de cada móvil con sus
+  sensores, más lo que se sabe del otro. **La IA sigue la peor de las dos escaleras** (la
+  cadencia más baja, IOS-25): el maestro, la suya y la que el esclavo cuenta en su latido; el
+  esclavo, la suya y la que manda el maestro. Ninguno detecta por encima de lo que permite la
+  suya: lo propio se aplica al momento, sin esperar a la orden. **El programa va con la
+  escalera del maestro y la parte con la del esclavo.** Un otro caído no cuenta.
+- **La orden `cadence`** (`RigCore/Wire/CadenceCommand.swift`): `command` por control en JSON
+  (`{"ai":false,"kind":"cadence","level":2,"player_hz":0}`), el `kind` que ya lista el ADR
+  0023 §1 y que pide §5 («la cadencia la fija el maestro con `command`»). El maestro la manda
+  al cambiar la común y cada `cadenceResendS` (5 s). Un esclavo de antes ignora el `kind`: no
+  sube `link_version`. El nivel del esclavo ya iba en el latido (IOS-81); ahora se rellena
+  (`RigLinkSession.setLadderLevel`) y el maestro lo oye (`onPeerLadder`, solo los cambios).
+- **La cadencia común en la rejilla del soporte** (`DetectionGate`, junto a DetectionCadence):
+  la detección del banco y de EMITIR ya no toma «el último fotograma cada 4 tics», sino el más
+  cercano a t_k = k/hz del soporte, igual en los dos (la regla de PlayerDetectionStage para
+  quien va por tics). Las cajas llevan t_k: el director las empareja con desfase cero. Cambiar
+  la cadencia empieza la rejilla nueva; 0 la apaga. Un tic que llega más de un periodo tarde va
+  al instante más reciente y cuenta los saltados.
+- **SplitBench** (el banco split y EMITIR, `ios/Runner/RigLinkNW.swift`): avanza la escalera
+  una vez por segundo con los sensores del CaptureEngine (`ladderSensorTarget`: térmica,
+  presión de la cámara y carga) y aplica lo que cambia:
+  - **L1** jugadores a 5 Hz en los dos; **L2** sin detecciones en los dos y el director a
+    `setAI(false)`, que va al plano abierto al ritmo del muelle (con «sin detecciones» a secas
+    se quedaba en el último plano: la gramática ve la última evidencia buena);
+  - **L3** el programa ×0,6: por `setCeiling` del publicador (él lleva el codificador con
+    `onBitrate`); sin publicador (la cancha sin internet), el codificador directamente; un
+    publicador que nace en L3 nace con el techo;
+  - **L4 en el esclavo**: deja de pintar y codificar su parte (con un IDR al volver); el
+    maestro lo oye en el latido y sigue con una lente sin esperarla, como con el esclavo caído
+    (`peerDown` y `setSingleLens`, IOS-81). Su 4K sigue.
+- **Lo que se ve**: CaptureStatus.ladderLevel enseña la escalera de la pasada mientras dura
+  (sin pasada, la de CaptureEngine, que solo se enseña). ThermalMonitor guarda sus niveles
+  tras un candado (se leen desde la cola del programa). `FrameRing.latestRigMs()`, sin reservar.
+- **El forzado para los bancos** (`LadderForce`, solo `ProgramRunConfig.bench`; EMITIR no lo
+  mira): `RIG_LADDER_FORCE=L0..L4`, `RIG_LADDER_FORCE_AT_S` (desde, 0),
+  `RIG_LADDER_FORCE_UNTIL_S` (hasta; sin él, al final) y `RIG_LADDER_FORCE_SIDE=left|right`
+  (sin él, los dos: BANCO_EXTRA llega igual a los dos). Es el **objetivo**, no el nivel: pasa
+  por la misma histéresis, así que al acabar el tramo la escalera mejora un escalón cada 60 s.
+- **El informe** (`program-split-<lado>-<t>.json`): `ladder_by_minute` (el nivel de ese
+  móvil), `ladder_ai_by_minute` (el de su IA, la común), `detect_runs_by_minute` (el último,
+  a medias), `director_pairing` (completas, huérfanas por lado, desfase máximo) y `ladder`:
+  cada cambio con su `s` y `rig_ms` (`level`, `ai_level`, `peer_level`, `commanded_level`,
+  `forced`, `detect_hz`, `program_bitrate_factor`, `part`, `single_lens`), las acciones en
+  vigor al acabar, el forzado, las órdenes mandadas y recibidas, `detect_skipped_late`,
+  `detect_missing_frame`, `part_frames_paused` y `program_bitrate_bps`. El latido
+  (`program-live-*`) lleva el nivel, el de la IA, los dos por minuto y los últimos 20 cambios.
+
+**Cambia también sin calor** (L0)
+- La detección va en la rejilla k/7,5 Hz del soporte y no por el contador de tics. Antes los
+  contadores de los dos móviles no estaban en fase (cada uno empezaba al arrancar su banco): lo
+  más probable es que la mayoría de los ciclos llegaran al director como huérfanos de un lado
+  (no se medía; ahora sí, `director_pairing`).
+- Un esclavo promovido (IOS-85) con el enlace caído ya compone con su lente sola: antes el
+  aviso de caída le llegaba siendo esclavo y se ignoraba.
+
+**NO probado en hardware**: nada de lo de hoy. Ni el forzado, ni la orden por Wi-Fi Aware, ni
+el director yendo al abierto con el programa en marcha, ni el bitrate de L3 en la copia .mov y
+en el SRT, ni la parte que para y vuelve con su IDR, ni la escalera de verdad al sol.
+
+**Pendiente de revisión de Alexander** (no se ha cambiado)
+- **La tabla es la provisional de IOS-06 (M19): `serious` → L2.** Con el ensayo del 10-14
+  (esclavo 71 min en `serious`), la IA de los dos habría ido apagada esos 71 min: el partido en
+  el plano abierto. ¿`serious` → L1 (5 Hz) y L2 desde `critical`? Es una decisión de M19
+  (SPK-54/SPK-07), no de esta tarea.
+- **Sin carga se sube un escalón** (IOS-06): con la batería externa agotada, `fair` ya es L2.
+- **L3 a 720p no se aplica**, solo el ×0,6. Cambiar el alto a mitad pide rehacer el pool, el
+  compositor, el render y el codificador del programa, abrir otra copia .mov (el formato no
+  cambia dentro de un fichero) y mandar un SPS nuevo por el SRT. No es barato ni seguro hoy.
+- **L3 en el esclavo no hace nada** (la tarjeta solo habla del programa). ¿Bajar la parte?
+- **L4 en el maestro**: no hay cesión (IOS-86); sigue como en L3.
+- **El balón global (L1) y la vista previa (L2)** no tienen a quién mandar en este camino: no
+  hay balón en el banco split ni en EMITIR, y la vista previa la gobierna IOS-07.
+- La escalera de CaptureEngine (sin pasada) sigue sin actuar: fuera de EMITIR y del banco
+  split no hay IA que soltar.
+
+**Comprobado**
+- `swift test --skip ModelBench`: **502 tests, 4 saltados, 0 fallos** (486 antes; los 16
+  nuevos: LadderGovernorTests 9 —la peor de las dos, la común igual en los dos lados para
+  todas las parejas de niveles, el esclavo nunca por encima de la suya, L2 sin detecciones con
+  el programa y la grabación vivos, L3 ×0,6, L4 sin parte y el maestro con una lente, el
+  forzado del entorno con su lado, solo en el banco, y su histéresis, la orden de ida y
+  vuelta—, DetectionGateTests 4 —7,5 Hz en la rejilla, los dos móviles con 4,5 ms de fase dan
+  los mismos instantes a 7,5 y a 5 Hz, cambiar y apagar, el tic tarde—, DirectorServiceTests 1
+  —la IA de la escalera apagada ignora las cajas y va al plano abierto centrado—,
+  RigLinkSessionTests 1 —el nivel en el latido, solo los cambios; la orden del maestro llega y
+  la del esclavo no sale— y FrameRingTests 1).
+- `tools/check_layers.sh`: limpio.
+- ZeroKit para iOS con xcodebuild (derivedData propio): BUILD SUCCEEDED.
+- El Runner, sin `flutter build` y sin tocar `build/ios`: `swiftc -typecheck` de todos sus
+  `.swift` contra ese ZeroKit y los módulos de HaishinKit y Flutter del DerivedData (copiados
+  aparte): 0 errores y los mismos 16 avisos de siempre (ninguno en lo nuevo).
+- Sin Dart: `flutter test` no hace falta.
+
+**Para probarlo en los dos iPhone** (10 min; con el director y el detector, como el ensayo):
+```
+# L2 en el esclavo de 120 a 300 s: la detección para en los dos y el programa sigue.
+BANCO_EXTRA='{"RIG_LINK_INTERFACE":"aware","RIG_SPLIT_DIRECTOR":"1","RIG_DETECT":"players-centernet-mnv4.mlpackage","RIG_LADDER_FORCE":"L2","RIG_LADDER_FORCE_AT_S":"120","RIG_LADDER_FORCE_UNTIL_S":"300","RIG_LADDER_FORCE_SIDE":"right"}' \
+  tools/banco_dos_moviles.sh split <secreto> 600
+```
+En los dos informes, `detect_runs_by_minute` (el minuto i va de 60·i a 60·(i+1) s de cada
+móvil): ~450 en el 0 y el 1, **0 del 2 al 5**, ~300 en el 6 (L1 de 360 a 420 s, la
+histéresis) y 450 desde el 7, si los sensores están en L0 (en `fair` es L1: 300). En el
+izquierdo, `ladder.changes` con `peer_level` 2 y `ai_level` 2 hacia `s` 120 y
+`cadence_commands_sent` > 0; en el derecho, `forced` true y `cadence_commands_received` > 0.
+`program_frames` ~18 000 sin hueco, `two_lens_frames` como siempre y `ladder.single_lens`
+false. El N0 del izquierdo (`n0/banco-*-left.jsonl`) lleva el `hfov` de la vista: el más
+abierto de 120 a ~360 s. Y `director_pairing.max_abs_skew_ms` 0.
+
+Variantes: L4 en el esclavo (`"RIG_LADDER_FORCE":"L4","RIG_LADDER_FORCE_AT_S":"120",
+"RIG_LADDER_FORCE_SIDE":"right"`, sin UNTIL): `slave_parts` deja de crecer y
+`ladder.part_frames_paused` ~14 400 en el derecho; en el izquierdo, `two_lens_frames` se para a
+los 120 s, `one_lens_frames` sigue y `ladder.single_lens` true. L3 en el maestro
+(`"RIG_LADDER_FORCE":"L3","RIG_LADDER_FORCE_SIDE":"left"`): `ladder.program_bitrate_bps`
+3 600 000 y la copia .mov del programa ~60 % de la de siempre.
+
+**Siguiente paso**: la pasada de arriba en los dos iPhone. Después, la decisión de la tabla
+(`serious` → L1 o L2) antes de la cancha al sol.
+
 
 
 
