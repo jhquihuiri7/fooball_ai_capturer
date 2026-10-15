@@ -41,6 +41,10 @@ public struct LinkTransportStats: Equatable, Sendable {
     /// durante el plazo de la cita (Wi-Fi Aware, IOS-14c).
     public var silenceDrops = 0
 
+    /// Suscripciones del que busca cambiadas por otras porque en el plazo de la cita no
+    /// dieron con nadie (Wi-Fi Aware, 2026-10-15).
+    public var resubscribes = 0
+
     /// Bytes recibidos por control (TCP). En el maestro son sobre todo las miniaturas del
     /// esclavo, a 1 Hz.
     public var controlBytesReceived = 0

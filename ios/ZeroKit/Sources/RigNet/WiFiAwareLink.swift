@@ -76,6 +76,14 @@ public enum WiFiAwareTimings {
     /// seguidos, seis veces HEARTBEAT_LOSS_MS. Un parón de la radio de 1-2 s no rehace el
     /// enlace; uno muerto vuelve a buscarse en 3 s y no en 20-90.
     public static let silenceTimeoutS: Double = 3
+
+    /// Segundos sin ver al otro tras los que el que busca rehace su suscripción. Una viva ve
+    /// el anuncio en ~0,5 s (bancos del 2026-10-15, 08:06 y 08:39) y, tras una caída, en
+    /// ~1 s (2026-10-08): 20 s son cuarenta veces eso. Por Wi-Fi Aware, «Network is down» y
+    /// «Device not configured» llegan como espera, no como fallo, y una suscripción en
+    /// espera o que no ve nada no tiene por qué caducar: en el plan B del 2026-10-15 (09:02)
+    /// el esclavo no enlazó en 10 min mientras el maestro volvía a publicar seis veces.
+    public static let resubscribeAfterS: Double = 20
 }
 
 public enum WiFiAwareLinkError: Error, CustomStringConvertible {
@@ -123,6 +131,8 @@ public struct WiFiAwareRendezvous: LinkRendezvous {
     public var connectTimeoutS: Double { WiFiAwareTimings.connectTimeoutS }
 
     public var silenceTimeoutS: Double? { WiFiAwareTimings.silenceTimeoutS }
+
+    public var resubscribeAfterS: Double? { WiFiAwareTimings.resubscribeAfterS }
 
     public static var isSupported: Bool {
         WACapabilities.supportedFeatures.contains(.wifiAware)

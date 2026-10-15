@@ -43,6 +43,11 @@ public protocol LinkRendezvous {
     /// está muerto: se tiran el control y los medios y se vuelve a buscar (IOS-14c). nil,
     /// sin vigía: el medio avisa solo cuando la conexión muere (Ethernet, Wi-Fi).
     var silenceTimeoutS: Double? { get }
+
+    /// Segundos que el que busca deja a una suscripción sin dar con quién conectar (sin
+    /// enlace y sin un intento en marcha) antes de cambiarla por otra (2026-10-15). nil,
+    /// nunca: un browser de Bonjour ve el anuncio en cuanto aparece.
+    var resubscribeAfterS: Double? { get }
 }
 
 extension LinkRendezvous {
@@ -53,6 +58,8 @@ extension LinkRendezvous {
     public var connectTimeoutS: Double { NWLinkTransport.controlConnectTimeoutS }
 
     public var silenceTimeoutS: Double? { nil }
+
+    public var resubscribeAfterS: Double? { nil }
 }
 
 /// Bonjour por una interfaz: `.wiredEthernet` en el campo, `.wifi` en el banco y `nil`

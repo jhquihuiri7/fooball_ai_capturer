@@ -65,6 +65,10 @@ public final class NWLinkTransport: LinkTransport {
     /// entre 1 y 1,25 plazos después de lo último que llegó.
     static let silenceChecksPerTimeout: Double = 4
 
+    /// Cuántas veces por plazo mira el vigía de la suscripción: con 4, una suscripción que
+    /// no da con nadie se cambia entre 1 y 1,25 plazos después de abrirse.
+    static let subscriptionChecksPerTimeout: Double = 4
+
     /// Sucesos que guarda la línea de tiempo del banco: los últimos `maxEvents` y, aparte,
     /// los `maxStartEvents` primeros, que son el arranque (2026-10-11).
     static let maxEvents = 80
@@ -103,6 +107,16 @@ public final class NWLinkTransport: LinkTransport {
     static func linkIsDead(connected: Bool, peerMediaSinceConnect: Bool, silentS: Double, limitS: Double?) -> Bool {
         guard connected, peerMediaSinceConnect, let limitS else { return false }
         return silentS > limitS
+    }
+
+    /// Si el vigía de la suscripción rehace la de un canal del que busca (2026-10-15): la
+    /// cita da plazo, el canal sigue buscando, no hay un intento en marcha (cada intento
+    /// que falla ya abre una suscripción nueva) y esta lleva el plazo sin dar con nadie.
+    /// Una suscripción de Wi-Fi Aware en espera («Network is down») o que no ve nada no
+    /// falla, y no tiene por qué caducar: sin esto, se quedaba así toda la pasada.
+    static func subscriptionIsStuck(searching: Bool, attemptInFlight: Bool, ageS: Double?, limitS: Double?) -> Bool {
+        guard searching, !attemptInFlight, let ageS, let limitS else { return false }
+        return ageS >= limitS
     }
 
     public var onFrame: ((LinkFrame, LinkChannel) -> Void)?
@@ -228,6 +242,12 @@ public final class NWLinkTransport: LinkTransport {
     private var peerMediaSinceConnect = false
     private var linkWatchdog: DispatchSourceTimer?
 
+    // 2026-10-15: el vigía de la suscripción del que busca. Cuándo se abrió el browser de
+    // cada canal (ns de uptime).
+    private var browserOpenedNs: UInt64?
+    private var mediaBrowserOpenedNs: UInt64?
+    private var subscriptionWatchdog: DispatchSourceTimer?
+
     /// Lo que le ha pasado al enlace, «segundos desde que se creó el transporte: qué»: el
     /// arranque y los últimos `maxEvents`. Para el banco: dice si cada caída coincide con
     /// una cita que caduca y con qué error cae cada conexión (IOS-14c), y cuándo sube
@@ -278,6 +298,7 @@ public final class NWLinkTransport: LinkTransport {
             openMedia()
             startMediaWatchdog()
             startLinkWatchdog()
+            startSubscriptionWatchdog()
         }
     }
 
@@ -300,6 +321,8 @@ public final class NWLinkTransport: LinkTransport {
             mediaWatchdog = nil
             linkWatchdog?.cancel()
             linkWatchdog = nil
+            subscriptionWatchdog?.cancel()
+            subscriptionWatchdog = nil
             mediaCandidates = []
             endedRendezvous = []
             cancelRetiredListeners()
@@ -495,12 +518,15 @@ public final class NWLinkTransport: LinkTransport {
                 self.esperaPor = self.describe(error)
                 self.log.info("browser en espera: \(self.describe(error))")
             case .ready:
+                // Lista y sin anuncios no es lo mismo que en espera: que se lea cuál.
+                self.note("suscripción de control lista")
                 self.esperaPor = nil
             default:
                 break
             }
         }
         self.browser = browser
+        browserOpenedNs = DispatchTime.now().uptimeNanoseconds
         state = .connecting
         browser.start(queue: queue)
     }
@@ -637,6 +663,62 @@ public final class NWLinkTransport: LinkTransport {
         stats.silenceDrops += 1
         log.info("enlace mudo \(mudoS) s: se tira y se vuelve a buscar")
         dropConnection(String(format: "silencio de %.1f s", mudoS))
+    }
+
+    // MARK: - El vigía de la suscripción (2026-10-15)
+
+    /// El que busca cambia por otra la suscripción que en `resubscribeAfterS` no ha dado
+    /// con nadie. Hasta ahora solo se rehacía al fallar un intento de conexión o al caducar;
+    /// por Wi-Fi Aware una en espera o sin anuncios no hace ninguna de las dos cosas, y en
+    /// el plan B del 2026-10-15 el esclavo pasó así los 10 min.
+    private func startSubscriptionWatchdog() {
+        guard case .browse = mode, let limite = rendezvous.resubscribeAfterS, subscriptionWatchdog == nil else {
+            return
+        }
+        let paso = limite / Self.subscriptionChecksPerTimeout
+        let t = DispatchSource.makeTimerSource(queue: queue)
+        t.schedule(deadline: .now() + paso, repeating: paso)
+        t.setEventHandler { [weak self] in self?.checkSubscriptions() }
+        subscriptionWatchdog = t
+        t.resume()
+    }
+
+    private func checkSubscriptions() {
+        guard !stopped, let limite = rendezvous.resubscribeAfterS else { return }
+        let ahora = DispatchTime.now().uptimeNanoseconds
+        let edad = { (ns: UInt64?) in ns.map { Double(ahora &- $0) / 1e9 } }
+        // El control: sin enlace y sin un intento en marcha.
+        if let s = edad(browserOpenedNs), Self.subscriptionIsStuck(
+            searching: state != .connected, attemptInFlight: connection != nil, ageS: s, limitS: limite
+        ) {
+            resubscribe(.control, afterS: s)
+        }
+        // Los medios: sin nada del otro y sin ningún anuncio que probar (con anuncios, ya los
+        // rota el vigía de medios).
+        if let s = edad(mediaBrowserOpenedNs), Self.subscriptionIsStuck(
+            searching: !(state == .connected && peerMediaSinceConnect), attemptInFlight: !mediaCandidates.isEmpty,
+            ageS: s, limitS: limite
+        ) {
+            resubscribe(.media, afterS: s)
+        }
+    }
+
+    private func resubscribe(_ canal: LinkChannel, afterS edad: Double) {
+        stats.resubscribes += 1
+        endedRendezvous.remove(canal)
+        switch canal {
+        case .control:
+            note(String(format: "control: la suscripción no ha dado con nadie en %.0f s: otra", edad))
+            browser?.cancel()
+            browser = nil
+            openBrowser()
+        case .media:
+            note(String(format: "medios: la suscripción no ha dado con nadie en %.0f s: otra", edad))
+            mediaBrowser?.cancel()
+            mediaBrowser = nil
+            mediaCandidates = []
+            openMediaBrowser()
+        }
     }
 
     // MARK: - El fin de una cita (IOS-14)
@@ -852,11 +934,14 @@ public final class NWLinkTransport: LinkTransport {
     }
 
     private func openMediaBrowser() {
+        // Antes de crearlo: si falla, el vigía de la suscripción lo vuelve a intentar.
+        mediaBrowserOpenedNs = DispatchTime.now().uptimeNanoseconds
         let browser: NWBrowser
         do {
             browser = try rendezvous.makeBrowser(for: .media)
         } catch {
             log.error("medios sin browser: \(self.describe(error))")
+            note("medios sin browser: \(describe(error))")
             return
         }
         browser.browseResultsChangedHandler = { [weak self] results, cambios in
@@ -882,6 +967,8 @@ public final class NWLinkTransport: LinkTransport {
                 self.rendezvousEnded(.media, error)
             case let .waiting(error):
                 self.note("browser de medios en espera: \(self.describe(error))")
+            case .ready:
+                self.note("suscripción de medios lista")
             default:
                 break
             }

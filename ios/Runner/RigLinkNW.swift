@@ -452,6 +452,7 @@ enum LinkBench {
                     "media_pacer_drops": stats.mediaPacerDrops,
                     "rendezvous_ends": stats.rendezvousEnds,
                     "silence_drops": stats.silenceDrops,
+                    "resubscribes": stats.resubscribes,
                     // 2026-10-10: lo recibido por control y lo más que guardó su búfer.
                     "control_rx_bytes": stats.controlBytesReceived,
                     "control_buffer_peak_bytes": stats.controlBufferPeakBytes,
