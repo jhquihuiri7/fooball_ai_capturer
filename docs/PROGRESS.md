@@ -17,6 +17,169 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 
 
+## 2026-10-14 · La cancha sin internet: el camino de EMITIR auditado, lo frágil arreglado y los guiones de la sesión de mesa, la recogida y el plan B · 🚧 NADA de esto probado en los iPhone
+
+La primera prueba en una cancha va sin internet (solo datos móviles lentos; el Starlink y el
+VPS, después): los dos iPhone en un trípode, enlazados por Wi-Fi Aware, y EMITIR desde la
+pantalla del 17 sin QR Soporte. Lo único probado en hardware hasta hoy es el banco split
+lanzado desde el Mac. Aquí, el camino entero leído en el código, lo que se ha arreglado, los
+guiones para la sesión de mesa y la recogida, y el plan B.
+
+**Hecho** (4fb5bf4 la app, 913193e los guiones, y esta entrada; en un worktree aparte)
+- **Copias locales en fragmentos de 10 s** (`RecordingPolicy.movieFragmentIntervalS`): la 4K
+  (CaptureEngine) y la copia .mov del programa (ProgramRecorder). Sin ellos, una app que muere
+  a mitad (batería, jetsam, disco lleno, un cierre a mano) dejaba ficheros sin `moov` que no
+  abre nadie: hasta 30 GB de 4K perdidos enteros. Medido en el Mac: la copia de un .mov a medio
+  escribir se lee hasta el último fragmento (y ffprobe la lee); sin fragmentos, no se abre. Al
+  cerrar queda un .mov normal (ftyp, mdat, moov) sin mover datos (0,02 s). La 4K HEVC con
+  fragmentos, la sesión en un reloj del soporte grande y AAC, igual (una prueba de usar y tirar
+  en el Mac).
+- **VideoToolbox tras el segundo plano.** iOS invalida las sesiones de codificar y decodificar
+  (kVTInvalidSessionErr) cuando la app pasa a segundo plano: el botón lateral, contestar una
+  llamada, cambiar de app. Antes, al volver, el programa y la parte no salían más hasta PARAR
+  y EMITIR (y la pantalla seguía diciendo EMITIENDO, porque cuenta los fotogramas compuestos).
+  Ahora VideoEncoder rehace la sesión y vuelve a codificar el mismo fotograma (el primero, IDR);
+  VideoDecoder tira la suya y abre otra con el siguiente IDR. El informe dice cuántas
+  (`vt_session_resets`).
+- **La copia del programa no se pierde si su escritor falla**: ProgramRecorder ya no pisa un
+  fichero que exista, y SplitBench sigue en `program-<id>-2.mov` desde un IDR (hasta 8
+  segmentos). El informe: `files.mov_segments`, `mov_segments`, `mov_failures`.
+- **El latido**: `Documents/bench/program-live-<lado>-<t de arranque>.json` cada 30 s (y uno
+  final al PARAR), en EMITIR y en el banco. Lo que se sabe de la pasada aunque la app muera
+  antes de PARAR (el informe de verdad solo se escribe al final): fotogramas, dos/una lente,
+  desgarros, retrocesos, partes del esclavo, la huella, la térmica, la batería y el disco por
+  minuto, lo grabado y por qué se cortó. El informe trae además `battery_by_minute` y
+  `disk_free_gb_by_minute`.
+- **La 4K se cierra con menos de 2 GB libres** (`RecordingPolicy.diskFloorBytes`; lo mira el
+  estado que Dart pide cada segundo): con el disco lleno fallan a la vez la 4K, la copia del
+  programa, el N0 y el informe.
+- **El banco largo pedía 69,5 GB para su 4K** (el doble de la pasada) y no arrancaba: ahora
+  como mucho los 40 GB del partido, o la pasada y 2 GB si no cabe en ellos (7200 s: 42,5 GB).
+- **RIG_LINK_SECRET se guarda en el Keychain al arrancar.** Antes solo al abrir el enlace de
+  Network: el paso 2 de la entrada IOS-58 (lanzar con el secreto y cerrar) no guardaba nada.
+  En los dos está guardado igualmente: el banco split de hoy abrió el enlace con él.
+- **La pantalla no se bloquea**: `isIdleTimerDisabled` otra vez al volver a primer plano y al
+  EMITIR (las hojas del sistema pueden devolverlo a su valor).
+- **SIN DESTINO** dice ahora «se graba en este móvil; el QR Soporte lo sube al VPS».
+- **Guiones** (ver los comandos abajo): `tools/sesion_emitir.sh`, `tools/recoger_partido.sh`,
+  `tools/plan_b_cancha.sh`, con `tools/cancha.py` (qué es de la pasada, ffprobe y el
+  veredicto ✅/⚠️/❌) y `tools/zero_movil.sh` (cerrar solo Zero, lanzar con el secreto sin
+  imprimirlo, listar y copiar). `banco_dos_moviles.sh` gana `SOLO_LANZAR=1` y `APPS=<carpeta>`
+  sin cambiar lo de siempre.
+
+**Los riesgos de la cancha, paso a paso** (arreglado / mitigado / sin arreglo)
+
+| Paso | Riesgo | Estado |
+|---|---|---|
+| Icono | El secreto del enlace no está en el Keychain | Mitigado. Está en los dos (el banco lo guardó); `sesion_emitir.sh` lo vuelve a guardar y desde 4fb5bf4 basta lanzar con él. Si faltara, «Abrir cámara» con Aware falla («sin secreto del soporte») y sin Mac no hay forma: plan C, «Pod (Multipeer)» en los dos (cada uno graba su 4K, sin programa). |
+| Lado | Bonjour del servidor y el permiso de red local sin red | Sin arreglo, no bloquea: la búsqueda del servidor tarda 4 s; `requestLocalNetworkAccess` espera hasta 20 s si no se ve a sí mismo y la fila puede decir NO PERMITIDA. A mirar en la sesión, en modo avión. |
+| Aware | ¿Hay que emparejar cada vez? | No: el emparejado lo guarda el sistema (WAPairedDevice, IOS-14). |
+| Aware | Sin emparejar (o si el enlace no sube) | **Sin arreglo en la pantalla** (pendiente): dice «esperando al móvil derecho…» y el porqué («no hay ningún iPhone emparejado») solo va al log y a `transport_events` del informe. El maestro emite con una lente, pero **el esclavo no graba nada**: espera la orden (decisión de IOS-58). Mitigado con procedimiento: si el 16 Pro no enlaza en 2 min, en él «Un solo móvil» y GRABAR (su 4K, sin reloj del soporte). |
+| Aware | En modo avión con la Wi-Fi encendida | Sin probar. La sesión de mesa lo prueba así; si no sube, sin modo avión y con los datos apagados. |
+| LISTA | `rig.json` | EMITIR lo usa (Geometría «calibrada · rig.json»). Es la del trípode de casa (2026-10-11): si los móviles se montan distinto, la costura del programa no casa (las 4K no cambian). EMITIR no hace fotos de calibración (solo el banco, con RIG_CALIB_AT_S). Sin arreglo. |
+| LISTA | El detector | Está en los dos (`bench-resources`); se carga aparte, no bloquea el tic; sin él, el director sin detecciones y la fila en rojo. `sesion_emitir.sh` mira los dos ficheros en cada móvil. |
+| EMITIR | ¿Arranca sin destino? | Sí (código): sin QR Soporte no hay publicador ni red; el programa se compone y va a `Documents/program-<partido>-<t>.mov` a 6 Mbit/s, ~2,7 GB/h con el AAC. |
+| EMITIR | Un QR Soporte viejo en el Keychain (el del Mac de IOS-56) | Mitigado: el publicador reintenta cada 3 s por los datos, en su cola, sin tocar el programa; la tarjeta sale en rojo. «Olvidar» en la tarjeta VPS antes de ir. |
+| EMITIR | El .mov del programa o la 4K si la app muere o se queda sin batería | **Arreglado**: fragmentos de 10 s. |
+| EMITIR | El escritor de la copia falla a mitad | **Arreglado**: segmento siguiente desde un IDR. |
+| 90 min | Disco | Mitigado: 4K 20,25 GB/h por móvil, más 2,7 GB/h de copia en el maestro (2 h: ~46 y ~41 GB). La reserva de 40 GB solo mira la 4K al empezar; ahora la 4K se cierra con < 2 GB. Zero ocupa 59 GB en el 17 y 15 GB en el 16 Pro de bancos viejos (listados del 14-oct): mirar «Disco libre» (≥ 50 GB) y borrar `bench/` y `bench4k/` en Archivos → En mi iPhone → Zero. |
+| 90 min | La app muere y no hay informe | **Arreglado**: el latido. |
+| 90 min | Memoria | Medida plana en 90 min (banco del 10-14). Los históricos del tic sin tope suman ~5 MB en 2 h. |
+| 90 min | Bloqueo automático | Ya estaba (`isIdleTimerDisabled`); endurecido. |
+| 90 min | Segundo plano (botón lateral, llamada contestada, otra app) | **Arreglado** lo que no volvía (VideoToolbox). La cámara ya cerraba la 4K y abría otro segmento al volver; el enlace se rehace. |
+| 90 min | Llamada entrante | Ya estaba: el micro cede y el programa sigue con silencio (IOS-54). Mitigado: modo avión. |
+| 90 min | Térmica serious/critical | **Sin arreglo** (decisión pendiente: la escalera solo se enseña, IOS-56). En el ensayo del 10-14 el esclavo pasó 71 min en serious. En critical iOS puede parar la cámara (interrupción por presión): segmento nuevo al volver. Sombra, sin funda, la batería externa fuera del sol. |
+| 90 min | Batería | **Sin medir sin cable**: los bancos de 90 min fueron por cable. Ahora va por minuto en el informe y el latido, y el veredicto da %/h. Baterías externas en los dos. |
+| PARAR | Se cierra bien | Fuera del hilo principal; espera hasta 5 s a la copia. El esclavo para con la orden; si no le llega (sin enlace), PARAR también en él. |
+| Esclavo | Se reinicia o se cae a mitad | El maestro sigue con una lente (IOS-81, probado en banco) y le reenvía la orden al volver (con fakes). Su 4K nueva va en otro fichero. Sin probar desde la pantalla. |
+| Maestro | Muere a mitad | El esclavo sigue con su 4K; el maestro, desde el icono y EMITIR otra vez, abre otra copia. La primera se lee (fragmentos); `recoger_partido.sh` junta las pasadas del mismo partido (3 h). |
+| Plan B | ¿Sigue si se quita el cable? | La app sí (lanzada sin consola ni depurador; su entorno vive en el proceso). El guion del banco, si espera, al final no lista y no recoge nada (los ficheros se quedan en el móvil): `plan_b_cancha.sh lanzar` sale enseguida y se recoge en casa. |
+| Plan B | ¿La Mac en la misma Wi-Fi? | No, por cable (`transportType: wired`). Sin cable, devicectl solo por la red local si comparten Wi-Fi (hoy el 17 sale `wired` y el 16 Pro `unavailable`). |
+| Plan B | Compilar en la cancha | La firma puede pedir red: `plan_b_cancha.sh preparar` en casa guarda las tres apps. |
+| Plan B | Un iPhone que se reinicia (batería a cero) | Sin comprobar: devicectl tiene que volver a montar la imagen de desarrollo, que en iOS 17+ se personaliza con Apple (red). No reiniciar entre casa y la cancha; si hace falta, compartir los datos del móvil con el Mac. |
+| Plan B | La 4K no arrancaba (69,5 GB de reserva) | **Arreglado** (40 GB; 42,5 con 7200 s). |
+| Recogida | **El Mac tiene 4,9 GB libres** (460 GB al 99 %) | No cabe ni una 4K de 2 h (~40 GB). `recoger_partido.sh` lo mira y trae solo lo que cabe; para todo, `SALIDA=/Volumes/<disco>/partido-…`. Compilar también pide sitio. |
+
+**NO probado en hardware** (todo lo de hoy): los fragmentos en el iPhone (en el Mac sí), el
+rehacer VideoToolbox al volver del segundo plano (en el Mac, invalidando la sesión a mano),
+el latido, el suelo del disco, el secreto al arrancar, el bloqueo de pantalla, los tres
+guiones contra el devicectl de verdad (solo contra el falso), el plan B lanzado y sin cable,
+Aware en modo avión y la batería sin cable. Y EMITIR desde la pantalla sigue sin una sola
+pasada en los iPhone.
+
+**Pendiente de revisión de Alexander** (no se ha cambiado)
+- El esclavo en la arquitectura B no graba nada sin la orden del maestro (IOS-58): si el enlace
+  no sube en la cancha, el lado derecho se pierde salvo «Un solo móvil» a mano. ¿Que grabe su
+  4K solo tras N min sin maestro?
+- La escalera no actúa ante la térmica (IOS-56): en serious/critical no se suelta nada.
+- La pantalla no dice por qué no sube Aware (sin emparejar): pide plumbing del motivo del
+  transporte hasta Dart (RigNet → RigLinkNW → Pigeon).
+- EMITIR no hace fotos de calibración: si el soporte se monta distinto en la cancha, el cosido
+  del programa va con la calibración de casa.
+- `banco_dos_moviles.sh` sigue con sus funciones propias (probadas); los guiones nuevos usan
+  `tools/zero_movil.sh`. Unificarlos, cuando haya una pasada real de los nuevos.
+
+**Comprobado**
+- `swift test --skip ModelBench`: **486 tests, 4 saltados, 0 fallos** (476 antes; los 10
+  nuevos: RecordingPolicyFieldTests 3, ProgramRecorderTests 5 —el .mov cortado se lee, sin
+  fragmentos no, no pisa, cerrar sin fotogramas, audio cruzando fragmentos—,
+  VideoEncoderInvalidSessionTests 1 y VideoDecoderInvalidSessionTests 1).
+- `flutter test --no-pub`: **425, todos bien**. `flutter analyze --no-pub`: sin avisos.
+- `tools/check_layers.sh`: limpio.
+- ZeroKit para iOS con xcodebuild (derivedData propio): BUILD SUCCEEDED, el aviso de siempre
+  (`VtConcurrencyBench`).
+- El Runner, sin `flutter build` y sin tocar `build/ios`: `swiftc -typecheck` de todos sus
+  `.swift` contra ese ZeroKit y los módulos de HaishinKit y Flutter del DerivedData: 0 errores
+  y los mismos 16 avisos que 59510dc (comparados uno a uno).
+- `python3 tools/test_cancha.py` (17), `python3 tools/test_recogida_pasada.py` (8) y
+  `tools/test_guiones_cancha.sh` (59 comprobaciones, con `tools/fake_xcrun.py`): el secreto
+  nunca sale por pantalla ni en el registro; solo se cierra Zero; la sesión espera, recoge y
+  da el veredicto; la recogida trae la última pasada (no las viejas), las 4K con segmentos, la
+  del esclavo que murió a mitad (solo latido y un .mov fragmentado cortado que ffprobe lee) y
+  salta el móvil sin cable; el plan B instala las apps guardadas, lanza con el entorno de
+  siempre (Aware, director, CenterNet, micro, 4K, sin .ts, 7200 s) y sale sin recoger.
+- `tools/cancha.py veredicto` sobre los informes reales de `bench/dos-moviles-20261014-1235` y
+  `-1010`: da lo que dicen sus entradas (471 desgarros y p95 169 ms en el de 90 min; el
+  esclavo 71 min en serious).
+
+**Los comandos**
+
+```bash
+cd /Users/alexander/Trabajacion/fooball_ai_capturer && git pull --ff-only
+
+# 1. La sesión de mesa (en casa, los dos por cable y desbloqueados; ~20 min). Compila sin
+#    AUTO_ROLE, instala, guarda el secreto, dice qué tocar, espera el informe del maestro y
+#    recoge en bench/emitir-<fecha>/ con el veredicto:
+tools/sesion_emitir.sh <fichero_secreto>                # como en la cancha: SIN DESTINO
+tools/sesion_emitir.sh <fichero_secreto> --con-mac      # además, al MediaMTX del Mac (QR Soporte)
+#    opciones: --sin-instalar, --minutos N (45), --con-4k
+
+# 2. El plan B: en casa, las apps guardadas; en la cancha, lanzar y soltar; después, volver.
+tools/plan_b_cancha.sh preparar
+tools/plan_b_cancha.sh lanzar <fichero_secreto> [7200]
+tools/plan_b_cancha.sh volver
+#    (el de siempre sigue igual, pero espera y recoge al final, con el cable puesto:)
+BANCO_EXTRA='{"RIG_LINK_INTERFACE":"aware","RIG_AUDIO":"1","RIG_SPLIT_DIRECTOR":"1","RIG_DETECT":"players-centernet-mnv4.mlpackage","RIG_SPLIT_RECORD_4K":"1"}' \
+  tools/banco_dos_moviles.sh split <fichero_secreto> 6000
+
+# 3. Tras la cancha (por cable): la última pasada de cada móvil, ffprobe y el veredicto.
+tools/recoger_partido.sh                                 # todo, si cabe en el Mac
+tools/recoger_partido.sh --sin-4k                        # sin las 4K (se quedan en el móvil)
+SALIDA=/Volumes/<disco>/partido-$(date +%Y%m%d) tools/recoger_partido.sh   # a un disco externo
+tools/recoger_partido.sh --desde '2026-10-18 16:30'      # si después hubo otra pasada
+```
+
+**En la cancha** (EMITIR desde la pantalla): los dos en modo avión con la Wi-Fi encendida y
+«No molestar», baterías externas, sombra y sin funda; el 17 IZQUIERDA y «Este móvil
+dirige», el 16 Pro DERECHA, Aware, tarjeta VPS vacía; «Abrir cámara», LISTA en los dos (Enlace
+conectado), «Disco libre» ≥ 50 GB; «Guardar vídeo» y EMITIR en el 17. Al acabar, PARAR en el
+17 y comprobar que el 16 Pro paró. Si el 16 Pro no enlaza en 2 min: en él «Un solo móvil» y
+GRABAR. Si EMITIR falla: el plan B desde el Mac.
+
+**Siguiente paso**: la sesión de mesa con `tools/sesion_emitir.sh` (en modo avión, con el
+lado derecho que se cierra y vuelve y el botón lateral en el 17); con su veredicto en verde,
+la cancha.
+
 ## 2026-10-14 · El tic de fcbafad, probado en los dos iPhone: fase p99 4,5 ms, sin huecos y la latencia plana · 🚧 la fase entre cámaras sigue sin medir; EMITIR desde la pantalla, sin hacer
 
 Pasada de 8 min (`bench/dos-moviles-20261014-1235`, maestro
