@@ -12,6 +12,55 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-15 · Con los dos iPhone, sin nadie delante: la fase medida otra vez, la escalera actuando y el plan B · 🚧 el plan B no enlazó; EMITIR automático en marcha
+
+Los dos en el soporte de mesa (17 izquierdo/maestro por cable, 16 Pro derecho/esclavo por la
+red y sin cargador), sin bloqueo automático y en «No molestar». Todo lanzado desde el Mac.
+
+**1. La fase entre las cámaras, 30 min por Wi-Fi Aware con `RIG_SPLIT_SCRIPT=spk04`**
+(`bench/dos-moviles-20261015-0805`, 6a7a052).
+- `halves_phase_drift_ms_per_min` **0,859** (ayer, 0,8): el 16 Pro va ~14 ppm más rápido.
+  Arrancó en +9 ms (no ≤5 como quiere el ADR 0012), +16 en los minutos 7-8, **−16 en el 9**
+  y vuelta a +1 en el 29. `halves_skew_ms` p50 12 / p95 16 / p99 22.
+- **`torn_frames` 294, todos en los minutos 8 y 9** (el cruce); 0 el resto.
+- 53 925 fotogramas (twoLens 36 274), latencia añadida p95 144 ms, `part_age` p95 90,
+  partes 36 735 y 86 perdidas, `tick_phase_ms` p99 4. `program_skipped_instants` 74 (ayer,
+  en 8 min, 0): a vigilar.
+- Memoria plana (~495 MB el maestro, ~447 el esclavo). Térmica: `fair` desde el minuto 11
+  (maestro) y 17 (esclavo).
+- Con esto el ADR 0024 (football-ai, cd25549) tiene su dato; falta el spike de la duración de
+  fotograma (f4ce90d, f5e0671) en los iPhone.
+
+**2. La escalera actuando (91dd7bb, ceee4d3), 10 min con L2 forzado en el esclavo**
+(`bench/dos-moviles-20261015-0837`).
+- **Con la tabla provisional, la IA se apagó en los dos desde el segundo 0**: el esclavo,
+  `fair` y sin cargador, fue a L2 por sí solo (`fair` → L1, más uno sin carga), y manda la
+  peor de las dos. `detect_runs_by_minute` del maestro: 195 en el minuto 0 y 0 después;
+  `cadence_commands_sent` 111 / `received` 111: la orden de cadencia viaja. El programa
+  siguió: 17 973 fotogramas, twoLens 16 457, 0 desgarros, latencia p95 144 ms.
+- **Arreglo, 2358dcb (pendiente de la revisión de Alexander):** `fair` → L0, `serious` →
+  L1 (IA a 5 Hz), `critical` → L3, `shutdown` → L4; sin carga, un escalón más. El ensayo de
+  90 min aguantó 71 min en `serious` con la IA a 7,5 Hz sin llegar a `critical`.
+- El forzado a L2 de 120 a 300 s no se vio, porque ya estaba en L2. Queda repetirlo con la
+  tabla nueva.
+
+**3. El plan B (`tools/plan_b_cancha.sh lanzar <secreto> 600`, las apps de `build/cancha`)**
+(`bench/partido-20261015-0902`).
+- Lanzar y soltar: 12 s. El maestro grabó sus 10 min bien: 17 980 fotogramas, la copia .mov
+  con el 100 %, 0 desgarros, p95 144 ms, memoria plana y batería 80 % → 80 % cargando.
+- **❌ El esclavo no se enlazó nunca por Aware.** El maestro publicó la cita y la reabrió
+  cada ~120 s (`publisherTimeout`); `peer_states` vacío en los dos. **❌ El esclavo no dejó
+  informe final**: solo el latido hasta los 570 s (0 partes, 0 «sin parte») y Zero ya no
+  estaba abierta a las 09:03, sin crash ni jetsam. El mismo código enlazó a las 08:06 y a
+  las 08:39. Un agente lo investiga.
+- El 16 Pro, a batería: −33 %/h. Le quedan 11,4 GB libres (Zero ocupa 18 GB con las 4K de
+  las pasadas).
+
+**4. EMITIR automático (79ef313, db9f677), 60 min por Aware sin destino**, en marcha desde
+las 09:07. Al minuto: `purpose: production`, `publish_source: none`, la copia .mov
+creciendo, enlazados (93 partes del esclavo y 85 fotogramas de dos lentes), el maestro ya
+en `serious` (lleva desde las 08:06 sin parar). El resultado, en la entrada siguiente.
+
 ## 2026-10-15 · El spike de la duración de fotograma: mantener la fase entre las cámaras alargando un 0,1 % al que adelanta (ADR 0024 de football-ai, propuesta) · 🚧 hecho en código, sin medir en los iPhone
 
 La fase entre las capturas deriva (§2 de «Las tres anomalías…», 2026-10-14). La pasada de hoy
