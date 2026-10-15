@@ -217,6 +217,34 @@ class Veredicto(unittest.TestCase):
             self.assertIn(sucesos[-1], texto)
             self.assertNotIn("\n     " + sucesos[0], texto)  # solo los últimos
 
+    def test_sin_pasada_el_diagnostico_del_enlace_dice_por_que(self) -> None:
+        # El EMITIR automático del 2026-10-15 (11:36): 5 min buscando, sin informe ni latido.
+        # Desde ahora el enlace deja link-diag-<lado>-<t>.json desde que se abre.
+        with tempfile.TemporaryDirectory() as d:
+            sucesos = [f"{s}.0 [300 MB] control: no ha llegado nadie a la cita en 30 s: otra" for s in range(30, 300, 30)]
+            _informe(os.path.join(d, "izquierdo", "bench"), f"link-diag-left-{T}.json", linked=False, elapsed_s=300.2,
+                     summary="publicando; no ha llegado nadie en 300 s (10 citas, 9 rehechas)",
+                     link={"medium": "aware"}, transport_events=sucesos)
+            _informe(os.path.join(d, "derecho", "bench"), f"link-diag-right-{T}.json", linked=True, elapsed_s=40.0,
+                     linked_after_s=38.4, drops_seen=0, link={"medium": "aware"})
+            # Uno viejo, de otra pasada, no cuenta.
+            _informe(os.path.join(d, "derecho", "bench"), f"link-diag-right-{VIEJO}.json", linked=False,
+                     summary="no ve al otro en 600 s")
+            malas, texto = self._corre(d, T - 10)
+            self.assertEqual(malas, 1, texto)  # ningún informe de la pasada; el enlace es aviso
+            self.assertIn("⚠️  enlace del izquierdo: sin enlace a los 300 s (aware): publicando; no ha llegado nadie "
+                          "en 300 s (10 citas, 9 rehechas)", texto)
+            self.assertIn(sucesos[-1], texto)
+            self.assertIn("✅ enlace del derecho: enlazó a los 38 s (aware)", texto)
+            self.assertNotIn("no ve al otro en 600 s", texto)
+            self.assertIn("ningún informe de la pasada", texto)
+
+    def test_el_diagnostico_del_enlace_se_recoge_con_los_informes(self) -> None:
+        lista = listado(LISTADO + f"Documents/bench/link-diag-left-{T}.json      Writable, Readable    3 KB    x\n"
+                        + f"Documents/bench/link-diag-left-{VIEJO}.json      Writable, Readable    3 KB    x\n")
+        self.assertIn(f"bench/link-diag-left-{T}.json", informes(lista, T - MARGEN_PASADA_S))
+        self.assertNotIn(f"bench/link-diag-left-{VIEJO}.json", informes(lista, T - MARGEN_PASADA_S))
+
     def test_con_enlace_lo_dice_sin_avisar(self) -> None:
         with tempfile.TemporaryDirectory() as d:
             _informe(os.path.join(d, "izquierdo", "bench"), f"program-split-left-{T}.json",

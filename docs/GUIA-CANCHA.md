@@ -67,6 +67,7 @@ La Mac va para calibrar, para el plan B y para recoger al final.
 
 | Qué pasa | Qué hacer |
 |---|---|
+| No enlazan y quieres saber por qué | La fila Enlace de cada móvil dice la frase («publicando; no ha llegado nadie en 90 s (3 citas, 2 rehechas)», «no ve al otro…», «ve al otro pero no conecta…»). Cada móvil lo deja también en `Documents/bench/link-diag-*.json`, que recogen los guiones y enseña el veredicto. El que publica rehace su cita cada 30 s y el que busca la suya cada 20 s: no hace falta tocar nada en los primeros 2 min |
 | El 16 Pro no enlaza en 2 min | Quita el modo avión (datos móviles apagados) y vuelve a «Abrir cámara». Si sigue sin enlazar: cierra Zero en el 16 Pro, ábrela, en la pantalla de lado enciende «Un solo móvil, sin reloj», «Abrir cámara» y GRABAR (graba su 4K); el 17 emite con una lente |
 | EMITIR no arranca o se queda raro | El plan B, por cable: `tools/plan_b_cancha.sh lanzar ~/.config/football-ai/secreto-soporte 7200`. Graba 2 h y se para solo; se pueden quitar los cables. Luego `tools/plan_b_cancha.sh volver` |
 | Se cierra Zero en el 16 Pro | Ábrela y «Abrir cámara»: vuelve solo al programa. El 17 sigue mientras tanto con una lente |

@@ -503,7 +503,10 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
       case LinkState.off:
         return standalone ? 'apagado: un solo móvil' : 'apagado';
       case LinkState.searching:
-        return role == CameraRole.left ? 'esperando al móvil derecho…' : 'buscando al móvil izquierdo…';
+        final String busca = role == CameraRole.left ? 'esperando al móvil derecho…' : 'buscando al móvil izquierdo…';
+        // Con el enlace de Network, el nativo manda mientras busca por qué no enlaza (el
+        // diagnóstico del enlace, 2026-10-15) en el sitio del nombre del otro.
+        return linkPeer.isEmpty ? busca : '$busca · $linkPeer';
       case LinkState.connected:
         return 'conectado con $linkPeer';
       case LinkState.conflict:

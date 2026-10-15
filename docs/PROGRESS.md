@@ -12,6 +12,58 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-15 · Wi-Fi Aware que no enlaza: el que publica rehace su cita y el enlace dice por qué desde el arranque · 🚧 en código y tests; falta con los dos iPhone
+
+**El caso.** EMITIR automático de las 11:36 (`bench/emitir-auto-20261015-1135`), lanzado ~1,5 min
+después de que `calibrar_cancha.sh` matara Zero en los dos con el enlace Aware vivo: 5 min los dos
+en «enlace searching» y nada más, porque el diagnóstico de f0df022 solo va en el latido de una
+pasada del programa y EMITIR no llegó a arrancar.
+
+**Lo que dice el código** (NWLinkTransport). El que busca rehace su suscripción a los 20 s
+(4ca370b); el que publica no tenía nada simétrico: su listener de control o de medios en
+`.waiting` («Network is down», «Device not configured») solo se apuntaba y no fallaba ni caducaba,
+y uno publicado al que nadie llega solo se cambiaba al caducar (`publisherTimeout`, ~2 min). Los
+enlaces de 124 s (AUTO_EMITIR de las 09:04) cuadran con esa caducidad. Además, un listener de
+medios que no se podía crear no se reintentaba nunca. Lo que no se puede saber sin los iPhone: si
+lo que queda colgado tras matar la app con el enlace vivo es el datapath del sistema (no hay API
+para verlo); con 90 s entre matar y lanzar, una pausa corta en los guiones no lo habría evitado,
+así que no se añade.
+
+**Lo hecho.**
+- El vigía de la publicación (`LinkRendezvous.republishAfterS`, 30 s por Wi-Fi Aware, nil por
+  Bonjour): sin enlace, la cita de control o de medios a la que no llega nadie en 30 s desde que se
+  abrió o desde la última caída se cambia por otra, esté publicada o en espera.
+  `stats.republishes`, el suceso «control: no ha llegado nadie a la cita en 30 s (en espera: …):
+  otra» y el diagnóstico lo cuenta («publicando; no ha llegado nadie en 300 s (10 citas, 9
+  rehechas)»). El listener de medios que no se crea se reintenta a los 2 s.
+- `RigNet/LinkDiagnosisRecorder`: desde que se abre el enlace (RigLinkNW.start, en EMITIR, en
+  AUTO_EMITIR y en los bancos), `Documents/bench/link-diag-<lado>-<t>.json` cada 10 s sin sesión,
+  una vez al enlazar (con `linked_after_s`) y otra vez tras una caída: la frase, el diagnóstico,
+  los sucesos del transporte y los contadores. La frase va también a la fila Enlace mientras busca
+  («esperando al móvil derecho… · publicando; no ha llegado nadie en 40 s (2 citas, 1 rehechas)»)
+  y, por la misma vía, a `auto-emitir-*.log`.
+- `tools/cancha.py`: `informes` recoge `link-diag-*` (lo traen `emitir_auto.sh`,
+  `sesion_emitir.sh` y `recoger_partido.sh` sin tocarlos) y el veredicto dice de cada lado
+  «enlazó a los N s» o «sin enlace a los N s: <frase>» con los últimos sucesos, aunque no haya
+  informe de la pasada.
+
+**Tests.** `PublicationWatchdogTests` (5), `LinkDiagnosisRecorderTests` (2), las frases de
+`LinkDiagnosisTests`; `swift test --skip ModelBench`: 539, 4 saltados, 0 fallos. `check_layers`
+limpio. ZeroKit para iOS con xcodebuild (derivedData propio): BUILD SUCCEEDED; el Runner con
+`swiftc -typecheck` contra él: 0 errores, ningún aviso en lo nuevo. `test_cancha.py` 25 OK,
+`test_guiones_cancha.sh` 160 bien. `flutter analyze` sin nada; `flutter test` en verde.
+
+**Queda fuera.** Que `calibrar_cancha.sh` cierre el enlace antes de matar Zero (haría falta que el
+banco suelte el enlace tras el disparo); se decide con el primer `link-diag` de un fallo.
+
+**Para probarlo con los dos iPhone.** Compilar las apps de la cancha con este commit, luego
+`tools/calibrar_cancha.sh <secreto>` y en seguida `tools/emitir_auto.sh …` (lo que falló hoy). Si
+enlaza, el veredicto dice «enlace del izquierdo: enlazó a los N s». Si no, dice la frase de cada
+lado y los sucesos: buscar «no ha llegado nadie a la cita» en el izquierdo (el vigía actuó) y
+«suscripción … no ha dado con nadie» o «ve al otro pero no conecta» en el derecho.
+
+---
+
 ## 2026-10-15 · Calibrar en la cancha en una orden y limpiar los iPhone · 🚧 probado con el devicectl falso y con fotos reales; falta con los dos iPhone
 
 **`tools/calibrar_cancha.sh <secreto> [--solo-comprobar] [--sin-instalar]`** (44986ad). EMITIR

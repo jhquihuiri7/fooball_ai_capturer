@@ -48,7 +48,11 @@ MARGEN_PASADA_S = 120
 VENTANA_PARTIDO_S = 3 * 3600
 
 # Lo que se recoge de una pasada, por ruta relativa a Documents. El grupo 1 es su hora.
-_INFORME = re.compile(r"^bench/(?:program-split-(?:left|right)|program-live-(?:left|right)|audio)-(\d+)\.json$")
+_INFORME = re.compile(
+    r"^bench/(?:program-split-(?:left|right)|program-live-(?:left|right)|link-diag-(?:left|right)|audio)-(\d+)\.json$")
+# El diagnóstico del enlace desde que se abre (2026-10-15): lo escribe el enlace aunque no haya
+# pasada del programa, con la hora de apertura en el nombre.
+_DIAG = re.compile(r"^bench/link-diag-(left|right)-(\d+)\.json$")
 _FINAL = re.compile(r"^bench/program-split-(left|right)-(\d+)\.json$")
 _LATIDO = re.compile(r"^bench/program-live-(left|right)-(\d+)\.json$")
 _4K = (re.compile(r"^(?:left|right)-(\d+)(?:-\d+)?\.mov$"), re.compile(r"^bench4k/(\d+)/[^/]+\.mov$"))
@@ -504,6 +508,36 @@ def _enlace(d: dict, n: _Notas) -> None:
         n.info(suceso)
 
 
+def _diagnostico_del_enlace(carpeta: str, desde: int, n: _Notas) -> None:
+    """El enlace de cada lado desde que se abrió (`bench/link-diag-*.json`, 2026-10-15): cuánto
+    tardó en enlazar o, si no enlazó, por qué y los últimos sucesos del transporte. Sale aunque
+    EMITIR no llegara a arrancar, que es cuando más falta hace. Aviso y no fallo."""
+    for lado in ("izquierdo", "derecho"):
+        ultimo: tuple[int, str] | None = None
+        for ruta in glob.glob(os.path.join(carpeta, lado, "bench", "link-diag-*.json")):
+            m = _DIAG.match("bench/" + os.path.basename(ruta))
+            if m and int(m.group(2)) >= desde and (ultimo is None or int(m.group(2)) > ultimo[0]):
+                ultimo = (int(m.group(2)), ruta)
+        if ultimo is None:
+            continue
+        try:
+            d = _lee(ultimo[1])
+        except (OSError, ValueError):
+            n.aviso(f"enlace del {lado}: diagnóstico ilegible ({os.path.basename(ultimo[1])})")
+            continue
+        medio = (d.get("link") or {}).get("medium", "?")
+        if d.get("linked"):
+            caidas = d.get("drops_seen", 0)
+            n.ok(f"enlace del {lado}: enlazó a los {d.get('linked_after_s', 0):.0f} s ({medio})"
+                 + (f", {caidas} caídas" if caidas else ""))
+            continue
+        tras = f", tras enlazar a los {d['linked_after_s']:.0f} s" if "linked_after_s" in d else ""
+        n.aviso(f"enlace del {lado}: sin enlace a los {d.get('elapsed_s', 0):.0f} s{tras} ({medio}): "
+                f"{d.get('summary', '?')}")
+        for suceso in (d.get("transport_events") or [])[-SUCESOS_DEL_ENLACE:]:
+            n.info(suceso)
+
+
 def veredicto(carpeta: str, desde: int = 0) -> int:
     """Lee los informes de los dos lados y dice qué está bien y qué no. Devuelve los ❌."""
     n = _Notas()
@@ -527,6 +561,7 @@ def veredicto(carpeta: str, desde: int = 0) -> int:
             _esclavo(d, n)
         _enlace(d, n)
         _comunes(d, n)
+    _diagnostico_del_enlace(carpeta, desde, n)
     if vistos == 0:
         n.mal("ningún informe de la pasada en la carpeta")
     total = "✅ en orden" if n.malas == 0 and n.avisos == 0 else (

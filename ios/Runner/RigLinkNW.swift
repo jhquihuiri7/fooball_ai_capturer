@@ -63,6 +63,15 @@ final class RigLinkNW: PeerLinking {
     /// Por qué no hay enlace, o que lo hay, para el latido y el informe (2026-10-15).
     var transportDiagnosis: LinkDiagnosis { transport.diagnosis }
 
+    /// El diagnóstico del enlace en `Documents/bench/link-diag-<lado>-<t>.json` desde que se
+    /// abre hasta que enlaza, y la frase para la fila Enlace mientras busca (2026-10-15). En
+    /// el EMITIR de las 11:36 no llegó a haber pasada del programa, y sin ella nada lo decía.
+    private var diagRecorder: LinkDiagnosisRecorder?
+    private let sideLabel: String
+    /// La última frase del diagnóstico, que acompaña al estado «buscando» hacia Dart.
+    private let summaryLock = NSLock()
+    private var lastSummary = ""
+
     /// El partido que dirige este móvil: va en el hello de las siguientes conexiones.
     var matchId: String? {
         get { session.matchId }
@@ -144,6 +153,7 @@ final class RigLinkNW: PeerLinking {
 
     init(role: CameraRole, secret: Data, prefersMaster: Bool, medium: LinkMedium) {
         let side: RigLinkSession.Side = role == .left ? .left : .right
+        sideLabel = side.rawValue
         let transport = Self.makeTransport(side: side, secret: secret, medium: medium)
         self.transport = transport
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
@@ -173,7 +183,8 @@ final class RigLinkNW: PeerLinking {
         session.onState = { [weak self] estado in
             switch estado {
             case .searching, .authenticating:
-                self?.onState?(.searching, "")
+                // Con la frase del diagnóstico, si ya la hay: la fila Enlace la enseña.
+                self?.onState?(.searching, self?.currentSummary ?? "")
             case let .connected(peer):
                 self?.onState?(.connected, peer)
             case let .rejected(motivo):
@@ -191,10 +202,63 @@ final class RigLinkNW: PeerLinking {
 
     func start() {
         session.start()
+        startDiagnosisFile()
     }
 
     func stop() {
+        diagRecorder?.stop()
+        diagRecorder = nil
         session.stop()
+    }
+
+    private var currentSummary: String {
+        summaryLock.lock(); defer { summaryLock.unlock() }
+        return lastSummary
+    }
+
+    private func startDiagnosisFile() {
+        guard diagRecorder == nil else { return }
+        let arranqueMs = Int64(Date().timeIntervalSince1970 * 1000)
+        let destino = (try? FileManager.default
+            .url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true))
+            .map { docs -> URL in
+                let base = docs.appendingPathComponent("bench", isDirectory: true)
+                try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+                return base.appendingPathComponent(
+                    LinkDiagnosisRecorder.fileName(side: sideLabel, startUnixS: Int(arranqueMs / 1000))
+                )
+            }
+        let transporte = transport
+        let sesion = session
+        let r = LinkDiagnosisRecorder(
+            side: sideLabel, startUnixMs: arranqueMs,
+            sample: {
+                .init(diagnosis: transporte.diagnosis, session: sesion.state, events: transporte.events,
+                      stats: transporte.statsSnapshot)
+            },
+            write: { datos in
+                guard let destino else { return }
+                // Lo que no se pueda escribir no para el enlace.
+                try? datos.write(to: destino, options: .atomic)
+            }
+        )
+        r.onSummary = { [weak self] frase in
+            guard let self else { return }
+            summaryLock.lock()
+            let cambia = lastSummary != frase
+            lastSummary = frase
+            summaryLock.unlock()
+            // Solo mientras busca: apagado, en conflicto o rechazado lo dice su estado.
+            switch sesion.state {
+            case .searching, .authenticating:
+                if cambia { onState?(.searching, frase) }
+            default:
+                break
+            }
+            NSLog("[enlace] %@", frase)
+        }
+        diagRecorder = r
+        r.start()
     }
 
     func publish(look: CameraLook) {
