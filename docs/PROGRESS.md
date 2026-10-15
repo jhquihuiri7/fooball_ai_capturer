@@ -12,6 +12,24 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-15 · La primera emisión al VPS de verdad: el 17 en «Una cámara (sin pareja)» → VPS (167.71.31.225.sslip.io) → YouTube · ✅ mientras Zero estuvo delante
+
+Jonathan desplegó el VPS en el droplet de siempre (subido a 2 vCPU / 2 GB). El 17 con
+AUTO_EMITIR (`AUTO_LINK=single`, 600 s) y el destino del QR Soporte del VPS por entorno
+(`RIG_SRT_*`, leído del `/pair/qr.svg` sin imprimir nada); las credenciales del `.env` de
+Alexander no eran las del despliegue («authentication failed»). Datos en
+`bench/partido-20261015-1605`.
+
+- **8,1 min sin un fallo mientras Zero estuvo delante:** 14 553 fotogramas, 29,8 fps, 0
+  desgarros, 0 retrocesos, latencia añadida p95 143 ms, la copia .mov con el 100 %, **SRT
+  con 1 tramo y 0 reconexiones**, detector 2 422 pasadas, memoria plana, `fair`.
+- **En el VPS** (`deploy/vps-estado.sh`): programa h264 1920×1080 + aac publicando, **relé a
+  YouTube «emitiendo»**, la grabación en segmentos de 60 s.
+- **A los 446 s Zero se fue al fondo** (alguien usó el 17): el programa se para (la cámara
+  no corre en segundo plano), el relé cae a «conectando» y al volver VideoToolbox se rehace
+  (`program_encoder` 2) y el modo automático arranca otra emisión (1,5 min, con dos idas al
+  fondo más: 16,8 fps de media). En la cancha: **no salir de Zero en el móvil que emite**.
+
 ## 2026-10-15 · IOS-81 (arreglo) — el maestro arranca en una lente mientras no oye al esclavo · 🚧 sin compilar; falta la pasada con los dos iPhone
 
 Del modo de un móvil que escribió Jhonatan antes de ver a79d736 (rama local
