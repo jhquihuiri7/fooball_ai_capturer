@@ -12,6 +12,38 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-15 · Mediodía con los dos iPhone: calibrar en la cancha, EMITIR con 4K y el Aware que no enlazaba tras cerrar Zero · 🚧 falta el dedo en EMITIR
+
+Los dos en el soporte de mesa, por Wi-Fi Aware, todo lanzado desde el Mac (Alexander no
+llegó a hacer la prueba con el dedo: `tools/sesion_emitir.sh` esperó de 11:05 a 11:32).
+
+**`tools/calibrar_cancha.sh --solo-comprobar` (44986ad), en los iPhone:** fotos de los dos
+en ~1-1,5 min, «❌ NO CALIBRA» con el motivo de cada pareja (en el cuarto, como debe), no toca
+los `rig.json` y deja otra vez la app de EMITIR. Dos veces (11:33 y 12:11).
+
+**`tools/limpiar_moviles.sh` (bf66979), solo listar:** Zero ocupa 68,3 GB en el 17 (bench
+40,9; bench4k 18,4; nv12 6,4) y 20,9 GB en el 16 Pro (bench4k 19,0). `--borrar-pruebas`
+espera el sí de Alexander.
+
+**EMITIR automático con «Guardar vídeo» (f2f2c21), 10 min** (`bench/emitir-auto-20261015-1157`):
+enlazó a los ~10 s, **dos lentes 98 %**, 17 975 fotogramas, la copia .mov entera,
+latencia p95 145 ms, memoria plana. 198 desgarros (el cruce de fase del ADR 0024). La 4K
+del 17 se grabó (−4 GB); **la del 16 Pro no** (10,5 GB libres: la reserva no la deja
+arrancar). El 16 Pro, a batería, llegó al 20 %.
+
+**El Aware que no enlaza.** 11:36: EMITIR automático lanzado ~1,5 min después de que
+`calibrar_cancha.sh` matara Zero con el enlace vivo → **5 min los dos en «searching»**, sin
+EMITIR (`bench/emitir-auto-20261015-1135`). Cerrando Zero y esperando 1 min, a la siguiente
+enlazó en <1 min. Arreglo, 546917d (el que publica rehace su cita a los 30 s si no llega
+nadie) y 526a348 (`link-diag-*.json` desde el arranque y la frase en la fila Enlace).
+**Repetido el mismo escenario con el arreglo** (`bench/emitir-auto-20261015-1213`):
+**enlazó a los 90 s** (una primera conexión cancelada, «Operation canceled», y se rehízo
+sola), 3 min de EMITIR sin problemas, «✅ enlace del izquierdo/derecho: enlazó a los 90 s,
+1 caídas». Una sola vez: no basta para decir que no vuelve a pasar.
+
+**En los dos queda la app de EMITIR de 526a348** (`tools/plan_b_cancha.sh volver`), con
+«Guardar vídeo» arreglado y el diagnóstico del enlace. `docs/GUIA-CANCHA.md`, al día.
+
 ## 2026-10-15 · Wi-Fi Aware que no enlaza: el que publica rehace su cita y el enlace dice por qué desde el arranque · 🚧 en código y tests; falta con los dos iPhone
 
 **El caso.** EMITIR automático de las 11:36 (`bench/emitir-auto-20261015-1135`), lanzado ~1,5 min

@@ -10,6 +10,8 @@ La Mac va para calibrar, para el plan B y para recoger al final.
 |---|---|
 | EMITIR de producción, 60 min por Aware y sin destino, con la escalera térmica | ✅ en los dos iPhone, con el botón pulsado por el modo automático. Vídeo completo (1:00:00), 0 desgarros, latencia fija |
 | El plan B desde la Mac (lanzar y soltar los cables) | ✅ en los dos iPhone, tras el arreglo del enlace |
+| Aware tras cerrar Zero con el enlace vivo (546917d) | ✅ una vez: enlazó a los 90 s; antes, 5 min sin enlazar. Lo normal, de 10 s a 2 min |
+| La 4K de los dos en EMITIR («Guardar vídeo», f2f2c21) | ✅ el 17, con el modo automático. El 16 Pro no la grabó: le quedan 10 GB y la reserva no le deja. Borra las pruebas viejas antes |
 | Calibrar con `calibrar_cancha.sh` | ✅ la mecánica en los dos iPhone (en casa dice «NO CALIBRA», como debe dentro de un cuarto). ❌ nunca calibró en una cancha |
 | **Pulsar EMITIR con el dedo**, la pantalla de lado, el botón lateral y otra app a mitad | ❌ sin probar en los iPhone |
 | **Aware en modo avión** (con la Wi-Fi encendida) | ❌ sin probar |
@@ -50,7 +52,7 @@ La Mac va para calibrar, para el plan B y para recoger al final.
    «Este móvil dirige»; el 16 Pro **DERECHA**. «Enlace y emisión» → **Aware** en los dos. En el
    17, la tarjeta VPS vacía («Desemparejar» si había algo).
 5. **«Abrir cámara»** en los dos y espera a **LISTA** (Enlace conectado, Reloj y Fase). Puede
-   tardar 1-2 min.
+   tardar hasta 2-3 min: no toques nada mientras, se reintenta solo.
 6. En el 17: **«Guardar vídeo»** encendido (la 4K de los dos) y **EMITIR**. El 16 Pro pasa solo
    a EMITIENDO. La tarjeta Programa del 17 dice «SIN DESTINO»: es lo esperado, el programa se
    graba en el móvil.
@@ -68,7 +70,7 @@ La Mac va para calibrar, para el plan B y para recoger al final.
 | Qué pasa | Qué hacer |
 |---|---|
 | No enlazan y quieres saber por qué | La fila Enlace de cada móvil dice la frase («publicando; no ha llegado nadie en 90 s (3 citas, 2 rehechas)», «no ve al otro…», «ve al otro pero no conecta…»). Cada móvil lo deja también en `Documents/bench/link-diag-*.json`, que recogen los guiones y enseña el veredicto. El que publica rehace su cita cada 30 s y el que busca la suya cada 20 s: no hace falta tocar nada en los primeros 2 min |
-| El 16 Pro no enlaza en 2 min | Quita el modo avión (datos móviles apagados) y vuelve a «Abrir cámara». Si sigue sin enlazar: cierra Zero en el 16 Pro, ábrela, en la pantalla de lado enciende «Un solo móvil, sin reloj», «Abrir cámara» y GRABAR (graba su 4K); el 17 emite con una lente |
+| El 16 Pro no enlaza en 3 min | Cierra Zero en los dos, espera 1 min y ábrela otra vez (lado, Aware, «Abrir cámara»). Si sigue sin enlazar, quita el modo avión (datos móviles apagados) y repite. Si sigue sin enlazar: cierra Zero en el 16 Pro, ábrela, en la pantalla de lado enciende «Un solo móvil, sin reloj», «Abrir cámara» y GRABAR (graba su 4K); el 17 emite con una lente |
 | EMITIR no arranca o se queda raro | El plan B, por cable: `tools/plan_b_cancha.sh lanzar ~/.config/football-ai/secreto-soporte 7200`. Graba 2 h y se para solo; se pueden quitar los cables. Luego `tools/plan_b_cancha.sh volver` |
 | Se cierra Zero en el 16 Pro | Ábrela y «Abrir cámara»: vuelve solo al programa. El 17 sigue mientras tanto con una lente |
 | Se cierra Zero en el 17 | Lo grabado hasta ahí se puede leer. Ábrela, «Abrir cámara» y EMITIR otra vez |
