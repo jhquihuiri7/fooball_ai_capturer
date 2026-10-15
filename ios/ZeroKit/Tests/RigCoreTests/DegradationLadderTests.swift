@@ -8,39 +8,46 @@ final class DegradationLadderTests: XCTestCase {
         var escalera = DegradationLadder()
 
         // Se calienta: sube de golpe.
-        XCTAssertEqual(escalera.step(thermal: .serious, pressure: .nominal, charging: true, dtS: 1), .l2)
+        XCTAssertEqual(escalera.step(thermal: .critical, pressure: .nominal, charging: true, dtS: 1), .l3)
 
         // Se enfría: no baja hasta sostenerlo recoverS segundos…
         for _ in 0..<59 {
-            XCTAssertEqual(escalera.step(thermal: .nominal, pressure: .nominal, charging: true, dtS: 1), .l2)
+            XCTAssertEqual(escalera.step(thermal: .nominal, pressure: .nominal, charging: true, dtS: 1), .l3)
         }
         // …y entonces baja UN escalón, no de golpe.
-        XCTAssertEqual(escalera.step(thermal: .nominal, pressure: .nominal, charging: true, dtS: 1), .l1)
+        XCTAssertEqual(escalera.step(thermal: .nominal, pressure: .nominal, charging: true, dtS: 1), .l2)
         for _ in 0..<59 {
-            XCTAssertEqual(escalera.step(thermal: .nominal, pressure: .nominal, charging: true, dtS: 1), .l1)
+            XCTAssertEqual(escalera.step(thermal: .nominal, pressure: .nominal, charging: true, dtS: 1), .l2)
         }
-        XCTAssertEqual(escalera.step(thermal: .nominal, pressure: .nominal, charging: true, dtS: 1), .l0)
+        XCTAssertEqual(escalera.step(thermal: .nominal, pressure: .nominal, charging: true, dtS: 1), .l1)
     }
 
     func testARelapseResetsTheRecoveryClock() {
         var escalera = DegradationLadder()
-        escalera.step(thermal: .serious, pressure: .nominal, charging: true, dtS: 1)
+        escalera.step(thermal: .critical, pressure: .nominal, charging: true, dtS: 1)
 
         // 50 s enfriándose… y recae: el contador vuelve a cero.
         for _ in 0..<50 {
             escalera.step(thermal: .nominal, pressure: .nominal, charging: true, dtS: 1)
         }
-        XCTAssertEqual(escalera.step(thermal: .serious, pressure: .nominal, charging: true, dtS: 1), .l2)
+        XCTAssertEqual(escalera.step(thermal: .critical, pressure: .nominal, charging: true, dtS: 1), .l3)
         for _ in 0..<59 {
-            XCTAssertEqual(escalera.step(thermal: .nominal, pressure: .nominal, charging: true, dtS: 1), .l2)
+            XCTAssertEqual(escalera.step(thermal: .nominal, pressure: .nominal, charging: true, dtS: 1), .l3)
         }
-        XCTAssertEqual(escalera.step(thermal: .nominal, pressure: .nominal, charging: true, dtS: 1), .l1)
+        XCTAssertEqual(escalera.step(thermal: .nominal, pressure: .nominal, charging: true, dtS: 1), .l2)
     }
 
     func testPressureAndThermalTakeTheWorst() {
         XCTAssertEqual(DegradationLadder.target(thermal: .nominal, pressure: .shutdown, charging: true), .l4)
         XCTAssertEqual(DegradationLadder.target(thermal: .critical, pressure: .nominal, charging: true), .l3)
-        XCTAssertEqual(DegradationLadder.target(thermal: .fair, pressure: .serious, charging: true), .l2)
+        XCTAssertEqual(DegradationLadder.target(thermal: .fair, pressure: .serious, charging: true), .l1)
+    }
+
+    func testFairKeepsEverythingAndSeriousOnlySlowsTheAI() {
+        XCTAssertEqual(DegradationLadder.target(thermal: .fair, pressure: .fair, charging: true), .l0)
+        XCTAssertEqual(DegradationLadder.target(thermal: .serious, pressure: .nominal, charging: true), .l1)
+        XCTAssertEqual(DegradationLadder.target(thermal: .nominal, pressure: .serious, charging: true), .l1)
+        XCTAssertEqual(DegradationLadder.target(thermal: .fair, pressure: .nominal, charging: false), .l1)
     }
 
     func testRunningOnBatteryCostsOneLevel() {

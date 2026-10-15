@@ -116,21 +116,25 @@ public struct DegradationLadder: Sendable {
     ///
     /// La tabla es PROVISIONAL hasta M19. Sin carga (el hub caído) se sube un escalón:
     /// a batería sola el móvil se calienta más y no hay margen para apurar.
+    ///
+    /// `fair` no suelta nada y `serious` solo baja la IA a L1 (2026-10-15, pendiente de la
+    /// revisión de Alexander). Con `fair` en L1 y `serious` en L2, la primera pasada con la
+    /// escalera actuando dejó los dos móviles sin IA desde el segundo 0 (el esclavo, `fair`
+    /// y sin cargador), y el ensayo de 90 min del 2026-10-14 aguantó 71 min en `serious` con
+    /// la IA a 7,5 Hz sin llegar a `critical`.
     public static func target(
         thermal: ThermalLevel,
         pressure: PressureLevel,
         charging: Bool
     ) -> LadderLevel {
         let porTermica: LadderLevel = switch thermal {
-        case .nominal: .l0
-        case .fair: .l1
-        case .serious: .l2
+        case .nominal, .fair: .l0
+        case .serious: .l1
         case .critical: .l3
         }
         let porPresion: LadderLevel = switch pressure {
-        case .nominal: .l0
-        case .fair: .l1
-        case .serious: .l2
+        case .nominal, .fair: .l0
+        case .serious: .l1
         case .critical: .l3
         case .shutdown: .l4
         }
