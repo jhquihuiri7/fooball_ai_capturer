@@ -12,6 +12,61 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-15 · El plan B que no enlazó: la suscripción de Aware que no se rehacía, el esclavo sin informe y el latido mudo (IOS-14c) · 🚧 falta repetir el plan B en los iPhone
+
+`bench/partido-20261015-0902` (apps de `build/cancha`, 6a7a052, el código de las pasadas de
+08:06 y 08:39).
+
+**Lo que dicen los datos.**
+- El maestro publicó a los 0 s y, tras «Device not configured» a los 62 s, otra vez a los 65 y
+  70 s, y cada ~120 s (`publisherTimeout`). No le llegó ni una conexión de control: el esclavo
+  no lo vio o no montó el datapath.
+- El esclavo llegó a su final: cerró la 4K a las 09:01 (600 s) y su audio siguió hasta la
+  recogida (09:02:19; `last_rig_ms` 61 400 559 es su reloj de host, sin el desfase del
+  maestro). Qué la cerró entre eso y las 09:03 no queda dicho (sin crash ni jetsam).
+- Firma, entitlement de Wi-Fi Aware y perfil de `build/cancha/auto-*.app` correctos
+  (`codesign --verify`, el mismo perfil y los dos iPhone en él). Entorno, orden y los 10 s
+  entre los dos, iguales que en el banco.
+- Lo que sí cambia: con APPS no se compila, así que la app nueva arranca **~10-20 s después de
+  matar la anterior**, que tenía un datapath Aware vivo con el otro (la pasada de 08:39); en el
+  banco normal pasa más de un minuto. La de 08:39, ~30-50 s después de matar la de 08:06,
+  tardó 36 s en enlazar con tres intentos fallidos. Es la hipótesis; la línea de tiempo del
+  esclavo no se guardó (abajo).
+
+**Lo arreglado**
+1. **4ca370b** `fix(ios)`: **la suscripción de Wi-Fi Aware que no da con nadie se rehace.**
+   Solo se cambiaba al fallar un intento o al caducar. «Network is down» y «Device not
+   configured» llegan como `.waiting`, que solo se apuntaba, y una suscripción en espera o sin
+   anuncios no falla ni tiene por qué caducar. Ahora el que busca, sin enlace ni intento en
+   marcha, cambia la de control a los 20 s (`WiFiAwareTimings.resubscribeAfterS`), y la de
+   medios si no ve ningún anuncio. Bonjour no cambia. La línea de tiempo dice también cuándo la
+   suscripción está lista.
+2. **8ab8f86** `fix(ios)`: **el informe final se escribe siempre.** `SplitBench.finish` salía
+   con `guard session.isMaster || slave != nil`, y el esclavo sin enlace no monta su parte. Por
+   eso no había `program-split-right` y el latido seguía en `finished: false`.
+   `RigMedia/Obs/ProgramRunFiles.writeFinal` escribe los dos.
+3. **f0df022** `feat(ios)`: **el latido (cada 30 s) y el informe dicen por qué no hay
+   enlace.** `link` trae la frase («no ve al otro en 600 s (31 citas, 30 rehechas)», «ve al otro
+   pero no conecta: 3 intentos; el último: sin respuesta en 10 s», «publicando; no ha llegado
+   nadie…», «control arriba, la sesión no: rechazada: …») y sus cifras. El latido lleva además
+   `transport_events`. `tools/cancha.py` lo enseña en el veredicto.
+
+**Comprobado.** `swift test --skip ModelBench`: 528, 4 saltados, 0 fallos (sin el vigía, el
+test nuevo de la suscripción falla). `tools/check_layers.sh` limpio. `bash
+tools/test_guiones_cancha.sh`: 81 bien. `python3 tools/test_cancha.py`: 19 OK. ZeroKit para
+iOS con xcodebuild (derivedData propio): BUILD SUCCEEDED. El Runner, con `swiftc -typecheck`
+contra ese ZeroKit: 0 errores, los 32 avisos de siempre.
+
+**Siguiente, en los iPhone** (cuando acabe el EMITIR de 60 min):
+1. `tools/plan_b_cancha.sh preparar`: `build/cancha` sigue con 6a7a052, sin esto.
+2. El plan B como hoy, justo después de otra pasada enlazada:
+   `tools/plan_b_cancha.sh lanzar <secreto> 600`.
+3. Recoger con `tools/recoger_partido.sh --desde <lo que diga lanzado.txt>`.
+   - Si enlaza tarde: el `link` del esclavo y sus `transport_events` (las suscripciones
+     rehechas y si estaban listas).
+   - Si no enlaza: ahora hay informe y frase en los dos.
+   - Ya no debe salir «SOLO EL LATIDO» en el esclavo.
+
 ## 2026-10-15 · Con los dos iPhone, sin nadie delante: la fase medida otra vez, la escalera actuando y el plan B · 🚧 el plan B no enlazó; EMITIR automático en marcha
 
 Los dos en el soporte de mesa (17 izquierdo/maestro por cable, 16 Pro derecho/esclavo por la
