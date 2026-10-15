@@ -255,6 +255,7 @@ MEMORIA_CRECE_MAX_MB = 300.0  # de lo del minuto 3 al máximo
 RETROCESOS_MAX = 0.01  # vistas de dos lentes que salieron de una, sobre los fotogramas
 COPIA_MIN = 0.99  # fotogramas en la copia .mov sobre los del programa
 MINUTO_ESTABLE = 3  # los primeros minutos son el arranque (modelos, pools)
+SUCESOS_DEL_ENLACE = 6  # los últimos sucesos del transporte que se enseñan sin enlace
 _TERMICA = {"nominal": 0, "fair": 1, "serious": 2, "critical": 3}
 
 
@@ -430,6 +431,22 @@ def _esclavo(d: dict, n: _Notas) -> None:
         n.aviso(f"fallos de render de la parte: {fallos}")
 
 
+def _enlace(d: dict, n: _Notas) -> None:
+    """Lo que el móvil dice de su enlace (`link`, desde el 2026-10-15): arriba o, si no, por
+    qué, con los últimos sucesos del transporte. Aviso y no fallo: sin enlace, el maestro
+    sigue con una lente y al esclavo ya le cuentan las partes."""
+    enlace = d.get("link") or {}
+    frase = enlace.get("summary")
+    if not frase:
+        return
+    if frase == "enlace arriba":
+        n.ok(f"enlace: arriba ({enlace.get('medium', '?')})")
+        return
+    n.aviso(f"enlace: {frase}")
+    for suceso in (d.get("transport_events") or [])[-SUCESOS_DEL_ENLACE:]:
+        n.info(suceso)
+
+
 def veredicto(carpeta: str, desde: int = 0) -> int:
     """Lee los informes de los dos lados y dice qué está bien y qué no. Devuelve los ❌."""
     n = _Notas()
@@ -451,6 +468,7 @@ def veredicto(carpeta: str, desde: int = 0) -> int:
             _maestro(d, n)
         else:
             _esclavo(d, n)
+        _enlace(d, n)
         _comunes(d, n)
     if vistos == 0:
         n.mal("ningún informe de la pasada en la carpeta")

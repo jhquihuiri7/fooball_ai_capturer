@@ -397,6 +397,7 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
             return ["out_of_buffers": e.cameraDropsOutOfBuffers, "late": e.cameraDropsLate, "other": e.cameraDropsOther]
         }
         s.linkStats = { [weak nw] in nw?.transportStats }
+        s.linkDiagnosis = { [weak nw] in nw?.transportDiagnosis }
         s.linkEvents = { [weak nw] in nw?.transportTimeline }
         s.cameraSwitch = { [weak self] on in self?.engine.setCameraRunningForBench(on) }
         s.exposureBias = { [weak self, weak s] ev in

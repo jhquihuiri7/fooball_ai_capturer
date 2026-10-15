@@ -60,6 +60,9 @@ final class RigLinkNW: PeerLinking {
     /// program-split (2026-10-11).
     var transportTimeline: (createdNs: UInt64, events: [String]) { (transport.createdNs, transport.events) }
 
+    /// Por qué no hay enlace, o que lo hay, para el latido y el informe (2026-10-15).
+    var transportDiagnosis: LinkDiagnosis { transport.diagnosis }
+
     /// El partido que dirige este móvil: va en el hello de las siguientes conexiones.
     var matchId: String? {
         get { session.matchId }
@@ -993,6 +996,10 @@ final class SplitBench {
     var cameraDrops: () -> [String: Int64] = { [:] }
     /// Los contadores del transporte del enlace, para el informe (nil sin enlace de Network).
     var linkStats: () -> LinkTransportStats? = { nil }
+    /// 2026-10-15: por qué no hay enlace, o que lo hay (nil sin enlace de Network). Va en el
+    /// latido y en el informe, con la línea de tiempo del transporte: en el plan B de la
+    /// cancha el esclavo no enlazó y nada de lo que dejó decía por qué.
+    var linkDiagnosis: () -> LinkDiagnosis? = { nil }
     /// Lo que el maestro espera la parte del esclavo, en ms: `PART_MAX_WAIT_MS` del ADR
     /// 0023, o RIG_SPLIT_PART_WAIT_MS para medir otro valor (SPK-04).
     private lazy var partWaitMs: Int64 = env["RIG_SPLIT_PART_WAIT_MS"].flatMap(Int64.init)
@@ -2573,6 +2580,8 @@ final class SplitBench {
             "link_timeline_ms": linkTimeline.report(transport: transporte),
             "transport_events": enlace?.events ?? [],
             "transport_t0_ms": enlace.map { linkTimeline.msSinceStart($0.createdNs) } ?? 0,
+            // 2026-10-15: cómo acaba el enlace y, si no está arriba, por qué.
+            "link": linkReport(),
             "launch_to_bench_ms": LinkStartupTimeline.processStartUnixMs().map { startUnixMs - $0 } ?? -1,
             "bench_start_unix_ms": startUnixMs,
             "bench_start_rig_ms": (startHostNs + session.clock.offsetAt(ns: startHostNs)) / 1_000_000,
@@ -2705,7 +2714,18 @@ final class SplitBench {
                                   "part_encoder": slaveEncoder?.sessionResets ?? 0,
                                   "part_decoder": master?.decoderSessionResets ?? 0],
             "files": recordedFiles(),
+            // 2026-10-15: el enlace, en una frase y en cifras, y la línea de tiempo del
+            // transporte (el arranque y los últimos sucesos): antes solo iba en el informe
+            // final, y el esclavo que no enlazaba no lo escribía.
+            "link": linkReport(),
+            "transport_events": linkEvents()?.events ?? [],
         ]
+    }
+
+    /// El enlace para el latido y el informe: la frase («no ve al otro en 600 s…») y lo que
+    /// la sostiene, con el estado de la sesión. Vacío sin enlace de Network.
+    private func linkReport() -> [String: Any] {
+        linkDiagnosis()?.report(session: session.state) ?? [:]
     }
 
     /// Los últimos cambios del esclavo y sucesos de la app que van en el latido.

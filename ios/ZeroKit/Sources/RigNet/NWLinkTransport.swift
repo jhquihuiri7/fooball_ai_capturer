@@ -248,6 +248,34 @@ public final class NWLinkTransport: LinkTransport {
     private var mediaBrowserOpenedNs: UInt64?
     private var subscriptionWatchdog: DispatchSourceTimer?
 
+    // 2026-10-15: lo que dice `diagnosis`. Citas de control abiertas, si la actual está
+    // lista, intentos de control (los que salen o los que llegan), la última caída y desde
+    // cuándo no hay control arriba (ns de uptime; nil, arriba).
+    private var citasAbiertas = 0
+    private var citaLista = false
+    private var intentosControl = 0
+    private var ultimaCaida: String?
+    private var sinEnlaceDesdeNs: UInt64? = DispatchTime.now().uptimeNanoseconds
+
+    /// Por qué no hay enlace, o que lo hay: para el latido y el informe del programa.
+    /// Nunca desde la propia cola: se bloquearía.
+    public var diagnosis: LinkDiagnosis {
+        queue.sync {
+            let ahora = DispatchTime.now().uptimeNanoseconds
+            let rol: LinkDiagnosis.Role = switch mode {
+            case .advertise, .listen: .publishes
+            case .browse, .connect: .searches
+            }
+            return LinkDiagnosis(
+                role: rol, medium: rendezvous.label, state: state, waiting: esperaPor,
+                lastRendezvousEnd: finDeCita, lastDrop: ultimaCaida, rendezvousReady: citaLista,
+                announcements: controlCandidates.count, mediaAnnouncements: mediaCandidates.count,
+                rendezvousOpened: citasAbiertas, resubscribes: stats.resubscribes, controlAttempts: intentosControl,
+                withoutLinkS: state == .connected ? nil : sinEnlaceDesdeNs.map { Double(ahora &- $0) / 1e9 }
+            )
+        }
+    }
+
     /// Lo que le ha pasado al enlace, «segundos desde que se creó el transporte: qué»: el
     /// arranque y los últimos `maxEvents`. Para el banco: dice si cada caída coincide con
     /// una cita que caduca y con qué error cae cada conexión (IOS-14c), y cuándo sube
@@ -429,7 +457,9 @@ public final class NWLinkTransport: LinkTransport {
                 guard let self else { return }
                 // Un soporte son dos móviles: la conexión nueva sustituye a la vieja,
                 // que Network puede tardar en dar por muerta (el patrón de RigLink).
-                if self.connection != nil { self.note("control: llega otra y sustituye a la de antes") }
+                self.intentosControl += 1
+                self.note(self.connection == nil ? "control: llega una conexión"
+                    : "control: llega otra y sustituye a la de antes")
                 self.connection?.cancel()
                 // Si la vieja seguía arriba, la sesión tiene que verlo para darse la mano
                 // otra vez por la nueva; si no, se queda con la clave de la vieja.
@@ -451,15 +481,18 @@ public final class NWLinkTransport: LinkTransport {
                 switch estado {
                 case .ready:
                     self.esperaPor = nil
+                    self.citaLista = true
                     self.localPort = listener.port?.rawValue ?? 0
                     self.note("cita de control publicada")
                     // Una cita renovada con la conexión arriba no la tumba.
                     if self.state != .connected { self.state = .listening }
                     self.onReady?(self.localPort)
                 case let .failed(error):
+                    self.citaLista = false
                     self.rendezvousEnded(.control, error)
                 case let .waiting(error):
                     // Wi-Fi Aware sin nadie emparejado no falla: espera. Que se lea.
+                    self.citaLista = false
                     if self.esperaPor != self.describe(error) { self.note("listener en espera: \(self.describe(error))") }
                     self.esperaPor = self.describe(error)
                     self.log.info("listener en espera: \(self.describe(error))")
@@ -468,6 +501,8 @@ public final class NWLinkTransport: LinkTransport {
                 }
             }
             self.listener = listener
+            citasAbiertas += 1
+            citaLista = false
             listener.start(queue: queue)
         } catch {
             state = .failed(describe(error))
@@ -511,9 +546,11 @@ public final class NWLinkTransport: LinkTransport {
             guard let self, let browser, browser === self.browser else { return }
             switch estado {
             case let .failed(error):
+                self.citaLista = false
                 self.rendezvousEnded(.control, error)
             case let .waiting(error):
                 // Wi-Fi Aware sin emparejado o sin entitlement no falla: espera. Se dice.
+                self.citaLista = false
                 if self.esperaPor != self.describe(error) { self.note("browser en espera: \(self.describe(error))") }
                 self.esperaPor = self.describe(error)
                 self.log.info("browser en espera: \(self.describe(error))")
@@ -521,18 +558,24 @@ public final class NWLinkTransport: LinkTransport {
                 // Lista y sin anuncios no es lo mismo que en espera: que se lea cuál.
                 self.note("suscripción de control lista")
                 self.esperaPor = nil
+                self.citaLista = true
             default:
                 break
             }
         }
         self.browser = browser
         browserOpenedNs = DispatchTime.now().uptimeNanoseconds
+        citasAbiertas += 1
+        citaLista = false
+        // Los anuncios son los de la suscripción nueva (el diagnóstico los cuenta).
+        controlCandidates = []
         state = .connecting
         browser.start(queue: queue)
     }
 
     private func openConnection(to endpoint: NWEndpoint) {
         state = .connecting
+        intentosControl += 1
         note("control: se conecta a \(endpoint)")
         let conexion = NWConnection(to: endpoint, using: parameters())
         adopt(connection: conexion)
@@ -557,6 +600,7 @@ public final class NWLinkTransport: LinkTransport {
                 self.reconnectAttempt = 0
                 // El vigía de silencio se arma con los primeros medios de esta conexión.
                 self.peerMediaSinceConnect = false
+                self.sinEnlaceDesdeNs = nil
                 self.note("control arriba")
                 if self.stats.firstControlUpNs == nil {
                     self.stats.firstControlUpNs = DispatchTime.now().uptimeNanoseconds
@@ -584,6 +628,8 @@ public final class NWLinkTransport: LinkTransport {
         guard !stopped else { return }
         let estabaArriba = state == .connected
         note("control caído (\(motivo))")
+        ultimaCaida = motivo
+        if estabaArriba || sinEnlaceDesdeNs == nil { sinEnlaceDesdeNs = DispatchTime.now().uptimeNanoseconds }
         connection?.cancel()
         connection = nil
         stats.reconnects += 1

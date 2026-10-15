@@ -47,6 +47,12 @@ final class SubscriptionWatchdogTests: XCTestCase {
         XCTAssertTrue(busca.events.contains { $0.contains("control: la suscripción no ha dado con nadie") })
         XCTAssertTrue(busca.events.contains { $0.contains("medios: la suscripción no ha dado con nadie") })
         XCTAssertEqual(busca.state, .connecting)
+        // Y el latido lo dice (LinkDiagnosis).
+        let d = busca.diagnosis
+        XCTAssertEqual(d.role, .searches)
+        XCTAssertGreaterThanOrEqual(d.resubscribes, 4)
+        XCTAssertGreaterThanOrEqual(d.rendezvousOpened, 3)
+        XCTAssertTrue(d.summary().hasPrefix("no ve al otro en"), d.summary())
     }
 
     /// Bonjour no tiene plazo: su suscripción no se toca aunque no vea a nadie.

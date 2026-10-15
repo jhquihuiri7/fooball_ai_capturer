@@ -197,6 +197,32 @@ class Veredicto(unittest.TestCase):
             self.assertEqual(texto.count("informe final"), 2, texto)  # el aviso de la primera y la segunda
             self.assertEqual(malas, 1, texto)
 
+    def test_el_esclavo_sin_enlace_dice_por_que(self) -> None:
+        # El plan B del 2026-10-15: el esclavo no enlazó. Desde ahora deja su informe final
+        # y el enlace en una frase, con los últimos sucesos del transporte.
+        with tempfile.TemporaryDirectory() as d:
+            sucesos = [f"{s}.0 [380 MB] control: la suscripción no ha dado con nadie en 20 s: otra"
+                       for s in range(20, 200, 20)]
+            _informe(os.path.join(d, "derecho", "bench"), f"program-split-right-{T}.json", role="slave",
+                     purpose="bench", slave_parts=0,
+                     link={"summary": "no ve al otro en 600 s (31 citas, 30 rehechas)", "medium": "aware"},
+                     transport_events=sucesos)
+            malas, texto = self._corre(d)
+            self.assertEqual(malas, 1, texto)  # las partes; el enlace es un aviso
+            self.assertIn("informe final", texto)
+            self.assertIn("⚠️  enlace: no ve al otro en 600 s (31 citas, 30 rehechas)", texto)
+            self.assertIn(sucesos[-1], texto)
+            self.assertNotIn("\n     " + sucesos[0], texto)  # solo los últimos
+
+    def test_con_enlace_lo_dice_sin_avisar(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            _informe(os.path.join(d, "izquierdo", "bench"), f"program-split-left-{T}.json",
+                     **dict(MAESTRO, link={"summary": "enlace arriba", "medium": "aware"}))
+            malas, texto = self._corre(d)
+            self.assertEqual(malas, 0, texto)
+            self.assertIn("✅ enlace: arriba (aware)", texto)
+            self.assertIn("VEREDICTO: ✅ en orden", texto)
+
     def test_lo_de_antes_de_la_pasada_no_cuenta(self) -> None:
         with tempfile.TemporaryDirectory() as d:
             _informe(os.path.join(d, "izquierdo", "bench"), f"program-split-left-{VIEJO}.json", **MAESTRO)
