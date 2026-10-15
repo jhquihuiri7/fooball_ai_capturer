@@ -14,8 +14,11 @@ ZM_LISTADO_TIMEOUT_S=180   # s que puede tardar un listado, con miles de fotos d
 ZM_LISTADO_PAUSA_S=10      # s entre un intento y el siguiente
 
 # Los dispositivos de $@ que devicectl ve conectados (por cable o por la red), uno por línea.
+# Un móvil por la red sale «available (paired)» hasta que algo le abre el túnel: se lo abre
+# un `info details` antes de listar (visto el 2026-10-15 con el 16 Pro).
 zm_conectados() {
-  local f; f=$(mktemp)
+  local f d; f=$(mktemp)
+  for d in "$@"; do "$XCRUN" devicectl device info details --device "$d" >/dev/null 2>&1 || true; done
   "$XCRUN" devicectl list devices --json-output "$f" >/dev/null 2>&1 || true
   python3 - "$f" "$@" <<'PY'
 import json, sys
