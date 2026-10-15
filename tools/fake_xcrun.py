@@ -10,7 +10,7 @@ Todo vive en $FAKE_DIR:
     dev/<id>/keychain          lo que Zero guardaría del RIG_LINK_SECRET al arrancar
     guion.json                 {id: {"<n>": [[«pon», origen, ruta en Documents], …]}}: lo que
                                aparece en el móvil antes de su listado número n (Zero emitiendo)
-    log                        las órdenes, sin valores del entorno
+    log                        las órdenes, sin valores del entorno (`copy to` sale como «sube»)
 
 Hay siempre otra app de Flutter (otro Runner.app) corriendo en cada móvil: el guion no
 puede cerrarla nunca (lo que pasó el 2026-10-07).
@@ -167,6 +167,18 @@ def main() -> int:
             return 1
         shutil.copyfile(origen, destino)
         log(f"{dev} copia {opcion(args, '--source')}")
+        return 0
+    if args[:3] == ["device", "copy", "to"]:
+        # Un fichero del Mac a su ruta en el contenedor (--destination es la ruta entera).
+        origen = opcion(args, "--source") or ""
+        relativa = opcion(args, "--destination") or ""
+        destino = os.path.join(raiz(dev), relativa)
+        if not os.path.isfile(origen) or opcion(args, "--domain-identifier") != ZERO:
+            print(f"ERROR: no se puede copiar {origen}", file=sys.stderr)
+            return 1
+        os.makedirs(os.path.dirname(destino), exist_ok=True)
+        shutil.copyfile(origen, destino)
+        log(f"{dev} sube {relativa}")
         return 0
     print(f"fake_xcrun: no sé {args}", file=sys.stderr)
     return 2

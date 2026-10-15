@@ -3,8 +3,8 @@
 #   tools/test_guiones_cancha.sh
 # sesion_emitir.sh (espera, recoge y veredicto; el secreto nunca sale), recoger_partido.sh (la
 # última pasada, la app que murió a mitad, --sin-4k y --desde) y plan_b_cancha.sh (lanzar y
-# soltar con las apps guardadas, y volver). Ninguno puede cerrar otra app que no sea Zero.
-# Con ffmpeg, los vídeos de prueba son de verdad (y uno, fragmentado y cortado a mitad).
+# soltar con las apps guardadas, y volver) y calibrar_cancha.sh (calibra e instala, --solo-comprobar,
+# no calibra y no toca, sin fotos). Ninguno puede cerrar otra app que no sea Zero. Con ffmpeg, los vídeos de prueba son de verdad (y uno, fragmentado y cortado a mitad).
 set -uo pipefail
 
 RAIZ=$(cd "$(dirname "$0")/.." && pwd)
@@ -291,6 +291,168 @@ espera_que "sale con error" test $? -ne 0
 espera_que "no compila ni lanza nada" no_tiene "$FAKE_DIR/log" "flutter\|lanza"
 "$RAIZ/tools/emitir_auto.sh" "$SECRETO" 600 --link multipeer > "$T/auto4.txt" 2>&1
 espera_que "--link multipeer no vale (no hay programa)" test $? -eq 2
+
+# ------------------------------------------------------------------------------------------
+# calibrar_cancha.sh: la calibración de football-ai se sustituye por una falsa que mira que le
+# llegan las fotos del disparo nuevo y deja el rig.json de FALSO_RIG (o no calibra).
+cat > "$T/bin/calibrador-falso" <<'PY'
+#!/usr/bin/env python3
+import json, math, os, sys
+a = sys.argv[1:]
+op = lambda n: a[a.index(n) + 1]
+bench, boot, out, js = op("--bench"), op("--boot"), op("--out"), op("--json")
+open(os.path.join(os.environ["FAKE_DIR"], "calibrador.log"), "a").write(f"--boot {boot}\n")
+fotos = [os.path.join(bench, c, "calib", boot, f"{s}-{boot}.jpg") for c, s in (("izquierdo", "left"), ("derecho", "right"))]
+base = {"chosen_instant_ms": None, "out": None, "error": None, "min_inliers": 30, "ransac_threshold_px": 3.0}
+if not all(os.path.isfile(f) for f in fotos):
+    json.dump({**base, "calibrated": False, "attempts": [], "error": "faltan las fotos"}, open(js, "w"))
+    sys.exit(2)
+if os.environ.get("FALSO_NO_CALIBRA"):
+    fallo = "solo hay 14 emparejamientos entre las dos imagenes y hacen falta 30"
+    json.dump({**base, "calibrated": False, "attempts": [{"instant_ms": int(boot), "delta_ms": -2, "failure": fallo}]},
+              open(js, "w"))
+    sys.exit(1)
+rig = json.load(open(os.environ["FALSO_RIG"]))
+json.dump(rig, open(out, "w"), indent=2)
+cams = {s: {f"{e}_deg": math.degrees(rig[s]["pose"][f"{e}_rad"]) for e in ("yaw", "pitch", "roll")} for s in ("left", "right")}
+json.dump({**base, "calibrated": True, "chosen_instant_ms": int(boot), "out": out, "attempts": [
+    {"instant_ms": int(boot), "delta_ms": 3, "failure": None, "inliers": 100, "matches": 199, "residual_deg": 0.061,
+     "cameras": cams}]}, open(js, "w"))
+PY
+chmod +x "$T/bin/calibrador-falso"
+CASA="$RAIZ/docs/img/rig-tripode-20261011.json"
+python3 - "$CASA" "$T/rig-nuevo.json" <<'PY'
+import json, math, sys
+rig = json.load(open(sys.argv[1]))
+rig["right"]["pose"]["roll_rad"] += math.radians(0.1)   # el mismo montaje, otra calibración
+json.dump(rig, open(sys.argv[2], "w"), indent=2)
+PY
+APPS="$T/apps"; mkdir -p "$APPS/auto-left.app" "$APPS/auto-right.app" "$APPS/emitir.app"; echo abc1234 > "$APPS/VERSION"
+CVIEJO=600000; CNUEVO=1004334720
+calib_fake() {  # $1 1: las fotos aparecen en el segundo listado (Zero haciendo el disparo)
+  nuevo_fake
+  for par in "$IZQ:left" "$DER:right"; do
+    d=${par%%:*}; s=${par##*:}
+    pon "$d" "$CASA" "rig.json"
+    pon "$d" "$FIX/entero.mov" "calib/$CVIEJO/$s-$CVIEJO.jpg"
+    pon "$d" "$FIX/n0.jsonl" "calib/$CVIEJO/summary-$s.json"
+    touch "$FAKE_DIR/dev/$d/corriendo"
+  done
+  [ "$1" = 1 ] || return 0
+  python3 - "$FAKE_DIR/guion.json" "$IZQ" "$DER" "$FIX" "$CNUEVO" <<'PY'
+import json, sys
+g, izq, der, fix, n = sys.argv[1:]
+def fotos(s):
+    acc = []
+    for k in range(5):
+        t = int(n) + 1000 * k
+        acc += [["pon", f"{fix}/entero.mov", f"calib/{n}/{s}-{t}.jpg"], ["pon", f"{fix}/n0.jsonl", f"calib/{n}/{s}-{t}.json"]]
+    return acc + [["pon", f"{fix}/n0.jsonl", f"calib/{n}/summary-{s}.json"]]
+json.dump({izq: {"2": fotos("left")}, der: {"3": fotos("right")}}, open(g, "w"))
+PY
+}
+entorno_de() {  # $1 dispositivo: el entorno de su último lanzamiento, sin el secreto
+  python3 - "$FAKE_DIR/dev/$1/entorno.json" <<'PY'
+import json, sys
+e = json.load(open(sys.argv[1]))
+print(" ".join(f"{k}={e[k]}" for k in sorted(e) if k != "RIG_LINK_SECRET"))
+PY
+}
+apps_instaladas() { grep ' instala ' "$FAKE_DIR/log" | sed -E 's/^([^ ]+) instala (.*)$/\1:\2/' | tr '\n' ' '; }
+
+echo "calibrar_cancha.sh: calibra e instala en los dos"
+calib_fake 1
+OUT="$T/calib"
+SALIDA="$OUT" SONDEO_S=0 CANCHA_APPS="$APPS" CALIBRADOR="$T/bin/calibrador-falso" FALSO_RIG="$T/rig-nuevo.json" \
+  "$RAIZ/tools/calibrar_cancha.sh" "$SECRETO" > "$T/calib.txt" 2>&1
+espera_que "termina bien" test $? -eq 0
+espera_que "instala la de banco de cada lado y al final EMITIR en los dos" test "$(apps_instaladas)" = \
+  "$IZQ:auto-left.app $DER:auto-right.app $IZQ:emitir.app $DER:emitir.app "
+espera_que "cierra Zero" tiene "$FAKE_DIR/log" "$IZQ cierra Zero"
+espera_que "nunca otra app" no_tiene "$FAKE_DIR/log" "CERRÓ OTRA APP"
+entorno_de "$IZQ" > "$T/calib-entorno.txt"
+for par in RIG_CALIB_AT_S=10 RIG_SPLIT=1 RIG_SPLIT_S=360 RIG_LINK_INTERFACE=aware RIG_LINK_SIDE=left \
+           RIG_LINK_MULTIPEER=0 RIG_SPLIT_NO_TS=1 RIG_SPLIT_NO_MOV=1; do
+  espera_que "el entorno lleva $par" tiene "$T/calib-entorno.txt" "$par"
+done
+espera_que "el derecho, su lado" tiene <(entorno_de "$DER") "RIG_LINK_SIDE=right"
+espera_que "lanza con el secreto (al Keychain del fake)" test -s "$FAKE_DIR/dev/$IZQ/keychain" -a -s "$FAKE_DIR/dev/$DER/keychain"
+espera_que "el secreto no sale por pantalla" no_tiene "$T/calib.txt" "$VALOR"
+espera_que "ni en el registro" no_tiene "$OUT/calibrar.log" "$VALOR"
+espera_que "espera al derecho, que acaba un listado después" tiene "$T/calib.txt" "aún no están las fotos de los dos"
+espera_que "calibra el disparo nuevo" tiene "$FAKE_DIR/calibrador.log" "--boot $CNUEVO"
+espera_que "trae las 11 de cada lado" test "$(ls "$OUT/izquierdo/calib/$CNUEVO" | wc -l)" -eq 11 -a "$(ls "$OUT/derecho/calib/$CNUEVO" | wc -l)" -eq 11
+espera_que "y no las del disparo viejo" test ! -e "$OUT/izquierdo/calib/$CVIEJO"
+espera_que "dice puntos, residuo y ángulos" tiene "$T/calib.txt" "✅ CALIBRA con la pareja $CNUEVO: 100 de 199 puntos coherentes, residuo 0.061°"
+espera_que "el roll de la derecha" tiene "$T/calib.txt" "cámara derecha   yaw  +40.73°  pitch   -5.58°  roll   -6.11°"
+espera_que "guarda el viejo de cada uno" cmp -s "$OUT/izquierdo/antes/rig.json" "$CASA"
+espera_que "(el del derecho)" cmp -s "$OUT/derecho/antes/rig.json" "$CASA"
+espera_que "dice que se parece al de casa" tiene "$T/calib.txt" "se parece al que tenía: la diferencia mayor es 0.10° (roll de la derecha)"
+espera_que "lo sube a los dos" test "$(grep -c 'sube Documents/rig.json' "$FAKE_DIR/log")" -eq 2
+espera_que "y quedó: el izquierdo" cmp -s "$FAKE_DIR/dev/$IZQ/Documents/rig.json" "$T/rig-nuevo.json"
+espera_que "y el derecho" cmp -s "$FAKE_DIR/dev/$DER/Documents/rig.json" "$T/rig-nuevo.json"
+espera_que "lo comprueba bajándolo" tiene "$T/calib.txt" "✅ derecho: Documents/rig.json es el nuevo"
+espera_que "veredicto" tiene "$T/calib.txt" "VEREDICTO: ✅ calibrado e instalado en los dos"
+espera_que "Zero cerrada al acabar" test ! -e "$FAKE_DIR/dev/$IZQ/corriendo" -a ! -e "$FAKE_DIR/dev/$DER/corriendo"
+
+echo "calibrar_cancha.sh --solo-comprobar: calibra y compara, no instala"
+calib_fake 1
+SALIDA="$T/calib2" SONDEO_S=0 CANCHA_APPS="$APPS" CALIBRADOR="$T/bin/calibrador-falso" FALSO_RIG="$T/rig-nuevo.json" \
+  "$RAIZ/tools/calibrar_cancha.sh" "$SECRETO" --solo-comprobar > "$T/calib2.txt" 2>&1
+espera_que "termina bien" test $? -eq 0
+espera_que "compara" tiene "$T/calib2.txt" "se parece al que tenía"
+espera_que "no sube nada" no_tiene "$FAKE_DIR/log" "sube"
+espera_que "los móviles siguen con el de casa" cmp -s "$FAKE_DIR/dev/$IZQ/Documents/rig.json" "$CASA"
+espera_que "dice cómo instalarlo" tiene "$T/calib2.txt" "devicectl device copy to --device $DER"
+espera_que "y deja EMITIR" test "$(grep -c 'instala emitir.app' "$FAKE_DIR/log")" -eq 2
+
+echo "calibrar_cancha.sh: no calibra y no toca los móviles"
+calib_fake 1
+SALIDA="$T/calib3" SONDEO_S=0 CANCHA_APPS="$APPS" CALIBRADOR="$T/bin/calibrador-falso" FALSO_NO_CALIBRA=1 \
+  "$RAIZ/tools/calibrar_cancha.sh" "$SECRETO" > "$T/calib3.txt" 2>&1
+espera_que "sale con error" test $? -ne 0
+espera_que "dice que no calibra" tiene "$T/calib3.txt" "❌ NO CALIBRA: ninguna de las 1 parejas"
+espera_que "y por qué" tiene "$T/calib3.txt" "solo hay 14 emparejamientos"
+espera_que "y qué hacer" tiene "$T/calib3.txt" "aceptar el de casa"
+espera_que "no sube nada" no_tiene "$FAKE_DIR/log" "sube"
+espera_que "el izquierdo sigue con el de casa" cmp -s "$FAKE_DIR/dev/$IZQ/Documents/rig.json" "$CASA"
+espera_que "y el derecho" cmp -s "$FAKE_DIR/dev/$DER/Documents/rig.json" "$CASA"
+espera_que "deja EMITIR en los dos" test "$(grep -c 'instala emitir.app' "$FAKE_DIR/log")" -eq 2
+espera_que "nunca otra app" no_tiene "$FAKE_DIR/log" "CERRÓ OTRA APP"
+espera_que "el secreto no sale" no_tiene "$T/calib3.txt" "$VALOR"
+
+echo "calibrar_cancha.sh: sin fotos (el enlace no subió), sin el 16 Pro, o sin las apps"
+calib_fake 0
+informe "$FIX/live-mudo.json" master bench left "$(date +%s)" false latido
+python3 - "$FIX/live-mudo.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1])); d["link"] = {"summary": "no ve al otro en 300 s", "medium": "aware"}
+json.dump(d, open(sys.argv[1], "w"))
+PY
+python3 - "$FAKE_DIR/guion.json" "$IZQ" "$FIX" "$(( $(date +%s) + 2 ))" <<'PY'
+import json, sys
+g, izq, fix, t = sys.argv[1:]
+json.dump({izq: {"2": [["pon", f"{fix}/live-mudo.json", f"bench/program-live-left-{t}.json"]]}}, open(g, "w"))
+PY
+SALIDA="$T/calib4" SONDEO_S=0 ESPERA_S=0 CANCHA_APPS="$APPS" CALIBRADOR="$T/bin/calibrador-falso" \
+  "$RAIZ/tools/calibrar_cancha.sh" "$SECRETO" > "$T/calib4.txt" 2>&1
+espera_que "sale con error" test $? -ne 0
+espera_que "dice que no llegaron" tiene "$T/calib4.txt" "no llegaron las fotos de los dos"
+espera_que "y lo que dice el latido del enlace" tiene "$T/calib4.txt" "izquierdo: no ve al otro en 300 s (aware)"
+espera_que "no calibra" test ! -e "$FAKE_DIR/calibrador.log"
+espera_que "no sube nada" no_tiene "$FAKE_DIR/log" "sube"
+espera_que "deja EMITIR en los dos" test "$(grep -c 'instala emitir.app' "$FAKE_DIR/log")" -eq 2
+echo "$IZQ" > "$FAKE_DIR/conectados"; : > "$FAKE_DIR/log"
+SALIDA="$T/calib5" CANCHA_APPS="$APPS" CALIBRADOR="$T/bin/calibrador-falso" \
+  "$RAIZ/tools/calibrar_cancha.sh" "$SECRETO" > "$T/calib5.txt" 2>&1
+espera_que "sin el 16 Pro, error" test $? -ne 0
+espera_que "y no instala ni lanza nada" no_tiene "$FAKE_DIR/log" "instala\|lanza"
+printf '%s\n%s\n' "$IZQ" "$DER" > "$FAKE_DIR/conectados"
+SALIDA="$T/calib6" CANCHA_APPS="$T/sin-apps" CALIBRADOR="$T/bin/calibrador-falso" \
+  "$RAIZ/tools/calibrar_cancha.sh" "$SECRETO" > "$T/calib6.txt" 2>&1
+espera_que "sin las apps guardadas, error" test $? -ne 0
+espera_que "y dice cómo prepararlas" tiene "$T/calib6.txt" "plan_b_cancha.sh preparar"
+espera_que "sin lanzar nada" no_tiene "$FAKE_DIR/log" "instala\|lanza"
 
 echo
 echo "$BIEN bien, $MAL mal"
