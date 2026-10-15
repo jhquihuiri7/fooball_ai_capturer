@@ -12,6 +12,25 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-15 · IOS-81 (arreglo) — el maestro arranca en una lente mientras no oye al esclavo · 🚧 sin compilar; falta la pasada con los dos iPhone
+
+Del modo de un móvil que escribió Jhonatan antes de ver a79d736 (rama local
+`respaldo/ios-98-99-jhonatan`), lo único que «Una cámara» no cubre: con el **soporte de dos**,
+si el esclavo no ha llegado al pulsar EMITIR, el maestro encuadraba la mitad negra hasta oírlo
+caer. `PeerHealth` arranca en `down` y solo avisa de los cambios, así que sin esclavo no
+llegaba ningún aviso y `peerDown` se quedaba en falso (se vio el 2026-10-10 mientras tardaba el
+canal de medios). Jhonatan pidió conservar lo de Alexander y rescatar esto.
+
+**Hecho**: `SplitBench.start` toma el estado inicial del latido en su cola, antes del primer tic;
+`setUpIfNeeded` aplica la lente al montar. Con el esclavo arriba al EMITIR no cambia nada; al
+llegar después, `onPeerState(.up)` devuelve las dos lentes, como ya hacía IOS-81. Con «Una
+cámara» tampoco cambia: ya iba en una lente.
+
+**Tests**: `PeerHealthTests.testArrancaCaidoYSinNadieNoAvisa` fija lo que el arreglo da por
+hecho. **Sin compilar** (Windows). Para Alexander: `swift test` y, con los dos iPhone, EMITIR en
+el 17 con el 16 Pro aún sin enlazar. El programa sale de una lente sin negro y pasa a dos cuando
+enlaza.
+
 ## 2026-10-15 · IOS-99 — «Una cámara» a 720p o 1080p · 🚧 en código, con los tests de Dart; falta compilar en el Mac y la pasada en el iPhone
 
 Lo pidió Jhonatan: con un solo móvil, elegir entre 720p y 1080p (ADR 0025 de football-ai,

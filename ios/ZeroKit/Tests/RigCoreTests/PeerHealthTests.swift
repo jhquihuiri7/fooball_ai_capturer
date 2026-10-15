@@ -10,6 +10,22 @@ final class PeerHealthTests: XCTestCase {
                   lastHeardSeq: seq)
     }
 
+    /// El maestro que EMITE sin esclavo lee este estado al arrancar la pasada (SplitBench): arranca
+    /// caído y, mientras nadie conteste, no avisa de nada. Como no avisa, la pasada tiene que
+    /// leerlo, o encuadraría la mitad negra.
+    func testArrancaCaidoYSinNadieNoAvisa() {
+        let h = PeerHealth()
+        var cambios: [PeerState] = []
+        h.onChange = { cambios.append($0) }
+        XCTAssertEqual(h.state, .down)
+        for t in stride(from: Int64(0), through: 3000, by: 100) {
+            h.sent(seq: UInt32(t / 100 + 1), nowMs: t)
+            h.tick(nowMs: t + 50)
+        }
+        XCTAssertEqual(h.state, .down)
+        XCTAssertTrue(cambios.isEmpty)
+    }
+
     /// Dos móviles a 10 Hz: arriba en ≤1 latido; se corta a los 2 s; caído a 500 ms.
     func testCaidaYVueltaEnLosTiemposDelAdr() {
         let h = PeerHealth()

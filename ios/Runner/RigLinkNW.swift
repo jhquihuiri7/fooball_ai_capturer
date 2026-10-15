@@ -1290,6 +1290,12 @@ final class SplitBench {
     private var tsAudioFrames = 0
 
     func start() {
+        // El otro, de partida, como diga el latido, que arranca caído y solo avisa de los
+        // cambios (PeerHealth). Sin esto, un maestro cuyo esclavo aún no ha llegado creía tener
+        // las dos lentes y encuadraba la mitad negra hasta oírlo caer. En la cola, antes del
+        // primer tic; los avisos de `onPeerState` llegan detrás.
+        let sesion = session
+        queue.async { [weak self] in self?.peerDown = sesion.health.state == .down }
         // El spike de la duración de fotograma: la cadencia de la cámara se mide desde ya.
         if frameSpikePlan != nil { frameSpikeArm?(Int(Self.fps)) }
         // .strict: el sistema no agrupa los disparos para ahorrar energía.
@@ -1618,6 +1624,8 @@ final class SplitBench {
                 width: config.output.width, height: config.output.height,
                 bitrateBps: config.output.maximumBps, viewId: 0
             )
+            // Sin el esclavo arriba, el primer instante ya sale de una lente.
+            applySingleLens()
             return true
         } catch {
             NSLog("[split] no se pudo montar: %@", "\(error)")
