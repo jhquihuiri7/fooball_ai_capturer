@@ -7,6 +7,7 @@ import 'package:football_ai_capture/src/calibration_upload.dart';
 import 'package:football_ai_capture/src/capture_session.dart';
 import 'package:football_ai_capture/src/constants.dart';
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
+import 'package:football_ai_capture/src/generated/rig_api.g.dart';
 
 import 'fake_capture_api.dart';
 import 'fake_rig_api.dart';
@@ -1198,6 +1199,40 @@ void main() {
       expect(standalone.singleCamera, isFalse);
       expect(standalone.programMode, isFalse);
       expect(standalone.modeLabel, 'un solo móvil · SIN RELOJ');
+    });
+
+    test('IOS-99: EMITIR pide al nativo la resolución elegida, 1080p de partida', () async {
+      for (final ProgramResolution elegida in ProgramResolution.values) {
+        final FakeRigApi rig = FakeRigApi();
+        final CaptureSession session = CaptureSession(
+          role: CameraRole.left,
+          api: FakeCaptureApi(),
+          rigApi: rig,
+          linkMode: LinkMode.single,
+          resolution: elegida,
+        );
+        await session.prepare();
+        await session.toggleRecording();
+        expect(rig.lastResolution, elegida);
+      }
+      expect(
+        CaptureSession(role: CameraRole.left, api: FakeCaptureApi(), linkMode: LinkMode.single).resolution,
+        ProgramResolution.p1080,
+      );
+    });
+
+    test('IOS-99: el soporte de dos pide 1080p aunque le llegue otra', () async {
+      final FakeRigApi rig = FakeRigApi();
+      final CaptureSession session = CaptureSession(
+        role: CameraRole.left,
+        api: FakeCaptureApi(),
+        rigApi: rig,
+        linkMode: LinkMode.aware,
+        resolution: ProgramResolution.p720,
+      );
+      await session.prepare();
+      await session.toggleRecording();
+      expect(rig.lastResolution, ProgramResolution.p1080);
     });
   });
 }

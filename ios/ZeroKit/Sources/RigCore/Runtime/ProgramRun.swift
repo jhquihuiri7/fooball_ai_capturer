@@ -44,6 +44,9 @@ public struct ProgramRunConfig: Equatable, Sendable {
     /// de nada más. Sin parte que pintar ni que esperar, y el director encuadra dentro de su
     /// lente desde el primer instante (`DirectorLoop.singleCamera`).
     public var singleCamera: Bool
+    /// El tamaño y el techo con los que sale el programa (IOS-99, ADR 0025). 1080p salvo con
+    /// «Una cámara», que puede ir a 720p.
+    public var output: ProgramOutput
 
     /// Lo que dura el banco si RIG_SPLIT_S no dice otra cosa: los 10 min de IOS-44, en s.
     public static let benchDefaultDurationS = 600.0
@@ -55,7 +58,7 @@ public struct ProgramRunConfig: Equatable, Sendable {
     public init(
         purpose: Purpose, durationS: Double, director: Bool, publish: Bool, record4K: Bool,
         detectorPackage: String?, partBitrateBps: Int, benchFiles: Bool, ladderForce: LadderForce? = nil,
-        singleCamera: Bool = false
+        singleCamera: Bool = false, output: ProgramOutput = .hd1080
     ) {
         self.purpose = purpose
         self.durationS = durationS
@@ -67,6 +70,7 @@ public struct ProgramRunConfig: Equatable, Sendable {
         self.benchFiles = benchFiles
         self.ladderForce = ladderForce
         self.singleCamera = singleCamera
+        self.output = output
     }
 
     /// El banco split, como siempre: todo del entorno.
@@ -97,12 +101,13 @@ public struct ProgramRunConfig: Equatable, Sendable {
 
     /// EMITIR con «Una cámara (sin pareja)»: lo mismo que `production` (el director con su
     /// IA, el detector, el gráfico y la franja, la copia .mov y el SRT si hay QR Soporte), sin
-    /// enlace y con el programa de una sola lente. Sin parte, su bitrate no se usa.
-    public static func single(detectorPackage: String?) -> ProgramRunConfig {
+    /// enlace y con el programa de una sola lente. Sin parte, su bitrate no se usa. Sale a la
+    /// resolución que eligió el operador (IOS-99): 1080p de partida.
+    public static func single(detectorPackage: String?, output: ProgramOutput = .hd1080) -> ProgramRunConfig {
         ProgramRunConfig(
             purpose: .production, durationS: .infinity, director: true, publish: true, record4K: false,
             detectorPackage: detectorPackage, partBitrateBps: noPartBitrateBps, benchFiles: false,
-            singleCamera: true
+            singleCamera: true, output: output
         )
     }
 

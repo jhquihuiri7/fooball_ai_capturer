@@ -298,6 +298,10 @@ const String prefersMasterKey = 'zero.prefersMaster';
 /// (`LinkMode.name`). Sin nada, el Multipeer de siempre.
 const String linkModeKey = 'zero.linkMode';
 
+/// Dónde se guarda la resolución de «Una cámara (sin pareja)» (IOS-99), por su nombre
+/// (`ProgramResolution.name`). Sin nada, 1080p.
+const String singleResolutionKey = 'zero.singleResolution';
+
 /// PHONE_DISK_RESERVE_GB (IOS-57) en bytes: lo que tiene que quedar libre para que la
 /// 4K local vaya encendida por defecto y arranque. Copia de `RecordingPolicy` en RigCore,
 /// donde el nativo la hace cumplir.

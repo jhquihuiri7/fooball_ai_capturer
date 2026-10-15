@@ -331,6 +331,9 @@ class CaptureReadout {
     final ProgramStatus? p = session.recording ? _program : null;
     final int ladder = _status?.ladderLevel ?? 0;
     return <CaptureReading>[
+      // IOS-99: con una cámara, la resolución elegida (el soporte va siempre a 1080p).
+      if (session.singleCamera)
+        CaptureReading('Resolución', CaptureSession.resolutionLabel(session.resolution)),
       if (p == null)
         CaptureReading(
           'Programa',

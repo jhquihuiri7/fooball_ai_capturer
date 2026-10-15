@@ -15,6 +15,7 @@ import 'package:football_ai_capture/src/auto_emitir.dart';
 import 'package:football_ai_capture/src/capture_page.dart';
 import 'package:football_ai_capture/src/capture_session.dart';
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
+import 'package:football_ai_capture/src/generated/rig_api.g.dart';
 import 'package:football_ai_capture/src/mando_page.dart' show MatchBanner;
 import 'package:football_ai_capture/src/master_board.dart';
 import 'package:football_ai_capture/src/match_page.dart';
@@ -35,6 +36,7 @@ class ZeroShell extends StatefulWidget {
     this.session,
     this.match,
     this.linkMode = LinkMode.multipeer,
+    this.resolution = ProgramResolution.p1080,
     this.autoEmitir,
     super.key,
   });
@@ -44,6 +46,9 @@ class ZeroShell extends StatefulWidget {
 
   /// El enlace elegido en la pantalla de lado (IOS-58).
   final LinkMode linkMode;
+
+  /// La resolución con «Una cámara» (ver `CaptureSession.resolution`).
+  final ProgramResolution resolution;
 
   final CameraRole role;
 
@@ -157,6 +162,7 @@ class _ZeroShellState extends State<ZeroShell> {
             prefersMaster: widget.prefersMaster,
             onMasterHost: _onMasterHost,
             linkMode: widget.linkMode,
+            resolution: widget.resolution,
             autoEmitir: widget.autoEmitir,
           ),
           _matchPage(),

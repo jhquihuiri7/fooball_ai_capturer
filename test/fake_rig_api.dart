@@ -59,9 +59,13 @@ class FakeRigApi extends RigHostApi {
   /// La pasada que el nativo tendría en marcha.
   bool get running => startCalls > stopCalls && startProblem.isEmpty;
 
+  /// IOS-99: la resolución que pidió el último `startProgram`.
+  ProgramResolution? lastResolution;
+
   @override
-  Future<String> startProgram() async {
+  Future<String> startProgram(ProgramResolution resolution) async {
     startCalls++;
+    lastResolution = resolution;
     return startProblem;
   }
 

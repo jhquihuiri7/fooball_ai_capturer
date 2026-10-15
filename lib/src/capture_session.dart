@@ -86,6 +86,7 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
     this.masterHost,
     this.replicaStore,
     this.linkMode = LinkMode.multipeer,
+    this.resolution = ProgramResolution.p1080,
     RigHostApi? rigApi,
   })  : prefersMaster = prefersMaster ?? role == CameraRole.left,
         _api = api ?? CaptureHostApi(),
@@ -194,6 +195,19 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
   /// móvil, sin enlace. Este móvil dirige, marca su hora y EMITIR no espera a nadie. No es
   /// [standalone] (GRABAR la 4K para probar la cámara, sin programa).
   bool get singleCamera => programMode && linkMode == LinkMode.single;
+
+  /// La resolución con la que sale el programa con [singleCamera] (IOS-99, ADR 0025 de
+  /// football-ai): la que eligió el operador. El soporte de dos va siempre a 1080p.
+  final ProgramResolution resolution;
+
+  /// Lo que se le pide al nativo al EMITIR: la elegida con una cámara; si no, 1080p.
+  ProgramResolution get programResolution => singleCamera ? resolution : ProgramResolution.p1080;
+
+  /// `1080p` o `720p`, para la pantalla.
+  static String resolutionLabel(ProgramResolution r) => switch (r) {
+    ProgramResolution.p1080 => '1080p',
+    ProgramResolution.p720 => '720p',
+  };
 
   /// En la arquitectura B, EMITIR lo pulsa el maestro y pone en marcha los dos: el
   /// esclavo solo arranca por su orden, aunque puede parar el suyo.
@@ -780,7 +794,7 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
   Future<String?> _startProgram() async {
     String motivo;
     try {
-      motivo = await _rig.startProgram();
+      motivo = await _rig.startProgram(programResolution);
     } on Exception catch (error) {
       motivo = error is PlatformException ? (error.message ?? error.code) : '$error';
     }

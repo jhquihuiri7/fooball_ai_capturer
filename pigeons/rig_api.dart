@@ -86,14 +86,26 @@ class ProgramStatus {
   final String rigSource;
 }
 
+/// La resolución con la que sale el programa (IOS-99, ADR 0025 de football-ai). El soporte
+/// de dos móviles va siempre a 1080p; con «Una cámara (sin pareja)», la que elija el
+/// operador. El programa se compone a 1080p igual: el 720p lo escala el codificador.
+enum ProgramResolution {
+  /// 1920×1080, con un techo de 6 Mbit/s.
+  p1080,
+
+  /// 1280×720, con un techo de 3 Mbit/s: la mitad de subida.
+  p720,
+}
+
 @HostApi()
 abstract class RigHostApi {
   /// EMITIR en la arquitectura B (IOS-58): pone en marcha el programa de este móvil con el
-  /// enlace de Network abierto por `startLink`. En el maestro, la composición, el director,
-  /// el detector, la copia .mov y el SRT al destino del QR Soporte; en el esclavo, su
-  /// parte y su detector. La 4K va aparte, por `CaptureHostApi.start`. Devuelve "" o por
-  /// qué no arrancó.
-  String startProgram();
+  /// enlace de Network abierto por `startLink` (o sin enlace, con «Una cámara»). En el
+  /// maestro, la composición, el director, el detector, la copia .mov y el SRT al destino del
+  /// QR Soporte; en el esclavo, su parte y su detector. La 4K va aparte, por
+  /// `CaptureHostApi.start`. `resolution` solo cuenta con «Una cámara» (IOS-99). Devuelve ""
+  /// o por qué no arrancó.
+  String startProgram(ProgramResolution resolution);
 
   /// PARAR: cierra la copia, el SRT y la parte, y deja el informe en Documents/bench.
   void stopProgram();

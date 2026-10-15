@@ -12,6 +12,48 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-15 · IOS-99 — «Una cámara» a 720p o 1080p · 🚧 en código, con los tests de Dart; falta compilar en el Mac y la pasada en el iPhone
+
+Lo pidió Jhonatan: con un solo móvil, elegir entre 720p y 1080p (ADR 0025 de football-ai,
+aceptado hoy). Va encima de «Una cámara (sin pareja)» de a79d736, la entrada de abajo.
+Jhonatan escribió antes en Windows un modo de un móvil propio (IOS-98); al ver a79d736 se
+quedó en la rama local `respaldo/ios-98-99-jhonatan`, sin subir, y esto se rehízo sobre el
+de Alexander.
+
+**Hecho**
+- En «Enlace y emisión», con **«Una cámara (sin pareja)»** elegida, dos píldoras más:
+  **1080p** (de partida) y **720p**. La nota dice lo que pide de subida cada una. Se guarda
+  en `zero.singleResolution`, como el enlace. Con los otros enlaces no se ve: el soporte de dos
+  va siempre a 1080p.
+- Pigeon `RigHostApi.startProgram(ProgramResolution)`. La sesión manda la elegida con «Una
+  cámara» y 1080p en otro caso; la tarjeta Programa dice «Resolución · 720p».
+- `ProgramOutput` en RigCore (nuevo): 1920×1080 con techo de 6 Mbit/s y 1280×720 con 3, copia
+  de `PROGRAM_OUTPUTS` de `tools/program_contract.py` de football-ai.
+  `ProgramRunConfig.output`, y `.single(detectorPackage:output:)`. `production` sigue en 1080p.
+- `SplitBench`: la composición sigue a 1080p (gráfico, franja, director y miniaturas no
+  cambian). El codificador del programa se crea al tamaño de la salida y escala él mismo (el
+  `VTPixelTransferSession` interno de `VTCompressionSession`). El publicador y la escalera
+  (L3 ×0,6) usan el techo de la salida. El informe trae `program_output`.
+
+**Comprobado aquí (Windows)**
+- `flutter analyze` sin avisos. `flutter test`: 441 pasan; fallan los 7 dorados de imagen del
+  gráfico, por la plataforma (también en 6bdfafd en esta máquina). «Se pinta en ≤50 ms» falla
+  a veces. Nuevos: 2 en `capture_session_test` (la resolución que llega al nativo, y 1080p
+  con el soporte) y 2 en `role_page_test` (las píldoras solo con «Una cámara», 720p que se
+  guarda y se recuerda).
+- **El Swift no se ha compilado.** Tests nuevos para el Mac en `ProgramRunTests`: el soporte
+  siempre a 1080p, salidas 16:9 que no amplían la composición, y el techo de 720p con la
+  densidad por píxel del de 1080p.
+
+**Lo que solo dirá el iPhone**: que `VTCompressionSession` a 1280×720 acepta el fotograma de
+1920×1080 y lo escala. Si no (fallos al codificar, `program_encode_failures` en el informe), el
+plan B del ADR es un `VTPixelTransferSession` explícito hacia el pool del codificador, como
+`Thumbnailer`.
+
+**Para Alexander, en la pasada de «Una cámara»**: `swift test` y el build. Luego, con 720p
+elegido, EMITIR al VPS. En football-ai, `./deploy/vps-estado.sh` tiene que decir
+`programa publicando: h264|1280|720|30/1`, y la tarjeta del móvil ≤3 Mbit/s.
+
 ## 2026-10-15 · «Una cámara (sin pareja)»: EMITIR con un solo móvil, sin enlace · 🚧 en código y tests; sin probar en el iPhone
 
 Lo pidió Alexander para la cancha de mañana: poder transmitir solo con el lado izquierdo, sin

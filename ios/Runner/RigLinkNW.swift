@@ -936,9 +936,10 @@ final class SplitBench {
     }
 
     static let fps = 30.0
+    /// El tamaño de la composición, siempre 1080p. La salida del codificador y su techo son
+    /// los de `config.output` (IOS-99): a 720p, el codificador escala.
     static let programWidth = 1920
     static let programHeight = 1080
-    static let programBitrateBps = 6_000_000
     /// Cuánto se adelanta la vista que manda el maestro al instante que pinta: el
     /// esclavo tiene que tenerla antes de procesar su fotograma (2 fotogramas).
     static let viewLeadMs: Int64 = 67
@@ -1611,9 +1612,11 @@ final class SplitBench {
                                     models: [], rigSha: nil, pitchSha: nil, bandSha: nil)
                 )
             }
+            // IOS-99: a la salida elegida. A 720p, VideoToolbox escala él mismo cada fotograma
+            // de 1080p compuesto hacia su pool (ADR 0025, decisión 5).
             programEncoder = try VideoEncoder(
-                width: Self.programWidth, height: Self.programHeight,
-                bitrateBps: Self.programBitrateBps, viewId: 0
+                width: config.output.width, height: config.output.height,
+                bitrateBps: config.output.maximumBps, viewId: 0
             )
             return true
         } catch {
@@ -2264,13 +2267,13 @@ final class SplitBench {
                 return
             }
             publishTarget = ["source": origen, "host": destino.host, "port": Int(destino.port)]
-            let p = ProgramPublisher(target: destino, audio: Self.programAudio, maximumBps: Self.programBitrateBps)
+            let p = ProgramPublisher(target: destino, audio: Self.programAudio, maximumBps: config.output.maximumBps)
             p.onIdrRequest = { [weak enc] in enc?.forceIDR() }
             p.onBitrate = { [weak enc] bps in try? enc?.setBitrate(bps: bps) }
             p.onLog = { NSLog("[srt] %@", $0) }
             // IOS-06: si la escalera ya bajó el programa (L3), el publicador nace con su techo.
             if let factor = programBitrateFactorApplied, factor < 1 {
-                p.setCeiling(bps: Self.programBitrateBps(factor: factor))
+                p.setCeiling(bps: programBitrateBps(factor: factor))
             }
             p.start()
             publisher = p
@@ -2358,8 +2361,9 @@ final class SplitBench {
         noteLadder(ai: ia, actions: acciones, master: esMaestro)
     }
 
-    static func programBitrateBps(factor: Double) -> Int {
-        Int((Double(programBitrateBps) * factor).rounded())
+    /// El techo de la salida (IOS-99) por el factor de la escalera.
+    private func programBitrateBps(factor: Double) -> Int {
+        Int((Double(config.output.maximumBps) * factor).rounded())
     }
 
     /// L3: el programa ×`programBitrateFactor`. Con publicador, por su techo (él lleva el
@@ -2368,7 +2372,7 @@ final class SplitBench {
     private func applyProgramBitrate(factor: Double) {
         guard factor != programBitrateFactorApplied, let enc = programEncoder else { return }
         programBitrateFactorApplied = factor
-        let bps = Self.programBitrateBps(factor: factor)
+        let bps = programBitrateBps(factor: factor)
         if let p = publisher {
             p.setCeiling(bps: factor < 1 ? bps : nil)
         } else {
@@ -2479,7 +2483,8 @@ final class SplitBench {
             "detect_missing_frame": detectMissingFrame,
             "part_frames_paused": pausados,
             "single_lens": singleLensApplied,
-            "program_bitrate_bps": Self.programBitrateBps(factor: programBitrateFactorApplied ?? 1),
+            "program_bitrate_bps": programBitrateBps(factor: programBitrateFactorApplied ?? 1),
+            "program_output": config.output.rawValue,
         ]
     }
 

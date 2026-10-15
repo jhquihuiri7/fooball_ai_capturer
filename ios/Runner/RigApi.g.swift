@@ -170,6 +170,16 @@ private func nilOrValue<T>(_ value: Any?) -> T? {
 }
 
 
+/// La resolución con la que sale el programa (IOS-99, ADR 0025 de football-ai). El soporte
+/// de dos móviles va siempre a 1080p; con «Una cámara (sin pareja)», la que elija el
+/// operador. El programa se compone a 1080p igual: el 720p lo escala el codificador.
+enum ProgramResolution: Int, CaseIterable {
+  /// 1920×1080, con un techo de 6 Mbit/s.
+  case p1080 = 0
+  /// 1280×720, con un techo de 3 Mbit/s: la mitad de subida.
+  case p720 = 1
+}
+
 /// Cómo va EMITIR en la arquitectura B (IOS-58), para la pantalla de cada móvil. Lo que no
 /// toca a su papel va a cero o vacío: el esclavo no publica, el maestro no manda partes.
 ///
@@ -308,6 +318,12 @@ private class RigApiPigeonCodecReader: FlutterStandardReader {
   override func readValue(ofType type: UInt8) -> Any? {
     switch type {
     case 129:
+      let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
+      if let enumResultAsInt = enumResultAsInt {
+        return ProgramResolution(rawValue: enumResultAsInt)
+      }
+      return nil
+    case 130:
       return ProgramStatus.fromList(self.readValue() as! [Any?])
     default:
       return super.readValue(ofType: type)
@@ -317,8 +333,11 @@ private class RigApiPigeonCodecReader: FlutterStandardReader {
 
 private class RigApiPigeonCodecWriter: FlutterStandardWriter {
   override func writeValue(_ value: Any) {
-    if let value = value as? ProgramStatus {
+    if let value = value as? ProgramResolution {
       super.writeByte(129)
+      super.writeValue(value.rawValue)
+    } else if let value = value as? ProgramStatus {
+      super.writeByte(130)
       super.writeValue(value.toList())
     } else {
       super.writeValue(value)
@@ -344,11 +363,12 @@ class RigApiPigeonCodec: FlutterStandardMessageCodec, @unchecked Sendable {
 /// Generated protocol from Pigeon that represents a handler of messages from Flutter.
 protocol RigHostApi {
   /// EMITIR en la arquitectura B (IOS-58): pone en marcha el programa de este móvil con el
-  /// enlace de Network abierto por `startLink`. En el maestro, la composición, el director,
-  /// el detector, la copia .mov y el SRT al destino del QR Soporte; en el esclavo, su
-  /// parte y su detector. La 4K va aparte, por `CaptureHostApi.start`. Devuelve "" o por
-  /// qué no arrancó.
-  func startProgram() throws -> String
+  /// enlace de Network abierto por `startLink` (o sin enlace, con «Una cámara»). En el
+  /// maestro, la composición, el director, el detector, la copia .mov y el SRT al destino del
+  /// QR Soporte; en el esclavo, su parte y su detector. La 4K va aparte, por
+  /// `CaptureHostApi.start`. `resolution` solo cuenta con «Una cámara» (IOS-99). Devuelve ""
+  /// o por qué no arrancó.
+  func startProgram(resolution: ProgramResolution) throws -> String
   /// PARAR: cierra la copia, el SRT y la parte, y deja el informe en Documents/bench.
   func stopProgram() throws
   /// Cómo va. Con `running` a false si no hay pasada.
@@ -388,15 +408,18 @@ class RigHostApiSetup {
   static func setUp(binaryMessenger: FlutterBinaryMessenger, api: RigHostApi?, messageChannelSuffix: String = "") {
     let channelSuffix = messageChannelSuffix.count > 0 ? ".\(messageChannelSuffix)" : ""
     /// EMITIR en la arquitectura B (IOS-58): pone en marcha el programa de este móvil con el
-    /// enlace de Network abierto por `startLink`. En el maestro, la composición, el director,
-    /// el detector, la copia .mov y el SRT al destino del QR Soporte; en el esclavo, su
-    /// parte y su detector. La 4K va aparte, por `CaptureHostApi.start`. Devuelve "" o por
-    /// qué no arrancó.
+    /// enlace de Network abierto por `startLink` (o sin enlace, con «Una cámara»). En el
+    /// maestro, la composición, el director, el detector, la copia .mov y el SRT al destino del
+    /// QR Soporte; en el esclavo, su parte y su detector. La 4K va aparte, por
+    /// `CaptureHostApi.start`. `resolution` solo cuenta con «Una cámara» (IOS-99). Devuelve ""
+    /// o por qué no arrancó.
     let startProgramChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.RigHostApi.startProgram\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
-      startProgramChannel.setMessageHandler { _, reply in
+      startProgramChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let resolutionArg = args[0] as! ProgramResolution
         do {
-          let result = try api.startProgram()
+          let result = try api.startProgram(resolution: resolutionArg)
           reply(wrapResult(result))
         } catch {
           reply(wrapError(error))

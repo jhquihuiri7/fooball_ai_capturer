@@ -260,6 +260,47 @@ void main() {
       expect(elegida(tester, 'Pod'), isFalse);
     });
 
+    testWidgets('IOS-99: la resolución solo aparece con «Una cámara»; 1080p de partida', (
+      WidgetTester tester,
+    ) async {
+      SharedPreferences.setMockInitialValues(<String, Object>{linkModeKey: 'aware'});
+      await abrir(tester, FakeCaptureApi());
+      await tester.pumpAndSettle();
+      expect(find.text('720p'), findsNothing, reason: 'el soporte de dos va siempre a 1080p');
+
+      await tester.ensureVisible(find.text('Una cámara (sin pareja)'));
+      await tester.pump();
+      await tester.tap(find.text('Una cámara (sin pareja)'));
+      await tester.pumpAndSettle();
+
+      expect(elegida(tester, '1080p'), isTrue);
+      expect(elegida(tester, '720p'), isFalse);
+      expect(find.textContaining('~12 de subida'), findsOneWidget);
+    });
+
+    testWidgets('IOS-99: elegir 720p lo dice y lo guarda, y se recuerda al abrir', (
+      WidgetTester tester,
+    ) async {
+      SharedPreferences.setMockInitialValues(<String, Object>{linkModeKey: 'single'});
+      await abrir(tester, FakeCaptureApi());
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('720p'));
+      await tester.pump();
+      await tester.tap(find.text('720p'));
+      await tester.pumpAndSettle();
+
+      expect(elegida(tester, '720p'), isTrue);
+      expect(find.textContaining('~6 de subida'), findsOneWidget);
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString(singleResolutionKey), 'p720');
+
+      await tester.pumpWidget(const SizedBox());
+      await abrir(tester, FakeCaptureApi());
+      await tester.pumpAndSettle();
+      expect(elegida(tester, '720p'), isTrue);
+    });
+
     testWidgets('un valor que ya no existe deja el pod', (WidgetTester tester) async {
       SharedPreferences.setMockInitialValues(<String, Object>{linkModeKey: 'nan'});
       await abrir(tester, FakeCaptureApi());

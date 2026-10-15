@@ -17,6 +17,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:football_ai_capture/src/constants.dart';
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
+import 'package:football_ai_capture/src/generated/rig_api.g.dart';
 import 'package:football_ai_capture/src/mando_page.dart';
 import 'package:football_ai_capture/src/panel_pairing.dart';
 import 'package:football_ai_capture/src/theme/zero_colors.dart';
@@ -67,6 +68,10 @@ class _RolePageState extends State<RolePage> {
   /// El enlace entre los dos móviles (IOS-58). Se guarda; sin nada, el Multipeer de
   /// siempre, con el que cada móvil emite al pod. Los otros tres son la arquitectura B.
   LinkMode _linkMode = LinkMode.multipeer;
+
+  /// La resolución con «Una cámara (sin pareja)» (IOS-99, ADR 0025 de football-ai): lo
+  /// único que se elige en ese modo. Se guarda; sin nada, 1080p.
+  ProgramResolution _resolution = ProgramResolution.p1080;
 
   bool _searching = false;
   _ServerOrigin _origin = _ServerOrigin.none;
@@ -170,6 +175,12 @@ class _RolePageState extends State<RolePage> {
       if (modo != null && mounted) {
         setState(() => _linkMode = modo);
       }
+      final String? resolucion = prefs.getString(singleResolutionKey);
+      final ProgramResolution? r =
+          ProgramResolution.values.where((ProgramResolution v) => v.name == resolucion).firstOrNull;
+      if (r != null && mounted) {
+        setState(() => _resolution = r);
+      }
     } on Exception {
       // Sin almacenamiento (tests): manda el valor por defecto.
     }
@@ -180,6 +191,16 @@ class _RolePageState extends State<RolePage> {
     try {
       final SharedPreferences prefs = await SharedPreferences.getInstance();
       await prefs.setString(linkModeKey, mode.name);
+    } on Exception {
+      // Si no se guarda, vale para esta vez.
+    }
+  }
+
+  Future<void> _setResolution(ProgramResolution resolution) async {
+    setState(() => _resolution = resolution);
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.setString(singleResolutionKey, resolution.name);
     } on Exception {
       // Si no se guarda, vale para esta vez.
     }
@@ -310,6 +331,7 @@ class _RolePageState extends State<RolePage> {
               // «Una cámara» dirige siempre, aunque «Este móvil dirige» esté apagado.
               prefersMaster: _directs || _linkMode == LinkMode.single,
               linkMode: _linkMode,
+              resolution: _resolution,
             ),
       ),
     );
@@ -495,7 +517,12 @@ class _RolePageState extends State<RolePage> {
                     const SizedBox(height: ZeroMetrics.innerGap),
                     // IOS-58: el enlace decide qué hace EMITIR. Va junto a lo que la
                     // arquitectura B necesita: emparejar sin cable y el VPS.
-                    _LinkCard(mode: _linkMode, onMode: (LinkMode m) => unawaited(_setLinkMode(m))),
+                    _LinkCard(
+                      mode: _linkMode,
+                      onMode: (LinkMode m) => unawaited(_setLinkMode(m)),
+                      resolution: _resolution,
+                      onResolution: (ProgramResolution r) => unawaited(_setResolution(r)),
+                    ),
                     const SizedBox(height: ZeroMetrics.innerGap),
                     // Una vez por soporte, con los dos móviles delante: el plan B si no
                     // hay cable ni router (IOS-14).
@@ -821,10 +848,24 @@ class _ServerCard extends StatelessWidget {
 /// móviles tienen que elegir el mismo. Debajo, «Una cámara (sin pareja)» (2026-10-15): la
 /// arquitectura B con este móvil solo, sin enlace, cuando no hay forma de enlazar.
 class _LinkCard extends StatelessWidget {
-  const _LinkCard({required this.mode, required this.onMode});
+  const _LinkCard({
+    required this.mode,
+    required this.onMode,
+    required this.resolution,
+    required this.onResolution,
+  });
 
   final LinkMode mode;
   final ValueChanged<LinkMode> onMode;
+
+  /// IOS-99: la resolución de «Una cámara», que solo se ve con ella elegida.
+  final ProgramResolution resolution;
+  final ValueChanged<ProgramResolution> onResolution;
+
+  static const List<(ProgramResolution, String)> _resolutions = <(ProgramResolution, String)>[
+    (ProgramResolution.p1080, '1080p'),
+    (ProgramResolution.p720, '720p'),
+  ];
 
   static const List<(LinkMode, String)> _choices = <(LinkMode, String)>[
     (LinkMode.multipeer, 'Pod'),
@@ -841,9 +882,15 @@ class _LinkCard extends StatelessWidget {
       LinkMode.aware =>
         'Wi-Fi Aware, sin router: empareja antes sin cable. El maestro sube el programa al VPS.',
       LinkMode.ethernet => 'Hub USB-C con Ethernet. El maestro compone y sube el programa al VPS.',
-      LinkMode.single =>
-        'Sin pareja: este móvil emite solo con su cámara (1080p), con el director, el gráfico y '
-            'la franja. Sin enlace ni el otro móvil.',
+      // Lo que pide de subida cada resolución: PRIMER-DESPLIEGUE.md de football-ai, §4b y §5.
+      LinkMode.single => switch (resolution) {
+        ProgramResolution.p1080 =>
+          'Sin pareja: este móvil emite solo con su cámara (1080p, hasta 6 Mbit/s: ~12 de subida), '
+              'con el director, el gráfico y la franja. Sin enlace ni el otro móvil.',
+        ProgramResolution.p720 =>
+          'Sin pareja: este móvil emite solo con su cámara (720p, hasta 3 Mbit/s: ~6 de subida), '
+              'con el director, el gráfico y la franja. Sin enlace ni el otro móvil.',
+      },
     };
     return ZeroCard(
       child: Column(
@@ -870,6 +917,18 @@ class _LinkCard extends StatelessWidget {
               ),
             ],
           ),
+          // IOS-99 (ADR 0025): con una cámara, lo único que se elige es la resolución.
+          if (mode == LinkMode.single) ...<Widget>[
+            const SizedBox(height: 8),
+            Row(
+              children: <Widget>[
+                for (final (ProgramResolution r, String label) in _resolutions) ...<Widget>[
+                  if (r != _resolutions.first.$1) const SizedBox(width: 8),
+                  ZeroPill(label: label, selected: resolution == r, onTap: () => onResolution(r)),
+                ],
+              ],
+            ),
+          ],
           const SizedBox(height: 10),
           Text(
             nota,

@@ -10,6 +10,7 @@ import 'package:football_ai_capture/main.dart';
 import 'package:football_ai_capture/src/auto_emitir.dart';
 import 'package:football_ai_capture/src/capture_session.dart';
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
+import 'package:football_ai_capture/src/generated/rig_api.g.dart';
 
 import 'fake_capture_api.dart';
 import 'fake_rig_api.dart';
@@ -49,9 +50,9 @@ class _OrderedRig extends FakeRigApi {
   final List<String> calls;
 
   @override
-  Future<String> startProgram() {
+  Future<String> startProgram(ProgramResolution resolution) {
     calls.add('startProgram');
-    return super.startProgram();
+    return super.startProgram(resolution);
   }
 
   @override

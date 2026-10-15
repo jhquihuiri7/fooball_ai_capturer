@@ -107,6 +107,16 @@ int _deepHash(Object? value) {
 }
 
 
+/// La resolución con la que sale el programa (IOS-99, ADR 0025 de football-ai). El soporte
+/// de dos móviles va siempre a 1080p; con «Una cámara (sin pareja)», la que elija el
+/// operador. El programa se compone a 1080p igual: el 720p lo escala el codificador.
+enum ProgramResolution {
+  /// 1920×1080, con un techo de 6 Mbit/s.
+  p1080,
+  /// 1280×720, con un techo de 3 Mbit/s: la mitad de subida.
+  p720;
+}
+
 /// Cómo va EMITIR en la arquitectura B (IOS-58), para la pantalla de cada móvil. Lo que no
 /// toca a su papel va a cero o vacío: el esclavo no publica, el maestro no manda partes.
 class ProgramStatus {
@@ -258,8 +268,11 @@ class _PigeonCodec extends StandardMessageCodec {
     if (value is int) {
       buffer.putUint8(4);
       buffer.putInt64(value);
-    }    else if (value is ProgramStatus) {
+    }    else if (value is ProgramResolution) {
       buffer.putUint8(129);
+      writeValue(buffer, value.index);
+    }    else if (value is ProgramStatus) {
+      buffer.putUint8(130);
       writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
@@ -270,6 +283,9 @@ class _PigeonCodec extends StandardMessageCodec {
   Object? readValueOfType(int type, ReadBuffer buffer) {
     switch (type) {
       case 129:
+        final value = readValue(buffer) as int?;
+        return value == null ? null : ProgramResolution.values[value];
+      case 130:
         return ProgramStatus.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
@@ -295,18 +311,19 @@ class RigHostApi {
 
 
   /// EMITIR en la arquitectura B (IOS-58): pone en marcha el programa de este móvil con el
-  /// enlace de Network abierto por `startLink`. En el maestro, la composición, el director,
-  /// el detector, la copia .mov y el SRT al destino del QR Soporte; en el esclavo, su
-  /// parte y su detector. La 4K va aparte, por `CaptureHostApi.start`. Devuelve "" o por
-  /// qué no arrancó.
-  Future<String> startProgram() async {
+  /// enlace de Network abierto por `startLink` (o sin enlace, con «Una cámara»). En el
+  /// maestro, la composición, el director, el detector, la copia .mov y el SRT al destino del
+  /// QR Soporte; en el esclavo, su parte y su detector. La 4K va aparte, por
+  /// `CaptureHostApi.start`. `resolution` solo cuenta con «Una cámara» (IOS-99). Devuelve ""
+  /// o por qué no arrancó.
+  Future<String> startProgram(ProgramResolution resolution) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.RigHostApi.startProgram$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[resolution]);
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(

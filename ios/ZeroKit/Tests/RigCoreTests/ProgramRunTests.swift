@@ -68,6 +68,31 @@ final class ProgramRunTests: XCTestCase {
         XCTAssertFalse(ProgramRunConfig.bench(environment: ["RIG_LINK_INTERFACE": "aware"]).singleCamera)
     }
 
+    // MARK: - La salida del programa (IOS-99)
+
+    func testTheRigAlwaysGoesOutAt1080p() {
+        XCTAssertEqual(ProgramRunConfig.production(medium: .aware, detectorPackage: nil).output, .hd1080)
+        XCTAssertEqual(ProgramRunConfig.bench(environment: [:]).output, .hd1080)
+        XCTAssertEqual(ProgramRunConfig.single(detectorPackage: nil).output, .hd1080, "1080p de partida")
+        XCTAssertEqual(ProgramRunConfig.single(detectorPackage: nil, output: .hd720).output, .hd720)
+    }
+
+    func testTheOutputsAre16By9AndNeverEnlargeTheComposition() {
+        for salida in ProgramOutput.allCases {
+            XCTAssertEqual(salida.width * 9, salida.height * 16, salida.rawValue)
+            XCTAssertLessThanOrEqual(salida.width, ProgramOutput.hd1080.width)
+        }
+        XCTAssertEqual(ProgramOutput.hd720.width, 1280)
+        XCTAssertEqual(ProgramOutput.hd720.height, 720)
+    }
+
+    func testThe720pCeilingKeepsTheBitsPerPixelOf1080p() {
+        func porPixel(_ s: ProgramOutput) -> Double { Double(s.maximumBps) / Double(s.width * s.height) }
+        XCTAssertGreaterThanOrEqual(porPixel(.hd720), porPixel(.hd1080))
+        XCTAssertLessThan(ProgramOutput.hd720.maximumBps, ProgramOutput.hd1080.maximumBps)
+        XCTAssertGreaterThanOrEqual(ProgramOutput.hd720.maximumBps, AdaptiveRate.minimumBps)
+    }
+
     // MARK: - LinkChoice
 
     func testWithoutEnvironmentTheScreenDecides() {

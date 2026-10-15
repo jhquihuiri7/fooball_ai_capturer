@@ -61,11 +61,15 @@ class CapturePage extends StatefulWidget {
     this.prefersMaster,
     this.onMasterHost,
     this.linkMode = LinkMode.multipeer,
+    this.resolution = ProgramResolution.p1080,
     this.autoEmitir,
     super.key,
   });
 
   final CameraRole role;
+
+  /// La resolución con «Una cámara» (ver `CaptureSession.resolution`).
+  final ProgramResolution resolution;
 
   /// EMITIR sin tocar la pantalla (dart-define `AUTO_EMITIR`, ver `AutoEmitir`). null: la
   /// pantalla de siempre.
@@ -172,6 +176,7 @@ class _CapturePageState extends State<CapturePage> {
         linkOnly: widget.linkOnly,
         prefersMaster: widget.prefersMaster,
         linkMode: widget.linkMode,
+        resolution: widget.resolution,
         masterHost: _host,
         replicaStore: _host == null
             ? null
