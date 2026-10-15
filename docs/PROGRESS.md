@@ -12,6 +12,44 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-15 · EMITIR de producción, 60 min por Wi-Fi Aware y sin destino, en los dos iPhone (AUTO_EMITIR): ✅ programa completo y estable · 🚧 falta el dedo en el botón y una escena con dos lentes
+
+`tools/emitir_auto.sh <secreto> 3600 --link aware` (2358dcb: con la escalera actuando y la
+tabla nueva). Datos en `bench/emitir-auto-20261015-0903`. Es el camino de la cancha (Zero
+de producción, `purpose: production`, sin QR Soporte → `publish_source: none`), sin la
+pantalla de lado ni el toque: lo hace AUTO_EMITIR.
+
+**Lo que salió**
+- **LISTA a los 124,6 s** de lanzar (el enlace por Aware tarda), EMITIR a los 144,6 y PARAR a
+  los 3600 s de emitir. El esclavo arrancó y paró por la orden del maestro.
+- **La copia del programa:** `program-m_f50b97dd8d1a-1792076844.mov`, **1:00:00, 2,1 GB,
+  h264 1920×1080 a 30 fps y aac**; 107 830 fotogramas, el 100 % del programa. ffprobe la lee
+  entera.
+- Programa: `program_fps_p5` 29,2, **0 desgarros**, latencia añadida p95 **142-144 ms en
+  cada uno de los 60 minutos** (el tic de fcbafad, sin deriva en una hora),
+  `tick_phase_ms` p99 4,5.
+- **La escalera:** el maestro estuvo en `serious` los 60 min (llevaba desde las 08:06 sin
+  parar) y fue a L1. `detect_runs_by_minute` 300 en cada minuto (5 Hz) en los dos: la
+  cadencia común viaja. **`director_pairing`: 17 955 de 17 997 ciclos con la pareja
+  completa (99,8 %)**, `max_abs_skew_ms` 0. Antes de 91dd7bb, casi ninguno (ver la
+  entrada de la escalera).
+- Memoria plana: el maestro 414 → 480 MB (+4 desde el minuto 3); el esclavo 380 → 446 (+0).
+- Batería: el maestro cargando, 80 %; **el esclavo, a batería, −20 %/h** (75 → 55 %: le
+  quedarían ~165 min).
+
+**Lo que hay que mirar**
+- **El director no salió de la lente del 17:** 85 fotogramas de dos lentes de 107 830
+  (`slave_no_parts` 107 954). En los fotogramas de los minutos 5, 30 y 58 el plano es el
+  mismo, cerrado sobre el lado izquierdo del cuarto (el ventilador y una camiseta colgada:
+  probablemente falsos positivos del CenterNet). Con jugadores de verdad no se sabe; la
+  cosedura con dos lentes en EMITIR queda por ver en la cancha o con `RIG_SPLIT_SCRIPT`.
+- `program_skipped_instants` 168 en 60 min (~3 por minuto; 74 en los 30 min de la mañana; 0
+  en los 8 min de ayer): con el maestro en `serious`. A vigilar.
+- 3 instantes sin fotograma propio («SIN SEÑAL»).
+
+**Lo que no cubre:** la pantalla de lado, el toque en EMITIR y PARAR, el QR Soporte y el
+segundo plano/llamada (los pasos 7a-c de `sesion_emitir.sh`): eso, con Alexander delante.
+
 ## 2026-10-15 · El plan B que no enlazó: la suscripción de Aware que no se rehacía, el esclavo sin informe y el latido mudo (IOS-14c) · 🚧 falta repetir el plan B en los iPhone
 
 `bench/partido-20261015-0902` (apps de `build/cancha`, 6a7a052, el código de las pasadas de
