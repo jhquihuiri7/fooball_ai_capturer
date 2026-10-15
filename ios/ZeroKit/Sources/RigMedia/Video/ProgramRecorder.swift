@@ -2,6 +2,11 @@
 // en un .mov sin recodificar (AVAssetWriter en passthrough: outputSettings nil y la
 // descripción de formato como pista). Así lo que queda en el móvil es exactamente lo
 // emitido, y no cuesta ni GPU ni batería de más.
+//
+// 2026-10-14, antes de la primera cancha: en fragmentos de película
+// (RecordingPolicy.movieFragmentIntervalS). Sin ellos, una app que muere a mitad del partido
+// (batería, jetsam, disco lleno) dejaba un .mov sin índice que no abre nadie. Y nunca pisa
+// un fichero que ya exista: el que llama elige otro nombre (el siguiente segmento).
 
 import AVFoundation
 import CoreMedia
@@ -13,6 +18,8 @@ public final class ProgramRecorder {
         case cannotAdd(String)
         case sample(OSStatus)
         case notStarted
+        /// Ya hay un fichero ahí: no se borra (era la copia de un tramo anterior).
+        case exists
     }
 
     public let url: URL
@@ -27,9 +34,15 @@ public final class ProgramRecorder {
     public private(set) var audioFrames = 0
     public private(set) var dropped = 0
 
-    public init(url: URL, videoFormat: CMFormatDescription, audioFormat: CMAudioFormatDescription?) throws {
-        try? FileManager.default.removeItem(at: url)
+    /// `fragmentIntervalS`: cada cuánto se escribe un fragmento, en s; nil, sin fragmentos
+    /// (solo las pruebas, para ver qué se perdía).
+    public init(url: URL, videoFormat: CMFormatDescription, audioFormat: CMAudioFormatDescription?,
+                fragmentIntervalS: Double? = RecordingPolicy.movieFragmentIntervalS) throws {
+        guard !FileManager.default.fileExists(atPath: url.path) else { throw RecorderError.exists }
         writer = try AVAssetWriter(outputURL: url, fileType: .mov)
+        if let intervalo = fragmentIntervalS {
+            writer.movieFragmentInterval = CMTime(seconds: intervalo, preferredTimescale: Self.timescale)
+        }
         video = AVAssetWriterInput(mediaType: .video, outputSettings: nil, sourceFormatHint: videoFormat)
         video.expectsMediaDataInRealTime = true
         guard writer.canAdd(video) else { throw RecorderError.cannotAdd("vídeo") }
@@ -45,6 +58,20 @@ public final class ProgramRecorder {
         }
         self.audioFormat = audioFormat
         self.url = url
+    }
+
+    /// El escritor dejó de aceptar muestras (disco lleno, la app en segundo plano): lo
+    /// escrito hasta el último fragmento se puede leer, y lo que siga va en otro fichero.
+    public var failed: Bool {
+        lock.lock(); defer { lock.unlock() }
+        return writer.status == .failed
+    }
+
+    /// Por qué falló, sin rutas: para el informe.
+    public var failureDescription: String? {
+        lock.lock(); defer { lock.unlock() }
+        guard writer.status == .failed else { return nil }
+        return (writer.error as NSError?).map { "\($0.domain) \($0.code)" } ?? "?"
     }
 
     /// Un fotograma codificado del programa (AVCC con sus SPS/PPS en el formato).
@@ -76,12 +103,13 @@ public final class ProgramRecorder {
         }
     }
 
-    /// Cierra el fichero; `completion` cuando está escrito.
+    /// Cierra el fichero; `completion` cuando está escrito. Uno que falló ya no se cierra:
+    /// queda lo de sus fragmentos.
     public func finish(completion: @escaping (Bool) -> Void) {
         lock.lock()
-        guard started else {
+        guard started, writer.status == .writing else {
+            // Sin empezar no hay fichero (y cancelar con el estado desconocido aborta).
             lock.unlock()
-            writer.cancelWriting()
             completion(false)
             return
         }
@@ -101,6 +129,9 @@ public final class ProgramRecorder {
         }
         return ptsNs - (originNs ?? ptsNs)
     }
+
+    /// La escala de los instantes del fragmento, en tics por segundo.
+    private static let timescale: CMTimeScale = 600
 
     private static func sample(
         _ data: Data, format: CMFormatDescription, ptsNs: Int64, durationNs: Int64?, sync: Bool,

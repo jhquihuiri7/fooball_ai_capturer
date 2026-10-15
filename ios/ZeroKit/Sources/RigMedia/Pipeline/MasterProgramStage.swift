@@ -127,6 +127,8 @@ public final class MasterProgramStage {
     static let decodedSlots = 8
 
     public let masterSide: CameraSide
+    /// Las veces que el decodificador de las partes tiró una sesión invalidada (2026-10-14).
+    public var decoderSessionResets: Int { decoder.sessionResets }
     private let receiver = PartReceiver()
     private let sync: ProgramSync
     private let decoder: VideoDecoder

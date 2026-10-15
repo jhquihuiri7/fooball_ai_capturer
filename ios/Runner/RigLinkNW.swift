@@ -935,6 +935,27 @@ final class SplitBench {
     private var statusSnapshot = SplitBench.idleStatus
     // IOS-57: la copia local del programa en .mov (con el audio del micro si lo hay).
     private var recorder: ProgramRecorder?
+    /// 2026-10-14: los ficheros de la copia, en orden. Si su escritor falla (disco lleno,
+    /// segundo plano), lo escrito queda (fragmentos) y lo que sigue va al siguiente, desde un
+    /// IDR. Antes se perdía todo lo que venía después.
+    private var movSegments: [URL] = []
+    private var movOpenAttempts = 0
+    private var movWaitingKeyframe = false
+    private var movFailures: [String] = []
+    private var movFramesClosed = (video: 0, audio: 0)
+    /// Lo más que se intenta abrir la copia: pasado esto, el disco o el escritor no se
+    /// arreglan solos y se deja de intentar en cada fotograma.
+    private static let movMaxSegments = 8
+    /// 2026-10-14: el latido, `Documents/bench/program-live-<lado>-<t>.json`, cada
+    /// `liveEveryS`: lo que se sabe de la pasada aunque la app muera antes de PARAR (el
+    /// informe de verdad solo se escribe al final).
+    private var liveURL: URL?
+    private var nextLiveS = 0.0
+    private static let liveEveryS = 30.0
+    /// La batería (0-1) y el disco libre (GB) una vez por minuto, como la térmica: en la
+    /// cancha no hay cable.
+    private var batteryByMinute: [Double] = []
+    private var diskFreeGbByMinute: [Double] = []
     var audioFormat: () -> CMAudioFormatDescription? = { nil }
     /// La separación entre el reloj de la sesión de captura y el del host, por minuto (ms).
     var captureClockSkew: () -> [Double] = { [] }
@@ -1466,8 +1487,14 @@ final class SplitBench {
             footprintMb.append(Self.footprintMb())
             // SPK-54: el estado térmico, una vez por minuto.
             thermalByMinute.append(Self.thermalName(ProcessInfo.processInfo.thermalState))
+            batteryByMinute.append(Double(UIDevice.current.batteryLevel))
+            diskFreeGbByMinute.append(Double(CaptureEngine.freeDiskBytes()) / Self.bytesPerGb)
         }
         sampleFootprint(transcurrido)
+        if transcurrido >= nextLiveS {
+            nextLiveS = transcurrido + Self.liveEveryS
+            writeLive(transcurrido: transcurrido, finished: false)
+        }
         refreshStatus()
         // SPK-04: la 4K local, en cuanto hay cámara (antes, el CaptureEngine no sabe el tamaño).
         if config.record4K, !rec4kStarted, pipelineProvider() != nil {
@@ -1637,7 +1664,10 @@ final class SplitBench {
     private func recordedFiles() -> [String: Any] {
         var f: [String: Any] = [:]
         f["ts"] = Self.documentsRelative(tsURL)
-        if recorder != nil { f["mov"] = Self.documentsRelative(movURL) }
+        if !movSegments.isEmpty {
+            f["mov"] = Self.documentsRelative(movURL)
+            f["mov_segments"] = movSegments.compactMap(Self.documentsRelative)
+        }
         f["views"] = Self.documentsRelative(viewsURL)
         if session.isMaster { f["e0"] = Self.documentsRelative(e0URL) }
         if let dir = rec4kDir {
@@ -1805,11 +1835,21 @@ final class SplitBench {
             }
         }
         while let f = enc.pop() {
+            rollFailedRecorder(enc)
             // RIG_SPLIT_NO_MOV=1 / RIG_SPLIT_NO_TS=1: sin la copia .mov o sin el .ts, para
             // separar de dónde crece la memoria del maestro.
-            if recorder == nil, env["RIG_SPLIT_NO_MOV"] != "1", let fd = f.formatDescription, let url = programMovURL() {
-                movURL = url
-                recorder = try? ProgramRecorder(url: url, videoFormat: fd, audioFormat: audioFormat())
+            if recorder == nil, env["RIG_SPLIT_NO_MOV"] != "1", movOpenAttempts < Self.movMaxSegments,
+               !movWaitingKeyframe || f.isKeyframe, let fd = f.formatDescription,
+               let url = programMovURL(segment: movOpenAttempts + 1) {
+                movOpenAttempts += 1
+                movWaitingKeyframe = false
+                do {
+                    recorder = try ProgramRecorder(url: url, videoFormat: fd, audioFormat: audioFormat())
+                    movSegments.append(url)
+                    if movURL == nil { movURL = url }
+                } catch {
+                    movFailures.append("abrir \(url.lastPathComponent): \(error)")
+                }
             }
             try? recorder?.append(video: f)
             var avcc = f.data
@@ -1842,10 +1882,31 @@ final class SplitBench {
     )
 
     /// La copia del programa: en el banco, junto al .ts; en EMITIR, Documents/program-<id>.mov.
-    private func programMovURL() -> URL? {
-        if config.benchFiles { return tsURL?.deletingPathExtension().appendingPathExtension("mov") }
-        return try? FileManager.default.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil,
-                                            create: true).appendingPathComponent("program-\(runId).mov")
+    /// Los segmentos siguientes (`segment` > 1), con su número: `program-<id>-2.mov`.
+    private func programMovURL(segment: Int = 1) -> URL? {
+        let base: URL?
+        if config.benchFiles {
+            base = tsURL?.deletingPathExtension()
+        } else {
+            base = (try? FileManager.default.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil,
+                                                 create: true))?.appendingPathComponent("program-\(runId)")
+        }
+        guard let base else { return nil }
+        let nombre = segment <= 1 ? base.lastPathComponent : "\(base.lastPathComponent)-\(segment)"
+        return base.deletingLastPathComponent().appendingPathComponent(nombre).appendingPathExtension("mov")
+    }
+
+    /// Si el escritor de la copia falló, se suelta (lo suyo queda en sus fragmentos) y el
+    /// siguiente IDR abre el segmento que sigue.
+    private func rollFailedRecorder(_ enc: VideoEncoder) {
+        guard let r = recorder, r.failed else { return }
+        movFailures.append("\(r.url.lastPathComponent): \(r.failureDescription ?? "?")")
+        NSLog("[split] la copia del programa falló (%@): sigue en otro fichero", r.failureDescription ?? "?")
+        movFramesClosed.video += r.videoFrames
+        movFramesClosed.audio += r.audioFrames
+        recorder = nil
+        movWaitingKeyframe = true
+        enc.forceIDR()
     }
 
     /// El paquete del detector de EMITIR, si está en el móvil: RIG_DETECT si se lanzó con él;
@@ -2103,8 +2164,17 @@ final class SplitBench {
             "idr_requests": ms.idrRequests,
             "without_master_frame": ms.withoutMasterFrame,
             "compose_failures": ms.composeFailures,
-            "mov_video_frames": recorder?.videoFrames ?? 0,
-            "mov_audio_frames": recorder?.audioFrames ?? 0,
+            "mov_video_frames": movFramesClosed.video + (recorder?.videoFrames ?? 0),
+            "mov_audio_frames": movFramesClosed.audio + (recorder?.audioFrames ?? 0),
+            // 2026-10-14: los segmentos de la copia, por qué se cortó y las sesiones de
+            // VideoToolbox rehechas (al volver del segundo plano).
+            "mov_segments": movSegments.count,
+            "mov_failures": movFailures,
+            "vt_session_resets": ["program_encoder": programEncoder?.sessionResets ?? 0,
+                                  "part_encoder": slaveEncoder?.sessionResets ?? 0,
+                                  "part_decoder": master?.decoderSessionResets ?? 0],
+            "battery_by_minute": batteryByMinute,
+            "disk_free_gb_by_minute": diskFreeGbByMinute,
             "ts_audio_frames": tsAudioFrames,
             "peer_states": peerStates,
             "program_sources": master?.sources.counts ?? [:],
@@ -2175,7 +2245,75 @@ final class SplitBench {
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
         try? json.write(to: base.appendingPathComponent(
             "program-split-\(side.rawValue)-\(Int(Date().timeIntervalSince1970)).json"))
+        writeLive(transcurrido: Double(DispatchTime.now().uptimeNanoseconds - startNs) / 1e9, finished: true)
+        writerQueue.sync {}
     }
+
+    // MARK: - 2026-10-14: el latido
+
+    /// Lo que se sabe de la pasada, barato (sin percentiles): contadores, la huella, la
+    /// térmica, la batería y el disco, y lo grabado. En la cola del tic; el disco, aparte.
+    private func writeLive(transcurrido: Double, finished: Bool) {
+        if liveURL == nil, let base = try? FileManager.default.url(for: .documentDirectory, in: .userDomainMask,
+                                                                     appropriateFor: nil, create: true)
+            .appendingPathComponent("bench", isDirectory: true) {
+            try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+            liveURL = base.appendingPathComponent("program-live-\(side.rawValue)-\(startUnixMs / 1000).json")
+        }
+        guard let url = liveURL else { return }
+        let ms = master?.stats ?? .init()
+        let ss = slave?.stats ?? .init()
+        let srt = publisher?.snapshot
+        let latido: [String: Any] = [
+            "name": "program-live",
+            "purpose": config.purpose.rawValue,
+            "finished": finished,
+            "side": side.rawValue,
+            "role": session.isMaster ? "master" : "slave",
+            "device": BenchRunner.machine(),
+            "elapsed_s": transcurrido,
+            "bench_start_unix_ms": startUnixMs,
+            "updated_unix_ms": Int64(Date().timeIntervalSince1970 * 1000),
+            "rig": rigSource,
+            "problem": setUpProblem,
+            "program_frames": programFrames,
+            "two_lens_frames": ms.twoLensFrames,
+            "one_lens_frames": ms.oneLensFrames,
+            "torn_frames": ms.tornFrames,
+            "without_master_frame": ms.withoutMasterFrame,
+            "part_fallbacks": partFallbacks,
+            "parts_received": ms.partsReceived,
+            "program_skipped_instants": programSkippedInstants,
+            "slave_parts": ss.parts,
+            "slave_no_parts": ss.noParts,
+            "slave_without_view": ss.withoutView,
+            "detect_runs": detect?.runCount ?? 0,
+            "peer_states": Array(peerStates.suffix(Self.livePeerStates)),
+            "app_events": Array(appEvents.suffix(Self.livePeerStates)),
+            "footprint_mb": Self.footprintMb(),
+            "thermal": Self.thermalName(ProcessInfo.processInfo.thermalState),
+            "thermal_by_minute": thermalByMinute,
+            "battery": Double(UIDevice.current.batteryLevel),
+            "battery_by_minute": batteryByMinute,
+            "disk_free_gb": Double(CaptureEngine.freeDiskBytes()) / Self.bytesPerGb,
+            "publish_source": publishTarget["source"] as? String ?? "",
+            "srt_state": srt?.state ?? "",
+            "mov_segments": movSegments.count,
+            "mov_failures": movFailures,
+            "mov_video_frames": movFramesClosed.video + (recorder?.videoFrames ?? 0),
+            "vt_session_resets": ["program_encoder": programEncoder?.sessionResets ?? 0,
+                                  "part_encoder": slaveEncoder?.sessionResets ?? 0,
+                                  "part_decoder": master?.decoderSessionResets ?? 0],
+            "files": recordedFiles(),
+        ]
+        guard let datos = try? JSONSerialization.data(withJSONObject: Self.jsonSafe(latido),
+                                                      options: [.sortedKeys, .prettyPrinted])
+        else { return }
+        writerQueue.async { try? datos.write(to: url, options: .atomic) }
+    }
+
+    /// Los últimos cambios del esclavo y sucesos de la app que van en el latido.
+    private static let livePeerStates = 20
 }
 
 // MARK: - La pareja de fotogramas para calibrar (IOS-70)

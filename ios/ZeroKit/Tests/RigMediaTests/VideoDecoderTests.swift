@@ -148,3 +148,46 @@ final class VideoDecoderTests: XCTestCase {
         XCTAssertEqual(reabiertos, 1)
     }
 }
+
+/// 2026-10-14: la sesión que iOS invalida al pasar a segundo plano (kVTInvalidSessionErr).
+final class VideoDecoderInvalidSessionTests: XCTestCase {
+    func testLaSesionInvalidadaSeRehaceConElSiguienteIdr() throws {
+        let enc = try VideoEncoder(width: 320, height: 180, bitrateBps: 1_000_000, viewId: 1)
+        var b: CVPixelBuffer?
+        CVPixelBufferCreate(nil, 320, 180, kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+                            [kCVPixelBufferIOSurfacePropertiesKey: [:]] as CFDictionary, &b)
+        let px = try XCTUnwrap(b)
+        // 20 fotogramas, con IDR en el 0 y en el 12, y los SPS/PPS en banda delante de cada IDR.
+        var muestras: [EncodedFrame] = []
+        for i in 0..<20 {
+            if i == 12 { enc.forceIDR() }
+            enc.encode(px, ptsNs: Int64(i) * 33_333_333, rigMs: UInt64(i))
+            enc.flush()
+            while let f = enc.pop() {
+                guard f.isKeyframe, let fd = f.formatDescription else { muestras.append(f); continue }
+                muestras.append(EncodedFrame(data: H264ParameterSets.avccNals(from: fd) + f.data, isKeyframe: true,
+                                             rigMs: f.rigMs, viewId: f.viewId, ptsNs: f.ptsNs, formatDescription: fd))
+            }
+        }
+        XCTAssertEqual(muestras.count, 20)
+        XCTAssertTrue(muestras[12].isKeyframe)
+
+        let dec = VideoDecoder()
+        var salida: [UInt64] = []
+        func decodifica(_ rango: Range<Int>) {
+            for m in muestras[rango] {
+                dec.decode(avcc: m.data, ptsNs: m.ptsNs)
+                while let f = dec.pop() { salida.append(f.rigMs ?? 999) }
+            }
+        }
+        decodifica(0..<6)
+        XCTAssertEqual(salida, Array(0..<6))
+
+        dec.invalidateSessionForTesting()
+        decodifica(6..<20)
+
+        // Los P de antes del IDR no tienen sesión; desde el IDR, todo otra vez.
+        XCTAssertEqual(Array(salida.suffix(8)), Array(12..<20), "sin rehacerla no vuelve ni un fotograma")
+        XCTAssertGreaterThanOrEqual(dec.sessionResets, 1)
+    }
+}

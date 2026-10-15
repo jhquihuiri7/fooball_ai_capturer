@@ -192,3 +192,37 @@ final class VideoEncoderTests: XCTestCase {
         XCTAssertEqual(encoder.takeInFlightPeak(), 0, "el pico vuelve a contar desde lo que hay")
     }
 }
+
+/// 2026-10-14: la sesión que iOS invalida al pasar a segundo plano (kVTInvalidSessionErr).
+final class VideoEncoderInvalidSessionTests: XCTestCase {
+    func testLaSesionInvalidadaSeRehaceYElSiguienteSaleIdr() throws {
+        let enc = try VideoEncoder(width: 320, height: 180, bitrateBps: 1_000_000, viewId: 0)
+        var b: CVPixelBuffer?
+        CVPixelBufferCreate(nil, 320, 180, kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+                            [kCVPixelBufferIOSurfacePropertiesKey: [:]] as CFDictionary, &b)
+        let px = try XCTUnwrap(b)
+        func codifica(_ desde: Int, _ cuantos: Int) -> [EncodedFrame] {
+            var salida: [EncodedFrame] = []
+            for i in desde..<(desde + cuantos) {
+                enc.encode(px, ptsNs: Int64(i) * 33_333_333, rigMs: UInt64(i * 33))
+                while let f = enc.pop() { salida.append(f) }
+            }
+            enc.flush()
+            while let f = enc.pop() { salida.append(f) }
+            return salida
+        }
+        let antes = codifica(0, 10)
+        XCTAssertEqual(antes.count, 10)
+        let poolViejo = try XCTUnwrap(enc.pixelBufferPool)
+
+        enc.invalidateSessionForTesting()
+        let despues = codifica(10, 10)
+
+        XCTAssertEqual(enc.sessionResets, 1)
+        XCTAssertEqual(despues.count, 10, "sin rehacerla no sale ni uno hasta PARAR y EMITIR")
+        XCTAssertTrue(try XCTUnwrap(despues.first).isKeyframe, "la sesión nueva empieza en IDR")
+        XCTAssertEqual(despues.first?.rigMs, 10 * 33, "el fotograma que dio el error se codifica otra vez")
+        XCTAssertNotNil(enc.pixelBufferPool)
+        XCTAssertFalse(enc.pixelBufferPool === poolViejo, "el pool es el de la sesión nueva")
+    }
+}

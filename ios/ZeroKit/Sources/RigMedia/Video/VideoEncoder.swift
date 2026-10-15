@@ -9,6 +9,11 @@
 // acceso (H264Sei, ADR 0022): el rigMs viaja con el fotograma y sobrevive al PES, a
 // HLS y a cualquier relé. La salida va a una BoundedQueue con descarte de lo viejo:
 // si quien consume se atasca, se tira y se pide IDR, nunca se encola latencia.
+//
+// 2026-10-14: la sesión se rehace sola si iOS la invalida (kVTInvalidSessionErr). Pasa al
+// volver del segundo plano (el botón lateral, contestar una llamada, cambiar de app): sin
+// esto el programa y la parte no volvían a salir hasta PARAR y EMITIR, con la pantalla
+// diciendo EMITIENDO. Es lo que hace WebRTC con el mismo error.
 
 import CoreMedia
 import Foundation
@@ -37,7 +42,16 @@ public final class VideoEncoder {
         case property(OSStatus)
     }
 
-    private let session: VTCompressionSession
+    /// La sesión de VideoToolbox; se cambia (bajo `lock`) si iOS la invalida.
+    private var session: VTCompressionSession
+    private let width: Int
+    private let height: Int
+    /// El bitrate vigente, para rehacer la sesión con el mismo.
+    private var bitrateBps: Int
+    /// Un fotograma volvió con la sesión invalidada: el siguiente `encode` la rehace.
+    private var needsNewSession = false
+    /// Las veces que se rehízo la sesión (para el informe).
+    public private(set) var sessionResets = 0
     private let viewId: UInt8
     private let lock = NSLock()
     private var queue: BoundedQueue<EncodedFrame>
@@ -55,8 +69,15 @@ public final class VideoEncoder {
 
     public init(width: Int, height: Int, bitrateBps: Int, viewId: UInt8) throws {
         self.viewId = viewId
+        self.width = width
+        self.height = height
+        self.bitrateBps = bitrateBps
         queue = BoundedQueue(capacity: VideoConstants.encodedQueueSlots, policy: .dropOldest)
+        session = try Self.makeSession(width: width, height: height, bitrateBps: bitrateBps)
+    }
 
+    /// Una sesión de baja latencia lista para codificar, con los ajustes del programa.
+    private static func makeSession(width: Int, height: Int, bitrateBps: Int) throws -> VTCompressionSession {
         var created: VTCompressionSession?
         let spec: [CFString: Any] = [
             kVTVideoEncoderSpecification_EnableLowLatencyRateControl: true
@@ -84,37 +105,86 @@ public final class VideoEncoder {
         guard status == noErr, let session = created else {
             throw EncoderError.create(status)
         }
-        self.session = session
-
-        try set(kVTCompressionPropertyKey_RealTime, kCFBooleanTrue!)
-        try set(kVTCompressionPropertyKey_ProfileLevel, kVTProfileLevel_H264_High_AutoLevel)
-        try set(kVTCompressionPropertyKey_AllowFrameReordering, kCFBooleanFalse!)
-        try set(
-            kVTCompressionPropertyKey_MaxKeyFrameIntervalDuration,
-            VideoConstants.programGopS as CFNumber
-        )
-        // Solo existe en baja latencia; si el cacharro no lo soporta, no es un error.
-        VTSessionSetProperty(
-            session,
-            key: kVTCompressionPropertyKey_MaxAllowedFrameQP,
-            value: VideoConstants.maxAllowedFrameQp as CFNumber
-        )
-        try apply(bitrateBps: bitrateBps)
+        do {
+            try set(session, kVTCompressionPropertyKey_RealTime, kCFBooleanTrue!)
+            try set(session, kVTCompressionPropertyKey_ProfileLevel, kVTProfileLevel_H264_High_AutoLevel)
+            try set(session, kVTCompressionPropertyKey_AllowFrameReordering, kCFBooleanFalse!)
+            try set(
+                session, kVTCompressionPropertyKey_MaxKeyFrameIntervalDuration,
+                VideoConstants.programGopS as CFNumber
+            )
+            // Solo existe en baja latencia; si el cacharro no lo soporta, no es un error.
+            VTSessionSetProperty(
+                session,
+                key: kVTCompressionPropertyKey_MaxAllowedFrameQP,
+                value: VideoConstants.maxAllowedFrameQp as CFNumber
+            )
+            try apply(session, bitrateBps: bitrateBps)
+        } catch {
+            VTCompressionSessionInvalidate(session)
+            throw error
+        }
         VTCompressionSessionPrepareToEncodeFrames(session)
+        return session
     }
 
     deinit {
         VTCompressionSessionInvalidate(session)
     }
 
-    /// El pool del codificador, para que el render escriba directo en sus búferes.
+    /// La sesión vigente.
+    private var current: VTCompressionSession {
+        lock.lock()
+        defer { lock.unlock() }
+        return session
+    }
+
+    /// El pool del codificador, para que el render escriba directo en sus búferes. Se pide
+    /// en cada fotograma: si la sesión se rehízo, el pool es otro.
     public var pixelBufferPool: CVPixelBufferPool? {
-        VTCompressionSessionGetPixelBufferPool(session)
+        VTCompressionSessionGetPixelBufferPool(current)
     }
 
     /// Cambia el bitrate en marcha (la escalera de degradación lo pide).
     public func setBitrate(bps: Int) throws {
-        try apply(bitrateBps: bps)
+        try Self.apply(current, bitrateBps: bps)
+        lock.lock()
+        bitrateBps = bps
+        lock.unlock()
+    }
+
+    /// Cambia la sesión invalidada por una nueva con los mismos ajustes. La primera
+    /// muestra de la nueva sale IDR: el receptor arranca de ella. false si no se pudo
+    /// (se reintenta en el siguiente fotograma).
+    @discardableResult
+    private func replaceSession(_ vieja: VTCompressionSession) -> Bool {
+        lock.lock()
+        let bps = bitrateBps
+        lock.unlock()
+        guard let nueva = try? Self.makeSession(width: width, height: height, bitrateBps: bps) else {
+            lock.lock()
+            needsNewSession = true
+            lock.unlock()
+            return false
+        }
+        lock.lock()
+        // Otro hilo pudo cambiarla ya: entonces sobra esta.
+        guard session === vieja else {
+            lock.unlock()
+            VTCompressionSessionInvalidate(nueva)
+            return true
+        }
+        session = nueva
+        needsNewSession = false
+        sessionResets += 1
+        lock.unlock()
+        VTCompressionSessionInvalidate(vieja)
+        return true
+    }
+
+    /// Para las pruebas: lo que le hace iOS a la sesión al pasar a segundo plano.
+    func invalidateSessionForTesting() {
+        VTCompressionSessionInvalidate(current)
     }
 
     /// El siguiente fotograma sale IDR (el receptor lo pide tras un hueco).
@@ -137,11 +207,28 @@ public final class VideoEncoder {
         }
         let pts = CMTime(value: ptsNs, timescale: 1_000_000_000)
         lock.lock()
+        let rehacer = needsNewSession
+        let sesion = session
+        lock.unlock()
+        if rehacer { replaceSession(sesion) }
+        let status = submit(pixelBuffer, pts: pts, properties: properties, ptsNs: ptsNs, rigMs: rigMs)
+        // Invalidada (al volver del segundo plano): una nueva y el mismo fotograma otra vez.
+        if status == kVTInvalidSessionErr, replaceSession(sesion) {
+            _ = submit(pixelBuffer, pts: pts, properties: properties, ptsNs: ptsNs, rigMs: rigMs)
+        }
+    }
+
+    /// Entrega un fotograma a la sesión vigente; cuenta el fallo si no lo acepta.
+    private func submit(
+        _ pixelBuffer: CVPixelBuffer, pts: CMTime, properties: CFDictionary?, ptsNs: Int64, rigMs: UInt64
+    ) -> OSStatus {
+        lock.lock()
         submitted += 1
         inFlightMax = max(inFlightMax, submitted - completed - submitErrors)
+        let sesion = session
         lock.unlock()
         let status = VTCompressionSessionEncodeFrame(
-            session,
+            sesion,
             imageBuffer: pixelBuffer,
             presentationTimeStamp: pts,
             duration: .invalid,
@@ -156,6 +243,7 @@ public final class VideoEncoder {
             submitErrors += 1
             lock.unlock()
         }
+        return status
     }
 
     /// Fotogramas en VideoToolbox ahora mismo.
@@ -177,7 +265,7 @@ public final class VideoEncoder {
 
     /// Vacía lo pendiente del codificador (fin de la emisión o un test).
     public func flush() {
-        VTCompressionSessionCompleteFrames(session, untilPresentationTimeStamp: .invalid)
+        VTCompressionSessionCompleteFrames(current, untilPresentationTimeStamp: .invalid)
     }
 
     /// El fotograma codificado más viejo que espera, o `nil`.
@@ -196,20 +284,20 @@ public final class VideoEncoder {
 
     // MARK: - Dentro
 
-    private func set(_ key: CFString, _ value: CFTypeRef) throws {
+    private static func set(_ session: VTCompressionSession, _ key: CFString, _ value: CFTypeRef) throws {
         let status = VTSessionSetProperty(session, key: key, value: value)
         guard status == noErr else { throw EncoderError.property(status) }
     }
 
-    private func apply(bitrateBps: Int) throws {
-        try set(kVTCompressionPropertyKey_AverageBitRate, bitrateBps as CFNumber)
+    private static func apply(_ session: VTCompressionSession, bitrateBps: Int) throws {
+        try set(session, kVTCompressionPropertyKey_AverageBitRate, bitrateBps as CFNumber)
         // Los DataRateLimits van en bytes por ventana: el margen deja respirar al IDR.
         let bytes = Int(
             Double(bitrateBps) / 8.0
                 * VideoConstants.dataRateWindowS * VideoConstants.dataRateBurstRatio
         )
         try set(
-            kVTCompressionPropertyKey_DataRateLimits,
+            session, kVTCompressionPropertyKey_DataRateLimits,
             [bytes, VideoConstants.dataRateWindowS] as CFArray
         )
     }
@@ -217,6 +305,8 @@ public final class VideoEncoder {
     private func finish(status: OSStatus, sampleBuffer: CMSampleBuffer?, ptsNs: Int64, rigMs: UInt64) {
         lock.lock()
         completed += 1
+        // Invalidada a medio codificar: el siguiente `encode` la rehace.
+        if status == kVTInvalidSessionErr { needsNewSession = true }
         lock.unlock()
         guard status == noErr,
               let sampleBuffer,

@@ -8,6 +8,7 @@ import UIKit
   /// se pierde sin error.
   private var captureApi: CaptureHostApiImpl?
   private var rigApi: RigHostApiImpl?
+  private var idleObserver: NSObjectProtocol?
 
   override func application(
     _ application: UIApplication,
@@ -20,6 +21,14 @@ import UIKit
     // La pantalla no se apaga: iOS no captura en segundo plano, asi que si el movil se
     // bloquea a mitad de partido deja de haber camara (ADR 0012, operativa de campo).
     application.isIdleTimerDisabled = true
+    // 2026-10-14: y otra vez cada vez que la app vuelve a primer plano. Las hojas del
+    // sistema (el escaner, el emparejado sin cable, una llamada) pueden devolverlo a su
+    // valor y entonces el movil se bloquearia a los pocos minutos de EMITIR.
+    idleObserver = NotificationCenter.default.addObserver(
+      forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main
+    ) { _ in
+      UIApplication.shared.isIdleTimerDisabled = true
+    }
 
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }

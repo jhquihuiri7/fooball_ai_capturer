@@ -45,9 +45,31 @@ public enum RecordingPolicy {
     }
 
     /// La reserva de un banco de `durationS` segundos: 10 min son 3,4 GB de 4K y piden
-    /// 8,75 GB libres, no los 40 GB del partido.
+    /// 8,75 GB libres, no los 40 GB del partido. Un banco largo no pide más que un partido
+    /// (los 40 GB), salvo que la pasada sola no quepa en ellos: el plan B de la cancha, 6000 s,
+    /// pedía 69,5 GB y la 4K no arrancaba (2026-10-14).
     public static func benchReserveBytes(durationS: Double) -> Int64 {
         let pasada = durationS * Double(localBitrateBps) / bitsPerByte
-        return Int64(pasada * benchReserveFactor) + benchReserveExtraGb * bytesPerGb
+        let colchon = benchReserveExtraGb * bytesPerGb
+        let holgada = Int64(pasada * benchReserveFactor) + colchon
+        return min(holgada, max(phoneDiskReserveBytes, Int64(pasada) + colchon))
+    }
+
+    /// Cada cuánto escriben las copias locales (la 4K y el .mov del programa) un fragmento
+    /// de película, en s. Sin fragmentos, el índice (`moov`) solo se escribe al cerrar: si la
+    /// app muere a mitad (batería, jetsam, disco lleno, un cierre a mano), el fichero entero
+    /// no se puede abrir. Con ellos se lee hasta el último fragmento: se pierden como mucho
+    /// estos segundos. Es lo que hace AVCaptureMovieFileOutput por defecto (10 s).
+    public static let movieFragmentIntervalS = 10.0
+
+    /// Lo que tiene que quedar libre mientras se graba la 4K, en GB decimales: por debajo se
+    /// cierra (el fichero queda entero) para que la copia del programa (~2,7 GB/h), el N0 y
+    /// los informes sigan teniendo sitio. Con el disco lleno fallan todos a la vez.
+    public static let diskFloorGb: Int64 = 2
+    public static var diskFloorBytes: Int64 { diskFloorGb * bytesPerGb }
+
+    /// Si la 4K en marcha tiene que cerrarse ya por el disco (`diskFloorBytes`).
+    public static func mustStopForDisk(freeBytes: Int64) -> Bool {
+        freeBytes < diskFloorBytes
     }
 }

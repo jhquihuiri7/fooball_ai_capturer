@@ -616,6 +616,7 @@ final class CaptureEngine: NSObject {
             return ""
         }
         recordingWanted = true
+        recordingStoppedForDisk = false
         recordingDirectory = directory
         // Una grabación nueva cuenta desde cero lo que el reloj del soporte le hizo esperar
         // o cortar. En la cola, antes de que se instale su primer segmento.
@@ -710,6 +711,10 @@ final class CaptureEngine: NSObject {
         let url = URL(fileURLWithPath: recordingDirectory).appendingPathComponent(name)
 
         let writer = try AVAssetWriter(outputURL: url, fileType: .mov)
+        // 2026-10-14: en fragmentos, para que una app que muere a mitad (batería, jetsam,
+        // disco lleno) no deje 30 GB sin índice que no abre nadie (RecordingPolicy).
+        writer.movieFragmentInterval = CMTime(seconds: RecordingPolicy.movieFragmentIntervalS,
+                                              preferredTimescale: Self.fragmentTimescale)
         let input = AVAssetWriterInput(
             mediaType: .video,
             outputSettings: [
@@ -754,6 +759,23 @@ final class CaptureEngine: NSObject {
             self?.closeWriter()
             self?.writeDumpRunReport()
         }
+    }
+
+    /// La escala de los instantes del intervalo de fragmentos, en tics por segundo.
+    private static let fragmentTimescale: CMTimeScale = 600
+
+    /// La 4K cerrada por quedarse sin disco (RecordingPolicy.diskFloorBytes), para la
+    /// pantalla y el informe.
+    private(set) var recordingStoppedForDisk = false
+
+    /// 2026-10-14: con menos del suelo libre, la 4K se cierra (entera) para que la copia del
+    /// programa, el N0 y los informes no se queden sin sitio a la vez. Lo mira el estado,
+    /// que Dart pide una vez por segundo.
+    private func enforceDiskFloor(freeBytes: Int64) {
+        guard recordingWanted, RecordingPolicy.mustStopForDisk(freeBytes: freeBytes) else { return }
+        NSLog("[grabacion] la 4K se cierra: quedan %lld bytes libres", freeBytes)
+        recordingStoppedForDisk = true
+        stopRecording()
     }
 
     /// IOS-15: el informe de la grabación de prueba con el volcado: fotogramas que
@@ -927,6 +949,8 @@ final class CaptureEngine: NSObject {
     func status() -> CaptureStatus {
         let applied = self.applied
         let reloj = recordingClock
+        let libre = Self.freeDiskBytes()
+        enforceDiskFloor(freeBytes: libre)
         return CaptureStatus(
             running: session.isRunning,
             width: Int64(applied?.width ?? 0),
@@ -944,7 +968,7 @@ final class CaptureEngine: NSObject {
             pressure: Self.pressure(thermalMonitor.pressure),
             ladderLevel: Int64(stepLadder().rawValue),
             batteryLevel: Double(UIDevice.current.batteryLevel),
-            freeDiskBytes: Self.freeDiskBytes(),
+            freeDiskBytes: libre,
             droppedFrames: droppedFrames,
             timecodeFailures: timecodeFailures,
             recordingFile: recordingFile,

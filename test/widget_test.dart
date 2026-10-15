@@ -798,7 +798,7 @@ void main() {
       await tester.pump(statusRefreshInterval);
 
       expect(find.text('SIN DESTINO'), findsOneWidget);
-      expect(find.text('SIN DESTINO · escanea el QR Soporte del VPS'), findsOneWidget);
+      expect(find.text('SIN DESTINO · se graba en este móvil; el QR Soporte lo sube al VPS'), findsOneWidget);
       // Sin calibrar se emite igual, pero la costura no casa: se dice en rojo.
       expect(find.text('NOMINAL · sin Documents/rig.json'), findsOneWidget);
       final ZeroChip chip = tester.widget<ZeroChip>(

@@ -9,6 +9,11 @@
 // más reciente, no un búfer de latencia. Ante un error de decodificación o un hueco
 // que informe el transporte, se piden IDR y se tira todo hasta que llegue: un P sin
 // su referencia es papilla verde, y es peor enseñarla que congelar medio segundo.
+//
+// 2026-10-14: si iOS invalida la sesión (kVTInvalidSessionErr, al volver del segundo
+// plano), se olvida con su formato y el siguiente IDR, que trae SPS/PPS en banda, abre otra.
+// Antes solo se rehacía si cambiaba el formato: el maestro se quedaba con una lente hasta
+// PARAR y EMITIR.
 
 import CoreMedia
 import Foundation
@@ -39,6 +44,10 @@ public final class VideoDecoder {
     public private(set) var decodeFailures = 0
     /// Fotogramas tirados mientras se esperaba un IDR.
     public private(set) var droppedWaitingIDR = 0
+    /// Las veces que la sesión volvió invalidada y se tiró para abrir otra.
+    public private(set) var sessionResets = 0
+    /// La sesión volvió invalidada en una respuesta: el siguiente `decode` la tira.
+    private var sessionInvalidated = false
 
     public init() {
         queue = BoundedQueue(capacity: VideoConstants.decodedQueueSlots, policy: .dropOldest)
@@ -58,6 +67,15 @@ public final class VideoDecoder {
 
     /// Decodifica una muestra AVCC. El fotograma aparece en `pop()` al completar.
     public func decode(avcc: Data, ptsNs: Int64) {
+        lock.lock()
+        let invalidada = sessionInvalidated
+        sessionInvalidated = false
+        lock.unlock()
+        if invalidada { dropSession() }
+        decode(avcc: avcc, ptsNs: ptsNs, retrying: false)
+    }
+
+    private func decode(avcc: Data, ptsNs: Int64, retrying: Bool) {
         let types = NalUnits.types(inAvcc: avcc)
         if types.contains(7), types.contains(8) {
             adoptParameterSets(from: avcc)
@@ -110,6 +128,11 @@ public final class VideoDecoder {
         ) { [weak self] status, _, imagen, _, _ in
             guard let self else { return }
             guard status == noErr, let imagen = imagen as CVPixelBuffer? else {
+                if status == kVTInvalidSessionErr {
+                    self.lock.lock()
+                    self.sessionInvalidated = true
+                    self.lock.unlock()
+                }
                 self.decodeFailures += 1
                 self.waitingForIDR = true
                 self.onNeedsIDR?()
@@ -127,10 +150,33 @@ public final class VideoDecoder {
             if isIDR {
                 waitingForIDR = false
             }
+        } else if status == kVTInvalidSessionErr, !retrying, types.contains(7), types.contains(8) {
+            // Un IDR con SPS/PPS: se abre otra sesión con ellos y se decodifica otra vez.
+            dropSession()
+            decode(avcc: avcc, ptsNs: ptsNs, retrying: true)
         } else {
+            if status == kVTInvalidSessionErr { dropSession() }
             decodeFailures += 1
             waitingForIDR = true
             onNeedsIDR?()
+        }
+    }
+
+    /// Tira la sesión invalidada y su formato: el siguiente IDR con SPS/PPS abre otra.
+    private func dropSession() {
+        if let session {
+            VTDecompressionSessionInvalidate(session)
+        }
+        session = nil
+        format = nil
+        waitingForIDR = true
+        sessionResets += 1
+    }
+
+    /// Para las pruebas: lo que le hace iOS a la sesión al pasar a segundo plano.
+    func invalidateSessionForTesting() {
+        if let session {
+            VTDecompressionSessionInvalidate(session)
         }
     }
 

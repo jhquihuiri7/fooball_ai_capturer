@@ -320,7 +320,8 @@ class CaptureReadout {
       'connecting' => 'conectando a $destino…',
       'waiting' => 'RECONECTANDO a $destino$detalle',
       'failed' => 'FALLO$detalle',
-      'none' => 'SIN DESTINO · escanea el QR Soporte del VPS',
+      // Sin VPS (la cancha sin internet) el programa sigue y se graba en el maestro.
+      'none' => 'SIN DESTINO · se graba en este móvil; el QR Soporte lo sube al VPS',
       _ => 'arrancando',
     };
   }

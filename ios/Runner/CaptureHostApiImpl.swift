@@ -57,6 +57,13 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
         CaptureHostApiSetup.setUp(binaryMessenger: binaryMessenger, api: self)
         observeInterruptions()
         ProgramHub.capture = self
+        // 2026-10-14: un lanzamiento con RIG_LINK_SECRET lo guarda en el Keychain ya, al
+        // arrancar. Antes solo se guardaba al abrir el enlace de Network (`startLink`): lanzar
+        // con el secreto y cerrar sin abrir la cámara (el paso 2 de IOS-58) no guardaba nada.
+        if ProcessInfo.processInfo.environment["RIG_LINK_SECRET"] != nil {
+            let guardado = RigLinkNW.benchSecret() != nil
+            NSLog("[enlace] secreto del soporte del entorno: %@", guardado ? "en el Keychain" : "NO VALE (no es base64)")
+        }
     }
 
     // MARK: - CaptureHostApi
@@ -414,6 +421,9 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
         guard split == nil else { return "el banco split está en marcha" }
         guard program == nil else { return "" }
         guard let lado = currentRole else { return "sin lado" }
+        // 2026-10-14: que la pantalla no se bloquee durante el partido, aunque una hoja del
+        // sistema lo hubiera devuelto a su valor (también al volver a primer plano).
+        UIApplication.shared.isIdleTimerDisabled = true
         engine.startRunning()
         let s = makeProgramRun(nw: nw, role: lado,
                                config: .production(medium: medio, detectorPackage: SplitBench.productionDetector()))
