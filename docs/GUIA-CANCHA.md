@@ -48,7 +48,7 @@ La Mac va para calibrar, para el plan B y para recoger al final.
      20 m y repite. Si los montaste igual que en casa, puedes seguir con la de casa.
 4. Quita los cables si quieres. **Abre Zero desde el icono** en los dos: el 17 **IZQUIERDA** y
    «Este móvil dirige»; el 16 Pro **DERECHA**. «Enlace y emisión» → **Aware** en los dos. En el
-   17, la tarjeta VPS vacía («Olvidar» si había algo).
+   17, la tarjeta VPS vacía («Desemparejar» si había algo).
 5. **«Abrir cámara»** en los dos y espera a **LISTA** (Enlace conectado, Reloj y Fase). Puede
    tardar 1-2 min.
 6. En el 17: **«Guardar vídeo»** encendido (la 4K de los dos) y **EMITIR**. El 16 Pro pasa solo
@@ -67,7 +67,7 @@ La Mac va para calibrar, para el plan B y para recoger al final.
 
 | Qué pasa | Qué hacer |
 |---|---|
-| El 16 Pro no enlaza en 2 min | Quita el modo avión (datos móviles apagados) y vuelve a «Abrir cámara». Si sigue sin enlazar: en el 16 Pro «Un solo móvil» y GRABAR (graba su 4K), y el 17 emite con una lente |
+| El 16 Pro no enlaza en 2 min | Quita el modo avión (datos móviles apagados) y vuelve a «Abrir cámara». Si sigue sin enlazar: cierra Zero en el 16 Pro, ábrela, en la pantalla de lado enciende «Un solo móvil, sin reloj», «Abrir cámara» y GRABAR (graba su 4K); el 17 emite con una lente |
 | EMITIR no arranca o se queda raro | El plan B, por cable: `tools/plan_b_cancha.sh lanzar ~/.config/football-ai/secreto-soporte 7200`. Graba 2 h y se para solo; se pueden quitar los cables. Luego `tools/plan_b_cancha.sh volver` |
 | Se cierra Zero en el 16 Pro | Ábrela y «Abrir cámara»: vuelve solo al programa. El 17 sigue mientras tanto con una lente |
 | Se cierra Zero en el 17 | Lo grabado hasta ahí se puede leer. Ábrela, «Abrir cámara» y EMITIR otra vez |
