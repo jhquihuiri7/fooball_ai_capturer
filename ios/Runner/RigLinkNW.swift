@@ -1901,19 +1901,6 @@ final class SplitBench {
         return s(uso.ru_utime) + s(uso.ru_stime)
     }
 
-    /// El informe sin números que JSON no admite: un percentil desbordado da infinito y
-    /// `JSONSerialization` aborta la app (le pasó al esclavo promovido el 6-oct). Lo no
-    /// finito pasa a -1.
-    static func jsonSafe(_ v: Any) -> Any {
-        switch v {
-        case let d as Double: return d.isFinite ? d : -1.0
-        case let f as Float: return f.isFinite ? Double(f) : -1.0
-        case let m as [String: Any]: return m.mapValues(jsonSafe)
-        case let a as [Any]: return a.map(jsonSafe)
-        default: return v
-        }
-    }
-
     static func thermalName(_ t: ProcessInfo.ThermalState) -> String {
         switch t {
         case .nominal: return "nominal"
@@ -2432,7 +2419,9 @@ final class SplitBench {
             try? ts?.close()
             try? vistas?.close()
         }
-        guard session.isMaster || slave != nil else { return }
+        // 2026-10-15: el informe se escribe siempre. Aquí había un `guard session.isMaster ||
+        // slave != nil`: el esclavo que no llegó a enlazar no monta su parte y se iba sin
+        // informe ni latido final (el plan B de bench/partido-20261015-0902).
         func pct(_ xs: [Double], _ q: Double) -> Double {
             let o = xs.sorted()
             return o.isEmpty ? 0 : o[min(o.count - 1, Int(q * Double(o.count)))]
@@ -2625,34 +2614,52 @@ final class SplitBench {
             "slave_dropped": ss.dropped,
             "slave_idr_requests": ss.idrRequests,
         ]
-        guard let base = try? FileManager.default.url(for: .documentDirectory, in: .userDomainMask,
-                                                      appropriateFor: nil, create: true)
-            .appendingPathComponent("bench", isDirectory: true),
-            let json = try? JSONSerialization.data(withJSONObject: Self.jsonSafe(informe), options: [.sortedKeys, .prettyPrinted])
-        else { return }
-        try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
-        try? json.write(to: base.appendingPathComponent(
-            "program-split-\(side.rawValue)-\(Int(Date().timeIntervalSince1970)).json"))
-        writeLive(transcurrido: Double(DispatchTime.now().uptimeNanoseconds - startNs) / 1e9, finished: true)
-        writerQueue.sync {}
+        // El informe y el latido final, siempre los dos; los latidos que quedaran en la cola
+        // del disco ya salieron con el `writerQueue.sync` de arriba.
+        guard let base = Self.benchDirectory() else {
+            NSLog("[split] sin carpeta Documents/bench: la pasada se queda sin informe")
+            return
+        }
+        do {
+            try ProgramRunFiles.writeFinal(
+                report: informe,
+                live: liveSnapshot(transcurrido: Double(DispatchTime.now().uptimeNanoseconds - startNs) / 1e9,
+                                   finished: true),
+                directory: base, side: side.rawValue, startUnixMs: startUnixMs,
+                endUnixS: Int64(Date().timeIntervalSince1970)
+            )
+        } catch {
+            NSLog("[split] no se pudo escribir el informe final: %@", "\(error)")
+        }
+    }
+
+    /// Documents/bench, donde van los informes, los latidos y lo grabado del banco.
+    static func benchDirectory() -> URL? {
+        try? FileManager.default.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+            .appendingPathComponent("bench", isDirectory: true)
     }
 
     // MARK: - 2026-10-14: el latido
 
-    /// Lo que se sabe de la pasada, barato (sin percentiles): contadores, la huella, la
-    /// térmica, la batería y el disco, y lo grabado. En la cola del tic; el disco, aparte.
+    /// El latido, cada `liveEveryS`: lo de `liveSnapshot`, al disco en su cola.
     private func writeLive(transcurrido: Double, finished: Bool) {
-        if liveURL == nil, let base = try? FileManager.default.url(for: .documentDirectory, in: .userDomainMask,
-                                                                     appropriateFor: nil, create: true)
-            .appendingPathComponent("bench", isDirectory: true) {
+        if liveURL == nil, let base = Self.benchDirectory() {
             try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
-            liveURL = base.appendingPathComponent("program-live-\(side.rawValue)-\(startUnixMs / 1000).json")
+            liveURL = base.appendingPathComponent(ProgramRunFiles.liveName(side: side.rawValue, startUnixMs: startUnixMs))
         }
-        guard let url = liveURL else { return }
+        guard let url = liveURL,
+              let datos = try? ProgramRunFiles.encode(liveSnapshot(transcurrido: transcurrido, finished: finished))
+        else { return }
+        writerQueue.async { try? datos.write(to: url, options: .atomic) }
+    }
+
+    /// Lo que se sabe de la pasada, barato (sin percentiles): contadores, la huella, la
+    /// térmica, la batería y el disco, y lo grabado. En la cola del tic.
+    private func liveSnapshot(transcurrido: Double, finished: Bool) -> [String: Any] {
         let ms = master?.stats ?? .init()
         let ss = slave?.stats ?? .init()
         let srt = publisher?.snapshot
-        let latido: [String: Any] = [
+        return [
             "name": "program-live",
             "purpose": config.purpose.rawValue,
             "finished": finished,
@@ -2699,10 +2706,6 @@ final class SplitBench {
                                   "part_decoder": master?.decoderSessionResets ?? 0],
             "files": recordedFiles(),
         ]
-        guard let datos = try? JSONSerialization.data(withJSONObject: Self.jsonSafe(latido),
-                                                      options: [.sortedKeys, .prettyPrinted])
-        else { return }
-        writerQueue.async { try? datos.write(to: url, options: .atomic) }
     }
 
     /// Los últimos cambios del esclavo y sucesos de la app que van en el latido.
