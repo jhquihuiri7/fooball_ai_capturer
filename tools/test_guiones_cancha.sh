@@ -5,7 +5,8 @@
 # última pasada, la app que murió a mitad, --sin-4k y --desde) y plan_b_cancha.sh (lanzar y
 # soltar con las apps guardadas, y volver), calibrar_cancha.sh (calibra e instala, --solo-comprobar,
 # no calibra y no toca, sin fotos) y limpiar_moviles.sh (lo que ocupa; --borrar-pruebas con una app
-# que borra y con una anterior). Ninguno puede cerrar otra app que no sea Zero. Con ffmpeg, los vídeos de prueba son de verdad (y uno, fragmentado y cortado a mitad).
+# que borra y con una anterior); emitir_auto.sh, también con --link single y un solo móvil.
+# Ninguno puede cerrar otra app que no sea Zero. Con ffmpeg, los vídeos de prueba son de verdad (y uno, fragmentado y cortado a mitad).
 set -uo pipefail
 
 RAIZ=$(cd "$(dirname "$0")/.." && pwd)
@@ -292,6 +293,69 @@ espera_que "sale con error" test $? -ne 0
 espera_que "no compila ni lanza nada" no_tiene "$FAKE_DIR/log" "flutter\|lanza"
 "$RAIZ/tools/emitir_auto.sh" "$SECRETO" 600 --link multipeer > "$T/auto4.txt" 2>&1
 espera_que "--link multipeer no vale (no hay programa)" test $? -eq 2
+
+echo "emitir_auto.sh --link single: «Una cámara (sin pareja)» con un solo móvil conectado"
+nuevo_fake
+echo "$IZQ" > "$FAKE_DIR/conectados"   # el 16 Pro ni está
+AHORA=$(( $(date +%s) + 5 ))
+for f in live-s final-s; do
+  if [ "$f" = live-s ]; then informe "$FIX/$f.json" master production left "$AHORA" false latido
+  else informe "$FIX/$f.json" master production left "$AHORA" true; fi
+  python3 - "$FIX/$f.json" <<'PY3'
+import json, sys
+d = json.load(open(sys.argv[1]))
+d.update({"single_camera": True, "two_lens_frames": 0, "one_lens_frames": 18000, "part_fallbacks": 0})
+json.dump(d, open(sys.argv[1], "w"))
+PY3
+done
+printf '0.0s auto-emitir: LISTA (una cámara, sin pareja): EMITIR\n0.1s auto-emitir: EMITIENDO\n600.1s auto-emitir: PARAR (600 s)\n' > "$FIX/auto-s.log"
+python3 - "$FAKE_DIR/guion.json" "$IZQ" "$FIX" "$AHORA" <<'PY4'
+import json, sys
+g, izq, fix, t = sys.argv[1:]
+t = int(t)
+json.dump({
+    izq: {"2": [["pon", f"{fix}/entero.mov", f"program-zero-{t}.mov"],
+                ["pon", f"{fix}/live-s.json", f"bench/program-live-left-{t}.json"],
+                ["pon", f"{fix}/auto-s.log", f"bench/auto-emitir-left-{t}.log"]],
+          "3": [["pon", f"{fix}/final-s.json", f"bench/program-split-left-{t + 600}.json"],
+                ["pon", f"{fix}/n0.jsonl", f"n0/zero-{t}-left.jsonl"]]},
+}, open(g, "w"))
+PY4
+touch "$FAKE_DIR/dev/$IZQ/corriendo"
+OUT="$T/autos"
+SALIDA="$OUT" SONDEO_S=0 ESPERA_ESCLAVO_S=0 FLUTTER="$T/bin/flutter-falso" RUNNER="$T/build/Runner.app" \
+  "$RAIZ/tools/emitir_auto.sh" "$SECRETO" 600 --link single > "$T/autos.txt" 2>&1
+espera_que "termina bien sin el 16 Pro" test $? -eq 0
+espera_que "compila solo el izquierdo, con AUTO_LINK=single" tiene "$FAKE_DIR/log" \
+  "flutter build ios --release --dart-define=AUTO_ROLE=left --dart-define=AUTO_EMITIR=true --dart-define=AUTO_LINK=single --dart-define=AUTO_EMITIR_S=600"
+espera_que "no compila el derecho" no_tiene "$FAKE_DIR/log" "AUTO_ROLE=right"
+espera_que "lanza solo ese, con RIG_LINK_SECRET" \
+  test "$(grep -c "lanza com.logicielapplab.zero con \['RIG_LINK_SECRET'\]" "$FAKE_DIR/log")" -eq 1
+espera_que "ni toca el otro móvil" no_tiene "$FAKE_DIR/log" "$DER"
+espera_que "nunca otra app" no_tiene "$FAKE_DIR/log" "CERRÓ OTRA APP"
+espera_que "el secreto no sale por pantalla" no_tiene "$T/autos.txt" "$VALOR"
+espera_que "dice que el otro no hace falta" tiene "$T/autos.txt" "el otro móvil no hace falta"
+espera_que "ve la parada" tiene "$T/autos.txt" "el maestro paró"
+espera_que "trae la copia .mov y el informe" test -s "$OUT/izquierdo/program-zero-$AHORA.mov" \
+  -a -s "$OUT/izquierdo/bench/program-split-left-$(( AHORA + 600 )).json"
+espera_que "sin carpeta del derecho" test ! -d "$OUT/derecho"
+espera_que "resume el registro" tiene "$T/autos.txt" "izquierdo: 0.0s auto-emitir: LISTA (una cámara, sin pareja): EMITIR"
+espera_que "el veredicto lo dice" tiene "$T/autos.txt" "una cámara (sin pareja): 18000 fotogramas de su lente"
+espera_que "veredicto en orden, sin esclavo" tiene "$T/autos.txt" "VEREDICTO: ✅ en orden"
+
+echo "emitir_auto.sh --link single --lado right: el derecho solo"
+nuevo_fake
+echo "$DER" > "$FAKE_DIR/conectados"
+touch "$FAKE_DIR/dev/$DER/corriendo"
+A5=$(( $(date +%s) + 5 ))
+pon "$DER" "$FIX/final-s.json" "bench/program-split-right-$A5.json"   # ya paró
+SALIDA="$T/autos2" SONDEO_S=0 ESPERA_ESCLAVO_S=0 MARGEN_FIN_S=0 FLUTTER="$T/bin/flutter-falso" RUNNER="$T/build/Runner.app" \
+  "$RAIZ/tools/emitir_auto.sh" "$SECRETO" 1 --link single --lado right > "$T/autos2.txt" 2>&1 || true
+espera_que "compila el derecho con AUTO_LINK=single" tiene "$FAKE_DIR/log" "AUTO_ROLE=right --dart-define=AUTO_EMITIR=true --dart-define=AUTO_LINK=single"
+espera_que "lo instala y lanza en el derecho" tiene "$FAKE_DIR/log" "$DER lanza com.logicielapplab.zero"
+espera_que "ni toca el izquierdo" no_tiene "$FAKE_DIR/log" "$IZQ"
+"$RAIZ/tools/emitir_auto.sh" "$SECRETO" 600 --link single --lado centro > "$T/autos3.txt" 2>&1
+espera_que "--lado centro no vale" test $? -eq 2
 
 # ------------------------------------------------------------------------------------------
 # calibrar_cancha.sh: la calibración de football-ai se sustituye por una falsa que mira que le

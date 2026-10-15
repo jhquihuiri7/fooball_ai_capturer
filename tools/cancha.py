@@ -434,7 +434,10 @@ def _maestro(d: dict, n: _Notas) -> None:
     n.si(frames > 0 and media >= FPS_MIN,
          f"programa: {frames} fotogramas, {media:.1f} fps de media" + (f", p5 {p5:.1f}" if isinstance(p5, (int, float)) else ""))
     dos, una = int(d.get("two_lens_frames", 0)), int(d.get("one_lens_frames", 0))
-    if dos + una:
+    if d.get("single_camera"):
+        # «Una cámara (sin pareja)», 2026-10-15: sin esclavo ni parte, a propósito.
+        n.ok(f"una cámara (sin pareja): {una} fotogramas de su lente; sin esclavo ni parte, a propósito")
+    elif dos + una:
         n.info(f"dos lentes {dos} ({100 * dos / (dos + una):.0f} %) · una lente (masterOnly) {una}")
     retro = int(d.get("part_fallbacks", 0))
     n.si(retro <= RETROCESOS_MAX * max(frames, 1), f"retrocesos a una lente: {retro}", grave=False)
@@ -548,6 +551,8 @@ def veredicto(carpeta: str, desde: int = 0) -> int:
         d = _lee(final) if final else _lee(latido)  # type: ignore[arg-type]
         papel = "MAESTRO" if d.get("role") == "master" else "ESCLAVO"
         que = "EMITIR" if d.get("purpose") == "production" else "banco"
+        if d.get("single_camera"):
+            que += " con una cámara (sin pareja)"
         fuente = "informe final" if final else ("latido final" if d.get("finished") else "SOLO EL LATIDO")
         print(f"{papel} · {lado} ({d.get('device', '?')}) · {que} · {fuente} · {_duracion_s(d) / 60:.1f} min")
         if final is None:

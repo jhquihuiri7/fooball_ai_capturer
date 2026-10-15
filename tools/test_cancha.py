@@ -159,6 +159,23 @@ class Veredicto(unittest.TestCase):
             self.assertIn("MAESTRO · izquierdo", texto)
             self.assertIn("ESCLAVO · derecho", texto)
 
+    def test_una_camara_sin_esclavo_no_es_un_fallo(self) -> None:
+        # «Una cámara (sin pareja)», 2026-10-15: un solo móvil, del lado que sea, sin enlace.
+        for lado in ("izquierdo", "derecho"):
+            with tempfile.TemporaryDirectory() as d:
+                sola = dict(MAESTRO, single_camera=True, two_lens_frames=0, one_lens_frames=18_000,
+                            part_fallbacks=0, parts_received=0, peer_states=[], link={})
+                ladito = "left" if lado == "izquierdo" else "right"
+                _informe(os.path.join(d, lado, "bench"), f"program-split-{ladito}-{T}.json", **sola)
+                malas, texto = self._corre(d)
+                self.assertEqual(malas, 0, texto)
+                self.assertIn("VEREDICTO: ✅ en orden", texto)
+                self.assertIn(f"MAESTRO · {lado}", texto)
+                self.assertIn("EMITIR con una cámara (sin pareja)", texto)
+                self.assertIn("✅ una cámara (sin pareja): 18000 fotogramas de su lente", texto)
+                self.assertNotIn("ESCLAVO", texto)
+                self.assertNotIn("masterOnly", texto)
+
     def test_lo_que_falla_y_lo_que_avisa(self) -> None:
         with tempfile.TemporaryDirectory() as d:
             mal = dict(MAESTRO, files={}, torn_frames=5, added_latency_ms_p95=190.0,
