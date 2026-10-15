@@ -12,6 +12,106 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-15 · «Una cámara (sin pareja)»: EMITIR con un solo móvil, sin enlace · 🚧 en código y tests; sin probar en el iPhone
+
+Lo pidió Alexander para la cancha de mañana: poder transmitir solo con el lado izquierdo, sin
+parear, con todo lo que tiene la app, y sin dañar lo que ya vale. a79d736 (la app) y c914802
+(los guiones).
+
+**Qué es.** Una opción nueva y explícita en «Enlace y emisión» de la pantalla de lado: la
+píldora ancha **«Una cámara (sin pareja)»**, debajo de Pod/Wi-Fi/Aware/Cable (`LinkMode.single`,
+se guarda en `zero.linkMode` como las demás). Sin elegirla, nada cambia. Vale en los dos lados.
+- **«Abrir cámara»** no abre ningún enlace (ni Bonjour, ni Aware, ni el secreto): `RigSoloLink`
+  lleva una `RigLinkSession` sola (`RigLinkSession.alone` + `startAlone`, sobre
+  `NoLinkTransport`) que dirige desde el primer instante, con el reloj de host como reloj del
+  soporte (la 4K, de referencia, no espera reloj). **LISTA** en cuanto la cámara está bien:
+  sin enlace, sin reloj del otro ni fase. La pantalla: Enlace «Una cámara · sin pareja: una
+  cámara», Reloj «propio: una cámara, sin pareja», Modo «una cámara · sin pareja».
+- **EMITIR** arranca la misma pasada de producción (`ProgramRunConfig.single`): director con su
+  IA, detector CenterNet, gráfico y franja con anuncios, la copia `program-*.mov`, el latido y
+  el informe, la escalera térmica y el SRT al VPS si hay QR Soporte (si no, SIN DESTINO).
+  «Guardar vídeo» graba la 4K propia como hoy. Programa 1080p de la captura 4K, como siempre.
+  Sin parte (ni su codificador ni su render), sin órdenes, sin vistas, sin pizarra al otro.
+- **El director, dentro de su lente**: `DirectorLoop.singleCamera` construye el lienzo con
+  `CylindricalCanvas.fit(…, sides: [lado])` (la geometría de `rig.json` de ese lado, o la
+  nominal) y `singleLens`: las vistas piden solo ese lado, así que no hay retrocesos que
+  contar; el maestro no espera ninguna parte (`peerDown`). `DirectorService(soloSide:)` mete
+  cada ciclo de detección al llegar: con un solo lado, el emparejador lo retenía 3 ciclos.
+  Medido en un test con el soporte del pod y el nominal: el plano más abierto, centrado en su
+  lente, tiene 57,6° de ancho (lo limita la franja de pitch del campo, como con dos) y **0 %
+  de píxeles fuera de la imagen**.
+- El informe y el latido llevan `single_camera: true`; `tools/cancha.py` dice «EMITIR con una
+  cámara (sin pareja)» y «✅ una cámara (sin pareja): N fotogramas de su lente; sin esclavo ni
+  parte, a propósito», y no cuenta la falta de esclavo.
+- **AUTO_EMITIR** acepta `AUTO_LINK=single` (con `AUTO_ROLE=left|right`): emite en cuanto está
+  LISTA, sin los 20 s del esclavo. **`tools/emitir_auto.sh <secreto> <s> --link single [--lado
+  left|right]`** compila, instala, lanza y recoge solo ese móvil (IZQ o DER), sin exigir ni
+  tocar el otro.
+- **No cambia**: el banco split (su entorno sigue mandando en `LinkChoice.resolve`), EMITIR con
+  dos, AUTO_EMITIR con aware/wifi, el plan B, Multipeer y «Un solo móvil, sin reloj»
+  (`standalone`, GRABAR). Lo demuestran los tests de siempre en verde y los nuevos.
+
+**Comprobado** (worktree aparte; el árbol principal y los iPhone, sin tocar)
+- `swift test --skip ModelBench`: **546, 4 saltados, 0 fallos** (539 antes; nuevos:
+  `SoloLinkTests` 3, `ProgramRunTests` 2, `DirectorLoopTests` 1 —los dos lados, la vista nunca
+  sale de su lente aunque el grupo esté al otro lado— y `DirectorServiceTests` 1).
+- `tools/check_layers.sh`: limpio.
+- El Runner con `swiftc -typecheck` contra los módulos de ZeroKit emitidos para iOS desde este
+  árbol: **0 errores y los mismos 34 avisos** que el de 6bdfafd con el mismo método,
+  comparados uno a uno (sin xcodebuild: el Mac tenía 2,7 GB libres).
+- `flutter test --no-pub`: **444, todos bien** (435 antes; nuevos: 4 en `capture_session_test`,
+  1 en `widget_test`, 2 en `role_page_test`, 2 en `auto_emitir_test`). Un arreglo de prueba:
+  el ayudante `emparejar` de `role_page_test` tocaba antes de pintar tras `ensureVisible` (con la
+  fila nueva, el botón queda bajo el pliegue). `flutter analyze --no-pub`: sin avisos.
+- `bash tools/test_guiones_cancha.sh`: **178 bien** (18 nuevos de `--link single`, el izquierdo
+  solo con el 16 Pro desconectado y el derecho con `--lado right`).
+  `python3 tools/test_cancha.py`: **26 OK**.
+
+**NO probado en el iPhone.** Nada de esto ha corrido en un móvil: ni la pantalla, ni la pasada
+sola, ni el director con una lente en vivo, ni el SRT con una cámara.
+
+**Para probarlo con un solo iPhone por cable** (el 17; ~5 min de EMITIR, sin nadie delante):
+
+    cd /Users/alexander/Trabajacion/fooball_ai_capturer && git pull --ff-only
+    tools/emitir_auto.sh ~/.config/football-ai/secreto-soporte 300 --link single
+    # con el 16 Pro en su lugar:  … --link single --lado right
+    # otro iPhone como izquierdo: IZQ=<id de devicectl> tools/emitir_auto.sh … --link single
+
+En el veredicto: «MAESTRO · izquierdo … · EMITIR con una cámara (sin pareja)», «✅ una cámara
+(sin pareja): N fotogramas de su lente», programa ~30 fps, copia .mov ≈ 100 %, «SRT: sin
+destino» sin QR Soporte, detector con pasadas, ningún «retrocesos» > 0 y «VEREDICTO: ✅». En el
+registro, «LISTA (una cámara, sin pareja): EMITIR» a los pocos segundos. Mirar la copia .mov a
+ojo: el director se mueve dentro de la lente, sin bandas negras. Después, para la pantalla de
+lado de la cancha, `tools/plan_b_cancha.sh preparar` (las tres apps con esto; pide ~5 GB libres
+en el Mac) y `volver`: la `emitir.app` de `build/cancha` es de 526a348 y **no trae este modo**.
+
+**Decidido aquí, pendiente de revisión de Alexander**
+- **Es un modo degradado explícito, no un cambio de arquitectura.** Los ADR 0019 y 0023
+  describen dos móviles; «Una cámara» reutiliza la pasada del maestro sin enlace y no cambia el
+  protocolo, el reloj ni los roles del soporte de dos. Si se queda, se anota en el ADR 0019.
+- **El lado dice cómo va montado el móvil**: IZQUIERDA es girado 180° (como en el soporte),
+  DERECHA derecho (`mountedUpsideDown = side == .left`, de siempre). El 17 solo, en su sitio del
+  soporte, es IZQUIERDA; un móvil derecho en otro trípode tendría que elegir DERECHA (y la
+  geometría de `rig.json` de ese lado). No se ha añadido una opción de orientación.
+- **El plano más abierto es el mismo que con dos** (57,6°, lo limita la franja de pitch del
+  campo `directorPitchLimitsRad`, ahora constante con unidades): no se ha abierto el pitch para
+  enseñar la lente entera, que metería cielo y suelo cercano.
+- El secreto del soporte sigue en el lanzamiento de `emitir_auto.sh` (lo guarda en el Keychain
+  aunque «Una cámara» no lo use) para que la firma del guion no cambie.
+
+**Visto y no tocado (EMITIR con dos)**: el maestro que arranca sin haber visto nunca al esclavo
+no pasa a una lente: `PeerHealth` empieza en `down` y solo avisa de los cambios, así que
+`peerDown` sigue en false, el director encuadra las dos lentes y lo que cae en la otra sale en
+negro y cuenta como retroceso. Es lo que pasaba con «el 17 emite con una lente» de la guía; con
+«Una cámara» ya no. Arreglarlo en el modo de dos es otra tarea.
+
+**La guía** (`docs/GUIA-CANCHA.md`, «Si algo falla»): si no hay forma de enlazar, en el 17
+«Una cámara (sin pareja)», «Abrir cámara» y EMITIR; «Un solo móvil, sin reloj» + GRABAR queda
+como último recurso para la 4K del 16 Pro. En la tabla de lo probado, «Una cámara» sin probar.
+
+**Siguiente**: el comando de arriba con el 17 por cable; con su veredicto en verde, `preparar`
+y `volver` para la cancha.
+
 ## 2026-10-15 · Mediodía con los dos iPhone: calibrar en la cancha, EMITIR con 4K y el Aware que no enlazaba tras cerrar Zero · 🚧 falta el dedo en EMITIR
 
 Los dos en el soporte de mesa, por Wi-Fi Aware, todo lanzado desde el Mac (Alexander no

@@ -17,6 +17,7 @@ La Mac va para calibrar, para el plan B y para recoger al final.
 | **Aware en modo avión** (con la Wi-Fi encendida) | ❌ sin probar |
 | El director con jugadores de verdad | ❌ en casa se quedaba fijo en un rincón del cuarto |
 | 90-120 min al sol | ❌ el calor solo se midió a la sombra; la escalera baja la IA a 5 Hz en `serious` |
+| **«Una cámara (sin pareja)»**: emitir con un solo móvil, sin enlazar (2026-10-15) | ❌ sin probar en el iPhone: hecho en código y con pruebas. Pruébalo antes con `tools/emitir_auto.sh <secreto> 300 --link single` (un solo iPhone por cable) |
 
 ## La víspera, en casa
 
@@ -70,7 +71,9 @@ La Mac va para calibrar, para el plan B y para recoger al final.
 | Qué pasa | Qué hacer |
 |---|---|
 | No enlazan y quieres saber por qué | La fila Enlace de cada móvil dice la frase («publicando; no ha llegado nadie en 90 s (3 citas, 2 rehechas)», «no ve al otro…», «ve al otro pero no conecta…»). Cada móvil lo deja también en `Documents/bench/link-diag-*.json`, que recogen los guiones y enseña el veredicto. El que publica rehace su cita cada 30 s y el que busca la suya cada 20 s: no hace falta tocar nada en los primeros 2 min |
-| El 16 Pro no enlaza en 3 min | Cierra Zero en los dos, espera 1 min y ábrela otra vez (lado, Aware, «Abrir cámara»). Si sigue sin enlazar, quita el modo avión (datos móviles apagados) y repite. Si sigue sin enlazar: cierra Zero en el 16 Pro, ábrela, en la pantalla de lado enciende «Un solo móvil, sin reloj», «Abrir cámara» y GRABAR (graba su 4K); el 17 emite con una lente |
+| El 16 Pro no enlaza en 3 min | Cierra Zero en los dos, espera 1 min y ábrela otra vez (lado, Aware, «Abrir cámara»). Si sigue sin enlazar, quita el modo avión (datos móviles apagados) y repite. Si sigue sin enlazar, la fila siguiente |
+| **No hay forma de enlazar** (o solo hay un iPhone) | **«Una cámara (sin pareja)» en el 17.** Si estaba emitiendo, PARAR; vuelve atrás a la pantalla de lado: **IZQUIERDA**, «Enlace y emisión» → **«Una cámara (sin pareja)»** (la píldora ancha, debajo de Pod/Wi-Fi/Aware/Cable), «Abrir cámara». Sale **LISTA** en segundos, sin enlace, sin reloj del otro y sin fase. «Guardar vídeo» si quieres su 4K y **EMITIR**. El 17 emite solo con todo: el director con su IA (recorre su lente y no encuadra nada fuera de ella), el gráfico, la franja con los anuncios y la copia del programa en el móvil (1080p). La tarjeta Programa dice «SIN DESTINO» sin QR Soporte, y la fila Parte, «sin pareja». El móvil va **en su sitio del soporte, girado como siempre**: el lado le dice a la app cómo va montado (IZQUIERDA, girado; DERECHA, derecho). Una lente ve ~100° de ancho y el soporte la abre ~40° hacia su lado: si puedes, gira el soporte para que apunte al centro de la cancha. Si solo queda el 16 Pro, lo mismo en él con **DERECHA** |
+| Y además quieres la 4K del 16 Pro (último recurso) | Con el 17 en «Una cámara»: en el 16 Pro, cierra Zero, ábrela, enciende «Un solo móvil, sin reloj», «Abrir cámara» y GRABAR. Graba su 4K, que no parea con nada (sin reloj del soporte) |
 | EMITIR no arranca o se queda raro | El plan B, por cable: `tools/plan_b_cancha.sh lanzar ~/.config/football-ai/secreto-soporte 7200`. Graba 2 h y se para solo; se pueden quitar los cables. Luego `tools/plan_b_cancha.sh volver` |
 | Se cierra Zero en el 16 Pro | Ábrela y «Abrir cámara»: vuelve solo al programa. El 17 sigue mientras tanto con una lente |
 | Se cierra Zero en el 17 | Lo grabado hasta ahí se puede leer. Ábrela, «Abrir cámara» y EMITIR otra vez |
