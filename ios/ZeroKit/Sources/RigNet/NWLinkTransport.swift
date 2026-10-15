@@ -119,6 +119,17 @@ public final class NWLinkTransport: LinkTransport {
         return ageS >= limitS
     }
 
+    /// Si el vigía de la publicación rehace la cita de un canal del que publica (2026-10-15):
+    /// la cita da plazo, el canal no está en uso (una conexión de control en marcha o
+    /// arriba; medios del otro con el control arriba), no ha llegado nadie a ella desde que
+    /// se abrió o desde la última caída, y lleva así el plazo. Un listener de Wi-Fi Aware en
+    /// espera no falla ni caduca, y uno publicado al que nadie llega solo se renovaba al
+    /// caducar (~2 min).
+    static func publicationIsStuck(inUse: Bool, arrived: Bool, ageS: Double?, limitS: Double?) -> Bool {
+        guard !inUse, !arrived, let ageS, let limitS else { return false }
+        return ageS >= limitS
+    }
+
     public var onFrame: ((LinkFrame, LinkChannel) -> Void)?
     public var onState: ((LinkTransportState) -> Void)?
     public var onPath: ((String) -> Void)?
@@ -248,6 +259,15 @@ public final class NWLinkTransport: LinkTransport {
     private var mediaBrowserOpenedNs: UInt64?
     private var subscriptionWatchdog: DispatchSourceTimer?
 
+    // 2026-10-15: el vigía de la publicación del que publica. Desde cuándo cuenta la cita de
+    // cada canal (se abrió o cayó la conexión que salió de ella; ns de uptime) y si ha
+    // llegado alguien desde entonces.
+    private var listenerQuietSinceNs: UInt64?
+    private var controlArrived = false
+    private var mediaListenerQuietSinceNs: UInt64?
+    private var mediaArrived = false
+    private var publicationWatchdog: DispatchSourceTimer?
+
     // 2026-10-15: lo que dice `diagnosis`. Citas de control abiertas, si la actual está
     // lista, intentos de control (los que salen o los que llegan), la última caída y desde
     // cuándo no hay control arriba (ns de uptime; nil, arriba).
@@ -270,7 +290,8 @@ public final class NWLinkTransport: LinkTransport {
                 role: rol, medium: rendezvous.label, state: state, waiting: esperaPor,
                 lastRendezvousEnd: finDeCita, lastDrop: ultimaCaida, rendezvousReady: citaLista,
                 announcements: controlCandidates.count, mediaAnnouncements: mediaCandidates.count,
-                rendezvousOpened: citasAbiertas, resubscribes: stats.resubscribes, controlAttempts: intentosControl,
+                rendezvousOpened: citasAbiertas, resubscribes: stats.resubscribes, republishes: stats.republishes,
+                controlAttempts: intentosControl,
                 withoutLinkS: state == .connected ? nil : sinEnlaceDesdeNs.map { Double(ahora &- $0) / 1e9 }
             )
         }
@@ -327,6 +348,7 @@ public final class NWLinkTransport: LinkTransport {
             startMediaWatchdog()
             startLinkWatchdog()
             startSubscriptionWatchdog()
+            startPublicationWatchdog()
         }
     }
 
@@ -351,6 +373,8 @@ public final class NWLinkTransport: LinkTransport {
             linkWatchdog = nil
             subscriptionWatchdog?.cancel()
             subscriptionWatchdog = nil
+            publicationWatchdog?.cancel()
+            publicationWatchdog = nil
             mediaCandidates = []
             endedRendezvous = []
             cancelRetiredListeners()
@@ -458,6 +482,7 @@ public final class NWLinkTransport: LinkTransport {
                 // Un soporte son dos móviles: la conexión nueva sustituye a la vieja,
                 // que Network puede tardar en dar por muerta (el patrón de RigLink).
                 self.intentosControl += 1
+                self.controlArrived = true
                 self.note(self.connection == nil ? "control: llega una conexión"
                     : "control: llega otra y sustituye a la de antes")
                 self.connection?.cancel()
@@ -501,6 +526,8 @@ public final class NWLinkTransport: LinkTransport {
                 }
             }
             self.listener = listener
+            listenerQuietSinceNs = DispatchTime.now().uptimeNanoseconds
+            controlArrived = false
             citasAbiertas += 1
             citaLista = false
             listener.start(queue: queue)
@@ -637,6 +664,15 @@ public final class NWLinkTransport: LinkTransport {
         switch mode {
         case .advertise, .listen:
             state = .listening
+            // El vigía de la publicación cuenta desde aquí: el otro tiene que volver a
+            // llegar, a esta cita o a la que la sustituya. Los medios, si estaban arriba: los
+            // que había son de un enlace que ya no está.
+            listenerQuietSinceNs = DispatchTime.now().uptimeNanoseconds
+            controlArrived = false
+            if estabaArriba {
+                mediaListenerQuietSinceNs = listenerQuietSinceNs
+                mediaArrived = false
+            }
         case .browse, .connect:
             state = .connecting
             controlCandidateIndex += 1
@@ -764,6 +800,59 @@ public final class NWLinkTransport: LinkTransport {
             mediaBrowser = nil
             mediaCandidates = []
             openMediaBrowser()
+        }
+    }
+
+    // MARK: - El vigía de la publicación (2026-10-15)
+
+    /// El que publica cambia por otra la cita a la que en `republishAfterS` no ha llegado
+    /// nadie, sin enlace. Lo mismo que el vigía de la suscripción en el otro lado: un listener
+    /// de Wi-Fi Aware en espera no falla ni caduca, y uno publicado solo se renovaba al
+    /// caducar (~2 min). En el EMITIR del 2026-10-15 (11:36), los dos 5 min buscando.
+    private func startPublicationWatchdog() {
+        guard case .advertise = mode, let limite = rendezvous.republishAfterS, publicationWatchdog == nil else {
+            return
+        }
+        let paso = limite / Self.subscriptionChecksPerTimeout
+        let t = DispatchSource.makeTimerSource(queue: queue)
+        t.schedule(deadline: .now() + paso, repeating: paso)
+        t.setEventHandler { [weak self] in self?.checkPublications() }
+        publicationWatchdog = t
+        t.resume()
+    }
+
+    private func checkPublications() {
+        guard !stopped, let limite = rendezvous.republishAfterS else { return }
+        let ahora = DispatchTime.now().uptimeNanoseconds
+        let edad = { (ns: UInt64?) in ns.map { Double(ahora &- $0) / 1e9 } }
+        if let s = edad(listenerQuietSinceNs), Self.publicationIsStuck(
+            inUse: connection != nil, arrived: controlArrived, ageS: s, limitS: limite
+        ) {
+            republish(.control, afterS: s)
+        }
+        if let s = edad(mediaListenerQuietSinceNs), Self.publicationIsStuck(
+            inUse: state == .connected && peerMediaSinceConnect, arrived: mediaArrived, ageS: s, limitS: limite
+        ) {
+            republish(.media, afterS: s)
+        }
+    }
+
+    private func republish(_ canal: LinkChannel, afterS edad: Double) {
+        stats.republishes += 1
+        endedRendezvous.remove(canal)
+        let espera = (canal == .control ? esperaPor : nil).map { " (en espera: \($0))" } ?? ""
+        note(String(format: "%@: no ha llegado nadie a la cita en %.0f s%@: otra",
+                    canal == .control ? "control" : "medios", edad, espera))
+        switch canal {
+        case .control:
+            retire(listener)
+            listener = nil
+            citaLista = false
+            open()
+        case .media:
+            retire(mediaListener)
+            mediaListener = nil
+            openMedia()
         }
     }
 
@@ -947,10 +1036,14 @@ public final class NWLinkTransport: LinkTransport {
 
 
     private func openMediaListener(_ make: () throws -> NWListener) {
+        // Antes de crearlo: si falla, el vigía de la publicación cuenta desde aquí.
+        mediaListenerQuietSinceNs = DispatchTime.now().uptimeNanoseconds
+        mediaArrived = false
         do {
             let listener = try make()
             listener.newConnectionHandler = { [weak self] nueva in
                 guard let self else { return }
+                self.mediaArrived = true
                 self.note(self.mediaConnection == nil ? "medios: llega una conexión"
                     : "medios: llega otra y sustituye a la de antes")
                 self.mediaConnection?.cancel()
@@ -975,7 +1068,14 @@ public final class NWLinkTransport: LinkTransport {
             mediaListener = listener
             listener.start(queue: queue)
         } catch {
+            // Un listener de medios que no se pudo crear se reintenta, como uno que falla.
             log.error("medios sin listener: \(self.describe(error))")
+            note("medios sin listener: \(describe(error))")
+            guard case .advertise = mode else { return }
+            endedRendezvous.insert(.media)
+            queue.asyncAfter(deadline: .now() + Self.reconnectDelaysS[Self.reconnectDelaysS.count - 1]) {
+                [weak self] in self?.renewEndedRendezvous()
+            }
         }
     }
 

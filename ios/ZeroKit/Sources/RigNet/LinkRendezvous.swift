@@ -48,6 +48,11 @@ public protocol LinkRendezvous {
     /// enlace y sin un intento en marcha) antes de cambiarla por otra (2026-10-15). nil,
     /// nunca: un browser de Bonjour ve el anuncio en cuanto aparece.
     var resubscribeAfterS: Double? { get }
+
+    /// Segundos que el que publica deja a una cita (listener) sin que llegue nadie, sin
+    /// enlace, antes de cambiarla por otra (2026-10-15). nil, nunca: un anuncio de Bonjour
+    /// lo ve quien llegue.
+    var republishAfterS: Double? { get }
 }
 
 extension LinkRendezvous {
@@ -60,6 +65,8 @@ extension LinkRendezvous {
     public var silenceTimeoutS: Double? { nil }
 
     public var resubscribeAfterS: Double? { nil }
+
+    public var republishAfterS: Double? { nil }
 }
 
 /// Bonjour por una interfaz: `.wiredEthernet` en el campo, `.wifi` en el banco y `nil`

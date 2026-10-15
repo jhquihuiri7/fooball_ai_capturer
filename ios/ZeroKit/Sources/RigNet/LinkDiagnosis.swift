@@ -36,6 +36,8 @@ public struct LinkDiagnosis: Equatable, Sendable {
     public var rendezvousOpened: Int
     /// Suscripciones cambiadas por el vigía porque no daban con nadie.
     public var resubscribes: Int
+    /// Citas del que publica cambiadas por el vigía porque no llegaba nadie.
+    public var republishes: Int
     /// Conexiones de control intentadas (el que busca) o llegadas (el que publica).
     public var controlAttempts: Int
     /// Segundos sin el control arriba (desde el arranque o la última caída); nil, arriba.
@@ -45,7 +47,7 @@ public struct LinkDiagnosis: Equatable, Sendable {
         role: Role, medium: String, state: LinkTransportState, waiting: String? = nil,
         lastRendezvousEnd: String? = nil, lastDrop: String? = nil, rendezvousReady: Bool = false,
         announcements: Int = 0, mediaAnnouncements: Int = 0, rendezvousOpened: Int = 0, resubscribes: Int = 0,
-        controlAttempts: Int = 0, withoutLinkS: Double? = nil
+        republishes: Int = 0, controlAttempts: Int = 0, withoutLinkS: Double? = nil
     ) {
         self.role = role
         self.medium = medium
@@ -58,6 +60,7 @@ public struct LinkDiagnosis: Equatable, Sendable {
         self.mediaAnnouncements = mediaAnnouncements
         self.rendezvousOpened = rendezvousOpened
         self.resubscribes = resubscribes
+        self.republishes = republishes
         self.controlAttempts = controlAttempts
         self.withoutLinkS = withoutLinkS
     }
@@ -76,9 +79,9 @@ public struct LinkDiagnosis: Equatable, Sendable {
         default:
             break
         }
-        let citas = "\(rendezvousOpened) citas, \(resubscribes) rehechas"
+        let citas = "\(rendezvousOpened) citas, \(role == .publishes ? republishes : resubscribes) rehechas"
         if let waiting {
-            return role == .publishes ? "la cita no se publica: \(waiting)"
+            return role == .publishes ? "la cita no se publica: \(waiting) (\(citas))"
                 : "la suscripción espera: \(waiting) (\(citas))"
         }
         if case let .failed(motivo) = state {
@@ -87,7 +90,7 @@ public struct LinkDiagnosis: Equatable, Sendable {
         switch role {
         case .publishes:
             guard rendezvousReady else { return "la cita aún no está publicada\(hace)" }
-            guard controlAttempts > 0 else { return "publicando; no ha llegado nadie\(hace)" }
+            guard controlAttempts > 0 else { return "publicando; no ha llegado nadie\(hace) (\(citas))" }
             return "llegaron \(controlAttempts) conexiones y no sigue ninguna; la última: \(lastDrop ?? "?")"
         case .searches:
             if controlAttempts > 0 {
@@ -114,6 +117,7 @@ public struct LinkDiagnosis: Equatable, Sendable {
             "media_announcements": mediaAnnouncements,
             "rendezvous_opened": rendezvousOpened,
             "resubscribes": resubscribes,
+            "republishes": republishes,
             "control_attempts": controlAttempts,
             "without_link_s": withoutLinkS ?? -1,
         ]

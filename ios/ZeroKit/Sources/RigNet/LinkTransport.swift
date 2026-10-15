@@ -45,6 +45,10 @@ public struct LinkTransportStats: Equatable, Sendable {
     /// dieron con nadie (Wi-Fi Aware, 2026-10-15).
     public var resubscribes = 0
 
+    /// Citas del que publica cambiadas por otras porque en el plazo de la cita no llegó
+    /// nadie a ellas, publicadas o en espera (Wi-Fi Aware, 2026-10-15).
+    public var republishes = 0
+
     /// Bytes recibidos por control (TCP). En el maestro son sobre todo las miniaturas del
     /// esclavo, a 1 Hz.
     public var controlBytesReceived = 0

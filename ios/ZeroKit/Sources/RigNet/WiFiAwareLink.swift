@@ -84,6 +84,15 @@ public enum WiFiAwareTimings {
     /// espera o que no ve nada no tiene por qué caducar: en el plan B del 2026-10-15 (09:02)
     /// el esclavo no enlazó en 10 min mientras el maestro volvía a publicar seis veces.
     public static let resubscribeAfterS: Double = 20
+
+    /// Segundos sin que llegue nadie a la cita del que publica, sin enlace, tras los que se
+    /// cambia por otra (2026-10-15). Un listener de Wi-Fi Aware en espera («Network is
+    /// down») no falla ni caduca, y uno publicado al que nadie llega solo se renovaba al
+    /// caducar, a los ~2 min: los enlaces de 124 s del 2026-10-15 (09:04) son esa caducidad,
+    /// y en el EMITIR de las 11:36 los dos se quedaron 5 min buscando. Una cita viva recibe
+    /// la conexión del que busca en 2,4-6,3 s (2026-10-08); 30 s dejan de sobra a una que va
+    /// a llegar, y no coincide con el ritmo de las suscripciones (20 s).
+    public static let republishAfterS: Double = 30
 }
 
 public enum WiFiAwareLinkError: Error, CustomStringConvertible {
@@ -133,6 +142,8 @@ public struct WiFiAwareRendezvous: LinkRendezvous {
     public var silenceTimeoutS: Double? { WiFiAwareTimings.silenceTimeoutS }
 
     public var resubscribeAfterS: Double? { WiFiAwareTimings.resubscribeAfterS }
+
+    public var republishAfterS: Double? { WiFiAwareTimings.republishAfterS }
 
     public static var isSupported: Bool {
         WACapabilities.supportedFeatures.contains(.wifiAware)

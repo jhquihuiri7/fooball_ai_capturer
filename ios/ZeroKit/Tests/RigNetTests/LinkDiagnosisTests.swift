@@ -36,8 +36,9 @@ final class LinkDiagnosisTests: XCTestCase {
                        "ve al otro; conectando")
         // El maestro: publicando y sin nadie, o con conexiones que no siguen.
         XCTAssertEqual(
-            D(role: .publishes, medium: "aware", state: .listening, rendezvousReady: true, withoutLinkS: 600).summary(),
-            "publicando; no ha llegado nadie en 600 s"
+            D(role: .publishes, medium: "aware", state: .listening, rendezvousReady: true, rendezvousOpened: 21,
+              republishes: 20, withoutLinkS: 600).summary(),
+            "publicando; no ha llegado nadie en 600 s (21 citas, 20 rehechas)"
         )
         XCTAssertEqual(
             D(role: .publishes, medium: "aware", state: .listening, lastDrop: "silencio de 3.2 s", rendezvousReady: true,
@@ -45,8 +46,9 @@ final class LinkDiagnosisTests: XCTestCase {
             "llegaron 2 conexiones y no sigue ninguna; la última: silencio de 3.2 s"
         )
         XCTAssertEqual(
-            D(role: .publishes, medium: "aware", state: .listening, waiting: "Device not configured").summary(),
-            "la cita no se publica: Device not configured"
+            D(role: .publishes, medium: "aware", state: .listening, waiting: "Device not configured",
+              rendezvousOpened: 3, republishes: 2).summary(),
+            "la cita no se publica: Device not configured (3 citas, 2 rehechas)"
         )
         XCTAssertEqual(D(role: .searches, medium: "aware", state: .failed("sin entitlement")).summary(),
                        "la cita falló: sin entitlement; se reintenta")
