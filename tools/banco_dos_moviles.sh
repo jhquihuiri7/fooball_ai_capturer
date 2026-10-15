@@ -25,6 +25,11 @@
 # el programa (.ts y .mov), sus vistas por instante (program-views-<t>.jsonl), el N0 del
 # maestro (n0/banco-<t>-<lado>.jsonl) y las 4K (bench4k/<t>/<lado>-<t>.mov, ~3,4 GB cada
 # una). SIN_4K=1 no trae las 4K (se quedan en el móvil).
+#
+# La cancha (2026-10-14, tools/plan_b_cancha.sh): SOLO_LANZAR=1 lanza y sale sin esperar ni
+# recoger (los cables se pueden quitar; se recoge después con tools/recoger_partido.sh), y
+# APPS=<carpeta> instala las apps ya compiladas <carpeta>/auto-left.app y auto-right.app en vez
+# de compilar allí.
 set -euo pipefail
 
 MODO=${1:?split o link90}
@@ -35,7 +40,7 @@ DER=${DER:-11BE5E85-F450-5C4B-B19E-ADA3EF036831}   # iPhone 16 Pro
 FLUTTER=${FLUTTER:-/Users/alexander/flutter_3.44.8/bin/flutter}
 APP=com.logicielapplab.zero
 RAIZ=$(cd "$(dirname "$0")/.." && pwd)
-SALIDA="$RAIZ/bench/dos-moviles-$(date +%Y%m%d-%H%M)"
+SALIDA=${SALIDA:-"$RAIZ/bench/dos-moviles-$(date +%Y%m%d-%H%M)"}
 mkdir -p "$SALIDA"
 INICIO=$(date +%s)  # los informes de esta pasada son posteriores: los viejos no se recogen
 
@@ -54,6 +59,11 @@ PY
 }
 
 instala() {  # $1 dispositivo, $2 dart-defines
+  local guardada="${APPS:-}/auto-${2##*AUTO_ROLE=}.app"
+  if [ -n "${APPS:-}" ] && [ -d "$guardada" ]; then
+    xcrun devicectl device install app --device "$1" "$guardada" | grep -c "App installed"
+    return
+  fi
   (cd "$RAIZ" && $FLUTTER build ios --release $2 2>&1 | grep -E "Built|rror")
   xcrun devicectl device install app --device "$1" "$RAIZ/build/ios/iphoneos/Runner.app" | grep -c "App installed"
 }
@@ -163,6 +173,12 @@ case "$MODO" in
     EXTRA="{\"RIG_SPLIT\": \"1\", \"RIG_SPLIT_S\": \"$SEG\", \"RIG_CALIB_AT_S\": \"30\", \"RIG_ADS\": \"bench.json\"}"
     lanza "$IZQ" left "$EXTRA"
     lanza "$DER" right "$EXTRA"
+    if [ -n "${SOLO_LANZAR:-}" ]; then
+      echo "$INICIO" > "$SALIDA/lanzado.txt"
+      echo "Lanzado a las $(date -r "$INICIO" +%T); termina sola a las $(date -r $(( INICIO + SEG )) +%T)."
+      echo "Ya se pueden quitar los cables. Para recoger: tools/recoger_partido.sh --desde $(( INICIO - MARGEN_RELOJ_S ))"
+      exit 0
+    fi
     espera $(( SEG + 45 ))
     ;;
   link90)
