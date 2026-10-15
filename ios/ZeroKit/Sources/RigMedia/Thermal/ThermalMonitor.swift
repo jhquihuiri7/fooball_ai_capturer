@@ -14,14 +14,27 @@ public final class ThermalMonitor {
     private var thermalObserver: NSObjectProtocol?
     private var pressureObservation: NSKeyValueObservation?
 
-    public private(set) var thermal: ThermalLevel
-    public private(set) var pressure: PressureLevel = .nominal
+    /// Los niveles se escriben en el hilo principal y se leen también desde la cola del
+    /// programa (la escalera de IOS-06 en el banco split y EMITIR): van tras un candado.
+    private let lock = NSLock()
+    private var thermalNow: ThermalLevel
+    private var pressureNow: PressureLevel = .nominal
+
+    public private(set) var thermal: ThermalLevel {
+        get { lock.lock(); defer { lock.unlock() }; return thermalNow }
+        set { lock.lock(); thermalNow = newValue; lock.unlock() }
+    }
+
+    public private(set) var pressure: PressureLevel {
+        get { lock.lock(); defer { lock.unlock() }; return pressureNow }
+        set { lock.lock(); pressureNow = newValue; lock.unlock() }
+    }
 
     /// Se llama con cada cambio, con los dos niveles vigentes.
     public var onUpdate: ((ThermalLevel, PressureLevel) -> Void)?
 
     public init() {
-        thermal = Self.level(from: ProcessInfo.processInfo.thermalState)
+        thermalNow = Self.level(from: ProcessInfo.processInfo.thermalState)
         thermalObserver = NotificationCenter.default.addObserver(
             forName: ProcessInfo.thermalStateDidChangeNotification,
             object: nil,

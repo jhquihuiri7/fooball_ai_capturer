@@ -120,8 +120,16 @@ public final class RigLinkSession {
     public let health = PeerHealth()
     /// Cada cambio de salud del otro (en la cola de la sesión).
     public var onPeerState: ((PeerState) -> Void)?
-    /// Lo que este móvil cuenta de sí en su latido.
+    /// Lo que este móvil cuenta de sí en su latido. El nivel de la escalera, desde otro
+    /// hilo, con `setLadderLevel`.
     public var ladderLevel: UInt8 = 0
+    /// El nivel de la escalera del otro, de su latido (IOS-06): con el primer latido de
+    /// cada sesión y cada vez que cambia, en la cola de la sesión.
+    public var onPeerLadder: ((UInt8) -> Void)?
+    private var peerLadderHeard: UInt8?
+    /// El esclavo recibe la cadencia común que fija el maestro (IOS-25): `command` con
+    /// `kind: cadence`.
+    public var onCadence: ((CadenceCommand) -> Void)?
     public var cameraOk = true
     public var recording = false
     public var sendingParts = false
@@ -264,6 +272,7 @@ public final class RigLinkSession {
     }
 
     private func resetSession() {
+        peerLadderHeard = nil
         sessionKey = nil
         sessionId = 0
         seqControl = 0
@@ -528,6 +537,22 @@ public final class RigLinkSession {
 
     static let calibrationCaptureKind = "calibration_capture"
 
+    /// El maestro fija la cadencia común de detección (IOS-25, ADR 0023 §5): `command` por
+    /// control, en JSON, con `kind: cadence`. El esclavo no la manda.
+    public func send(cadence: CadenceCommand) {
+        queue.async { [self] in
+            guard isMaster, case .connected = state,
+                  let payload = try? JSONSerialization.data(withJSONObject: cadence.json, options: [.sortedKeys])
+            else { return }
+            send(type: .command, payload: payload, seq: nextControlSeq())
+        }
+    }
+
+    /// El nivel de la escalera que cuenta el latido (IOS-06), desde cualquier hilo.
+    public func setLadderLevel(_ nivel: UInt8) {
+        queue.async { [self] in ladderLevel = nivel }
+    }
+
     /// El maestro pide un IDR, por control, con el part_seq del hueco.
     public func requestIdr(partSeq: UInt32) {
         queue.async { [self] in
@@ -610,6 +635,10 @@ public final class RigLinkSession {
         case .heartbeat:
             guard let hb = Heartbeat.decode(frame.payload) else { return }
             health.heard(hb, nowMs: llegada / 1_000_000)
+            if hb.ladderLevel != peerLadderHeard {
+                peerLadderHeard = hb.ladderLevel
+                onPeerLadder?(hb.ladderLevel)
+            }
         case .detections:
             guard isMaster, let (ms, cajas) = DetectionsPayload.decode(frame.payload) else { return }
             onDetections?(Int64(frame.rigMs), Double(ms), cajas.compactMap(\.detection))
@@ -621,11 +650,18 @@ public final class RigLinkSession {
             onColorMeans?(bgr)
         case .command:
             guard !isMaster,
-                  let orden = try? JSONSerialization.jsonObject(with: frame.payload) as? [String: Any],
-                  orden["kind"] as? String == Self.calibrationCaptureKind,
-                  let destinos = orden["targets"] as? [NSNumber]
+                  let orden = try? JSONSerialization.jsonObject(with: frame.payload) as? [String: Any]
             else { return }
-            onCalibrationCapture?(destinos.map(\.int64Value))
+            switch orden["kind"] as? String {
+            case Self.calibrationCaptureKind:
+                guard let destinos = orden["targets"] as? [NSNumber] else { return }
+                onCalibrationCapture?(destinos.map(\.int64Value))
+            case CadenceCommand.kind:
+                guard let cadencia = CadenceCommand(json: orden) else { return }
+                onCadence?(cadencia)
+            default:
+                break
+            }
         default:
             break
         }

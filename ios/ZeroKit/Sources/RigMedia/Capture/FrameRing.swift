@@ -114,6 +114,18 @@ public final class FrameRing {
         return slots.filter(\.occupied).map(\.rigMs).sorted()
     }
 
+    /// El instante del fotograma más nuevo, o nil con el anillo vacío. Sin reservar memoria:
+    /// el tic de detección lo mira a 30 Hz (IOS-06/IOS-25).
+    public func latestRigMs() -> Int64? {
+        lock.lock()
+        defer { lock.unlock() }
+        var ultimo: Int64?
+        for indice in slots.indices where slots[indice].occupied {
+            if ultimo.map({ slots[indice].rigMs > $0 }) ?? true { ultimo = slots[indice].rigMs }
+        }
+        return ultimo
+    }
+
     public func acquire(nearest rigMs: Int64, maxDistanceMs: Int64 = .max) -> Lease? {
         lock.lock()
         defer { lock.unlock() }

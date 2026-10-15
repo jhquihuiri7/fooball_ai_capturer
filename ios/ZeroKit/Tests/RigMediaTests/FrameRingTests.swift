@@ -41,6 +41,18 @@ final class FrameRingTests: XCTestCase {
         XCTAssertNil(ring.acquire(nearest: 500, maxDistanceMs: 100))
     }
 
+    func testElMasNuevoSinReservar() throws {
+        let ring = try makeRing()
+        XCTAssertNil(ring.latestRigMs(), "vacío")
+        sello(ring, 133)
+        sello(ring, 100)
+        XCTAssertEqual(ring.latestRigMs(), 133)
+        sello(ring, 166)
+        sello(ring, 200)  // pisa el más viejo (100)
+        XCTAssertEqual(ring.latestRigMs(), 200)
+        XCTAssertEqual(ring.latestRigMs(), ring.availableRigMs().last)
+    }
+
     func testAReferencedFrameIsNeverOverwritten() throws {
         let ring = try makeRing(slots: 2)
         sello(ring, 10)

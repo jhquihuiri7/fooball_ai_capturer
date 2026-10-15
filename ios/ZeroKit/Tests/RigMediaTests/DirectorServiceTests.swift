@@ -57,6 +57,34 @@ final class DirectorServiceTests: XCTestCase {
         XCTAssertEqual(director.cyclesIngested, Int(k - 1))
     }
 
+    func testConLaIaDeLaEscaleraApagadaIgnoraLasCajasYVaAlPlanoAbierto() throws {
+        // L2 en cualquiera de los dos móviles (IOS-06): la común apaga la IA del director, que
+        // ignora lo que aún llegue y vuelve al plano abierto, centrado.
+        let rig = try soporte()
+        let loop = try DirectorLoop(
+            rig: rig, canvas: CylindricalCanvas.fit(rig, pitchLimitsRad: (-0.5, 0.1)),
+            width: 1280, height: 720, plan: ShotPlan.at(), frameDurationMs: 1000.0 / 30
+        )
+        let director = DirectorService(loop: loop)
+        var maestro = LadderGovernor()
+        maestro.setPeer(level: .l2)  // el esclavo, caliente
+        director.setAI(enabled: maestro.actions(isMaster: true).aiEnabled)
+        let grupo = [RigDirection(yawRad: 0.5, pitchRad: -0.2)]
+        var t: Int64 = 0
+        for k in 1...(30 * 20) {
+            t = Int64((Double(k) * 1000 / 30).rounded())
+            if k % 4 == 0 {
+                director.receive(side: .right, targetRigMs: t, detections: cajas(rig, .right, grupo))
+                director.receive(side: .left, targetRigMs: t, detections: cajas(rig, .left, grupo))
+            }
+            _ = try director.tick(targetRigMs: t)
+        }
+        let v = try director.tick(targetRigMs: t + 33).view
+        XCTAssertEqual(v.hfovRad, loop.limits.hfovHigh, accuracy: 0.05, "el plano más abierto")
+        XCTAssertEqual(v.yawRad, (loop.limits.yawLow + loop.limits.yawHigh) / 2, accuracy: 0.05, "centrado")
+        XCTAssertNil(loop.evidence, "las cajas no llegaron a la acción")
+    }
+
     func testSoloUnaCamaraSigueDirigiendoYPlanoAbiertoSeQuedaQuieto() throws {
         let rig = try soporte()
         let loop = try DirectorLoop(

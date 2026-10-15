@@ -150,7 +150,13 @@ public struct DegradationLadder: Sendable {
         charging: Bool,
         dtS: Double
     ) -> LadderLevel {
-        let objetivo = Self.target(thermal: thermal, pressure: pressure, charging: charging)
+        step(target: Self.target(thermal: thermal, pressure: pressure, charging: charging), dtS: dtS)
+    }
+
+    /// El mismo paso con el objetivo ya decidido: el de los sensores o el forzado de un
+    /// banco (LadderForce), que pasa por la misma histéresis.
+    @discardableResult
+    public mutating func step(target objetivo: LadderLevel, dtS: Double) -> LadderLevel {
         if objetivo >= level {
             level = objetivo
             recoverS = 0

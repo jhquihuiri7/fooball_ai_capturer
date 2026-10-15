@@ -37,6 +37,9 @@ public struct ProgramRunConfig: Equatable, Sendable {
     /// Lo que solo sirve para medir: el .ts del programa y las vistas por instante
     /// (SPK-04, REF-41). La emisión guarda solo la copia .mov de IOS-57.
     public var benchFiles: Bool
+    /// El nivel forzado de la escalera (RIG_LADDER_FORCE…), solo en el banco: EMITIR la
+    /// deja siempre a sus sensores.
+    public var ladderForce: LadderForce?
 
     /// Lo que dura el banco si RIG_SPLIT_S no dice otra cosa: los 10 min de IOS-44, en s.
     public static let benchDefaultDurationS = 600.0
@@ -47,7 +50,7 @@ public struct ProgramRunConfig: Equatable, Sendable {
 
     public init(
         purpose: Purpose, durationS: Double, director: Bool, publish: Bool, record4K: Bool,
-        detectorPackage: String?, partBitrateBps: Int, benchFiles: Bool
+        detectorPackage: String?, partBitrateBps: Int, benchFiles: Bool, ladderForce: LadderForce? = nil
     ) {
         self.purpose = purpose
         self.durationS = durationS
@@ -57,6 +60,7 @@ public struct ProgramRunConfig: Equatable, Sendable {
         self.detectorPackage = detectorPackage
         self.partBitrateBps = partBitrateBps
         self.benchFiles = benchFiles
+        self.ladderForce = ladderForce
     }
 
     /// El banco split, como siempre: todo del entorno.
@@ -71,7 +75,8 @@ public struct ProgramRunConfig: Equatable, Sendable {
             record4K: env["RIG_SPLIT_RECORD_4K"] == "1",
             detectorPackage: env["RIG_DETECT"],
             partBitrateBps: parteBps ?? medio.partBitrateBps,
-            benchFiles: true
+            benchFiles: true,
+            ladderForce: LadderForce.parse(environment: env)
         )
     }
 

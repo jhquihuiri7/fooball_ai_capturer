@@ -301,6 +301,40 @@ final class RigLinkSessionTests: XCTestCase {
         XCTAssertTrue(cableLeft.sentFrames(of: .part).isEmpty)
     }
 
+    // MARK: - La escalera (IOS-06, IOS-25)
+
+    func testLaEscaleraDelEsclavoVaEnSuLatidoYLaCadenciaComunEnUnaOrden() throws {
+        let (left, right, cableLeft, cableRight) = makePair()
+        let lock = NSLock()
+        nonisolated(unsafe) var oidosEnElMaestro: [UInt8] = []
+        nonisolated(unsafe) var ordenes: [CadenceCommand] = []
+        left.onPeerLadder = { n in lock.lock(); oidosEnElMaestro.append(n); lock.unlock() }
+        right.onCadence = { c in lock.lock(); ordenes.append(c); lock.unlock() }
+        left.start()
+        right.start()
+        waitUntil { self.isConnected(left) && self.isConnected(right) }
+
+        // El primer latido trae el nivel (0); el cambio a L2, una vez, aunque lleguen diez.
+        waitUntil { lock.lock(); defer { lock.unlock() }; return oidosEnElMaestro == [0] }
+        right.setLadderLevel(2)
+        waitUntil { lock.lock(); defer { lock.unlock() }; return oidosEnElMaestro == [0, 2] }
+        usleep(300_000)
+        lock.lock()
+        XCTAssertEqual(oidosEnElMaestro, [0, 2], "solo los cambios")
+        lock.unlock()
+
+        // El maestro fija la común; el esclavo no manda órdenes.
+        left.send(cadence: CadenceCommand(level: .l2))
+        right.send(cadence: CadenceCommand(level: .l4))
+        waitUntil { lock.lock(); defer { lock.unlock() }; return ordenes == [CadenceCommand(level: .l2)] }
+        XCTAssertTrue(cableRight.sentFrames(of: .command).isEmpty)
+        let enviada = try XCTUnwrap(cableLeft.sentFrames(of: .command).first)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: enviada.payload) as? [String: Any])
+        XCTAssertEqual(json["kind"] as? String, "cadence")
+        XCTAssertEqual(json["level"] as? Int, 2)
+        XCTAssertEqual(json["ai"] as? Bool, false)
+    }
+
     // MARK: - Apretón
 
     func testTheSameSecretConnectsBothSides() {
