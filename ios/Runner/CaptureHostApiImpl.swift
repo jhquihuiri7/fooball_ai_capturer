@@ -369,6 +369,7 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
         stopProgramRun()
         split?.stop()
         split = nil
+        engine.programLadderLevel = nil
         linkMedium = nil
         calibPairs = nil
         ThumbHub.shared.stop()
@@ -409,6 +410,10 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
         s.stopLocal4K = { [weak self] in self?.engine.stopRecording() }
         s.local4KFrames = { [weak self] in self?.engine.recordedFrames ?? 0 }
         s.local4KClock = { [weak self] in self?.engine.recordingClockReport() ?? [:] }
+        // IOS-06: la escalera de la pasada lee los sensores de la cámara, actúa y es la que
+        // enseña la pantalla mientras dura.
+        s.ladderSensors = { [weak self] in self?.engine.ladderSensorTarget() ?? .l0 }
+        engine.programLadderLevel = { [weak s] in s?.currentLadderLevel }
         return s
     }
 
@@ -439,6 +444,7 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
         guard let s = program else { return }
         program = nil
         engine.onAacFrame = nil
+        engine.programLadderLevel = nil
         DispatchQueue.global(qos: .userInitiated).async { s.stop() }
     }
 

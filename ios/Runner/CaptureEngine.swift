@@ -29,10 +29,13 @@ final class CaptureEngine: NSObject {
 
     private let publisher = StreamPublisher()
 
-    // IOS-06: los sensores y la escalera. Hoy observan y se enseñan en el estado; las
-    // acciones gobernarán el pipeline cuando IOS-25/IOS-44/IOS-50 las consuman.
+    // IOS-06: los sensores y la escalera. Sin pasada del programa, la escalera de aquí solo
+    // se enseña; con el banco split o EMITIR, actúa la de la pasada (SplitBench con
+    // LadderGovernor), que lee estos sensores y es la que se enseña.
     private let thermalMonitor = ThermalMonitor()
     private var ladder = DegradationLadder()
+    /// El nivel de la escalera de la pasada del programa en marcha, si la hay.
+    var programLadderLevel: (() -> LadderLevel?)?
 
     // IOS-09: el enganche del pipeline. Copia cada fotograma al anillo propio sin
     // retener más de un búfer de la cámara; sus consumidores llegan con IOS-23+.
@@ -966,7 +969,7 @@ final class CaptureEngine: NSObject {
             intrinsicsAvailable: intrinsicsAvailable,
             thermalState: Self.thermalState(),
             pressure: Self.pressure(thermalMonitor.pressure),
-            ladderLevel: Int64(stepLadder().rawValue),
+            ladderLevel: Int64((programLadderLevel?() ?? stepLadder()).rawValue),
             batteryLevel: Double(UIDevice.current.batteryLevel),
             freeDiskBytes: libre,
             droppedFrames: droppedFrames,
@@ -999,18 +1002,30 @@ final class CaptureEngine: NSObject {
         }
     }
 
+    /// Lo que piden los sensores ahora, sin histéresis: el objetivo de la escalera de la
+    /// pasada del programa. Se llama desde su cola: la presión va tras el candado del monitor.
+    func ladderSensorTarget() -> LadderLevel {
+        DegradationLadder.target(
+            thermal: ThermalMonitor.level(from: ProcessInfo.processInfo.thermalState),
+            pressure: thermalMonitor.pressure,
+            charging: Self.charging()
+        )
+    }
+
+    private static func charging() -> Bool {
+        UIDevice.current.batteryState == .charging || UIDevice.current.batteryState == .full
+    }
+
     /// Avanza la escalera con el tiempo real transcurrido desde la última foto.
     /// El estado se pide a 1 Hz desde Dart, así que este es su tic.
     private func stepLadder() -> LadderLevel {
         let ahora = CMClockGetTime(CMClockGetHostTimeClock())
         let dt = max(0, CMTimeGetSeconds(CMTimeSubtract(ahora, ladderSteppedAt)))
         ladderSteppedAt = ahora
-        let cargando = UIDevice.current.batteryState == .charging
-            || UIDevice.current.batteryState == .full
         return ladder.step(
             thermal: ThermalMonitor.level(from: ProcessInfo.processInfo.thermalState),
             pressure: thermalMonitor.pressure,
-            charging: cargando,
+            charging: Self.charging(),
             dtS: dt
         )
     }

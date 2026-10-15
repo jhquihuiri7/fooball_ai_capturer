@@ -757,6 +757,11 @@ final class LinkPartsLoad {
 //                           IOS-68), o al de RIG_SRT_HOST, RIG_SRT_PORT (8890), RIG_SRT_USER,
 //                           RIG_SRT_PASS y RIG_SRT_PASSPHRASE si se dan (pruebas). Ninguno de
 //                           esos valores sale en el log ni en el informe: solo host y puerto.
+//   RIG_LADDER_FORCE        L0..L4: fuerza el objetivo de la escalera de degradación (IOS-06)
+//                           en el banco, con RIG_LADDER_FORCE_AT_S (desde, 0),
+//                           RIG_LADDER_FORCE_UNTIL_S (hasta; sin él, al final) y
+//                           RIG_LADDER_FORCE_SIDE (left o right; sin él, los dos). Ver
+//                           LadderForce; EMITIR no lo mira
 //   RIG_NOMINAL_YAW_DEG     sin Documents/rig.json, la apertura de cada cámara (DEFAULT_RIG_YAW_DEG)
 //   RIG_NOMINAL_HFOV_DEG    y su HFOV (106, la ultra gran angular)
 //   RIG_NOMINAL_PITCH_DEG   y su pitch (DEFAULT_RIG_PITCH_DEG)
@@ -772,6 +777,15 @@ final class LinkPartsLoad {
 // detector (si su paquete está en Documents/bench-resources) y el SRT; la copia del programa
 // va a Documents/program-<partido>-<t>.mov (IOS-57) y sin el .ts ni las vistas. Lo de medir
 // sigue leyéndose del entorno y sin él no hace nada.
+//
+// IOS-06 (2026-10-15): la escalera de degradación ACTÚA en el banco y en EMITIR
+// (LadderGovernor). Una vez por segundo avanza con los sensores del CaptureEngine y su nivel
+// va en el latido. La IA de los dos sigue la peor de las dos escaleras: el maestro la manda
+// con la orden `cadence` y cada uno detecta en los instantes k/hz del soporte (DetectionGate);
+// con la IA apagada (L2), sin detecciones y el director al plano abierto. L3 baja el bitrate
+// del programa ×0,6 (el techo del publicador o, sin él, el codificador). En L4 el esclavo deja
+// de pintar su parte y el maestro sigue con una lente. El informe trae `ladder_by_minute`,
+// `ladder_ai_by_minute`, `detect_runs_by_minute` y `ladder` (cambios y acciones en vigor).
 //
 // SPK-04: el maestro escribe además Documents/bench/program-views-<t>.jsonl, una línea por
 // instante del programa con la vista de verdad, los fotogramas de cada móvil y la GPU (lo
@@ -996,7 +1010,65 @@ final class SplitBench {
         if env["RIG_DETECT_CHAIN"] == "vision" { return DetectLoad(package: paquete) }
         return MetalDetectLoad(package: paquete, side: side)
     }()
-    private var detectTicks = 0
+    // MARK: IOS-06: la escalera actuando
+
+    /// Lo que piden los sensores ahora, sin histéresis (térmica, presión de la cámara y
+    /// carga). Lo da el CaptureEngine, que observa la presión del dispositivo; sin él, la
+    /// térmica y la carga.
+    var ladderSensors: () -> LadderLevel = {
+        DegradationLadder.target(thermal: ThermalMonitor.level(from: ProcessInfo.processInfo.thermalState),
+                                 pressure: .nominal, charging: UIDevice.current.batteryState != .unplugged)
+    }
+    private var governor: LadderGovernor
+    /// Las acciones en vigor, rehechas en cada paso y con cada noticia del otro móvil.
+    private var ladderActions = LadderActions.actions(for: .l0, role: .master)
+    /// Qué instante de la rejilla toca detectar, a la cadencia de la escalera común.
+    private var detectGate = DetectionGate(frameDurationMs: 1000 / SplitBench.fps)
+    private var nextLadderS = 0.0
+    private var lastLadderStepNs: UInt64?
+    /// El nivel del último latido del otro, y si está caído (IOS-81): caído, no cuenta.
+    private var peerLadderHeard: LadderLevel?
+    private var peerDown = false
+    /// La última orden `cadence` del maestro y cuándo salió, en s de la pasada.
+    private var cadenceSent: LadderLevel?
+    private var cadenceSentAtS = -Double.infinity
+    private var cadenceCommandsSent = 0
+    private var cadenceCommandsReceived = 0
+    /// El maestro va con una lente (esclavo caído o en L4): lo último aplicado.
+    private var singleLensApplied = false
+    /// El factor del bitrate del programa ya aplicado (al techo del publicador o al codificador).
+    private var programBitrateFactorApplied: Double?
+    /// L4 en el esclavo: su parte, parada. Se lee en el hilo del pipeline, tras `lock`.
+    private var partPaused = false
+    private var partFramesPaused = 0
+    /// Por minuto, como la térmica: el nivel de este móvil, el de su IA (el común) y las
+    /// detecciones acumuladas.
+    private var ladderByMinute: [Int] = []
+    private var ladderAiByMinute: [Int] = []
+    private var detectRunsAtMinute: [Int] = []
+    /// Cada cambio de la escalera (la propia, la del otro, la común o la orden), con su
+    /// instante y lo que se aplicó; acotado a `maxLadderChanges`.
+    private var ladderChanges: [[String: Any]] = []
+    private var ladderChangesDropped = 0
+    private var ladderMark: LadderMark?
+    private static let maxLadderChanges = 256
+    /// Los últimos cambios que van en el latido.
+    private static let liveLadderChanges = 20
+    /// Instantes de detección sin un fotograma a ≤½ fotograma en el anillo.
+    private var detectMissingFrame = 0
+    /// El nivel de la escalera de este móvil para la pantalla (tras `lock`).
+    private var ladderLevelShown = LadderLevel.l0
+
+    /// Lo que se apunta como cambio de la escalera.
+    private struct LadderMark: Equatable {
+        var level: LadderLevel
+        var ai: LadderLevel
+        var peer: LadderLevel?
+        var commanded: LadderLevel?
+        var forced: Bool
+        var master: Bool
+    }
+
     /// IOS-64: la CPU del proceso al arrancar el banco, para su coste medio en el informe.
     private let cpuStartS = SplitBench.processCpuSeconds()
     private var cameraOnDone = false
@@ -1019,6 +1091,7 @@ final class SplitBench {
         let ajustes = config ?? .bench(environment: environment)
         self.config = ajustes
         durationS = ajustes.durationS
+        governor = LadderGovernor(force: ajustes.ladderForce.flatMap { $0.applies(to: side) ? $0 : nil })
     }
 
     private func number(_ key: String, _ def: Double) -> Double {
@@ -1086,15 +1159,34 @@ final class SplitBench {
         }
         session.onNoPart = { [weak self] nada in self?.master?.receive(noPart: nada) }
         // IOS-81: con el esclavo caído, una lente y sin esperar su parte; al volver, las dos.
+        // IOS-06: caído, su escalera no cuenta, y en el esclavo la orden del maestro caduca.
         session.onPeerState = { [weak self] estado in
             self?.queue.async {
-                guard let self, self.session.isMaster else { return }
-                self.peerStates.append("\(self.rigNowMs()):\(estado.rawValue)")
-                self.peerStatesFootprintMb.append(Self.footprintMb())
-                if estado == .up { self.linkTimeline.mark(.peerUp) }
-                let caido = estado == .down
-                self.master?.peerDown = caido
-                self.director?.setSingleLens(caido ? self.side : nil)
+                guard let self else { return }
+                self.peerDown = estado == .down
+                if self.peerDown { self.governor.setCommanded(level: nil) }
+                if self.session.isMaster {
+                    self.peerStates.append("\(self.rigNowMs()):\(estado.rawValue)")
+                    self.peerStatesFootprintMb.append(Self.footprintMb())
+                    if estado == .up { self.linkTimeline.mark(.peerUp) }
+                }
+                self.applyLadder()
+            }
+        }
+        // IOS-06: el nivel del otro, de su latido; y en el esclavo, la cadencia común.
+        session.onPeerLadder = { [weak self] nivel in
+            self?.queue.async {
+                guard let self else { return }
+                self.peerLadderHeard = LadderLevel(rawValue: Int(nivel))
+                self.applyLadder()
+            }
+        }
+        session.onCadence = { [weak self] orden in
+            self?.queue.async {
+                guard let self else { return }
+                self.cadenceCommandsReceived += 1
+                self.governor.setCommanded(level: orden.level)
+                self.applyLadder()
             }
         }
         session.onColorMeans = { [weak self] bgr in
@@ -1374,6 +1466,12 @@ final class SplitBench {
 
     private func slaveFrame(_ meta: RigPipeline.FrameMeta, ring: FrameRing) {
         guard !session.isMaster, case .connected = session.state, let slave else { return }
+        // IOS-06: en L4 el esclavo deja de pintar y codificar su parte.
+        lock.lock()
+        let pausada = partPaused
+        if pausada { partFramesPaused += 1 }
+        lock.unlock()
+        guard !pausada else { return }
         let ms = meta.rigNs / 1_000_000
         // IOS-43: la edad del fotograma al llegar a la app (el retraso de la cámara) y lo
         // que tarda el render en volver (la codificación sigue, asíncrona).
@@ -1481,10 +1579,15 @@ final class SplitBench {
                 session.forceMaster { t in NSLog("[split] relevo forzado: term %d", t ?? -1) }
             }
         }
+        stepLadder(transcurrido)
         if transcurrido >= Double(footprintMb.count) * Self.footprintEveryS {
             // 2026-10-14: la latencia del minuto que acaba (la primera muestra abre el 0).
             if !footprintMb.isEmpty { closeLatencyMinute() }
             footprintMb.append(Self.footprintMb())
+            // IOS-06: la escalera de este móvil, la de su IA y las detecciones hasta ahora.
+            ladderByMinute.append(governor.level.rawValue)
+            ladderAiByMinute.append(governor.aiLevel(isMaster: session.isMaster).rawValue)
+            detectRunsAtMinute.append(detect?.runCount ?? 0)
             // SPK-54: el estado térmico, una vez por minuto.
             thermalByMinute.append(Self.thermalName(ProcessInfo.processInfo.thermalState))
             batteryByMinute.append(Double(UIDevice.current.batteryLevel))
@@ -1723,16 +1826,19 @@ final class SplitBench {
     /// el punto ya haya pasado aunque el temporizador se adelante un poco.
     private static let tickPhaseMarginMs = 2.0
 
-    /// Una detección cada 4 tics del programa: 7,5 Hz (PLAYER_TARGET_HZ).
-    private static let detectEveryTicks = 4
-
-    /// La detección a 7,5 Hz en los dos papeles (IOS-73): el esclavo manda sus cajas al
-    /// maestro; el maestro las da a su director (si dirige el DirectorService).
+    /// La detección en los dos papeles (IOS-73) a la cadencia de la escalera común (IOS-06,
+    /// IOS-25): 7,5 Hz en L0, 5 en L1, nada desde L2. Los dos móviles detectan en los mismos
+    /// instantes t_k del soporte (DetectionGate), así que el director del maestro empareja sus
+    /// cajas con desfase cero. El esclavo manda sus cajas al maestro; el maestro las da a su
+    /// director (si dirige el DirectorService).
     private func detectTick() {
-        detectTicks += 1
-        guard detectTicks % Self.detectEveryTicks == 0, let d = detect, let ring = pipelineProvider()?.ring,
-              let ultimo = ring.availableRigMs().last, let lease = ring.acquire(nearest: ultimo, maxDistanceMs: 0)
+        guard let d = detect, let ring = pipelineProvider()?.ring, let ultimo = ring.latestRigMs(),
+              let objetivo = detectGate.due(latestRigMs: ultimo)
         else { return }
+        guard let lease = ring.acquire(nearest: objetivo, maxDistanceMs: detectGate.halfFrameMs) else {
+            detectMissingFrame += 1
+            return
+        }
         if d.onDetections == nil {
             d.onDetections = { [weak self] cajas, t, ms in
                 guard let self else { return }
@@ -1743,7 +1849,7 @@ final class SplitBench {
                 }
             }
         }
-        d.offer(lease.buffer, rigMs: ultimo) { ring.release(lease) }
+        d.offer(lease.buffer, rigMs: objetivo) { ring.release(lease) }
     }
 
     /// `phys_footprint` del proceso, lo que mira jetsam, en MB.
@@ -1988,6 +2094,10 @@ final class SplitBench {
             p.onIdrRequest = { [weak enc] in enc?.forceIDR() }
             p.onBitrate = { [weak enc] bps in try? enc?.setBitrate(bps: bps) }
             p.onLog = { NSLog("[srt] %@", $0) }
+            // IOS-06: si la escalera ya bajó el programa (L3), el publicador nace con su techo.
+            if let factor = programBitrateFactorApplied, factor < 1 {
+                p.setCeiling(bps: Self.programBitrateBps(factor: factor))
+            }
             p.start()
             publisher = p
         } else if !session.isMaster, publisher != nil {
@@ -2031,6 +2141,172 @@ final class SplitBench {
         // el QP en su tope, el modo de baja latencia los tira (visto en el Mac con ruido).
         return ["requested": true, "target": publishTarget, "sessions": tramos,
                 "program_encode_failures": programEncoder?.encodeFailures ?? 0]
+    }
+
+    // MARK: - IOS-06: la escalera actuando
+
+    /// El nivel de la escalera de este móvil, para la pantalla (CaptureStatus.ladderLevel).
+    var currentLadderLevel: LadderLevel {
+        lock.lock(); defer { lock.unlock() }
+        return ladderLevelShown
+    }
+
+    /// Una vez por segundo: la escalera con lo que piden los sensores (o el forzado del
+    /// banco en su tramo), su nivel al latido y las acciones que cambien.
+    private func stepLadder(_ transcurrido: Double) {
+        guard transcurrido >= nextLadderS else { return }
+        nextLadderS = transcurrido + LadderConstants.stepEveryS
+        let ahora = DispatchTime.now().uptimeNanoseconds
+        let dt = lastLadderStepNs.map { Double(ahora - $0) / 1e9 } ?? 0
+        lastLadderStepNs = ahora
+        governor.step(sensors: ladderSensors(), elapsedS: transcurrido, dtS: dt)
+        session.setLadderLevel(UInt8(governor.level.rawValue))
+        applyLadder()
+    }
+
+    /// Rehace las acciones en vigor y aplica lo que cambió: la cadencia de la IA y el director,
+    /// el bitrate del programa, la parte del esclavo, la lente sola del maestro y la orden
+    /// `cadence`. En la cola del tic: con cada paso y con cada noticia del otro móvil.
+    private func applyLadder() {
+        let esMaestro = session.isMaster
+        governor.setPeer(level: peerDown ? nil : peerLadderHeard)
+        let acciones = governor.actions(isMaster: esMaestro)
+        let ia = governor.aiLevel(isMaster: esMaestro)
+        ladderActions = acciones
+        // La IA (L1, L2): la cadencia de la detección y, sin IA, el director al plano abierto
+        // (con «sin detecciones» a secas se quedaría en el último plano).
+        detectGate.set(hz: LadderGovernor.detectionHz(acciones))
+        director?.setAI(enabled: acciones.aiEnabled)
+        applyProgramBitrate(factor: acciones.programBitrateFactor)
+        applyPart(enabled: acciones.partEnabled)
+        applySingleLens()
+        if esMaestro { sendCadence(ia) }
+        noteLadder(ai: ia, actions: acciones, master: esMaestro)
+    }
+
+    static func programBitrateBps(factor: Double) -> Int {
+        Int((Double(programBitrateBps) * factor).rounded())
+    }
+
+    /// L3: el programa ×`programBitrateFactor`. Con publicador, por su techo (él lleva el
+    /// codificador con `onBitrate` y sube despacio al volver); sin él (la copia .mov sin
+    /// destino), el codificador directamente. El alto de 720p de L3 no se aplica: ver PROGRESS.
+    private func applyProgramBitrate(factor: Double) {
+        guard factor != programBitrateFactorApplied, let enc = programEncoder else { return }
+        programBitrateFactorApplied = factor
+        let bps = Self.programBitrateBps(factor: factor)
+        if let p = publisher {
+            p.setCeiling(bps: factor < 1 ? bps : nil)
+        } else {
+            try? enc.setBitrate(bps: bps)
+        }
+        NSLog("[escalera] programa a %.1f Mbit/s (×%.2f)", Double(bps) / 1e6, factor)
+    }
+
+    /// L4 en el esclavo: deja de pintar y codificar su parte; al volver, la primera es un IDR
+    /// (el maestro no tiene con qué decodificar una P suelta).
+    private func applyPart(enabled: Bool) {
+        lock.lock()
+        let estaba = partPaused
+        partPaused = !enabled
+        lock.unlock()
+        if estaba, enabled { slaveEncoder?.forceIDR() }
+    }
+
+    /// En el maestro: con el esclavo caído (IOS-81) o con su parte parada por la escalera
+    /// (L4), una lente y sin esperar su parte; al volver, las dos.
+    private func applySingleLens() {
+        guard session.isMaster, let m = master else { return }
+        let sola = peerDown || governor.peerStoppedParts
+        guard sola != singleLensApplied else { return }
+        singleLensApplied = sola
+        m.peerDown = sola
+        director?.setSingleLens(sola ? side : nil)
+    }
+
+    /// La orden `cadence` con la escalera común: al cambiar y cada `cadenceResendS`.
+    private func sendCadence(_ comun: LadderLevel) {
+        guard case .connected = session.state else {
+            cadenceSent = nil
+            return
+        }
+        let ahora = Double(DispatchTime.now().uptimeNanoseconds - startNs) / 1e9
+        guard comun != cadenceSent || ahora - cadenceSentAtS >= LadderConstants.cadenceResendS else { return }
+        session.send(cadence: CadenceCommand(level: comun))
+        cadenceSent = comun
+        cadenceSentAtS = ahora
+        cadenceCommandsSent += 1
+    }
+
+    /// Apunta el cambio, si lo hay, con su instante y lo que se aplicó; y el nivel de la pantalla.
+    private func noteLadder(ai: LadderLevel, actions a: LadderActions, master: Bool) {
+        let transcurrido = Double(DispatchTime.now().uptimeNanoseconds - startNs) / 1e9
+        let marca = LadderMark(
+            level: governor.level, ai: ai, peer: governor.peerLevel, commanded: governor.commandedLevel,
+            forced: governor.force?.isActive(elapsedS: transcurrido) ?? false, master: master
+        )
+        lock.lock()
+        ladderLevelShown = marca.level
+        lock.unlock()
+        guard marca != ladderMark else { return }
+        ladderMark = marca
+        NSLog("[escalera] L%ld, IA L%ld (otro L%ld, orden L%ld)%@", marca.level.rawValue, ai.rawValue,
+              marca.peer?.rawValue ?? -1, marca.commanded?.rawValue ?? -1, marca.forced ? ", forzada" : "")
+        guard ladderChanges.count < Self.maxLadderChanges else {
+            ladderChangesDropped += 1
+            return
+        }
+        ladderChanges.append([
+            "s": transcurrido, "rig_ms": rigNowMs(), "role": master ? "master" : "slave",
+            "level": marca.level.rawValue, "ai_level": ai.rawValue,
+            "peer_level": marca.peer?.rawValue ?? -1, "commanded_level": marca.commanded?.rawValue ?? -1,
+            "forced": marca.forced, "detect_hz": LadderGovernor.detectionHz(a),
+            "program_bitrate_factor": a.programBitrateFactor, "part": a.partEnabled,
+            "single_lens": master && singleLensApplied,
+        ])
+    }
+
+    /// Las detecciones de cada minuto de la pasada (el último, a medias).
+    private func detectRunsByMinute() -> [Int] {
+        let cuentas = detectRunsAtMinute + [detect?.runCount ?? 0]
+        return zip(cuentas.dropFirst(), cuentas).map { $0 - $1 }
+    }
+
+    /// Lo que la escalera hizo en la pasada y lo que estaba en vigor al acabar.
+    private func ladderReport() -> [String: Any] {
+        let a = ladderActions
+        lock.lock()
+        let pausados = partFramesPaused
+        lock.unlock()
+        let forzado: [String: Any] = governor.force.map {
+            ["level": $0.level.rawValue, "at_s": $0.atS, "until_s": $0.untilS, "side": $0.side?.rawValue ?? "both"]
+        } ?? [:]
+        return [
+            "level": governor.level.rawValue,
+            "ai_level": governor.aiLevel(isMaster: session.isMaster).rawValue,
+            "peer_level": governor.peerLevel?.rawValue ?? -1,
+            "commanded_level": governor.commandedLevel?.rawValue ?? -1,
+            "force": forzado,
+            // Las acciones en vigor. `program_height`, `ball`, `preview` y `handover` aún no
+            // tienen a quién mandar en este camino (`not_wired`).
+            "actions": [
+                "player_hz": a.playerHz, "ai": a.aiEnabled, "ball": a.ballEnabled, "ball_roi_hz": a.ballRoiHz,
+                "program_height": a.programHeight, "program_bitrate_factor": a.programBitrateFactor,
+                "program": a.programEnabled, "part": a.partEnabled, "local_recording": a.localRecording,
+                "preview": a.preview, "handover": a.requestsHandover,
+            ] as [String: Any],
+            "not_wired": ["program_height", "ball", "preview", "handover"],
+            "changes": ladderChanges,
+            "changes_dropped": ladderChangesDropped,
+            "cadence_commands_sent": cadenceCommandsSent,
+            "cadence_commands_received": cadenceCommandsReceived,
+            "detect_hz": detectGate.hz,
+            "detect_skipped_late": detectGate.skipped,
+            "detect_missing_frame": detectMissingFrame,
+            "part_frames_paused": pausados,
+            "single_lens": singleLensApplied,
+            "program_bitrate_bps": Self.programBitrateBps(factor: programBitrateFactorApplied ?? 1),
+        ]
     }
 
     // MARK: - Informe
@@ -2175,6 +2451,20 @@ final class SplitBench {
                                   "part_decoder": master?.decoderSessionResets ?? 0],
             "battery_by_minute": batteryByMinute,
             "disk_free_gb_by_minute": diskFreeGbByMinute,
+            // IOS-06: la escalera actuando. El nivel de este móvil y el de su IA (la común)
+            // por minuto, las detecciones de cada minuto (el último, a medias), y en `ladder`
+            // cada cambio con su instante y lo que estaba en vigor al acabar.
+            "ladder_by_minute": ladderByMinute,
+            "ladder_ai_by_minute": ladderAiByMinute,
+            "detect_runs_by_minute": detectRunsByMinute(),
+            "ladder": ladderReport(),
+            // Cómo emparejó el director las cajas de las dos cámaras: con la cadencia común en
+            // la rejilla del soporte, completas y con desfase 0 (huérfanas solo al cambiar).
+            "director_pairing": director.map { d -> [String: Any] in
+                let p = d.pairing
+                return ["complete": p.complete, "orphan_left": p.orphanLeft, "orphan_right": p.orphanRight,
+                        "max_abs_skew_ms": Double(p.maxAbsSkewNs) / 1e6, "cycles": d.cyclesIngested]
+            } ?? [:],
             "ts_audio_frames": tsAudioFrames,
             "peer_states": peerStates,
             "program_sources": master?.sources.counts ?? [:],
@@ -2288,6 +2578,11 @@ final class SplitBench {
             "slave_no_parts": ss.noParts,
             "slave_without_view": ss.withoutView,
             "detect_runs": detect?.runCount ?? 0,
+            "detect_runs_by_minute": detectRunsByMinute(),
+            "ladder_level": governor.level.rawValue,
+            "ladder_ai_level": governor.aiLevel(isMaster: session.isMaster).rawValue,
+            "ladder_by_minute": ladderByMinute,
+            "ladder_changes": Array(ladderChanges.suffix(Self.liveLadderChanges)),
             "peer_states": Array(peerStates.suffix(Self.livePeerStates)),
             "app_events": Array(appEvents.suffix(Self.livePeerStates)),
             "footprint_mb": Self.footprintMb(),
@@ -2833,6 +3128,8 @@ final class MetalDetectLoad: BenchDetector {
                 "infer_p50_ms_by_minute": tramos]
     }
 
-    /// Pasadas del detector en un minuto: una cada 4 tics del programa a 30 fps (7,5 Hz).
+    /// Pasadas del detector en un minuto a 7,5 Hz (L0). Con la escalera en L1 (5 Hz) cada
+    /// tramo dura minuto y medio; las detecciones de cada minuto de verdad van en
+    /// `detect_runs_by_minute` del informe.
     private static let runsPerMinute = 450
 }
