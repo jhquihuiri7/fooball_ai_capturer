@@ -9,7 +9,8 @@ Todo vive en $FAKE_DIR:
     dev/<id>/entorno.json      el entorno del último lanzamiento (con el secreto: no sale)
     dev/<id>/keychain          lo que Zero guardaría del RIG_LINK_SECRET al arrancar
     guion.json                 {id: {"<n>": [[«pon», origen, ruta en Documents], …]}}: lo que
-                               aparece en el móvil antes de su listado número n (Zero emitiendo)
+                               aparece en el móvil antes de su listado número n (Zero emitiendo);
+                               [«quita», ruta en Documents] lo borra (Zero con RIG_PURGE_BENCH)
     log                        las órdenes, sin valores del entorno (`copy to` sale como «sube»)
 
 Hay siempre otra app de Flutter (otro Runner.app) corriendo en cada móvil: el guion no
@@ -77,6 +78,12 @@ def aplica_guion(dev: str, n: int) -> None:
             destino = os.path.join(raiz(dev), "Documents", accion[2])
             os.makedirs(os.path.dirname(destino), exist_ok=True)
             shutil.copyfile(accion[1], destino)
+        elif accion[0] == "quita":
+            ruta = os.path.join(raiz(dev), "Documents", accion[1])
+            if os.path.isdir(ruta):
+                shutil.rmtree(ruta)
+            elif os.path.exists(ruta):
+                os.remove(ruta)
 
 
 def listado(dev: str) -> None:

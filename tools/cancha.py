@@ -11,6 +11,9 @@ Lo usan tools/sesion_emitir.sh, tools/recoger_partido.sh y tools/plan_b_cancha.s
     python3 tools/cancha.py estado <listado> <desde>          # nada | emitiendo … | parado …
     python3 tools/cancha.py recursos <listado>                # rig.json y el detector, ✅/⚠️
     python3 tools/cancha.py espacio <listado> <desde>         # lo que ocupa Zero y lo de la pasada
+    python3 tools/cancha.py ocupa <listado>                   # lo que ocupa Zero, por carpeta
+    python3 tools/cancha.py purga <listado antes> <listado ahora>  # el informe nuevo de RIG_PURGE_BENCH
+    python3 tools/cancha.py resumen-purga <purge.json>        # lo que dice que borró
     python3 tools/cancha.py verificar <carpeta>               # ffprobe de cada .mov y .ts
     python3 tools/cancha.py veredicto <carpeta> [desde]       # ✅/⚠️/❌ del programa y la parte
 
@@ -181,6 +184,60 @@ def espacio(lista: dict[str, int], desde: int) -> str:
     grandes = ", ".join(f"{c} {_gb(b)}" for c, b in sorted(viejo.items(), key=lambda x: -x[1])[:4] if b > BYTES_POR_GB)
     return (f"Zero ocupa {_gb(total)}; esta pasada {_gb(sum(lista[r] for r in pasada))}; "
             f"de antes {_gb(total - sum(lista[r] for r in pasada))}" + (f" ({grandes})" if grandes else ""))
+
+
+# Lo que ocupa Zero por carpeta (tools/limpiar_moviles.sh). Las tres primeras son las que limpia
+# --borrar-pruebas: la app, al arrancar con RIG_PURGE_BENCH=1, borra de ellas lo de antes de hoy
+# (BenchPurge.swift) y deja bench/purge-<t>.json.
+_GRUPOS = (
+    ("bench/", re.compile(r"^bench/")),
+    ("bench4k/", re.compile(r"^bench4k/")),
+    ("nv12/", re.compile(r"^nv12/")),
+    ("program-*.mov (copias del programa)", re.compile(r"^program-[^/]*\.mov$")),
+    ("left/right-*.mov (4K de EMITIR)", re.compile(r"^(?:left|right)-\d+(?:-\d+)?\.mov$")),
+    ("calib/", re.compile(r"^calib/")),
+    ("bench-resources/ (modelos)", re.compile(r"^bench-resources/")),
+)
+LIMPIA_PURGA = ("bench/", "bench4k/", "nv12/")
+_PURGA = re.compile(r"^bench/purge-(\d+)\.json$")
+
+
+def _tam(b: float) -> str:
+    return f"{b / BYTES_POR_GB:.1f} GB" if b >= BYTES_POR_GB else f"{b / BYTES_POR_MB:.0f} MB"
+
+
+def ocupa(lista: dict[str, int]) -> list[str]:
+    """Una línea por carpeta (las de `_GRUPOS` y el resto), con ficheros y tamaño, y el total."""
+    cuenta: dict[str, list[int]] = {nombre: [0, 0] for nombre, _ in _GRUPOS}
+    cuenta["otros"] = [0, 0]
+    for ruta, b in lista.items():
+        nombre = next((n for n, p in _GRUPOS if p.match(ruta)), "otros")
+        cuenta[nombre][0] += 1
+        cuenta[nombre][1] += b
+    lineas = []
+    for nombre, (n, b) in cuenta.items():
+        marca = "  ← --borrar-pruebas: lo de antes de hoy" if nombre in LIMPIA_PURGA and n else ""
+        lineas.append(f"{nombre:<36} {n:6d} ficheros {_tam(b):>9}{marca}")
+    lineas.append(f"{'total':<36} {len(lista):6d} ficheros {_tam(sum(lista.values())):>9}")
+    return lineas
+
+
+def purga(antes: dict[str, int], ahora: dict[str, int]) -> str | None:
+    """El informe de purga que no estaba antes (el más nuevo), o None."""
+    nuevos = [(int(m.group(1)), r) for r in ahora if (m := _PURGA.match(r)) and r not in antes]
+    return max(nuevos)[1] if nuevos else None
+
+
+def resumen_purga(d: dict) -> list[str]:
+    """Lo que la app dice que borró, por carpeta, y lo que no pudo."""
+    lineas = [f"borrados {d.get('removed_files', 0)} ficheros ({_tam(float(d.get('removed_bytes', 0)))}) "
+              f"de antes de las 00:00 del móvil"]
+    for carpeta, r in sorted((d.get("by_folder") or {}).items()):
+        lineas.append(f"   {carpeta}/: {r.get('removed_files', 0)} borrados ({_tam(float(r.get('removed_bytes', 0)))}), "
+                      f"{r.get('kept_files', 0)} de hoy se quedan")
+    for fallo in d.get("failures") or []:
+        lineas.append(f"   ⚠️  no se pudo: {fallo}")
+    return lineas
 
 
 # ---------------------------------------------------------------------------------- ffprobe
@@ -484,6 +541,16 @@ if __name__ == "__main__":
         sys.exit(1 if verificar(sys.argv[2]) else 0)
     if orden == "veredicto":
         sys.exit(1 if veredicto(sys.argv[2], int(sys.argv[3]) if len(sys.argv) > 3 else 0) else 0)
+    if orden == "resumen-purga":
+        print("\n".join(resumen_purga(_lee(sys.argv[2]))))
+        sys.exit(0)
+    if orden == "purga":
+        with open(sys.argv[2], encoding="utf-8", errors="replace") as fa, \
+                open(sys.argv[3], encoding="utf-8", errors="replace") as fb:
+            nuevo = purga(listado(fa.read()), listado(fb.read()))
+        if nuevo:
+            print(nuevo)
+        sys.exit(0)
     with open(sys.argv[2], encoding="utf-8", errors="replace") as fichero:
         lista_ = listado(fichero.read())
     if orden == "desde":
@@ -507,5 +574,7 @@ if __name__ == "__main__":
         print(estado(lista_, int(sys.argv[3])))
     elif orden == "espacio":
         print(espacio(lista_, int(sys.argv[3])))
+    elif orden == "ocupa":
+        print("\n".join(ocupa(lista_)))
     else:
         sys.exit(f"orden desconocida: {orden}")

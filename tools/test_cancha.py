@@ -21,8 +21,11 @@ from cancha import (  # noqa: E402
     informes,
     listado,
     medios,
+    ocupa,
     pasadas,
+    purga,
     recursos,
+    resumen_purga,
     verificar,
     veredicto,
 )
@@ -241,6 +244,45 @@ class Verificar(unittest.TestCase):
             with contextlib.redirect_stdout(salida):
                 self.assertEqual(verificar(d), 1)
             self.assertIn("❌ roto.mov: no se lee", salida.getvalue())
+
+
+class Limpieza(unittest.TestCase):
+    """tools/limpiar_moviles.sh: lo que ocupa por carpeta y el informe de RIG_PURGE_BENCH."""
+
+    LISTA = {"bench/program-split-1.ts": 2_000_000_000, "bench/program-split-left-2.json": 1000,
+             "bench4k/3/left-3.mov": 3_400_000_000, "nv12/left-4.nv12": 12_000_000,
+             "program-m_x-1792076844.mov": 1_910_000_000, "left-1791160494.mov": 144_900_000,
+             "calib/5/left-5.jpg": 1_600_000, "bench-resources/m.mlpackage/Manifest.json": 617,
+             "rig.json": 687}
+
+    def test_ocupa_por_carpeta(self) -> None:
+        lineas = [" ".join(l.split()) for l in ocupa(self.LISTA)]
+        self.assertIn("bench/ 2 ficheros 2.0 GB ← --borrar-pruebas: lo de antes de hoy", lineas)
+        self.assertIn("bench4k/ 1 ficheros 3.4 GB ← --borrar-pruebas: lo de antes de hoy", lineas)
+        self.assertIn("nv12/ 1 ficheros 12 MB ← --borrar-pruebas: lo de antes de hoy", lineas)
+        self.assertIn("program-*.mov (copias del programa) 1 ficheros 1.9 GB", lineas)
+        self.assertIn("left/right-*.mov (4K de EMITIR) 1 ficheros 145 MB", lineas)
+        self.assertIn("calib/ 1 ficheros 2 MB", lineas)
+        self.assertIn("bench-resources/ (modelos) 1 ficheros 0 MB", lineas)
+        self.assertIn("otros 1 ficheros 0 MB", lineas)  # rig.json
+        self.assertEqual(lineas[-1], "total 9 ficheros 7.5 GB")
+
+    def test_sin_nada_en_una_carpeta_no_la_marca(self) -> None:
+        self.assertNotIn("borrar", ocupa({"rig.json": 687})[0])
+
+    def test_purga_el_informe_nuevo(self) -> None:
+        antes = {"bench/purge-100.json": 10, "rig.json": 1}
+        ahora = {"bench/purge-100.json": 10, "bench/purge-200.json": 10, "rig.json": 1}
+        self.assertEqual(purga(antes, ahora), "bench/purge-200.json")
+        self.assertIsNone(purga(ahora, ahora))
+
+    def test_resumen_purga(self) -> None:
+        lineas = resumen_purga({"removed_files": 3, "removed_bytes": 2_500_000_000,
+                                "by_folder": {"nv12": {"removed_files": 1, "removed_bytes": 12_000_000, "kept_files": 2}},
+                                "failures": ["bench/x: ocupado"]})
+        self.assertEqual(lineas[0], "borrados 3 ficheros (2.5 GB) de antes de las 00:00 del móvil")
+        self.assertEqual(lineas[1], "   nv12/: 1 borrados (12 MB), 2 de hoy se quedan")
+        self.assertEqual(lineas[2], "   ⚠️  no se pudo: bench/x: ocupado")
 
 
 if __name__ == "__main__":

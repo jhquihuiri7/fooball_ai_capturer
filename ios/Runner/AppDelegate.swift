@@ -1,4 +1,5 @@
 import Flutter
+import RigMedia
 import UIKit
 
 @main
@@ -28,6 +29,16 @@ import UIKit
       forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main
     ) { _ in
       UIApplication.shared.isIdleTimerDisabled = true
+    }
+
+    // RIG_PURGE_BENCH=1 (tools/limpiar_moviles.sh --borrar-pruebas): borra las pruebas de antes
+    // de hoy de Documents/bench, bench4k y nv12, fuera del hilo principal (BenchPurge).
+    let entorno = ProcessInfo.processInfo.environment
+    if entorno[BenchPurge.environmentKey] == "1",
+       let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+      DispatchQueue.global(qos: .utility).async {
+        BenchPurge.purgeIfAsked(environment: entorno, documents: docs, now: Date())
+      }
     }
 
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)

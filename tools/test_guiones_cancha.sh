@@ -3,8 +3,9 @@
 #   tools/test_guiones_cancha.sh
 # sesion_emitir.sh (espera, recoge y veredicto; el secreto nunca sale), recoger_partido.sh (la
 # última pasada, la app que murió a mitad, --sin-4k y --desde) y plan_b_cancha.sh (lanzar y
-# soltar con las apps guardadas, y volver) y calibrar_cancha.sh (calibra e instala, --solo-comprobar,
-# no calibra y no toca, sin fotos). Ninguno puede cerrar otra app que no sea Zero. Con ffmpeg, los vídeos de prueba son de verdad (y uno, fragmentado y cortado a mitad).
+# soltar con las apps guardadas, y volver), calibrar_cancha.sh (calibra e instala, --solo-comprobar,
+# no calibra y no toca, sin fotos) y limpiar_moviles.sh (lo que ocupa; --borrar-pruebas con una app
+# que borra y con una anterior). Ninguno puede cerrar otra app que no sea Zero. Con ffmpeg, los vídeos de prueba son de verdad (y uno, fragmentado y cortado a mitad).
 set -uo pipefail
 
 RAIZ=$(cd "$(dirname "$0")/.." && pwd)
@@ -453,6 +454,65 @@ SALIDA="$T/calib6" CANCHA_APPS="$T/sin-apps" CALIBRADOR="$T/bin/calibrador-falso
 espera_que "sin las apps guardadas, error" test $? -ne 0
 espera_que "y dice cómo prepararlas" tiene "$T/calib6.txt" "plan_b_cancha.sh preparar"
 espera_que "sin lanzar nada" no_tiene "$FAKE_DIR/log" "instala\|lanza"
+
+# ------------------------------------------------------------------------------------------
+limpia_fake() {  # el contenido de los dos; $1 1: Zero con RIG_PURGE_BENCH borra lo viejo y deja su informe
+  nuevo_fake
+  for par in "$IZQ:left" "$DER:right"; do
+    d=${par%%:*}; s=${par##*:}
+    pon "$d" "$FIX/entero.mov" "bench/program-split-1791000000.ts"
+    pon "$d" "$FIX/entero.mov" "bench4k/1791000000/$s-1791000000.mov"
+    pon "$d" "$FIX/entero.mov" "nv12/$s-17.nv12"
+    pon "$d" "$FIX/entero.mov" "program-m_f50b97dd8d1a-1792076844.mov"
+    pon "$d" "$CASA" "rig.json"
+    pon "$d" "$FIX/n0.jsonl" "bench-resources/players-centernet-mnv4.mlpackage/Manifest.json"
+    touch "$FAKE_DIR/dev/$d/corriendo"
+  done
+  [ "$1" = 1 ] || return 0
+  echo '{"name": "purge", "removed_files": 3, "removed_bytes": 3000000000, "by_folder": {"bench": {"removed_files": 1, "removed_bytes": 1000000000, "kept_files": 0}}, "failures": []}' > "$FIX/purge.json"
+  python3 - "$FAKE_DIR/guion.json" "$IZQ" "$DER" "$FIX" <<'PY2'
+import json, sys
+g, izq, der, fix = sys.argv[1:]
+def purga(s):
+    return [["quita", "bench/program-split-1791000000.ts"], ["quita", "bench4k/1791000000"],
+            ["quita", f"nv12/{s}-17.nv12"], ["pon", f"{fix}/purge.json", "bench/purge-1792100000.json"]]
+json.dump({izq: {"2": purga("left")}, der: {"2": purga("right")}}, open(g, "w"))
+PY2
+}
+
+echo "limpiar_moviles.sh: lo que ocupa, sin tocar nada"
+limpia_fake 0
+SALIDA="$T/limpia" "$RAIZ/tools/limpiar_moviles.sh" > "$T/limpia.txt" 2>&1
+espera_que "termina bien" test $? -eq 0
+espera_que "por carpeta: bench/" tiene "$T/limpia.txt" "bench/ .* 1 ficheros"
+espera_que "las copias del programa" tiene "$T/limpia.txt" "program-\*.mov (copias del programa) .* 1 ficheros"
+espera_que "de los dos" tiene "$T/limpia.txt" "derecho ($DER), lo que ocupa Zero"
+espera_que "ni lanza ni cierra nada" no_tiene "$FAKE_DIR/log" "lanza\|cierra\|CERRÓ"
+
+echo "limpiar_moviles.sh --borrar-pruebas: Zero borra lo viejo y lo dice"
+limpia_fake 1
+SALIDA="$T/limpia2" SONDEO_S=0 "$RAIZ/tools/limpiar_moviles.sh" --borrar-pruebas > "$T/limpia2.txt" 2>&1
+espera_que "termina bien" test $? -eq 0
+espera_que "lanza Zero solo con RIG_PURGE_BENCH (sin el secreto)" \
+  test "$(grep -c "lanza com.logicielapplab.zero con \['RIG_PURGE_BENCH'\]" "$FAKE_DIR/log")" -eq 2
+espera_que "y la variable vale 1" tiene "$FAKE_DIR/dev/$IZQ/entorno.json" '"RIG_PURGE_BENCH": "1"'
+espera_que "cierra Zero" tiene "$FAKE_DIR/log" "$DER cierra Zero"
+espera_que "nunca otra app" no_tiene "$FAKE_DIR/log" "CERRÓ OTRA APP"
+espera_que "Zero cerrada al acabar" test ! -e "$FAKE_DIR/dev/$IZQ/corriendo" -a ! -e "$FAKE_DIR/dev/$DER/corriendo"
+espera_que "dice lo que borró" tiene "$T/limpia2.txt" "izquierdo: borrados 3 ficheros (3.0 GB)"
+espera_que "y lo que queda" tiene "$T/limpia2.txt" "izquierdo, lo que queda"
+espera_que "trae el informe" test -s "$T/limpia2/derecho/bench/purge-1792100000.json"
+espera_que "no sube nada" no_tiene "$FAKE_DIR/log" "sube"
+espera_que "el rig.json sigue" cmp -s "$FAKE_DIR/dev/$IZQ/Documents/rig.json" "$CASA"
+
+echo "limpiar_moviles.sh --borrar-pruebas con una app anterior: no borra y lo dice"
+limpia_fake 0
+SALIDA="$T/limpia3" SONDEO_S=0 ESPERA_PURGA_S=0 "$RAIZ/tools/limpiar_moviles.sh" --borrar-pruebas > "$T/limpia3.txt" 2>&1
+espera_que "sale con error" test $? -ne 0
+espera_que "dice que la app es anterior" tiene "$T/limpia3.txt" "la app instalada es anterior"
+espera_que "cierra Zero" tiene "$FAKE_DIR/log" "$IZQ cierra Zero"
+espera_que "nunca otra app" no_tiene "$FAKE_DIR/log" "CERRÓ OTRA APP"
+espera_que "todo sigue ahí" test -e "$FAKE_DIR/dev/$IZQ/Documents/bench/program-split-1791000000.ts"
 
 echo
 echo "$BIEN bien, $MAL mal"

@@ -12,6 +12,40 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-15 · Calibrar en la cancha en una orden y limpiar los iPhone · 🚧 probado con el devicectl falso y con fotos reales; falta con los dos iPhone
+
+**`tools/calibrar_cancha.sh <secreto> [--solo-comprobar] [--sin-instalar]`** (44986ad). EMITIR
+cose con `Documents/rig.json`, hoy el del trípode de casa, y no toma fotos de calibración. El
+guion instala las apps de banco de `build/cancha`, lanza un split corto por Aware con
+`RIG_CALIB_AT_S=10` (sin .ts ni .mov), espera a que los dos tengan `calib/<id>/summary-<lado>.json`,
+cierra Zero, trae el disparo a `bench/calib-cancha-<fecha>/`, vuelve a dejar `emitir.app` y
+calibra con `calibrate_bench_pairs.py --json` de football-ai (b7afc14; los umbrales del repo, sin
+red). Si calibra: puntos, residuo, ángulos y la comparación con el rig.json que tenía cada móvil
+(bajado antes como copia; «se parece» por debajo de 0,3°); lo instala con `devicectl copy to` y lo
+baja para comprobarlo. Si no calibra, no toca nada y dice por qué y qué hacer.
+- Con el devicectl falso y la calibración real: las fotos del trípode (`…-20261011-1321`) dan el
+  rig.json de casa idéntico e instalado en los dos; las del cuarto (`…-20261015-1047`), «NO CALIBRA»
+  con las cinco razones y los móviles sin tocar.
+- `devicectl device copy to` a `Documents/rig.json` no se ha usado en este repo con un fichero (sí
+  con una carpeta, en `spk53_bench.sh`): el guion lo baja otra vez y lo compara.
+
+**`tools/limpiar_moviles.sh [--borrar-pruebas]`**. Lo que ocupa Zero por carpeta (el 17, hoy: 68
+GB, 66 en `bench/`, `bench4k/` y `nv12/`). `devicectl` no sabe borrar ficheros de un contenedor
+(solo listar, copiar e instalar o desinstalar la app entera), así que borra la app: con
+`RIG_PURGE_BENCH=1`, al arrancar, `BenchPurge` (RigMedia) borra de esas tres carpetas lo de antes
+de hoy y deja `bench/purge-<t>.json`; nunca `rig.json`, `bench-resources/`, `calib/` ni las copias
+`program-*.mov`. Solo funciona con una app compilada desde este commit (las de `build/cancha` son
+de 3ccd75e): con una anterior, el guion dice que no borró nada.
+
+Pruebas: `tools/test_guiones_cancha.sh` 160 ✅ (79 nuevas), `tools/test_calib_cancha.py` 14,
+`tools/test_cancha.py` 23, `swift test` de ZeroKit 533 (4 de BenchPurge; 5 saltados) y
+`check_layers.sh` ✅. El AppDelegate no se compiló
+entero (5,7 GB libres en el Mac): sus líneas nuevas, comprobadas con `swiftc -typecheck` contra
+RigMedia.
+
+Siguiente: con los dos iPhone, `tools/calibrar_cancha.sh <secreto> --solo-comprobar` en casa
+(no calibra en un cuarto: tiene que decirlo y no tocar nada) y, en la cancha, sin la opción.
+
 ## 2026-10-15 · El plan B enlaza (4ca370b, 8ab8f86, f0df022), la escalera forzada responde y el spike de la duración de fotograma, medido · ✅ plan B · 🚧 el spike, con dos cosas que mirar
 
 Los dos iPhone en el soporte de mesa, por Wi-Fi Aware, lanzado desde el Mac.
