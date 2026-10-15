@@ -220,6 +220,78 @@ espera_que "dice cómo recoger" tiene "$T/planb.txt" "tools/recoger_partido.sh -
 CANCHA_APPS="$APPS" "$RAIZ/tools/plan_b_cancha.sh" volver > "$T/volver.txt" 2>&1
 espera_que "volver instala EMITIR en los dos" test "$(grep -c 'instala emitir.app' "$FAKE_DIR/log")" -eq 2
 
+# ------------------------------------------------------------------------------------------
+echo "emitir_auto.sh: compila cada lado con sus defines, lanza solo con el secreto, espera y recoge"
+nuevo_fake
+AHORA=$(( $(date +%s) + 5 ))
+informe "$FIX/live-l.json" master production left "$AHORA" false latido
+informe "$FIX/final-l.json" master production left "$AHORA" true
+informe "$FIX/final-r.json" slave production right "$AHORA" true
+printf '0.0s auto-emitir: LISTA\n20.0s auto-emitir: EMITIR\n20.1s auto-emitir: EMITIENDO\n620.1s auto-emitir: PARAR (600 s)\n' > "$FIX/auto-l.log"
+printf '0.0s auto-emitir: este móvil es el esclavo: espera la orden del maestro\n' > "$FIX/auto-r.log"
+python3 - "$FAKE_DIR/guion.json" "$IZQ" "$DER" "$FIX" "$AHORA" <<'PY2'
+import json, sys
+g, izq, der, fix, t = sys.argv[1:]
+t = int(t)
+json.dump({
+    izq: {"2": [["pon", f"{fix}/entero.mov", f"program-zero-{t}.mov"],
+                ["pon", f"{fix}/live-l.json", f"bench/program-live-left-{t}.json"],
+                ["pon", f"{fix}/auto-l.log", f"bench/auto-emitir-left-{t}.log"]],
+          "3": [["pon", f"{fix}/final-l.json", f"bench/program-split-left-{t + 600}.json"],
+                ["pon", f"{fix}/n0.jsonl", f"n0/zero-{t}-left.jsonl"]]},
+    der: {"1": [["pon", f"{fix}/final-r.json", f"bench/program-split-right-{t + 601}.json"],
+                ["pon", f"{fix}/auto-r.log", f"bench/auto-emitir-right-{t}.log"]]},
+}, open(g, "w"))
+PY2
+cat > "$T/bin/flutter-falso" <<EOF
+#!/bin/bash
+echo "flutter \$*" >> "$FAKE_DIR/log"
+mkdir -p "\$RUNNER"
+EOF
+chmod +x "$T/bin/flutter-falso"
+touch "$FAKE_DIR/dev/$IZQ/corriendo" "$FAKE_DIR/dev/$DER/corriendo"
+OUT="$T/auto"
+SALIDA="$OUT" SONDEO_S=0 ESPERA_ESCLAVO_S=0 FLUTTER="$T/bin/flutter-falso" RUNNER="$T/build/Runner.app" \
+  "$RAIZ/tools/emitir_auto.sh" "$SECRETO" 600 --link aware > "$T/auto.txt" 2>&1
+espera_que "termina bien" test $? -eq 0
+espera_que "compila el izquierdo con sus defines" tiene "$FAKE_DIR/log" \
+  "flutter build ios --release --dart-define=AUTO_ROLE=left --dart-define=AUTO_EMITIR=true --dart-define=AUTO_LINK=aware --dart-define=AUTO_EMITIR_S=600"
+espera_que "y el derecho" tiene "$FAKE_DIR/log" "--dart-define=AUTO_ROLE=right --dart-define=AUTO_EMITIR=true"
+espera_que "cada uno en su móvil, en orden" test "$(grep -E 'flutter|instala' "$FAKE_DIR/log" | sed -E 's/.*AUTO_ROLE=(left|right).*/\1/; s/ instala.*//' | tr '\n' ' ')" = "left $IZQ right $DER "
+espera_que "sin --con-4k, sin AUTO_EMITIR_4K" no_tiene "$FAKE_DIR/log" "AUTO_EMITIR_4K"
+espera_que "lanza los dos solo con RIG_LINK_SECRET (ni RIG_SPLIT ni RIG_LINK_*)" \
+  test "$(grep -c "lanza com.logicielapplab.zero con \['RIG_LINK_SECRET'\]" "$FAKE_DIR/log")" -eq 2
+espera_que "cierra Zero antes" tiene "$FAKE_DIR/log" "$IZQ cierra Zero"
+espera_que "nunca otra app" no_tiene "$FAKE_DIR/log" "CERRÓ OTRA APP"
+espera_que "el secreto no sale por pantalla" no_tiene "$T/auto.txt" "$VALOR"
+espera_que "ni en el registro de la sesión" no_tiene "$OUT/sesion.log" "$VALOR"
+espera_que "ve la parada" tiene "$T/auto.txt" "el maestro paró"
+espera_que "trae la copia .mov del programa" test -s "$OUT/izquierdo/program-zero-$AHORA.mov"
+espera_que "trae los informes y el latido" test -s "$OUT/izquierdo/bench/program-split-left-$(( AHORA + 600 )).json" \
+  -a -s "$OUT/derecho/bench/program-split-right-$(( AHORA + 601 )).json" -a -s "$OUT/izquierdo/bench/program-live-left-$AHORA.json"
+espera_que "trae el registro auto-emitir de los dos" test -s "$OUT/izquierdo/bench/auto-emitir-left-$AHORA.log" \
+  -a -s "$OUT/derecho/bench/auto-emitir-right-$AHORA.log"
+espera_que "y lo resume" tiene "$T/auto.txt" "izquierdo: 20.1s auto-emitir: EMITIENDO"
+espera_que "el esclavo esperó la orden" tiene "$T/auto.txt" "derecho: 0.0s auto-emitir: este móvil es el esclavo"
+[ -n "$HAY_FFMPEG" ] && espera_que "ffprobe lee el programa" tiene "$T/auto.txt" "✅ izquierdo/program-zero-$AHORA.mov"
+espera_que "veredicto en orden" tiene "$T/auto.txt" "VEREDICTO: ✅ en orden"
+
+echo "emitir_auto.sh: --con-4k y --link wifi; sin el 16 Pro no empieza"
+nuevo_fake
+touch "$FAKE_DIR/dev/$IZQ/corriendo"
+A2=$(( $(date +%s) + 5 ))
+pon "$IZQ" "$FIX/final-l.json" "bench/program-split-left-$A2.json"   # el maestro ya paró
+SALIDA="$T/auto2" SONDEO_S=0 ESPERA_ESCLAVO_S=0 MARGEN_FIN_S=0 FLUTTER="$T/bin/flutter-falso" RUNNER="$T/build/Runner.app" \
+  "$RAIZ/tools/emitir_auto.sh" "$SECRETO" 1 --link wifi --con-4k > "$T/auto2.txt" 2>&1 || true
+espera_que "con --con-4k, AUTO_EMITIR_4K y el enlace wifi" tiene "$FAKE_DIR/log" "AUTO_LINK=wifi --dart-define=AUTO_EMITIR_S=1 --dart-define=AUTO_EMITIR_4K=true"
+echo "$IZQ" > "$FAKE_DIR/conectados"; : > "$FAKE_DIR/log"
+SALIDA="$T/auto3" FLUTTER="$T/bin/flutter-falso" RUNNER="$T/build/Runner.app" \
+  "$RAIZ/tools/emitir_auto.sh" "$SECRETO" 600 > "$T/auto3.txt" 2>&1
+espera_que "sale con error" test $? -ne 0
+espera_que "no compila ni lanza nada" no_tiene "$FAKE_DIR/log" "flutter\|lanza"
+"$RAIZ/tools/emitir_auto.sh" "$SECRETO" 600 --link multipeer > "$T/auto4.txt" 2>&1
+espera_que "--link multipeer no vale (no hay programa)" test $? -eq 2
+
 echo
 echo "$BIEN bien, $MAL mal"
 [ "$MAL" -eq 0 ]

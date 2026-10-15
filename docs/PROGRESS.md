@@ -17,6 +17,60 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 
 
+## 2026-10-15 · EMITIR sin tocar la pantalla: `AUTO_EMITIR` y `tools/emitir_auto.sh` · 🚧 sin probar en los iPhone
+
+Para dejar los dos iPhone emitiendo por Wi-Fi Aware sin destino (como en la cancha) sin nadie
+que toque la pantalla. **No es el banco split** (sin `RIG_SPLIT` ni `RIG_LINK_*` en el
+entorno): es el camino de producción de los toques, con dart-defines.
+
+**Hecho**
+- **`lib/src/auto_emitir.dart`** (`AutoEmitir`), con `AUTO_ROLE=left|right`,
+  `AUTO_EMITIR=1`, `AUTO_LINK=aware|wifi` (aware por defecto; nunca Multipeer),
+  `AUTO_EMITIR_S=<s>` y `AUTO_EMITIR_4K=1`. La app abre la de captura como «Abrir cámara»
+  (`ZeroShell`/`CapturePage`/`CaptureSession` de siempre, con el `MasterHost`): el lado,
+  «Este móvil dirige» en el izquierdo (PREFERS_MASTER manda si se da), y
+  `startLink(role, prefersMaster, mode)`. En el maestro espera a LISTA (cámara lista, enlace
+  conectado y rol negociado `master`), deja 20 s al esclavo para su reloj y su fase (el
+  maestro no la ve) y llama a `toggleRecording()`, lo mismo que el botón EMITIR; a los
+  `AUTO_EMITIR_S` s, otra vez `toggleRecording()`, lo mismo que PARAR. Sin LISTA en 5 min, no
+  emite y dice por qué. El esclavo no hace nada: arranca y para por la orden del maestro.
+  Sin los defines, nada cambia (la pantalla de lado).
+- **El registro**: cada paso y cada cambio de fase, enlace, rol o emisión, al log del sistema
+  (`flutter:`) y a `Documents/bench/auto-emitir-<lado>-<t>.log`.
+- **`tools/emitir_auto.sh <secreto> <s> [--link aware|wifi] [--con-4k] [--sin-instalar]`**:
+  compila cada lado con sus defines e instala (como `instala` del banco), cierra solo Zero,
+  lanza los dos con solo `RIG_LINK_SECRET` (desde el fichero, temporal 600 borrado, nunca en
+  pantalla), espera a que el maestro pare (s + 5 min de tope de LISTA + 20 s + 3 min) y
+  recoge y da el veredicto como `sesion_emitir.sh` (informes, latido, el registro
+  auto-emitir y la copia `program-*.mov`, ~2,7 GB/h, con ffprobe y `tools/cancha.py`). Las 4K
+  se quedan en el móvil.
+
+**NO probado en hardware.** Y **no sustituye a la prueba con el dedo**: no pasa por la
+pantalla de lado (ni su Bonjour, ni lo guardado de «Enlace y emisión» y «Este móvil
+dirige», ni el servidor tecleado) ni por el botón (`canRecord`, el doble toque).
+
+**Pendiente de revisión de Alexander**
+- **El interruptor «Guardar vídeo» pone a emitir al esclavo.** `CaptureSession.setSaveVideo`
+  manda `record`/`recordAndSave` al otro móvil y, sin emitir, el esclavo lo toma como la orden
+  de EMITIR (`onPeerCommand` → `toggleRecording`): en la arquitectura B, tocar «Guardar vídeo»
+  en el 17 arranca la parte del 16 Pro antes de EMITIR (el paso 6 de `sesion_emitir.sh`). No se
+  ha cambiado; el modo automático pone el campo `saveVideo` sin pasar por ahí.
+
+**Comprobado**
+- `flutter test --no-pub`: **433, todos bien** (425 antes; 8 nuevos en `auto_emitir_test`: el
+  maestro en orden `startLink` → `start("")` → `startProgram` → `record` y PARAR a los s
+  segundos → `stopProgram` → `stop` → `stop` al esclavo; con 4K; sin LISTA en el tope; el
+  programa que no arranca; el esclavo que solo arranca y para por la orden; la pantalla con y
+  sin el modo; `autoEmitirShell`; sin defines, la pantalla de lado).
+- `flutter analyze --no-pub`: sin avisos. `tools/check_layers.sh`: limpio. Sin Swift tocado.
+- `tools/test_guiones_cancha.sh`: **81 bien** (59 + 22 de `emitir_auto.sh`: los defines de
+  cada lado y su móvil, solo `RIG_LINK_SECRET`, el secreto nunca sale, solo Zero, la espera, la
+  recogida con el registro y la copia, el veredicto, `--con-4k`/`--link wifi`, sin el 16 Pro no
+  empieza, `--link multipeer` no vale).
+
+**El comando** (60 min por Aware, sin destino):
+`tools/emitir_auto.sh <fichero_secreto> 3600 --link aware`
+
 ## 2026-10-14 · La cancha sin internet: el camino de EMITIR auditado, lo frágil arreglado y los guiones de la sesión de mesa, la recogida y el plan B · 🚧 NADA de esto probado en los iPhone
 
 La primera prueba en una cancha va sin internet (solo datos móviles lentos; el Starlink y el
