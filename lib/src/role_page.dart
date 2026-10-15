@@ -307,7 +307,8 @@ class _RolePageState extends State<RolePage> {
               role: _role,
               standalone: _standalone,
               serverHost: _server.text.trim(),
-              prefersMaster: _directs,
+              // «Una cámara» dirige siempre, aunque «Este móvil dirige» esté apagado.
+              prefersMaster: _directs || _linkMode == LinkMode.single,
               linkMode: _linkMode,
             ),
       ),
@@ -817,7 +818,8 @@ class _ServerCard extends StatelessWidget {
 /// El enlace entre los dos móviles (IOS-58), y con él qué hace EMITIR: con Multipeer,
 /// cada móvil emite su cámara al servidor de arriba (el pod); con los otros tres, el
 /// maestro compone el programa y lo sube al VPS del QR Soporte (arquitectura B). Los dos
-/// móviles tienen que elegir el mismo.
+/// móviles tienen que elegir el mismo. Debajo, «Una cámara (sin pareja)» (2026-10-15): la
+/// arquitectura B con este móvil solo, sin enlace, cuando no hay forma de enlazar.
 class _LinkCard extends StatelessWidget {
   const _LinkCard({required this.mode, required this.onMode});
 
@@ -839,6 +841,9 @@ class _LinkCard extends StatelessWidget {
       LinkMode.aware =>
         'Wi-Fi Aware, sin router: empareja antes sin cable. El maestro sube el programa al VPS.',
       LinkMode.ethernet => 'Hub USB-C con Ethernet. El maestro compone y sube el programa al VPS.',
+      LinkMode.single =>
+        'Sin pareja: este móvil emite solo con su cámara (1080p), con el director, el gráfico y '
+            'la franja. Sin enlace ni el otro móvil.',
     };
     return ZeroCard(
       child: Column(
@@ -852,6 +857,17 @@ class _LinkCard extends StatelessWidget {
                 // ZeroPill ya se expande en la fila.
                 ZeroPill(label: label, selected: mode == m, onTap: () => onMode(m)),
               ],
+            ],
+          ),
+          // Aparte y a lo ancho: no es un enlace más, es no tener ninguno.
+          const SizedBox(height: 8),
+          Row(
+            children: <Widget>[
+              ZeroPill(
+                label: 'Una cámara (sin pareja)',
+                selected: mode == LinkMode.single,
+                onTap: () => onMode(LinkMode.single),
+              ),
             ],
           ),
           const SizedBox(height: 10),

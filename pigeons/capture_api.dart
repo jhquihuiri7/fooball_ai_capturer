@@ -98,6 +98,13 @@ enum LinkMode {
 
   /// Wi-Fi Aware entre los dos iPhone, sin router (IOS-14). Pide emparejarlos una vez.
   aware,
+
+  /// «Una cámara (sin pareja)» (2026-10-15): el modo degradado explícito de la
+  /// arquitectura B con un solo móvil. No abre ningún enlace ni pide el secreto: este
+  /// móvil marca su propia hora, dirige y compone el programa solo con su lente (el
+  /// director encuadra dentro de ella), y EMITIR va como con dos, sin parte ni órdenes.
+  /// Si el entorno de un banco trae RIG_LINK_MULTIPEER, manda el entorno, como siempre.
+  single,
 }
 
 /// Estado de la emisión al servidor (TASK A5).

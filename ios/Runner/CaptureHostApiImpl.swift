@@ -199,7 +199,7 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
 
     func rigClockSnapshot() throws -> String {
         let host = RigLink.hostNowNs()
-        let offset = (link as? RigLinkNW)?.clock.offsetAt(ns: host) ?? 0
+        let offset = linkSession?.clock.offsetAt(ns: host) ?? 0
         return #"{"rig_ns":\#(host + offset),"domain":"\#(RigClockDomain.current())"}"#
     }
 
@@ -212,7 +212,12 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
     }
 
     func setMatchId(matchId: String) throws {
-        (link as? RigLinkNW)?.matchId = matchId
+        linkSession?.matchId = matchId
+    }
+
+    /// La sesión del enlace de Network o la de «Una cámara»; nil con Multipeer o sin enlace.
+    private var linkSession: RigLinkSession? {
+        (link as? RigLinkNW)?.session ?? (link as? RigSoloLink)?.session
     }
 
     func linkPeerAddress() throws -> String {
@@ -247,6 +252,7 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
         case .ethernet: .network(.ethernet)
         case .wifi: .network(.wifi)
         case .aware: .network(.aware)
+        case .single: .single
         }
     }
 
@@ -268,6 +274,28 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
             AdHub.clock = nil
             linkMedium = nil
             link = RigLink(role: role)
+        case .single:
+            // «Una cámara (sin pareja)», 2026-10-15: sin enlace ni secreto. Este móvil es la
+            // referencia del reloj del soporte (su host) y dirige desde ya.
+            let solo = RigSoloLink(role: role)
+            engine.rigClock = solo.clock
+            AdHub.clock = solo.clock
+            engine.setClockReference(true)
+            linkMedium = nil
+            calibPairs = nil
+            currentRole = role
+            solo.onRigRole = { [weak self] rol, term, partido in
+                Task { @MainActor in
+                    try? await self?.flutter.onRigRole(
+                        role: rol == .master ? .master : .slave, term: Int64(term), matchId: partido
+                    )
+                }
+            }
+            ThumbHub.shared.start(
+                side: role == .left ? .left : .right,
+                pipeline: { [weak self] in self?.engine.rigPipeline }, session: solo.session
+            )
+            link = solo
         case let .network(medio):
             guard let secreto = RigLinkNW.benchSecret() else {
                 throw PigeonError(
@@ -386,8 +414,18 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
     /// Una pasada del programa sobre el enlace de Network: el banco split o EMITIR. Junta
     /// SplitBench con la cámara (audio, 4K del banco, reloj) y el transporte del enlace.
     private func makeProgramRun(nw: RigLinkNW, role: CameraRole, config: ProgramRunConfig) -> SplitBench {
+        let s = makeProgramRun(session: nw.session, role: role, config: config)
+        s.linkStats = { [weak nw] in nw?.transportStats }
+        s.linkDiagnosis = { [weak nw] in nw?.transportDiagnosis }
+        s.linkEvents = { [weak nw] in nw?.transportTimeline }
+        return s
+    }
+
+    /// La pasada del programa sobre una sesión: la del enlace de Network o, sin transporte,
+    /// la de «Una cámara».
+    private func makeProgramRun(session: RigLinkSession, role: CameraRole, config: ProgramRunConfig) -> SplitBench {
         let s = SplitBench(
-            session: nw.session, side: role == .left ? .left : .right,
+            session: session, side: role == .left ? .left : .right,
             pipeline: { [weak self] in self?.engine.rigPipeline }, config: config
         )
         s.audioFormat = { [weak self] in self?.engine.audioFormatDescription }
@@ -396,9 +434,6 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
             guard let e = self?.engine else { return [:] }
             return ["out_of_buffers": e.cameraDropsOutOfBuffers, "late": e.cameraDropsLate, "other": e.cameraDropsOther]
         }
-        s.linkStats = { [weak nw] in nw?.transportStats }
-        s.linkDiagnosis = { [weak nw] in nw?.transportDiagnosis }
-        s.linkEvents = { [weak nw] in nw?.transportTimeline }
         s.cameraSwitch = { [weak self] on in self?.engine.setCameraRunningForBench(on) }
         s.exposureBias = { [weak self, weak s] ev in
             self?.engine.benchExposureBias(ev: ev) { r in s?.exposureApplied = r }
@@ -427,8 +462,10 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
     /// EMITIR (IOS-58): "" o por qué no. Una sola pasada a la vez; con el banco split en
     /// marcha no se mezcla otra.
     func startProgram() -> String {
-        guard let nw = link as? RigLinkNW, let medio = linkMedium else {
-            return "sin el enlace de Network: elige Wi-Fi, Wi-Fi Aware o Ethernet al abrir la cámara"
+        let solo = link as? RigSoloLink
+        let nw = link as? RigLinkNW
+        guard solo != nil || (nw != nil && linkMedium != nil) else {
+            return "sin el enlace de Network: elige Wi-Fi, Wi-Fi Aware, Ethernet o «Una cámara» al abrir la cámara"
         }
         guard split == nil else { return "el banco split está en marcha" }
         guard program == nil else { return "" }
@@ -437,8 +474,16 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
         // sistema lo hubiera devuelto a su valor (también al volver a primer plano).
         UIApplication.shared.isIdleTimerDisabled = true
         engine.startRunning()
-        let s = makeProgramRun(nw: nw, role: lado,
-                               config: .production(medium: medio, detectorPackage: SplitBench.productionDetector()))
+        let detector = SplitBench.productionDetector()
+        let s: SplitBench
+        if let solo {
+            // «Una cámara (sin pareja)»: la misma pasada, de una sola lente.
+            s = makeProgramRun(session: solo.session, role: lado, config: .single(detectorPackage: detector))
+        } else if let nw, let medio = linkMedium {
+            s = makeProgramRun(nw: nw, role: lado, config: .production(medium: medio, detectorPackage: detector))
+        } else {
+            return "sin enlace"
+        }
         s.start()
         program = s
         return ""

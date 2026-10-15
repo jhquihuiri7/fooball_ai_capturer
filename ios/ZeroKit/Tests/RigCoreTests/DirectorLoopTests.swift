@@ -136,6 +136,40 @@ final class DirectorLoopTests: XCTestCase {
         XCTAssertEqual(director.limits, ambas)
     }
 
+    func testUnaCamaraEncuadraSoloDentroDeSuLente() throws {
+        // «Una cámara (sin pareja)», 2026-10-15: el lienzo es el de su lente desde el
+        // principio, el primer plano es el más abierto que cabe en ella y no sale de ahí.
+        let rig = try Self.soporte()
+        let ambas = try Self.bucle()
+        for lado in CameraSide.allCases {
+            let director = try DirectorLoop.singleCamera(
+                rig: rig, side: lado, pitchLimitsRad: (-0.5, 0.1), width: 1280, height: 720,
+                plan: ShotPlan.at(), frameDurationMs: Self.frameMs
+            )
+            XCTAssertEqual(director.singleLens, lado)
+            let lente = try CylindricalCanvas.fit(rig, pitchLimitsRad: (-0.5, 0.1), sides: [lado])
+            XCTAssertEqual(director.canvas, lente)
+            XCTAssertLessThan(director.limits.yawHigh - director.limits.yawLow,
+                              ambas.limits.yawHigh - ambas.limits.yawLow, "menos campo que con dos")
+            let primera = try director.tick(targetRigMs: 0)
+            XCTAssertEqual(primera.sides, [lado], "no pide la otra lente")
+            XCTAssertEqual(primera.hfovRad, director.limits.hfovHigh, accuracy: 1e-9, "el plano abierto")
+            XCTAssertEqual(primera.yawRad, (lente.yawMinRad + lente.yawMaxRad) / 2, accuracy: 1e-9,
+                           "centrado en su lente")
+            // Un grupo al otro lado del campo, que esta lente no ve: la vista no se sale.
+            let lejos = lado == .left ? ambas.limits.yawHigh : ambas.limits.yawLow
+            var t: Int64 = 0
+            for _ in 0..<(30 * 20) {
+                director.ingest(Self.grupo(yaw: lejos))
+                t += 33
+                let v = try director.tick(targetRigMs: t)
+                XCTAssertEqual(v.sides, [lado])
+                XCTAssertGreaterThanOrEqual(v.yawRad, director.limits.yawLow - 1e-9)
+                XCTAssertLessThanOrEqual(v.yawRad, director.limits.yawHigh + 1e-9)
+            }
+        }
+    }
+
     func testElGolPidePlanoDeSituacion() throws {
         let director = try Self.bucle()
         var t: Int64 = 0

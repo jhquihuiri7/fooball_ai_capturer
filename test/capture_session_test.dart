@@ -1118,6 +1118,88 @@ void main() {
       expect(session.canCalibrate, isFalse);
     });
   });
+
+  group('«Una cámara (sin pareja)» (2026-10-15)', () {
+    CaptureSession sola(FakeCaptureApi api, FakeRigApi rig, CameraRole role, {bool prefersMaster = false}) =>
+        CaptureSession(
+          role: role,
+          api: api,
+          rigApi: rig,
+          linkMode: LinkMode.single,
+          prefersMaster: prefersMaster,
+          serverHost: '10.0.0.5',
+        );
+
+    test('del lado que sea: abre «sin enlace», dirige y queda LISTA sin reloj ni fase', () async {
+      for (final CameraRole lado in CameraRole.values) {
+        final FakeCaptureApi api = FakeCaptureApi();
+        final CaptureSession session = sola(api, FakeRigApi(), lado);
+        await session.prepare();
+
+        expect(api.lastLinkMode, LinkMode.single);
+        expect(api.lastPrefersMaster, isTrue, reason: 'no hay con quién negociar quién dirige');
+        expect(session.singleCamera, isTrue);
+        expect(session.programMode, isTrue);
+        expect(session.isRigMaster, isTrue);
+        expect(session.phase, SessionPhase.lista);
+        expect(session.waitsForMaster, isFalse);
+        expect(session.canRecord, isTrue);
+        expect(session.canCalibrate, isFalse);
+        expect(session.linkLabel, 'sin pareja: una cámara');
+        expect(session.clockLabel, 'propio: una cámara, sin pareja');
+        expect(session.modeLabel, 'una cámara · sin pareja');
+      }
+    });
+
+    test('EMITIR arranca el programa y la 4K sin pod ni órdenes; PARAR, todo', () async {
+      final FakeCaptureApi api = FakeCaptureApi();
+      final FakeRigApi rig = FakeRigApi();
+      final CaptureSession session = sola(api, rig, CameraRole.right);
+      await session.prepare();
+      // Ni un «conectado» de más le hace mandar nada a nadie.
+      session.onLinkStateChanged(LinkState.connected, 'nadie');
+
+      session.setSaveVideo(true);
+      await session.toggleRecording();
+      expect(session.recording, isTrue);
+      expect(api.lastSrtUrl, '', reason: 'nada al pod aunque haya uno guardado');
+      expect(api.lastSaveVideo, isTrue, reason: '«Guardar vídeo», la 4K propia');
+      expect(rig.startCalls, 1);
+      expect(api.peerCommands, isEmpty);
+
+      await session.refreshStatus();
+      expect(rig.statusCalls, 1);
+
+      await session.toggleRecording();
+      expect(session.recording, isFalse);
+      expect(rig.stopCalls, 1);
+      expect(api.stopCalls, 1);
+      expect(api.peerCommands, isEmpty);
+    });
+
+    test('un rol de esclavo que llegara del nativo no le quita el mando', () async {
+      final CaptureSession session = sola(FakeCaptureApi(), FakeRigApi(), CameraRole.right);
+      await session.prepare();
+      session.onRigRole(RigRole.slave, 3, null);
+      expect(session.isRigMaster, isTrue);
+      expect(session.waitsForMaster, isFalse);
+    });
+
+    test('los otros modos no son «Una cámara», y «Un solo móvil» sigue siendo el suyo', () {
+      for (final LinkMode modo in <LinkMode>[LinkMode.multipeer, LinkMode.wifi, LinkMode.aware, LinkMode.ethernet]) {
+        expect(CaptureSession(role: CameraRole.left, api: FakeCaptureApi(), linkMode: modo).singleCamera, isFalse);
+      }
+      final CaptureSession standalone = CaptureSession(
+        role: CameraRole.left,
+        api: FakeCaptureApi(),
+        linkMode: LinkMode.single,
+        standalone: true,
+      );
+      expect(standalone.singleCamera, isFalse);
+      expect(standalone.programMode, isFalse);
+      expect(standalone.modeLabel, 'un solo móvil · SIN RELOJ');
+    });
+  });
 }
 
 /// Un subidor que no sube: dice lo que le pidieron y contesta lo que toca.

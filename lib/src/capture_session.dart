@@ -187,8 +187,13 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
 
   /// La arquitectura B (IOS-58): con el enlace de Network, EMITIR no manda cada cámara al
   /// pod: el maestro compone el programa y lo sube al VPS, y el esclavo le manda su parte.
-  /// Con un solo móvil o en el banco del enlace no hay programa.
+  /// Con un solo móvil o en el banco del enlace no hay programa. «Una cámara» sí lo tiene.
   bool get programMode => linkMode != LinkMode.multipeer && !standalone && !linkOnly;
+
+  /// «Una cámara (sin pareja)» (2026-10-15): el programa de la arquitectura B con un solo
+  /// móvil, sin enlace. Este móvil dirige, marca su hora y EMITIR no espera a nadie. No es
+  /// [standalone] (GRABAR la 4K para probar la cámara, sin programa).
+  bool get singleCamera => programMode && linkMode == LinkMode.single;
 
   /// En la arquitectura B, EMITIR lo pulsa el maestro y pone en marcha los dos: el
   /// esclavo solo arranca por su orden, aunque puede parar el suyo.
@@ -197,8 +202,10 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
   /// Cómo va el programa de este móvil, leído cada segundo mientras emite. null si no hay.
   ProgramStatus? program;
 
-  /// Quién manda en el soporte: el negociado si lo hay; si no, el izquierdo.
-  bool get isRigMaster => rigRole == null ? role == CameraRole.left : rigRole == RigRole.master;
+  /// Quién manda en el soporte: el negociado si lo hay; si no, el izquierdo. Con «Una
+  /// cámara», este móvil, sea del lado que sea.
+  bool get isRigMaster =>
+      singleCamera || (rigRole == null ? role == CameraRole.left : rigRole == RigRole.master);
 
   /// El maestro del reloj es el maestro del soporte (IOS-80).
   bool get isClockMaster => isRigMaster;
@@ -221,8 +228,11 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
   bool get canRecord =>
       (phase == SessionPhase.lista || phase == SessionPhase.grabando) && !waitsForMaster;
 
-  String get modeLabel =>
-      standalone ? 'un solo móvil · SIN RELOJ' : 'soporte de dos móviles';
+  String get modeLabel => standalone
+      ? 'un solo móvil · SIN RELOJ'
+      : singleCamera
+      ? 'una cámara · sin pareja'
+      : 'soporte de dos móviles';
 
   String get localNetworkLabel {
     switch (localNetworkAllowed) {
@@ -501,7 +511,11 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
   String get linkLabel {
     switch (linkState) {
       case LinkState.off:
-        return standalone ? 'apagado: un solo móvil' : 'apagado';
+        return standalone
+            ? 'apagado: un solo móvil'
+            : singleCamera
+            ? 'sin pareja: una cámara'
+            : 'apagado';
       case LinkState.searching:
         final String busca = role == CameraRole.left ? 'esperando al móvil derecho…' : 'buscando al móvil izquierdo…';
         // Con el enlace de Network, el nativo manda mientras busca por qué no enlaza (el
@@ -515,6 +529,9 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
   }
 
   String get clockLabel {
+    if (singleCamera) {
+      return 'propio: una cámara, sin pareja';
+    }
     if (isClockMaster && !standalone) {
       return 'maestro: este móvil marca la hora';
     }
@@ -790,7 +807,7 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
     if (_clipping && command != RigCommand.calibrate) {
       return;
     }
-    if (!isClockMaster || linkState != LinkState.connected || standalone) {
+    if (!isClockMaster || linkState != LinkState.connected || standalone || singleCamera) {
       return;
     }
     try {
@@ -988,7 +1005,8 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
       return false;
     }
     _linkOwner = this;
-    await _api.startLink(role, prefersMaster, linkMode);
+    // «Una cámara» dirige siempre: no hay con quién negociarlo.
+    await _api.startLink(role, prefersMaster || singleCamera, linkMode);
     return true;
   }
 

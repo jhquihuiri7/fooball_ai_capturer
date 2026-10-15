@@ -277,6 +277,7 @@ class CaptureReadout {
     LinkMode.ethernet => 'Ethernet',
     LinkMode.wifi => 'Wi-Fi',
     LinkMode.aware => 'Wi-Fi Aware',
+    LinkMode.single => 'Una cámara',
   };
 
   /// `1,5 Mbit/s` con un decimal; `6 Mbit/s` sin él.
@@ -345,11 +346,15 @@ class CaptureReadout {
           tone: p.programFps >= programFpsFloor ? ZeroTone.ok : ZeroTone.bad,
         ),
         CaptureReading('SRT', _srtLabel, tone: programIsUp ? ZeroTone.ok : ZeroTone.bad),
-        CaptureReading(
-          'Parte',
-          '${_mbps(p.partMbps)} Mbit/s · ${p.partFallbacks} retrocesos · ${p.partsLost} perdidas',
-          tone: session.linkState == LinkState.connected ? ZeroTone.neutral : ZeroTone.bad,
-        ),
+        // «Una cámara»: no hay parte que esperar, y no es una alarma.
+        if (session.singleCamera)
+          const CaptureReading('Parte', 'sin pareja: el programa sale de esta cámara')
+        else
+          CaptureReading(
+            'Parte',
+            '${_mbps(p.partMbps)} Mbit/s · ${p.partFallbacks} retrocesos · ${p.partsLost} perdidas',
+            tone: session.linkState == LinkState.connected ? ZeroTone.neutral : ZeroTone.bad,
+          ),
       ] else
         CaptureReading(
           'Parte',

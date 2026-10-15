@@ -7,6 +7,9 @@
 /// y en el maestro la misma llamada que el botón EMITIR (`toggleRecording`) y que PARAR. El
 /// esclavo no hace nada: arranca y para por la orden del maestro, como en producción.
 ///
+/// Con `AUTO_LINK=single` («Una cámara (sin pareja)», 2026-10-15) no hay esclavo ni enlace:
+/// el móvil, del lado que sea, emite en cuanto su cámara está LISTA.
+///
 /// Sin `AUTO_EMITIR`, nada de esto se crea y la app es la de siempre.
 library;
 
@@ -99,11 +102,12 @@ class AutoEmitir {
       'rol ${session.rigRole?.name ?? '-'} · emitiendo ${session.recording ? 'sí' : 'no'}'
       '${session.problem == null ? '' : ' · ${session.problem}'}';
 
-  /// LISTA en el maestro: la cámara lista, el enlace conectado y el rol negociado.
+  /// LISTA en el maestro: la cámara lista, el enlace conectado y el rol negociado. Con
+  /// «Una cámara», la cámara lista y nada más: no hay enlace que esperar.
   bool get _ready =>
       session.phase == SessionPhase.lista &&
-      session.linkState == LinkState.connected &&
-      session.rigRole == RigRole.master &&
+      (session.singleCamera ||
+          (session.linkState == LinkState.connected && session.rigRole == RigRole.master)) &&
       !session.recording;
 
   void _onChanged() {
@@ -114,11 +118,17 @@ class AutoEmitir {
     }
     switch (step) {
       case AutoEmitirStep.esperando:
-        if (session.rigRole == RigRole.slave) {
+        if (session.rigRole == RigRole.slave && !session.singleCamera) {
           // El esclavo no emite solo: arranca por la orden del maestro (IOS-58).
           step = AutoEmitirStep.esclavo;
           _timeout?.cancel();
           log('auto-emitir: este móvil es el esclavo: espera la orden del maestro');
+        } else if (_ready && session.singleCamera) {
+          // Sin esclavo no hay reloj ni fase que dejar asentar.
+          step = AutoEmitirStep.asentando;
+          _timeout?.cancel();
+          log('auto-emitir: LISTA (una cámara, sin pareja): EMITIR');
+          unawaited(_emit());
         } else if (_ready) {
           step = AutoEmitirStep.asentando;
           _timeout?.cancel();

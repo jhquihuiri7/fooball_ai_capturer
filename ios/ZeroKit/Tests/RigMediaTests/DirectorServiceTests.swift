@@ -85,6 +85,41 @@ final class DirectorServiceTests: XCTestCase {
         XCTAssertNil(loop.evidence, "las cajas no llegaron a la acción")
     }
 
+    func testUnaCamaraSinParejaIngiereCadaCicloAlMomentoYSigueAlGrupo() throws {
+        // «Una cámara (sin pareja)», 2026-10-15: sin otro lado, cada ciclo entra al llegar;
+        // con el emparejador esperaba `rigPairBufferFrames` ciclos a una pareja que no viene.
+        let rig = try soporte()
+        let loop = try DirectorLoop.singleCamera(
+            rig: rig, side: .right, pitchLimitsRad: (-0.5, 0.1), width: 1280, height: 720,
+            plan: ShotPlan.at(), frameDurationMs: 1000.0 / 30
+        )
+        let director = DirectorService(loop: loop, soloSide: .right)
+        let grupo = (0..<10).map { RigDirection(yawRad: 0.45 + 0.01 * Double($0 - 5), pitchRad: -0.2) }
+        director.receive(side: .right, targetRigMs: 133, detections: cajas(rig, .right, grupo))
+        XCTAssertEqual(director.cyclesIngested, 1, "al momento, sin esperar pareja")
+        director.receive(side: .left, targetRigMs: 133, detections: cajas(rig, .left, grupo))
+        XCTAssertEqual(director.cyclesIngested, 1, "el otro lado no existe en este modo")
+        XCTAssertEqual(director.pairing.emitted, 0, "no pasa por el emparejador")
+        XCTAssertEqual(director.pairing.droppedLeft, 0)
+        // Aunque alguien pida volver a las dos lentes, se queda en la suya.
+        director.setSingleLens(nil)
+        XCTAssertEqual(loop.singleLens, .right)
+        let cadencia = DetectionCadence()
+        var k: Int64 = 2
+        var ultimo = try director.tick(targetRigMs: 0).view
+        for n in 1...(30 * 15) {
+            let t = Int64((Double(n) * 1000 / 30).rounded())
+            while cadencia.instant(k) <= t {
+                director.receive(side: .right, targetRigMs: cadencia.instant(k), detections: cajas(rig, .right, grupo))
+                k += 1
+            }
+            ultimo = try director.tick(targetRigMs: t).view
+            XCTAssertEqual(ultimo.sides, [.right])
+        }
+        XCTAssertEqual(ultimo.yawRad, 0.45, accuracy: 0.15, "sigue al grupo dentro de su lente")
+        XCTAssertEqual(director.cyclesIngested, Int(k - 1))
+    }
+
     func testSoloUnaCamaraSigueDirigiendoYPlanoAbiertoSeQuedaQuieto() throws {
         let rig = try soporte()
         let loop = try DirectorLoop(

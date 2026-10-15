@@ -16,15 +16,26 @@ public final class DirectorService {
     private let lock = NSLock()
     private let history = ViewHistory()
     public private(set) var cyclesIngested = 0
+    /// «Una cámara (sin pareja)» (2026-10-15): el único lado que hay. Sus detecciones entran
+    /// en cuanto llegan, sin esperar en el emparejador a una pareja que no va a venir (con
+    /// un solo lado, cada ciclo esperaba `rigPairBufferFrames` ciclos más).
+    public let soloSide: CameraSide?
 
-    public init(loop: DirectorLoop) {
+    public init(loop: DirectorLoop, soloSide: CameraSide? = nil) {
         self.loop = loop
+        self.soloSide = soloSide
     }
 
     /// Las detecciones de una cámara en el instante `targetRigMs` (propias o del esclavo).
     public func receive(side: CameraSide, targetRigMs: Int64, detections: [PlayerDetection]) {
         lock.lock()
         defer { lock.unlock() }
+        if let solo = soloSide {
+            guard side == solo else { return }
+            loop.ingest(left: solo == .left ? detections : [], right: solo == .right ? detections : [])
+            cyclesIngested += 1
+            return
+        }
         pairer.push(side, ptsNs: Int(targetRigMs) * 1_000_000, payload: detections)
         while let par = pairer.pop() {
             loop.ingest(left: par.left?.payload ?? [], right: par.right?.payload ?? [])
@@ -62,10 +73,11 @@ public final class DirectorService {
     }
 
     /// El otro móvil cayó (o volvió): a los límites de la lente que queda, o a las dos
-    /// (IOS-81). No lanza: si la lente sola no da límites, se queda como estaba.
+    /// (IOS-81). No lanza: si la lente sola no da límites, se queda como estaba. Con
+    /// «Una cámara» no hay otra lente a la que volver: se queda en la suya.
     public func setSingleLens(_ side: CameraSide?) {
         lock.lock(); defer { lock.unlock() }
-        try? loop.setSingleLens(side)
+        try? loop.setSingleLens(soloSide ?? side)
     }
 
     public func markSituation() {

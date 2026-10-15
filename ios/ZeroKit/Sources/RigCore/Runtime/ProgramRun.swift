@@ -40,6 +40,10 @@ public struct ProgramRunConfig: Equatable, Sendable {
     /// El nivel forzado de la escalera (RIG_LADDER_FORCE…), solo en el banco: EMITIR la
     /// deja siempre a sus sensores.
     public var ladderForce: LadderForce?
+    /// «Una cámara (sin pareja)» (2026-10-15): el programa sale de la lente de este móvil y
+    /// de nada más. Sin parte que pintar ni que esperar, y el director encuadra dentro de su
+    /// lente desde el primer instante (`DirectorLoop.singleCamera`).
+    public var singleCamera: Bool
 
     /// Lo que dura el banco si RIG_SPLIT_S no dice otra cosa: los 10 min de IOS-44, en s.
     public static let benchDefaultDurationS = 600.0
@@ -50,7 +54,8 @@ public struct ProgramRunConfig: Equatable, Sendable {
 
     public init(
         purpose: Purpose, durationS: Double, director: Bool, publish: Bool, record4K: Bool,
-        detectorPackage: String?, partBitrateBps: Int, benchFiles: Bool, ladderForce: LadderForce? = nil
+        detectorPackage: String?, partBitrateBps: Int, benchFiles: Bool, ladderForce: LadderForce? = nil,
+        singleCamera: Bool = false
     ) {
         self.purpose = purpose
         self.durationS = durationS
@@ -61,6 +66,7 @@ public struct ProgramRunConfig: Equatable, Sendable {
         self.partBitrateBps = partBitrateBps
         self.benchFiles = benchFiles
         self.ladderForce = ladderForce
+        self.singleCamera = singleCamera
     }
 
     /// El banco split, como siempre: todo del entorno.
@@ -89,6 +95,20 @@ public struct ProgramRunConfig: Equatable, Sendable {
         )
     }
 
+    /// EMITIR con «Una cámara (sin pareja)»: lo mismo que `production` (el director con su
+    /// IA, el detector, el gráfico y la franja, la copia .mov y el SRT si hay QR Soporte), sin
+    /// enlace y con el programa de una sola lente. Sin parte, su bitrate no se usa.
+    public static func single(detectorPackage: String?) -> ProgramRunConfig {
+        ProgramRunConfig(
+            purpose: .production, durationS: .infinity, director: true, publish: true, record4K: false,
+            detectorPackage: detectorPackage, partBitrateBps: noPartBitrateBps, benchFiles: false,
+            singleCamera: true
+        )
+    }
+
+    /// La parte de «Una cámara»: no hay, así que su bitrate es cero (bit/s).
+    public static let noPartBitrateBps = 0
+
     static let bitsPerMegabit = 1_000_000.0
 }
 
@@ -97,10 +117,12 @@ public struct ProgramRunConfig: Equatable, Sendable {
 public enum LinkChoice: Equatable, Sendable {
     case multipeer
     case network(LinkMedium)
+    /// «Una cámara (sin pareja)» (2026-10-15): ningún enlace; este móvil emite solo.
+    case single
 
     /// El entorno manda, para que los bancos lanzados desde el Mac sigan igual
-    /// (RIG_LINK_MULTIPEER=0 y RIG_LINK_INTERFACE); sin él, lo que eligió la pantalla.
-    /// nil si el entorno pide Network con un medio que no se entiende.
+    /// (RIG_LINK_MULTIPEER=0 y RIG_LINK_INTERFACE); sin él, lo que eligió la pantalla,
+    /// también «Una cámara». nil si el entorno pide Network con un medio que no se entiende.
     public static func resolve(environment env: [String: String], requested: LinkChoice) -> LinkChoice? {
         guard let multipeer = env["RIG_LINK_MULTIPEER"] else { return requested }
         if multipeer != "0" { return .multipeer }

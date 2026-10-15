@@ -217,6 +217,17 @@ public final class RigLinkSession {
         }
     }
 
+    /// «Una cámara (sin pareja)» (2026-10-15, `RigLinkSession.alone`): dirige desde ya, sin
+    /// abrir el transporte, sin latido y sin buscar a nadie. El estado se queda en `.off`:
+    /// las vistas, las partes y las órdenes no salen, porque nunca hay sesión conectada.
+    public func startAlone() {
+        queue.async { [self] in
+            claimedRole = .master
+            rigRole = .master
+            onRole?(rigRole, term, matchId)
+        }
+    }
+
     private func startHeartbeat() {
         heartbeatTimer?.cancel()
         let t = DispatchSource.makeTimerSource(queue: queue)

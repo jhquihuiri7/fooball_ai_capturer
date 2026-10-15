@@ -46,8 +46,9 @@ const int _autoRecordS = int.fromEnvironment('AUTO_RECORD_S');
 
 /// EMITIR sin tocar la pantalla (2026-10-15, `tools/emitir_auto.sh`): con AUTO_ROLE y
 /// AUTO_EMITIR=true, el camino de producción de los toques —el lado, «Este móvil dirige» en
-/// el izquierdo, el enlace AUTO_LINK (aware o wifi) de «Enlace y emisión», «Abrir cámara» y,
-/// en el maestro con LISTA, el mismo EMITIR del botón—, y no el banco split. AUTO_EMITIR_4K
+/// el izquierdo, el enlace AUTO_LINK (aware, wifi o single: «Una cámara (sin pareja)») de
+/// «Enlace y emisión», «Abrir cámara» y, en el maestro con LISTA, el mismo EMITIR del
+/// botón—, y no el banco split. AUTO_EMITIR_4K
 /// enciende «Guardar vídeo»; AUTO_EMITIR_S > 0 llama a PARAR a esos segundos de EMITIR.
 /// Los interruptores valen `1` o `true`.
 const String _autoEmitirDefine = String.fromEnvironment('AUTO_EMITIR');
@@ -114,7 +115,8 @@ class CaptureApp extends StatelessWidget {
 /// La pantalla de captura del modo sin toques, como la abre «Abrir cámara» desde la de lado
 /// (`RolePage._open`): sin servidor del pod (el programa va al QR Soporte del Keychain, o
 /// SIN DESTINO), «Este móvil dirige» en el izquierdo salvo PREFERS_MASTER, y el enlace pedido
-/// (aware por defecto; wifi o ethernet; nunca Multipeer, que no tiene programa).
+/// (aware por defecto; wifi, ethernet o single; nunca Multipeer, que no tiene programa). Con
+/// single dirige del lado que sea, como desde la pantalla.
 ZeroShell autoEmitirShell({
   required String role,
   required String link,
@@ -128,7 +130,8 @@ ZeroShell autoEmitirShell({
       LinkMode.aware;
   return ZeroShell(
     role: lado,
-    prefersMaster: prefersMaster.isEmpty ? lado == CameraRole.left : prefersMaster == 'true',
+    prefersMaster: modo == LinkMode.single ||
+        (prefersMaster.isEmpty ? lado == CameraRole.left : prefersMaster == 'true'),
     linkMode: modo,
     autoEmitir: AutoEmitirConfig(
       save4k: save4k,

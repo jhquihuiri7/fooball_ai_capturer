@@ -48,6 +48,24 @@ final class ProgramRunTests: XCTestCase {
         XCTAssertEqual(c.detectorPackage, "p.mlpackage")
         XCTAssertEqual(c.partBitrateBps, LinkMedium.aware.partBitrateBps)
         XCTAssertNil(ProgramRunConfig.production(medium: .wifi, detectorPackage: nil).detectorPackage)
+        XCTAssertFalse(c.singleCamera, "con dos móviles, el programa de siempre")
+    }
+
+    func testOneCameraIsTheSameEmitirWithoutAPartner() {
+        // «Una cámara (sin pareja)», 2026-10-15: lo mismo que EMITIR, de una sola lente.
+        let c = ProgramRunConfig.single(detectorPackage: "p.mlpackage")
+        XCTAssertTrue(c.singleCamera)
+        XCTAssertEqual(c.purpose, .production)
+        XCTAssertEqual(c.durationS, .infinity)
+        XCTAssertTrue(c.director)
+        XCTAssertTrue(c.publish)
+        XCTAssertFalse(c.record4K)
+        XCTAssertFalse(c.benchFiles)
+        XCTAssertEqual(c.detectorPackage, "p.mlpackage")
+        XCTAssertEqual(c.partBitrateBps, ProgramRunConfig.noPartBitrateBps)
+        XCTAssertNil(c.ladderForce, "EMITIR deja la escalera a sus sensores")
+        // El banco no lo es nunca: su entorno no tiene cómo pedirlo.
+        XCTAssertFalse(ProgramRunConfig.bench(environment: ["RIG_LINK_INTERFACE": "aware"]).singleCamera)
     }
 
     // MARK: - LinkChoice
@@ -58,6 +76,14 @@ final class ProgramRunTests: XCTestCase {
         // RIG_LINK_INTERFACE sola no cambia nada: hace falta RIG_LINK_MULTIPEER=0, como antes.
         XCTAssertEqual(LinkChoice.resolve(environment: ["RIG_LINK_INTERFACE": "wifi"], requested: .multipeer),
                        .multipeer)
+    }
+
+    func testOneCameraIsAScreenChoiceAndTheBenchEnvironmentStillWins() {
+        XCTAssertEqual(LinkChoice.resolve(environment: [:], requested: .single), .single)
+        XCTAssertEqual(LinkChoice.resolve(environment: ["RIG_LINK_SECRET": "x"], requested: .single), .single)
+        XCTAssertEqual(LinkChoice.resolve(environment: ["RIG_LINK_MULTIPEER": "0", "RIG_LINK_INTERFACE": "aware"],
+                                          requested: .single), .network(.aware))
+        XCTAssertEqual(LinkChoice.resolve(environment: ["RIG_LINK_MULTIPEER": "1"], requested: .single), .multipeer)
     }
 
     func testTheBenchEnvironmentWins() {

@@ -36,6 +36,8 @@ void main() {
 
   Future<void> emparejar(WidgetTester tester) async {
     await tester.ensureVisible(find.text('Emparejar sin cable'));
+    // `ensureVisible` desplaza sin pintar: sin este pump, el toque iría a donde estaba.
+    await tester.pump();
     await tester.tap(find.text('Emparejar sin cable'));
     await tester.pumpAndSettle();
   }
@@ -229,6 +231,33 @@ void main() {
 
       expect(elegida(tester, 'Wi-Fi'), isTrue);
       expect(find.textContaining('sube el programa al VPS'), findsOneWidget);
+    });
+
+    testWidgets('«Una cámara (sin pareja)» se elige aparte y se guarda', (WidgetTester tester) async {
+      SharedPreferences.setMockInitialValues(<String, Object>{linkModeKey: 'aware'});
+      await abrir(tester, FakeCaptureApi());
+      await tester.pumpAndSettle();
+      expect(elegida(tester, 'Una cámara (sin pareja)'), isFalse);
+
+      await tester.ensureVisible(find.text('Una cámara (sin pareja)'));
+      await tester.pump();
+      await tester.tap(find.text('Una cámara (sin pareja)'));
+      await tester.pumpAndSettle();
+
+      expect(elegida(tester, 'Una cámara (sin pareja)'), isTrue);
+      expect(elegida(tester, 'Aware'), isFalse);
+      expect(find.textContaining('este móvil emite solo con su cámara'), findsOneWidget);
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString(linkModeKey), 'single');
+    });
+
+    testWidgets('«Una cámara» guardada se elige al abrir', (WidgetTester tester) async {
+      SharedPreferences.setMockInitialValues(<String, Object>{linkModeKey: 'single'});
+      await abrir(tester, FakeCaptureApi());
+      await tester.pumpAndSettle();
+
+      expect(elegida(tester, 'Una cámara (sin pareja)'), isTrue);
+      expect(elegida(tester, 'Pod'), isFalse);
     });
 
     testWidgets('un valor que ya no existe deja el pod', (WidgetTester tester) async {

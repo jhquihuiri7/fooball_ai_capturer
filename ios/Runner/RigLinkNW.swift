@@ -277,6 +277,53 @@ final class RigLinkNW: PeerLinking {
     }
 }
 
+// MARK: - «Una cámara (sin pareja)» (2026-10-15)
+
+/// El «enlace» de «Una cámara»: ninguno. Ni Bonjour, ni Wi-Fi Aware, ni secreto. Lleva una
+/// RigLinkSession que dirige sola (`RigLinkSession.alone`) para que EMITIR sea la misma pasada
+/// del programa que con dos, con su reloj de host como reloj del soporte. A Dart le dice que
+/// el enlace está apagado y que este móvil dirige; lo que haría falta mandar al otro se pierde.
+final class RigSoloLink: PeerLinking {
+    var onState: ((LinkState, String) -> Void)?
+    var onStamps: ((Int64, Int64, Int64, Int64) -> Void)?
+    var recentPts: (() -> [Int64])?
+    var currentLook: (() -> CameraLook?)?
+    var onLook: ((CameraLook) -> Void)?
+    var onCommand: ((RigCommand) -> Void)?
+
+    let session: RigLinkSession
+    /// El rol (siempre maestro), con su term y su partido, como el de RigLinkNW.
+    var onRigRole: ((RigCore.RigRole, Int, String?) -> Void)?
+
+    var clock: RigClock { session.clock }
+
+    var matchId: String? {
+        get { session.matchId }
+        set { session.matchId = newValue }
+    }
+
+    init(role: CameraRole) {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
+        session = .alone(side: role == .left ? .left : .right, deviceId: UIDevice.current.name,
+                         appVersion: version ?? "0")
+        session.hostNowNs = { RigLink.hostNowNs() }
+        session.onRole = { [weak self] rol, term, partido in self?.onRigRole?(rol, term, partido) }
+    }
+
+    func start() {
+        session.startAlone()
+        onState?(.off, "")
+    }
+
+    func stop() {
+        session.stop()
+    }
+
+    func publish(look _: CameraLook) {}
+    func send(command _: RigCommand) {}
+    func masterRecentPts() async -> [Int64] { [] }
+}
+
 // MARK: - El banco del enlace
 
 // El banco del enlace entre los dos móviles (IOS-11/16/12, aceptación de campo).
@@ -861,6 +908,13 @@ final class LinkPartsLoad {
 // va a Documents/program-<partido>-<t>.mov (IOS-57) y sin el .ts ni las vistas. Lo de medir
 // sigue leyéndose del entorno y sin él no hace nada.
 //
+// «Una cámara (sin pareja)» (2026-10-15, `ProgramRunConfig.single`): la misma pasada de EMITIR
+// con un solo móvil, sobre la sesión sola (`RigSoloLink`). Sin parte (ni su codificador ni su
+// render), el maestro no espera ninguna, y el director va con el lienzo de su lente desde el
+// primer instante (`DirectorLoop.singleCamera`): recorre su lente entera, el plano abierto es el
+// más abierto que cabe en ella (en la franja del campo, como con dos) y no pide vistas de la otra
+// lente, así que no hay retrocesos que contar. El informe y el latido lo dicen con `single_camera`.
+//
 // IOS-06 (2026-10-15): la escalera de degradación ACTÚA en el banco y en EMITIR
 // (LadderGovernor). Una vez por segundo avanza con los sensores del CaptureEngine y su nivel
 // va en el latido. La IA de los dos sigue la peor de las dos escaleras: el maestro la manda
@@ -890,6 +944,9 @@ final class SplitBench {
     static let viewLeadMs: Int64 = 67
     /// Distancia máxima entre el instante pedido y el fotograma propio que se usa.
     static let frameMatchMs: Int64 = 20
+    /// El pitch del lienzo del director, en rad: de 0,5 por debajo del horizonte a 0,1 por
+    /// encima (el campo, sin cielo). El mismo con dos lentes y con una.
+    static let directorPitchLimitsRad = (low: -0.5, high: 0.1)
 
     private let session: RigLinkSession
     private let side: CameraSide
@@ -1420,43 +1477,45 @@ final class SplitBench {
             overlap = OverlapMeans(rig: modelo, side: side, width: ring.width, height: ring.height,
                                    mountedUpsideDown: side == .left)
 
-            // Esclavo: su parte.
-            let enc = try VideoEncoder(
-                width: Self.programWidth, height: Self.programHeight,
-                bitrateBps: config.partBitrateBps, viewId: side == .left ? 0 : 1
-            )
-            let s = SlavePartStage(
-                side: side,
-                resolver: SlaveViewResolver(frameDurationMs: 1000 / Self.fps),
-                renderer: try MetalPartRenderer(context: ctx, rig: modelo, side: side,
-                                                width: Self.programWidth, height: Self.programHeight),
-                encoder: enc
-            )
-            // RIG_SPLIT_SLAVE_NO_PARTS=1: el esclavo renderiza y codifica igual, pero manda
-            // «sin parte» en lugar de la parte. El maestro sigue con el enlace vivo y sin
-            // partes ni decodificador: separa la fuga de memoria de esos dos (2026-10-10).
-            let soloSinParte = env["RIG_SPLIT_SLAVE_NO_PARTS"] == "1"
-            s.onPart = { [weak self] p in
-                guard let self else { return }
-                linkTimeline.mark(.firstPartSent)
-                if soloSinParte {
-                    session.send(noPart: NoPartPacket(frameRigMs: p.frameRigMs, viewId: p.view.viewId))
-                    return
+            // Esclavo: su parte. «Una cámara» no tiene a quién mandarla.
+            if !config.singleCamera {
+                let enc = try VideoEncoder(
+                    width: Self.programWidth, height: Self.programHeight,
+                    bitrateBps: config.partBitrateBps, viewId: side == .left ? 0 : 1
+                )
+                let s = SlavePartStage(
+                    side: side,
+                    resolver: SlaveViewResolver(frameDurationMs: 1000 / Self.fps),
+                    renderer: try MetalPartRenderer(context: ctx, rig: modelo, side: side,
+                                                    width: Self.programWidth, height: Self.programHeight),
+                    encoder: enc
+                )
+                // RIG_SPLIT_SLAVE_NO_PARTS=1: el esclavo renderiza y codifica igual, pero manda
+                // «sin parte» en lugar de la parte. El maestro sigue con el enlace vivo y sin
+                // partes ni decodificador: separa la fuga de memoria de esos dos (2026-10-10).
+                let soloSinParte = env["RIG_SPLIT_SLAVE_NO_PARTS"] == "1"
+                s.onPart = { [weak self] p in
+                    guard let self else { return }
+                    linkTimeline.mark(.firstPartSent)
+                    if soloSinParte {
+                        session.send(noPart: NoPartPacket(frameRigMs: p.frameRigMs, viewId: p.view.viewId))
+                        return
+                    }
+                    // IOS-43: la edad de la parte al salir del esclavo (captura → render →
+                    // codificado), en el reloj del soporte. La de llegada menos esta es la red.
+                    let ns = RigLink.hostNowNs()
+                    let rig = (ns + session.clock.offsetAt(ns: ns)) / 1_000_000
+                    lock.lock()
+                    sendAge.record(ms: Double(rig - p.frameRigMs))
+                    partBytesSent += p.accessUnit.count
+                    lock.unlock()
+                    session.send(part: p)
                 }
-                // IOS-43: la edad de la parte al salir del esclavo (captura → render →
-                // codificado), en el reloj del soporte. La de llegada menos esta es la red.
-                let ns = RigLink.hostNowNs()
-                let rig = (ns + session.clock.offsetAt(ns: ns)) / 1_000_000
-                lock.lock()
-                sendAge.record(ms: Double(rig - p.frameRigMs))
-                partBytesSent += p.accessUnit.count
-                lock.unlock()
-                session.send(part: p)
+                s.onNoPart = { [weak self] n in self?.session.send(noPart: n) }
+                slaveEncoder = enc
+                slave = s
+                pipeline.onFrame = { [weak self] meta in self?.slaveFrame(meta, ring: ring) }
             }
-            s.onNoPart = { [weak self] n in self?.session.send(noPart: n) }
-            slaveEncoder = enc
-            slave = s
-            pipeline.onFrame = { [weak self] meta in self?.slaveFrame(meta, ring: ring) }
 
             // Maestro: el programa.
             var pool: CVPixelBufferPool?
@@ -1506,11 +1565,23 @@ final class SplitBench {
             )
             // IOS-84: sin ninguna cámara, la tarjeta SIN SEÑAL (la sube Dart, oculta).
             m.onSourceChange = { fuente in OverlayHub.shared?.setVisible(.slate, fuente == .noSignal) }
+            // «Una cámara»: una lente desde el principio, sin esperar ninguna parte.
+            if config.singleCamera {
+                m.peerDown = true
+                singleLensApplied = true
+            }
             if env["RIG_SPLIT_SCRIPT"] == "spk04" {
                 spk04 = Spk04Script(rig: modelo)
+            } else if config.singleCamera, config.director {
+                let loop = try DirectorLoop.singleCamera(
+                    rig: modelo, side: side, pitchLimitsRad: Self.directorPitchLimitsRad,
+                    width: Self.programWidth, height: Self.programHeight, plan: ShotPlan.at(),
+                    frameDurationMs: 1000 / Self.fps
+                )
+                director = DirectorService(loop: loop, soloSide: side)
             } else if config.director {
                 let loop = try DirectorLoop(
-                    rig: modelo, canvas: CylindricalCanvas.fit(modelo, pitchLimitsRad: (-0.5, 0.1)),
+                    rig: modelo, canvas: CylindricalCanvas.fit(modelo, pitchLimitsRad: Self.directorPitchLimitsRad),
                     width: Self.programWidth, height: Self.programHeight, plan: ShotPlan.at(),
                     frameDurationMs: 1000 / Self.fps
                 )
@@ -1616,8 +1687,13 @@ final class SplitBench {
             pitch = guion.pitchRad
         }
         let lados: [CameraSide]
-        if let v = try? RectilinearView(yawRad: yaw, pitchRad: pitch, hfovRad: hfov,
-                                        width: Self.programWidth, height: Self.programHeight) {
+        if config.singleCamera {
+            // «Una cámara»: sin barrido que cruce a la otra lente; quieta, al centro de la suya.
+            yaw = rig.camera(side).pose.yawRad
+            pitch = rig.camera(side).pose.pitchRad
+            lados = [side]
+        } else if let v = try? RectilinearView(yawRad: yaw, pitchRad: pitch, hfovRad: hfov,
+                                               width: Self.programWidth, height: Self.programHeight) {
             lados = sidesFor(rig: rig, view: v)
         } else {
             lados = [.left, .right]
@@ -2312,10 +2388,10 @@ final class SplitBench {
     }
 
     /// En el maestro: con el esclavo caído (IOS-81) o con su parte parada por la escalera
-    /// (L4), una lente y sin esperar su parte; al volver, las dos.
+    /// (L4), una lente y sin esperar su parte; al volver, las dos. Con «Una cámara», siempre una.
     private func applySingleLens() {
         guard session.isMaster, let m = master else { return }
-        let sola = peerDown || governor.peerStoppedParts
+        let sola = config.singleCamera || peerDown || governor.peerStoppedParts
         guard sola != singleLensApplied else { return }
         singleLensApplied = sola
         m.peerDown = sola
@@ -2568,6 +2644,8 @@ final class SplitBench {
             "spk04_acceptance": spk04Acceptance(addedLatencyP95: latenciaP95),
             "name": "program-split",
             "purpose": config.purpose.rawValue,
+            // «Una cámara (sin pareja)»: sin esclavo, sin parte y sin enlace, a propósito.
+            "single_camera": config.singleCamera,
             "elapsed_s": Double(DispatchTime.now().uptimeNanoseconds - startNs) / 1e9,
             "part_fallbacks": partFallbacks,
             "device": BenchRunner.machine(),
@@ -2735,6 +2813,7 @@ final class SplitBench {
         return [
             "name": "program-live",
             "purpose": config.purpose.rawValue,
+            "single_camera": config.singleCamera,
             "finished": finished,
             "side": side.rawValue,
             "role": session.isMaster ? "master" : "slave",

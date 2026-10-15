@@ -844,5 +844,47 @@ void main() {
       expect(rig.stopCalls, 1);
       await closeCapture(tester, session);
     });
+
+    testWidgets('«Una cámara»: el derecho solo, LISTA sin enlace, EMITIR y la tarjeta sin pareja', (
+      WidgetTester tester,
+    ) async {
+      // 2026-10-15: el modo «Una cámara (sin pareja)», del lado que sea.
+      final FakeCaptureApi api = FakeCaptureApi();
+      final FakeRigApi rig = FakeRigApi(
+        status: fakeProgramStatus(srtState: 'none', srtTarget: '', partMbps: 0, partFallbacks: 0, partsLost: 0),
+      );
+      final CaptureSession session = await openCapture(
+        tester,
+        api: api,
+        linkMode: LinkMode.single,
+        rigApi: rig,
+        height: 2400,
+      );
+      session.onLinkStateChanged(LinkState.off, '');
+      await tester.pump();
+
+      expect(api.lastLinkMode, LinkMode.single);
+      expect(find.text('LISTA'), findsOneWidget, reason: 'sin enlace, sin reloj del otro y sin fase');
+      expect(find.text('EMITE EL MAESTRO'), findsNothing);
+      expect(buttonWith(tester, 'EMITIR').onPressed, isNotNull);
+      expect(find.text('Una cámara · sin pareja: una cámara'), findsOneWidget);
+
+      await tester.tap(find.text('EMITIR'));
+      await tester.pump();
+      await tester.pump(statusRefreshInterval);
+
+      expect(rig.startCalls, 1);
+      expect(api.peerCommands, isEmpty, reason: 'no hay a quién');
+      expect(find.text('EMITIENDO'), findsOneWidget);
+      expect(find.text('SIN DESTINO'), findsOneWidget);
+      expect(find.text('sin pareja: el programa sale de esta cámara'), findsOneWidget);
+      expect(find.textContaining('retrocesos'), findsNothing);
+
+      await tester.tap(find.text('PARAR'));
+      await tester.pump();
+      expect(rig.stopCalls, 1);
+      expect(api.peerCommands, isEmpty);
+      await closeCapture(tester, session);
+    });
   });
 }

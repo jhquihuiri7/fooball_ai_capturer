@@ -184,6 +184,56 @@ void main() {
     });
   });
 
+  group('«Una cámara (sin pareja)», AUTO_LINK=single', () {
+    test('el derecho solo emite en cuanto está LISTA, sin enlace ni espera, y PARA a los s', () {
+      fakeAsync((FakeAsync async) {
+        final List<String> calls = <String>[];
+        final List<String> log = <String>[];
+        final CaptureSession session = CaptureSession(
+          role: CameraRole.right,
+          api: _OrderedApi(calls),
+          rigApi: _OrderedRig(calls),
+          linkMode: LinkMode.single,
+          prefersMaster: false,
+          phaseSettle: Duration.zero,
+        );
+        final AutoEmitir auto = AutoEmitir(
+          session: session,
+          config: const AutoEmitirConfig(stopAfter: Duration(seconds: 60), save4k: true),
+          log: log.add,
+        )..start();
+        session.prepare();
+        async.flushMicrotasks();
+        // El nativo dice «sin enlace» y que este dirige: nada más hace falta.
+        session.onLinkStateChanged(LinkState.off, '');
+        session.onRigRole(RigRole.master, 0, null);
+        async.flushMicrotasks();
+        expect(calls, <String>[
+          'startLink right dirige=true single',
+          'start url="" 4k=true',
+          'startProgram',
+        ], reason: 'sin los 20 s del esclavo y sin orden a nadie');
+        expect(auto.step, AutoEmitirStep.emitiendo);
+        expect(log.where((String l) => l.contains('una cámara')), isNotEmpty);
+
+        async.elapse(const Duration(seconds: 60));
+        async.flushMicrotasks();
+        expect(calls.skip(3), <String>['stopProgram', 'stop']);
+        expect(auto.step, AutoEmitirStep.parado);
+        auto.dispose();
+      });
+    });
+
+    test('autoEmitirShell con single: dirige del lado que sea', () {
+      for (final String lado in <String>['left', 'right']) {
+        final ZeroShell shell =
+            autoEmitirShell(role: lado, link: 'single', save4k: false, stopAfterS: 0, prefersMaster: 'false');
+        expect(shell.linkMode, LinkMode.single);
+        expect(shell.prefersMaster, isTrue);
+      }
+    });
+  });
+
   group('el esclavo', () {
     test('no emite solo: arranca y para por la orden del maestro', () {
       fakeAsync((FakeAsync async) {

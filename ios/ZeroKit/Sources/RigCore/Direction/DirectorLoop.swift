@@ -131,6 +131,29 @@ public final class DirectorLoop {
         grammar = ShotGrammar(plan: plan)
     }
 
+    /// «Una cámara (sin pareja)» (2026-10-15): el director de un móvil que emite solo. El
+    /// lienzo es el de su lente desde el principio, así que arranca en el plano más abierto
+    /// que cabe en ella, centrado, recorre la lente entera y nunca encuadra lo que no ve; y
+    /// sus vistas piden solo ese lado (`singleLens`), sin contar como retroceso lo que no
+    /// pinta la otra. `pitchLimitsRad`, los del lienzo de dos lentes: el plano más abierto lo
+    /// limita esa franja, como con dos.
+    public static func singleCamera(
+        rig: RigModel,
+        side: CameraSide,
+        pitchLimitsRad: (low: Double, high: Double),
+        width: Int,
+        height: Int,
+        plan: ShotPlan,
+        frameDurationMs: Double
+    ) throws -> DirectorLoop {
+        let lienzo = try CylindricalCanvas.fit(rig, pitchLimitsRad: pitchLimitsRad, sides: [side])
+        let loop = try DirectorLoop(
+            rig: rig, canvas: lienzo, width: width, height: height, plan: plan, frameDurationMs: frameDurationMs
+        )
+        try loop.setSingleLens(side)
+        return loop
+    }
+
     public var view: RectilinearView { engine.view }
     public var limits: CameraLimits { engine.limits }
     public var settled: Bool { engine.settled }
