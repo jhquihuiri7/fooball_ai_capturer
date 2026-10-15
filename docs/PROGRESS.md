@@ -62,6 +62,14 @@ de EMITIR, como la vez que falló.
     no está separado.
 - 200 desgarros: las ventanas empujaron la fase a través de ±½ fotograma, como se esperaba.
 
+**4. El spike en los dos lados** (`RIG_SPIKE_FRAME_SIDE=alternate`, sin 4K;
+`bench/dos-moviles-20261015-1047`): **el iPhone 17 responde igual que el 16 Pro**
+(33367/1000000 leído, 4 fotogramas, 0 pérdidas, exposición e ISO iguales). Cada ventana
+mueve la fase ~28 ms: hacia abajo si se alarga el derecho y hacia arriba si se alarga el
+izquierdo. **Aquí la parte, normal:** `part_age` 85/90 y `parts_jitter_ms` 1,3. El retraso de
+la pasada anterior iba con la 4K del esclavo: falta separarlo (4K sin spike frente a 4K con
+spike). Resultados en el ADR 0024 (football-ai, 9248c9c).
+
 ## 2026-10-15 · EMITIR de producción, 60 min por Wi-Fi Aware y sin destino, en los dos iPhone (AUTO_EMITIR): ✅ programa completo y estable · 🚧 falta el dedo en el botón y una escena con dos lentes
 
 `tools/emitir_auto.sh <secreto> 3600 --link aware` (2358dcb: con la escalera actuando y la
