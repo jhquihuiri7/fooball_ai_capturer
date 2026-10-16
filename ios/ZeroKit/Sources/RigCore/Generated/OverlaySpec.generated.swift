@@ -58,10 +58,8 @@ public enum OverlaySpec {
         "comp": 22,
         "live": 24,
         "crest": 26,
-        "slot": 22,
-        "sub": 15,
-        "claim": 30,
-        "ai": 16,
+        "strip_title": 34,
+        "strip_subtitle": 20,
     ]
 
     /// Las familias: «display» es Barlow Condensed y «sans», Inter.
@@ -77,10 +75,8 @@ public enum OverlaySpec {
         "comp": "display",
         "live": "sans",
         "crest": "display",
-        "slot": "display",
-        "sub": "sans",
-        "claim": "display",
-        "ai": "sans",
+        "strip_title": "display",
+        "strip_subtitle": "sans",
     ]
     /// El peso de cada texto.
     public static let fontWeights: [String: Int] = [
@@ -90,10 +86,8 @@ public enum OverlaySpec {
         "comp": 600,
         "live": 800,
         "crest": 800,
-        "slot": 700,
-        "sub": 500,
-        "claim": 700,
-        "ai": 500,
+        "strip_title": 700,
+        "strip_subtitle": 500,
     ]
 
     /// La franja (overlay_preview.py).
@@ -101,17 +95,15 @@ public enum OverlaySpec {
         "edge_h": 2,
         "reserved_left": 360,
         "reserved_right": 300,
-        "logo_h": 48,
-        "logo_gap": 16,
         "logo_src_w": 97,
         "logo_src_h": 84,
-        "claim_line_h": 32,
-        "divider_pad": 26,
-        "slot_gap": 40,
-        "slot_icon_r": 14,
-        "raya_w": 6,
-        "raya_h": 28,
-        "raya_gap": 14,
+        "image_h": 84,
+        "image_max_w": 300,
+        "image_gap": 28,
+        "title_dy": -14,
+        "subtitle_dy": 20,
+        "title_max_chars": 48,
+        "subtitle_max_chars": 72,
     ]
 
     /// La jornada (fixtures_card.py).

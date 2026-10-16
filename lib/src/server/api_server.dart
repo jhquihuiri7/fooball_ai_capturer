@@ -260,6 +260,14 @@ class MasterApi {
             ? ApiResponse.problem(HttpStatus.notFound, 'no hay icono del campeonato')
             : ApiResponse(HttpStatus.ok, tipo, await engine.graphics.iconFile.readAsBytes());
       }
+      final String? franja = stripNamed(request.path);
+      if (franja != null) {
+        // La imagen de una franja guardada (enmienda del ADR 0027 del 2026-10-16).
+        final StripImage? img = engine.graphics.stripImageFor(franja);
+        return img == null
+            ? ApiResponse.problem(HttpStatus.notFound, 'la franja $franja no tiene imagen')
+            : ApiResponse(HttpStatus.ok, img.mime, await img.file.readAsBytes());
+      }
       final String? ranura = crestSlot(request.path), nombrado = crestNamed(request.path);
       if (ranura != null || nombrado != null) {
         // El escudo del equipo de esa ranura (ADR 0028 y 0029), o el del nombre (ADR 0030).
@@ -298,6 +306,15 @@ class MasterApi {
         return ApiResponse.problem(HttpStatus.conflict, 'no hay próximo partido');
       }
       engine.deleteCrestFor(equipo);
+      return ApiResponse.json(engine.toJson(scopes: acceso.$1!));
+    }
+    final String? franja = stripNamed(request.path);
+    if (request.method == 'DELETE' && franja != null) {
+      final (Set<String>?, ApiResponse?) acceso = _access(request, panelScopeMatch);
+      if (acceso.$2 != null) {
+        return acceso.$2!;
+      }
+      engine.deleteStripImage(franja);
       return ApiResponse.json(engine.toJson(scopes: acceso.$1!));
     }
     final String? video = videoName(request.path);
@@ -357,6 +374,21 @@ class MasterApi {
       }
     }
     return null;
+  }
+
+  /// La franja guardada de una ruta `/api/v1/assets/strip/<nombre>`, ya sin el %-escapado;
+  /// null si la ruta no es de la imagen de una franja.
+  static String? stripNamed(String path) {
+    const String prefijo = '$panelApiPrefix$stripImageRoute/';
+    if (!path.startsWith(prefijo)) {
+      return null;
+    }
+    try {
+      final String nombre = Uri.decodeComponent(path.substring(prefijo.length)).trim();
+      return nombre.isEmpty || nombre.length > stripPresetNameMaxChars || nombre.contains('/') ? null : nombre;
+    } on ArgumentError {
+      return null;
+    }
   }
 
   /// El equipo de una ruta `/api/v1/assets/crests/<nombre>` (ADR 0030), ya sin el
@@ -699,6 +731,24 @@ class MasterApiServer {
           destino: motor.graphics.uploadFile,
           adoptar: motor.adoptChampionshipIcon,
         );
+        await _reply(request, respuesta);
+        return;
+      }
+      final String? franja = MasterApi.stripNamed(request.uri.path);
+      if (request.method == 'PUT' && franja != null) {
+        final MatchEngine motor = api.engine;
+        if (!motor.graphics.stripPresets.any((StripPreset p) => p.name.toUpperCase() == franja.toUpperCase())) {
+          await request.drain<void>();
+          respuesta = ApiResponse.problem(HttpStatus.notFound, 'no hay ninguna franja que se llame $franja');
+        } else {
+          respuesta = await _putImage(
+            request,
+            que: 'la imagen de la franja',
+            maxBytes: stripImageMaxBytes,
+            destino: motor.graphics.stripImageUploadFile,
+            adoptar: (String tipo) => motor.adoptStripImage(franja, tipo),
+          );
+        }
         await _reply(request, respuesta);
         return;
       }

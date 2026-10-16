@@ -122,10 +122,12 @@ void main() {
       expect(l.boxes['broadcaster'], const ui.Rect.fromLTRB(1786, 56, 1860, 120));
       expect(l.boxes.containsKey('camera'), isFalse);
       expect(l.boxes['strip'], const ui.Rect.fromLTRB(0, 972, 1920, 1080));
-      expect(l.boxes['logo'], const ui.Rect.fromLTRB(48, 1002, 103, 1050));
       expect(l.boxes['sellable'], const ui.Rect.fromLTRB(408, 972, 1572, 1080));
-      expect(l.boxes['ai']!.right, 1872);
-      expect(l.boxes['claim']!.left, 48);
+      // La franja: el título y el subtítulo desde el margen (enmienda del ADR 0027).
+      expect(l.boxes['strip_title']!.left, 48);
+      expect((l.boxes['strip_title']!.top, l.boxes['strip_title']!.bottom), (995, 1029));
+      expect((l.boxes['strip_subtitle']!.top, l.boxes['strip_subtitle']!.bottom), (1036, 1056));
+      expect(l.boxes.containsKey('logo'), isFalse);
     });
 
     test('el reloj no cambia de ancho con los dígitos', () {
@@ -151,14 +153,15 @@ void main() {
       expect(largo.boxes['clock']!.right, greaterThan(corto.boxes['clock']!.right));
     });
 
-    test('sin directo la competición ocupa el sitio de EN VIVO', () {
+    test('sin directo no hay EN VIVO y la competición no se mueve; con anuncios, la franja vacía', () {
       final ScoreboardLayout sin = medir(inicio);
       expect(sin.boxes.containsKey('live'), isFalse);
-      expect(sin.boxes['competition']!.left, medir(directo).boxes['live']!.left);
+      expect(sin.boxes['competition']!.left, medir(directo).boxes['competition']!.left);
       final ScoreboardLayout anuncios = medir(directo, slots: false);
-      expect(anuncios.boxes.keys.where((String k) => k.startsWith('slot_')), isEmpty);
       expect(anuncios.boxes['sellable'], medir(directo).boxes['sellable']);
-      expect(anuncios.boxes['sellable']!.left, greaterThan(anuncios.boxes['claim']!.right));
+      for (final String clave in <String>['strip_title', 'strip_subtitle', 'strip_image']) {
+        expect(anuncios.boxes.containsKey(clave), isFalse, reason: clave);
+      }
     });
 
     test('las siglas de los escudos', () {
@@ -170,7 +173,7 @@ void main() {
   });
 
   group('el icono, la franja oculta y sus textos (ADR 0027)', () {
-    ScoreboardState con({bool franja = true, int? icono, List<String>? claim}) => ScoreboardState(
+    ScoreboardState con({bool franja = true, int? icono, String? titulo, int? imagen}) => ScoreboardState(
       competition: directo.competition,
       home: directo.home,
       away: directo.away,
@@ -181,10 +184,11 @@ void main() {
       cameraMode: 'AUTO',
       stripVisible: franja,
       iconRev: icono,
-      stripClaim: claim ?? OverlaySpec.stripClaimDefault,
+      stripTitle: titulo ?? OverlaySpec.stripTitleDefault,
+      stripImageRev: imagen,
     );
-    ScoreboardLayout medir(ScoreboardState s) =>
-        ScoreboardLayout.measure(OverlaySpec.programWidth, OverlaySpec.programHeight, s);
+    ScoreboardLayout medir(ScoreboardState s, {ui.Size? imagen}) =>
+        ScoreboardLayout.measure(OverlaySpec.programWidth, OverlaySpec.programHeight, s, stripImageSize: imagen);
 
     test('el icono de la copa va en la esquina, junto al logo de la casa, donde en Python', () {
       final ScoreboardLayout sin = medir(con());
@@ -199,15 +203,35 @@ void main() {
 
     test('sin franja no se mide ni se pinta nada abajo', () {
       final ScoreboardLayout l = medir(con(franja: false));
-      for (final String clave in <String>['strip', 'logo', 'claim', 'sellable', 'ai', 'slot_0']) {
+      for (final String clave in <String>['strip', 'sellable', 'strip_title', 'strip_subtitle', 'strip_image']) {
         expect(l.boxes.containsKey(clave), isFalse, reason: clave);
       }
     });
 
     test('los textos editados de la franja cambian lo que se mide', () {
-      final double antes = medir(con()).boxes['claim']!.width;
-      final double despues = medir(con(claim: <String>['VAMOS', 'ISLAS'])).boxes['claim']!.width;
+      final double antes = medir(con()).boxes['strip_title']!.width;
+      final double despues = medir(con(titulo: 'VAMOS')).boxes['strip_title']!.width;
       expect(despues, lessThan(antes));
+    });
+
+    test('la imagen de la franja va contenida a la izquierda, donde en Python, y empuja el título', () {
+      // `directo_franja` de boxes.json: el isotipo de 97×84 a 84 de alto.
+      final ScoreboardLayout l = medir(con(imagen: 1), imagen: const ui.Size(97, 84));
+      expect(l.boxes['strip_image'], const ui.Rect.fromLTRB(48, 984, 145, 1068));
+      expect(l.boxes['strip_title']!.left, 173);
+      final ScoreboardLayout ancha = medir(con(imagen: 1), imagen: const ui.Size(800, 200));
+      expect(ancha.boxes['strip_image']!.width, OverlaySpec.strip['image_max_w']);
+    });
+
+    testWidgets('la franja con su imagen: ≤3 % de píxeles distintos de directo_franja.png', (WidgetTester t) async {
+      await t.runAsync(() async {
+        final ui.Image iso = await GalaBrand.isotipo();
+        final OverlayFrame f = await OverlayRaster().render(con(imagen: 1), stripImage: iso);
+        final double fraccion = await _distintosDePython(f.rgba, 'directo_franja.png');
+        // ignore: avoid_print
+        print('franja con imagen: ${(fraccion * 100).toStringAsFixed(2)} % de píxeles distintos');
+        expect(fraccion, lessThanOrEqualTo(0.03));
+      });
     });
 
     testWidgets('sin franja, la parte de abajo queda transparente', (WidgetTester tester) async {

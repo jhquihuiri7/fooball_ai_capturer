@@ -89,6 +89,33 @@ class ProgramGraphics {
     _crestsUsed.clear();
   }
 
+  /// La imagen de la franja puesta decodificada y su versión (enmienda del ADR 0027 del
+  /// 2026-10-16).
+  ui.Image? _stripImage;
+  int? _stripImageRev;
+
+  /// Decodifica la imagen de la franja si cambió; sin imagen, null.
+  Future<ui.Image?> _stripImageNow() async {
+    final StripImage? img = engine.graphics.activeStripImage;
+    if (img?.rev == _stripImageRev) {
+      return _stripImage;
+    }
+    _stripImageRev = img?.rev;
+    _stripImage?.dispose();
+    _stripImage = null;
+    if (img == null) {
+      return null;
+    }
+    try {
+      final ui.Codec codec = await ui.instantiateImageCodec(await img.file.readAsBytes());
+      _stripImage = (await codec.getNextFrame()).image;
+      codec.dispose();
+    } on Exception {
+      _stripImage = null; // una imagen que no se decodifica: la franja sale sin ella
+    }
+    return _stripImage;
+  }
+
   /// Decodifica el icono si cambió desde el último; sin icono, null.
   Future<ui.Image?> _championship() async {
     final int rev = engine.graphics.iconRev;
@@ -122,8 +149,9 @@ class ProgramGraphics {
     live: engine.streaming,
     cameraMode: programCameraModeAuto,
     stripVisible: engine.stripVisible,
-    stripClaim: engine.graphics.strip.claim,
-    stripSlots: engine.graphics.strip.slots,
+    stripTitle: engine.graphics.strip.title,
+    stripSubtitle: engine.graphics.strip.subtitle,
+    stripImageRev: engine.graphics.activeStripImage?.rev,
     iconRev: engine.graphics.hasIcon ? engine.graphics.iconRev : null,
     homeCrestRev: engine.graphics.crestFor(engine.home)?.rev,
     awayCrestRev: engine.graphics.crestFor(engine.away)?.rev,
@@ -165,7 +193,7 @@ class ProgramGraphics {
         await bridge.setBackdropBlur(false);
         await bridge.publish(
           OverlayLayerId.scoreboard,
-          await _scoreboard.render(estado, championship: icono, crests: escudos),
+          await _scoreboard.render(estado, championship: icono, crests: escudos, stripImage: await _stripImageNow()),
         );
         if (alAire == null) {
           await bridge.clear(OverlayLayerId.lineup);

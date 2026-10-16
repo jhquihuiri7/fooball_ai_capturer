@@ -12,6 +12,33 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-16 · IOS-109 — La franja con una imagen, un título y un subtítulo · 🚧 probado en Windows; falta verlo emitido en el iPhone
+
+Enmienda del ADR 0027 de football-ai (REF-64, c984f9c), pedida por Jhonatan: una franja
+inferior más sencilla, con un título, un subtítulo y una imagen que se sube.
+
+**Hecho**
+- `StripTexts` es `{title, subtitle}`. Cada franja guardada tiene su imagen en `franjas/`
+  (`assets/strip/<nombre>`: `PUT`, `GET`, `DELETE`, PNG o JPEG hasta 4 MB); renombrar la
+  franja se lleva su imagen y borrarla, también. El estado lleva `strip_image` (la de la
+  puesta) e `image` en cada franja guardada, como el dorado del túnel de football-ai.
+- `grafico.json` se lee por partes: un formato viejo de la franja (el claim y los mensajes)
+  vuelve a los textos de partida sin llevarse el icono, los escudos ni lo demás.
+- El painter: la franja con la imagen contenida a la izquierda y el título y el subtítulo a su
+  derecha, recortados si no caben; con anuncios encima, solo el fondo. Fuera el isotipo, el
+  claim, las ranuras y la marca del producto. `ProgramGraphics` decodifica la imagen cuando
+  cambia su versión.
+- El mando web: cada franja guardada con su imagen en pequeño; el editor con nombre, título,
+  subtítulo e imagen (se sube a la franja al guardarla) y «Quitar imagen».
+
+**Comprobado**: `flutter analyze` limpio; la API (los textos, las franjas con su imagen,
+renombrar y borrar), la geometría contra `boxes.json` y la franja con imagen frente a
+`directo_franja.png` (0,91 % de píxeles distintos). Fallan en Windows los 8 dorados de imagen
+y, a ratos, «se pinta en ≤50 ms».
+
+**Pendiente**: regenerar en el Mac los dorados de `test/graphics`; en el iPhone, guardar una
+franja con su imagen desde el Samsung y sacarla.
+
 ## 2026-10-16 · IOS-108 — El marcador reordenado · 🚧 probado en Windows; falta verlo emitido en el iPhone
 
 Enmienda del ADR 0026 de football-ai (REF-63, 2a46f56), pedida por Jhonatan: el logo de la

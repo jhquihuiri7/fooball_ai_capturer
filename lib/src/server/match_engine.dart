@@ -610,6 +610,19 @@ class MatchEngine {
     _changed();
   }
 
+  /// Adopta la imagen recién subida a `graphics.stripImageUploadFile` como la de la franja
+  /// guardada `name` (enmienda del ADR 0027 del 2026-10-16).
+  void adoptStripImage(String name, String mime) {
+    graphics.adoptStripImage(name, mime);
+    _changed();
+  }
+
+  /// Quita la imagen de la franja guardada `name`.
+  void deleteStripImage(String name) {
+    graphics.deleteStripImage(name);
+    _changed();
+  }
+
   /// El equipo de una ranura de escudo: `home` y `away`, los que juegan; `next_home` y
   /// `next_away`, los del próximo partido (null si no lo hay).
   String? crestTeam(String slot) => switch (slot) {
@@ -734,7 +747,10 @@ class MatchEngine {
           'away_crest': graphics.crestFor(n.away)?.rev,
         },
       },
-      'strip_presets': <Map<String, Object?>>[for (final StripPreset p in graphics.stripPresets) p.toJson()],
+      'strip_presets': <Map<String, Object?>>[
+        for (final StripPreset p in graphics.stripPresets)
+          <String, Object?>{...p.toJson(), 'image': graphics.stripImageFor(p.name)?.rev},
+      ],
       'strip_preset': graphics.stripPreset,
       'fixtures_on_air': fixturesOnAir,
       'fixtures': <Map<String, Object?>>[
@@ -749,6 +765,7 @@ class MatchEngine {
       'interview': graphics.interview.toJson(),
       'strip_remaining_ms': stripRemainingMs,
       'strip_texts': graphics.strip.toJson(),
+      'strip_image': graphics.activeStripImage?.rev,
       'championship_icon': graphics.hasIcon ? graphics.iconRev : null,
       'video': switch (video) {
         null => null,

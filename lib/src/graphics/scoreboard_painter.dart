@@ -35,8 +35,9 @@ class ScoreboardState {
     required this.live,
     required this.cameraMode,
     this.stripVisible = true,
-    this.stripClaim = OverlaySpec.stripClaimDefault,
-    this.stripSlots = OverlaySpec.stripSlotsDefault,
+    this.stripTitle = OverlaySpec.stripTitleDefault,
+    this.stripSubtitle = OverlaySpec.stripSubtitleDefault,
+    this.stripImageRev,
     this.iconRev,
     this.homeCrestRev,
     this.awayCrestRev,
@@ -54,9 +55,13 @@ class ScoreboardState {
   /// La franja fuera (ADR 0027: en el programa va oculta salvo cuando el operador la saca).
   final bool stripVisible;
 
-  /// Lo que el operador editó de la franja: las dos líneas del claim y los tres mensajes.
-  final List<String> stripClaim;
-  final List<(String, String)> stripSlots;
+  /// Lo que dice la franja (enmienda del ADR 0027 del 2026-10-16): un título y un
+  /// subtítulo, que puede ir vacío.
+  final String stripTitle;
+  final String stripSubtitle;
+
+  /// La versión de la imagen de la franja, o null sin imagen.
+  final int? stripImageRev;
 
   /// La versión del icono del campeonato si hay; null sin icono. Cambiarla obliga a
   /// rasterizar de nuevo aunque lo demás sea igual.
@@ -82,25 +87,17 @@ class ScoreboardState {
       other.live == live &&
       other.cameraMode == cameraMode &&
       other.stripVisible == stripVisible &&
-      listEquals(other.stripClaim, stripClaim) &&
-      listEquals(other.stripSlots, stripSlots) &&
+      other.stripTitle == stripTitle &&
+      other.stripSubtitle == stripSubtitle &&
+      other.stripImageRev == stripImageRev &&
       other.iconRev == iconRev &&
       other.homeCrestRev == homeCrestRev &&
       other.awayCrestRev == awayCrestRev;
 
   @override
   int get hashCode => Object.hash(competition, home, away, homeGoals, awayGoals, clockS, live, cameraMode,
-      stripVisible, Object.hashAll(stripClaim), Object.hashAll(stripSlots), iconRev, homeCrestRev,
-      awayCrestRev);
+      stripVisible, stripTitle, stripSubtitle, stripImageRev, iconRev, homeCrestRev, awayCrestRev);
 }
-
-// Textos fijos y colores de la maqueta que REF-32 no exporta porque solo los usa el
-// dibujo (overlay_preview.py: AI_TEXT y SLOT_ICON_COLOURS). El claim y los mensajes de la
-// franja ya no son fijos: los edita el operador (ADR 0027) y llegan en el estado.
-const String _aiText = 'Transmisión automática con IA';
-const List<Color> _slotIconColours = <Color>[Color(0xFFDDE7E4), Color(0xFF7FC4DC), Color(0xFFF5C542)];
-const List<String> _slotIcons = <String>['mountain', 'waves', 'sun'];
-const List<Color> _waveShades = <Color>[Color(0xFF7FC4DC), Color(0xFF4E93B4), Color(0xFF31708F)];
 
 /// Opacidad del separador del hueco vendible: el `linea` del sistema sobre oscuro.
 const double _lineaAlfa = 0.28;
@@ -112,17 +109,25 @@ final RegExp _digito = RegExp(r'\d');
 
 /// La geometría del gráfico, medida una vez sobre el tamaño de salida.
 class ScoreboardLayout {
-  ScoreboardLayout._(this.width, this.height, this.state, this.sponsorSlots, this.s);
+  ScoreboardLayout._(this.width, this.height, this.state, this.sponsorSlots, this.stripImageSize, this.s);
 
-  /// Mide el gráfico para `state` sobre un lienzo de `width`×`height`.
+  /// Mide el gráfico para `state` sobre un lienzo de `width`×`height`; `stripImageSize` es
+  /// el tamaño de la imagen de la franja, si la hay.
   factory ScoreboardLayout.measure(
     int width,
     int height,
     ScoreboardState state, {
     bool sponsorSlots = true,
+    Size? stripImageSize,
   }) {
-    final ScoreboardLayout l =
-        ScoreboardLayout._(width, height, state, sponsorSlots, width / OverlaySpec.refWidth);
+    final ScoreboardLayout l = ScoreboardLayout._(
+      width,
+      height,
+      state,
+      sponsorSlots,
+      stripImageSize,
+      width / OverlaySpec.refWidth,
+    );
     l._measure();
     return l;
   }
@@ -131,6 +136,7 @@ class ScoreboardLayout {
   final int height;
   final ScoreboardState state;
   final bool sponsorSlots;
+  final Size? stripImageSize;
 
   /// Escala sobre 1920 de ancho.
   final double s;
@@ -139,7 +145,6 @@ class ScoreboardLayout {
   final Map<String, Rect> boxes = <String, Rect>{};
   final Map<String, TextStyle> _fonts = <String, TextStyle>{};
   final Map<String, double> _v = <String, double>{};
-  final List<(double, double)> _slotXs = <(double, double)>[];
 
   int px(double v) => pyRound(v * s);
 
@@ -293,45 +298,54 @@ class ScoreboardLayout {
     final double sy0 = height - sh, scy = sy0 + sh / 2;
     boxes['strip'] = Rect.fromLTRB(0, sy0, width.toDouble(), height.toDouble());
 
-    final int logoH = px(_st('logo_h').toDouble());
-    final int logoW = math.max(1, pyRound(_st('logo_src_w') * logoH / _st('logo_src_h')));
-    final double lx = px(OverlaySpec.margin.toDouble()).toDouble();
-    final double ly = pyRound(scy - logoH / 2).toDouble();
-    boxes['logo'] = Rect.fromLTWH(lx, ly, logoW.toDouble(), logoH.toDouble());
-    final double claimX = lx + logoW + st('logo_gap');
-    final double claimW =
-        math.max(textWidth(state.stripClaim[0], 'claim'), textWidth(state.stripClaim[1], 'claim'));
-    boxes['claim'] = Rect.fromLTRB(lx, sy0, claimX + claimW, height.toDouble());
-
-    // El hueco vendible es fijo: lo que dejan las dos zonas reservadas.
+    // El hueco vendible es fijo: lo que dejan las dos zonas reservadas (el de los anuncios).
     final double sellX0 = px((OverlaySpec.margin + _st('reserved_left')).toDouble()).toDouble();
     final double sellX1 =
         width - px((OverlaySpec.margin + _st('reserved_right')).toDouble()).toDouble();
     boxes['sellable'] = Rect.fromLTRB(sellX0, sy0, sellX1, height.toDouble());
-    _v.addAll(<String, double>{
-      'strip_y': sy0,
-      'strip_h': sh,
-      'claim_x': claimX,
-      'divider_x': sellX0,
-    });
-
-    double cursor = sellX0 + st('slot_gap');
-    if (sponsorSlots) {
-      for (int i = 0; i < state.stripSlots.length; i++) {
-        final (String title, String sub) = state.stripSlots[i];
-        final double textX = cursor + st('slot_icon_r') * 2 + px(13);
-        final double a = math.max(textWidth(title, 'slot'), textWidth(sub, 'sub'));
-        boxes['slot_$i'] = Rect.fromLTRB(cursor, sy0, textX + a, height.toDouble());
-        _slotXs.add((cursor, textX));
-        cursor = textX + a + st('slot_gap');
-      }
+    _v.addAll(<String, double>{'strip_y': sy0, 'strip_h': sh});
+    if (!sponsorSlots) {
+      return; // con anuncios, el anuncio ocupa la franja: debajo solo va el fondo
     }
 
-    final double aiW = textWidth(_aiText, 'ai');
-    final double ax = width - px(OverlaySpec.margin.toDouble()) - aiW;
-    final double mitadAi = px(OverlaySpec.fontSizes['ai']!.toDouble()) / 2;
-    boxes['ai'] = Rect.fromLTRB(ax, scy - mitadAi, ax + aiW, scy + mitadAi);
-    _v['ai_x'] = ax;
+    // La imagen que subió el operador, si la hay, y el título y el subtítulo a su derecha
+    // (enmienda del ADR 0027 del 2026-10-16).
+    double x = px(OverlaySpec.margin.toDouble()).toDouble();
+    final Size? img = stripImageSize;
+    if (img != null) {
+      final double escala = math.min(st('image_max_w') / img.width, st('image_h') / img.height);
+      final double iw = math.max(1, pyRound(img.width * escala)).toDouble();
+      final double ih = math.max(1, pyRound(img.height * escala)).toDouble();
+      final double iy = pyRound(scy - ih / 2).toDouble();
+      boxes['strip_image'] = Rect.fromLTWH(x, iy, iw, ih);
+      x += iw + st('image_gap');
+    }
+    final double hueco = width - px(OverlaySpec.margin.toDouble()) - x;
+    final bool haySub = state.stripSubtitle.trim().isNotEmpty;
+    final double ty = scy + (haySub ? st('title_dy') : 0);
+    final String titulo = fitWidth(state.stripTitle, 'strip_title', hueco);
+    double mitad = px(OverlaySpec.fontSizes['strip_title']!.toDouble()) / 2;
+    boxes['strip_title'] = Rect.fromLTRB(x, ty - mitad, x + textWidth(titulo, 'strip_title'), ty + mitad);
+    _v.addAll(<String, double>{'strip_text_x': x, 'strip_title_y': ty, 'strip_text_w': hueco});
+    if (haySub) {
+      final String sub = fitWidth(state.stripSubtitle, 'strip_subtitle', hueco);
+      final double sy = scy + st('subtitle_dy');
+      mitad = px(OverlaySpec.fontSizes['strip_subtitle']!.toDouble()) / 2;
+      boxes['strip_subtitle'] = Rect.fromLTRB(x, sy - mitad, x + textWidth(sub, 'strip_subtitle'), sy + mitad);
+      _v['strip_subtitle_y'] = sy;
+    }
+  }
+
+  /// El texto si cabe en `ancho`; si no, recortado con puntos suspensivos (`_fit_width`).
+  String fitWidth(String text, String fuente, double ancho) {
+    if (textWidth(text, fuente) <= ancho) {
+      return text;
+    }
+    String t = text;
+    while (t.length > 1 && textWidth('$t…', fuente) > ancho) {
+      t = t.substring(0, t.length - 1);
+    }
+    return '${t.trimRight()}…';
   }
 }
 
@@ -343,7 +357,11 @@ class ScoreboardPainter extends CustomPainter {
     this.championship,
     this.crests = const <String, ui.Image>{},
     this.sponsorSlots = true,
+    this.stripImage,
   });
+
+  /// La imagen de la franja, ya decodificada; va si el estado dice que hay (`stripImageRev`).
+  final ui.Image? stripImage;
 
   /// Los escudos de los equipos que los tienen, por lado (`home`, `away`), ya decodificados:
   /// sustituyen al genérico (ADR 0028).
@@ -369,6 +387,9 @@ class ScoreboardPainter extends CustomPainter {
       size.height.round(),
       state,
       sponsorSlots: sponsorSlots,
+      stripImageSize: state.stripImageRev != null && stripImage != null
+          ? Size(stripImage!.width.toDouble(), stripImage!.height.toDouble())
+          : null,
     );
     _paintStatus(canvas, l);
     _paintBar(canvas, l);
@@ -384,7 +405,8 @@ class ScoreboardPainter extends CustomPainter {
       old.sponsorSlots != sponsorSlots ||
       old.isotipo != isotipo ||
       old.championship != championship ||
-      old.crests != crests;
+      old.crests != crests ||
+      old.stripImage != stripImage;
 
   static Paint _fill(Color c) => Paint()..color = c;
 
@@ -550,94 +572,54 @@ class ScoreboardPainter extends CustomPainter {
 
   // ---------------- la franja ----------------
   void _paintStrip(Canvas c, ScoreboardLayout l) {
-    final double sh = l.v('strip_h'), sy0 = l.v('strip_y'), mid = sy0 + sh / 2;
-    final double width = l.width.toDouble(), height = l.height.toDouble();
+    final double sy0 = l.v('strip_y');
+    final double width = l.width.toDouble();
     c.drawRect(l.boxes['strip']!, _fill(_palette('bar')));
     c.drawRect(Rect.fromLTWH(0, sy0, width, math.max(1, l.st('edge_h'))), _fill(_palette('edge')));
 
-    c.drawImageRect(
-      isotipo,
-      Rect.fromLTWH(0, 0, isotipo.width.toDouble(), isotipo.height.toDouble()),
-      l.boxes['logo']!,
-      Paint()..filterQuality = FilterQuality.high,
-    );
-    final double claimX = l.v('claim_x');
-    final double mitadLinea = l.st('claim_line_h') / 2;
-    _text(c, l, state.stripClaim[0], 'claim', _palette('white'), Offset(claimX, mid - mitadLinea));
-    _text(c, l, state.stripClaim[1], 'claim', _palette('white'), Offset(claimX, mid + mitadLinea));
-    final double dx = l.v('divider_x'), pad = l.st('divider_pad');
-    _line(c, Offset(dx, sy0 + pad), Offset(dx, height - pad),
-        GalaBrand.token('gris-oceanico').withValues(alpha: _lineaAlfa), math.max(1, l.px(1)).toDouble());
-
-    if (sponsorSlots) {
-      for (int i = 0; i < l._slotXs.length; i++) {
-        final (double iconX, double textX) = l._slotXs[i];
-        final (String title, String sub) = state.stripSlots[i];
-        final Color colour = _slotIconColours[i];
-        _paintSponsorIcon(
-            c, _slotIcons[i], iconX, mid, l.st('slot_icon_r'), colour, math.max(1, l.px(2)).toDouble());
-        _text(c, l, title, 'slot', _palette('white'), Offset(textX, mid - l.px(11)));
-        _text(c, l, sub, 'sub', _palette('dim'), Offset(textX, mid + l.px(13)));
-      }
+    final Rect? caja = l.boxes['strip_image'];
+    final ui.Image? img = stripImage;
+    if (caja != null && img != null) {
+      c.drawImageRect(
+        img,
+        Rect.fromLTWH(0, 0, img.width.toDouble(), img.height.toDouble()),
+        caja,
+        Paint()..filterQuality = FilterQuality.high,
+      );
     }
-
-    final double ax = l.v('ai_x');
-    final double rw = l.st('raya_w'), rh = l.st('raya_h');
-    final double rx = ax - l.st('raya_gap') - rw;
-    c.drawPath(
-      GalaBrand.skewed(rx, mid - rh / 2, rw, rh),
-      GalaBrand.fill(GalaBrand.token('teal-electrico'),
-          bottom: GalaBrand.token('azul-deportivo'), box: Rect.fromLTWH(rx, mid - rh / 2, rw, rh)),
-    );
-    _text(c, l, _aiText, 'ai', _palette('dim'), Offset(ax, mid));
-  }
-
-  /// Montaña, olas y sol: formas que se leen a 28 px, el tamaño en emisión.
-  static void _paintSponsorIcon(
-      Canvas c, String kind, double x, double cy, double r, Color colour, double width) {
-    switch (kind) {
-      case 'mountain':
-        c.drawPath(
-          Path()
-            ..moveTo(x, cy + r)
-            ..lineTo(x + r * 0.85, cy - r * 0.75)
-            ..lineTo(x + r * 1.25, cy - r * 0.1)
-            ..lineTo(x + r * 1.6, cy - r * 0.6)
-            ..lineTo(x + r * 2, cy + r)
-            ..close(),
-          _fill(colour),
-        );
-      case 'waves':
-        for (int i = 0; i < _waveShades.length; i++) {
-          final double y = cy - r * 0.55 + i * r * 0.6;
-          final Path ola = Path();
-          for (int k = 0; k < 13; k++) {
-            final double px = x + r * 2 * k / 12;
-            final double py = y - r * 0.22 * ((k ~/ 3).isOdd ? 1 : -1);
-            k == 0 ? ola.moveTo(px, py) : ola.lineTo(px, py);
-          }
-          c.drawPath(ola, _stroke(_waveShades[i], width)..strokeJoin = StrokeJoin.round);
-        }
-      default:
-        c.drawOval(Rect.fromLTRB(x + r * 0.55, cy - r * 0.45, x + r * 1.45, cy + r * 0.45),
-            _fill(colour));
-        for (int k = 0; k < 8; k++) {
-          final double a = math.pi * k / 4;
-          _line(c, Offset(x + r + math.cos(a) * r * 0.65, cy + math.sin(a) * r * 0.65),
-              Offset(x + r + math.cos(a) * r, cy + math.sin(a) * r), colour, width);
-        }
+    if (l.boxes.containsKey('strip_title')) {
+      final double x = l.v('strip_text_x'), hueco = l.v('strip_text_w');
+      _text(c, l, l.fitWidth(state.stripTitle, 'strip_title', hueco), 'strip_title', _palette('white'),
+          Offset(x, l.v('strip_title_y')));
+      if (l.boxes.containsKey('strip_subtitle')) {
+        _text(c, l, l.fitWidth(state.stripSubtitle, 'strip_subtitle', hueco), 'strip_subtitle',
+            _palette('dim'), Offset(x, l.v('strip_subtitle_y')));
+      }
     }
   }
 }
 
 /// Atajo para quien solo quiere la imagen: pinta `state` en un ui.Image.
-Future<ui.Image> paintScoreboard(ScoreboardState state, int width, int height,
-    {bool sponsorSlots = true, ui.Image? championship, Map<String, ui.Image> crests = const <String, ui.Image>{}}) async {
+Future<ui.Image> paintScoreboard(
+  ScoreboardState state,
+  int width,
+  int height, {
+  bool sponsorSlots = true,
+  ui.Image? championship,
+  Map<String, ui.Image> crests = const <String, ui.Image>{},
+  ui.Image? stripImage,
+}) async {
   final ui.Image isotipo = await GalaBrand.isotipo();
   final ui.PictureRecorder recorder = ui.PictureRecorder();
   final Canvas canvas = Canvas(recorder);
-  ScoreboardPainter(state, isotipo: isotipo, championship: championship, crests: crests, sponsorSlots: sponsorSlots)
-      .paint(canvas, Size(width.toDouble(), height.toDouble()));
+  ScoreboardPainter(
+    state,
+    isotipo: isotipo,
+    championship: championship,
+    crests: crests,
+    sponsorSlots: sponsorSlots,
+    stripImage: stripImage,
+  ).paint(canvas, Size(width.toDouble(), height.toDouble()));
   final ui.Picture picture = recorder.endRecording();
   return picture.toImage(width, height).whenComplete(picture.dispose);
 }

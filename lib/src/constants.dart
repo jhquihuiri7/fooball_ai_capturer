@@ -291,6 +291,17 @@ const String championshipIconFileName = 'campeonato.img';
 /// Donde vive el icono bajo `/api/v1/`: `PUT` lo sube, `GET` lo da y `DELETE` lo quita.
 const String championshipAssetRoute = 'assets/championship';
 
+/// La imagen de cada franja guardada (enmienda del ADR 0027 del 2026-10-16): bajo
+/// `/api/v1/`, `assets/strip/<nombre de la franja>`; `PUT` la sube, `GET` la da y `DELETE`
+/// la quita.
+const String stripImageRoute = 'assets/strip';
+
+/// La carpeta de las imágenes de las franjas, junto al partido: del campeonato.
+const String stripImageDirName = 'franjas';
+
+/// Bytes como mucho de la imagen de una franja: los del icono del campeonato.
+const int stripImageMaxBytes = championshipIconMaxBytes;
+
 /// Franjas guardadas como mucho (ADR 0029): las que caben en la tarjeta del mando sin
 /// buscar.
 const int stripPresetsMax = 12;

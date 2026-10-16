@@ -63,6 +63,7 @@ class OverlayRaster {
     bool sponsorSlots = true,
     ui.Image? championship,
     Map<String, ui.Image> crests = const <String, ui.Image>{},
+    ui.Image? stripImage,
   }) async {
     final OverlayFrame? previa = _last;
     if (previa != null && state == _lastState && sponsorSlots == _lastSlots) {
@@ -76,6 +77,7 @@ class OverlayRaster {
         sponsorSlots: sponsorSlots,
         championship: championship,
         crests: crests,
+        stripImage: stripImage,
       ),
     );
     _generation += 1;

@@ -28,65 +28,43 @@ class GraphicsError implements Exception {
 /// cada uno de los tres mensajes del centro (`StripTexts` de overlay_preview.py).
 @immutable
 class StripTexts {
-  StripTexts({required List<String> claim, required List<(String, String)> slots})
-    : claim = List<String>.unmodifiable(claim),
-      slots = List<(String, String)>.unmodifiable(slots) {
-    if (claim.length != 2 || slots.length != OverlaySpec.stripSlotsDefault.length) {
-      throw GraphicsError(
-        'la franja lleva 2 líneas de claim y ${OverlaySpec.stripSlotsDefault.length} mensajes',
-      );
-    }
-    for (final String texto in <String>[...claim, for (final (String a, String b) in slots) ...<String>[a, b]]) {
-      if (texto.length > OverlaySpec.stripTextMaxChars || texto.contains('\n')) {
-        throw GraphicsError(
-          'cada texto de la franja, hasta ${OverlaySpec.stripTextMaxChars} caracteres y sin saltos',
-        );
+  StripTexts({required this.title, this.subtitle = ''}) {
+    for (final (String texto, String clave) in <(String, String)>[(title, 'title'), (subtitle, 'subtitle')]) {
+      final int tope = OverlaySpec.strip['${clave}_max_chars']!;
+      if (texto.length > tope || texto.contains('\n')) {
+        throw GraphicsError('$clave de la franja: hasta $tope caracteres y sin saltos');
       }
     }
   }
 
-  /// Los de la maqueta, mientras el operador no los cambie.
+  /// Los de partida, mientras el operador no los cambie.
   factory StripTexts.defaults() =>
-      StripTexts(claim: OverlaySpec.stripClaimDefault, slots: OverlaySpec.stripSlotsDefault);
+      StripTexts(title: OverlaySpec.stripTitleDefault, subtitle: OverlaySpec.stripSubtitleDefault);
 
-  /// Lee `{"claim": [a, b], "slots": [[t, s], …]}`; [GraphicsError] si no vale.
+  /// Lee `{"title", "subtitle"}` (enmienda del ADR 0027 del 2026-10-16); [GraphicsError] si
+  /// no vale.
   factory StripTexts.fromJson(Object? json) {
     if (json is! Map<String, Object?>) {
-      throw GraphicsError('se espera {claim, slots}');
+      throw GraphicsError('se espera {title, subtitle}');
     }
-    final Object? claim = json['claim'];
-    final Object? slots = json['slots'];
-    if (claim is! List<Object?> || claim.any((Object? t) => t is! String)) {
-      throw GraphicsError('claim tiene que ser una lista de 2 textos');
+    final Object? titulo = json['title'];
+    final Object sub = json['subtitle'] ?? '';
+    if (titulo is! String || sub is! String) {
+      throw GraphicsError('title y subtitle tienen que ser textos');
     }
-    if (slots is! List<Object?> ||
-        slots.any((Object? m) => m is! List<Object?> || m.length != 2 || m.any((Object? t) => t is! String))) {
-      throw GraphicsError('slots tiene que ser una lista de [título, subtítulo]');
-    }
-    return StripTexts(
-      claim: claim.cast<String>(),
-      slots: <(String, String)>[
-        for (final Object? m in slots) _par(m! as List<Object?>),
-      ],
-    );
+    return StripTexts(title: titulo.trim(), subtitle: sub.trim());
   }
 
-  static (String, String) _par(List<Object?> m) => (m[0]! as String, m[1]! as String);
+  final String title;
+  final String subtitle;
 
-  final List<String> claim;
-  final List<(String, String)> slots;
-
-  Map<String, Object?> toJson() => <String, Object?>{
-    'claim': claim,
-    'slots': <List<String>>[for (final (String t, String s) in slots) <String>[t, s]],
-  };
+  Map<String, Object?> toJson() => <String, Object?>{'title': title, 'subtitle': subtitle};
 
   @override
-  bool operator ==(Object other) =>
-      other is StripTexts && listEquals(other.claim, claim) && listEquals(other.slots, slots);
+  bool operator ==(Object other) => other is StripTexts && other.title == title && other.subtitle == subtitle;
 
   @override
-  int get hashCode => Object.hash(Object.hashAll(claim), Object.hashAll(slots));
+  int get hashCode => Object.hash(title, subtitle);
 }
 
 /// Un texto de 1 a `max` caracteres (o de 0 si `vacio`), sin saltos de línea y sin
@@ -226,53 +204,60 @@ class TeamCrest {
   final int rev;
 }
 
+/// La imagen de una franja guardada (enmienda del ADR 0027 del 2026-10-16): como un escudo,
+/// su fichero y su versión.
+typedef StripImage = TeamCrest;
+
+/// Lee una parte de `grafico.json`: si no vale, null, y el resto se lee igual (un formato
+/// viejo de la franja no se lleva el icono ni los escudos).
+T? _parte<T>(T Function() leer) {
+  try {
+    return leer();
+  } on Object {
+    return null;
+  }
+}
+
 class GraphicsStore {
   /// Lee lo guardado en `directory`; un fichero roto no impide arrancar: se empieza con
   /// los textos de partida y sin icono.
   GraphicsStore(this.directory) {
     final File f = _file;
-    if (f.existsSync()) {
-      try {
-        final Object? json = jsonDecode(f.readAsStringSync());
-        if (json is Map<String, Object?>) {
-          strip = StripTexts.fromJson(json['strip']);
-          final Object? tipo = json['icon_mime'];
-          iconMime = tipo is String && iconFile.existsSync() ? tipo : null;
-          final Object? jornada = json['fixtures'];
-          if (jornada is List<Object?> && jornada.isNotEmpty) {
-            fixtures = Fixture.listFromJson(<String, Object?>{'matches': jornada});
-          }
-          final Object? entrevista = json['interview'];
-          if (entrevista != null) {
-            interview = Interview.fromJson(entrevista);
-          }
-          final Object? proximo = json['next_match'];
-          nextMatch = proximo == null ? null : NextMatch.fromJson(proximo);
-          final Object? franjas = json['strip_presets'];
-          if (franjas is List<Object?>) {
-            stripPresets = <StripPreset>[for (final Object? f in franjas) StripPreset.fromJson(f)];
-          }
-          final Object? puesta = json['strip_preset'];
-          stripPreset = puesta is String && _preset(puesta) != null ? puesta : null;
-          final Object? escudos = json['crests'];
-          if (escudos is Map<String, Object?>) {
-            for (final MapEntry<String, Object?> e in escudos.entries) {
-              final Object? mime = e.value;
-              if (mime is String && _crestFile(e.key).existsSync()) {
-                _crests[e.key] = TeamCrest(mime: mime, file: _crestFile(e.key), rev: ++_crestSeq);
-              }
-            }
+    final Object? json = f.existsSync() ? _parte(() => jsonDecode(f.readAsStringSync())) : null;
+    if (json is Map<String, Object?>) {
+      strip = _parte(() => StripTexts.fromJson(json['strip'])) ?? StripTexts.defaults();
+      final Object? tipo = json['icon_mime'];
+      iconMime = tipo is String && iconFile.existsSync() ? tipo : null;
+      final Object? jornada = json['fixtures'];
+      if (jornada is List<Object?> && jornada.isNotEmpty) {
+        fixtures = _parte(() => Fixture.listFromJson(<String, Object?>{'matches': jornada})) ?? fixtures;
+      }
+      interview = _parte(() => Interview.fromJson(json['interview'])) ?? interview;
+      nextMatch = _parte(() => NextMatch.fromJson(json['next_match']));
+      final Object? franjas = json['strip_presets'];
+      if (franjas is List<Object?>) {
+        stripPresets = <StripPreset>[
+          for (final Object? f in franjas)
+            if (_parte(() => StripPreset.fromJson(f)) case final StripPreset p) p,
+        ];
+      }
+      final Object? puesta = json['strip_preset'];
+      stripPreset = puesta is String && _preset(puesta) != null ? puesta : null;
+      for (final (String clave, Map<String, TeamCrest> destino, File Function(String) fichero, bool franja)
+          in <(String, Map<String, TeamCrest>, File Function(String), bool)>[
+            ('crests', _crests, _crestFile, false),
+            ('strip_images', _stripImages, _stripImageFile, true),
+          ]) {
+        final Object? guardadas = json[clave];
+        if (guardadas is! Map<String, Object?>) {
+          continue;
+        }
+        for (final MapEntry<String, Object?> e in guardadas.entries) {
+          final Object? mime = e.value;
+          if (mime is String && fichero(e.key).existsSync()) {
+            destino[e.key] = TeamCrest(mime: mime, file: fichero(e.key), rev: franja ? ++_stripSeq : ++_crestSeq);
           }
         }
-      } on Object {
-        strip = StripTexts.defaults();
-        iconMime = null;
-        _crests.clear();
-        nextMatch = null;
-        fixtures = const <Fixture>[];
-        interview = const Interview();
-        stripPresets = <StripPreset>[];
-        stripPreset = null;
       }
     }
     iconRev = iconMime == null ? 0 : 1;
@@ -336,6 +321,7 @@ class GraphicsStore {
     if (vieja == null) {
       stripPresets = <StripPreset>[...stripPresets, preset];
     } else {
+      _moveStripImage(vieja.name, preset.name);
       stripPresets = <StripPreset>[for (final StripPreset p in stripPresets) p == vieja ? preset : p];
       if (stripPreset != null && stripPreset!.toUpperCase() == vieja.name.toUpperCase()) {
         stripPreset = preset.name;
@@ -352,6 +338,10 @@ class GraphicsStore {
       return false;
     }
     stripPresets = <StripPreset>[for (final StripPreset q in stripPresets) if (q != p) q];
+    final StripImage? img = _stripImages.remove(p.name.toUpperCase());
+    if (img != null && img.file.existsSync()) {
+      img.file.deleteSync();
+    }
     if (stripPreset != null && stripPreset!.toUpperCase() == p.name.toUpperCase()) {
       stripPreset = null;
     }
@@ -389,6 +379,58 @@ class GraphicsStore {
 
   /// El escudo del equipo que se llama `teamName`, o null si va el genérico.
   TeamCrest? crestFor(String teamName) => _crests[crestKey(teamName)];
+
+  /// Las imágenes de las franjas guardadas, por la clave de su nombre, y la última versión.
+  final Map<String, StripImage> _stripImages = <String, StripImage>{};
+  int _stripSeq = 0;
+
+  File _stripImageFile(String key) => File(
+    '${directory.path}/$stripImageDirName/'
+    '${utf8.encode(key).map((int b) => b.toRadixString(16).padLeft(2, '0')).join()}.img',
+  );
+
+  /// La imagen de la franja guardada `name`, o null.
+  StripImage? stripImageFor(String name) => _stripImages[name.trim().toUpperCase()];
+
+  /// La imagen de la franja que está puesta, o null (sin franja guardada puesta, o sin imagen).
+  StripImage? get activeStripImage {
+    final String? puesta = stripPreset;
+    return puesta == null ? null : stripImageFor(puesta);
+  }
+
+  /// Dónde se escribe la imagen de una franja mientras llega.
+  File get stripImageUploadFile => File('${directory.path}/$stripImageDirName/imagen.subida');
+
+  /// Adopta la imagen recién subida como la de la franja guardada `name`.
+  void adoptStripImage(String name, String mime) {
+    final String clave = name.trim().toUpperCase();
+    final File destino = _stripImageFile(clave);
+    stripImageUploadFile.renameSync(destino.path);
+    _stripImages[clave] = StripImage(mime: mime, file: destino, rev: ++_stripSeq);
+    _save();
+  }
+
+  /// Quita la imagen de la franja guardada `name`.
+  void deleteStripImage(String name) {
+    final StripImage? previa = _stripImages.remove(name.trim().toUpperCase());
+    if (previa != null && previa.file.existsSync()) {
+      previa.file.deleteSync();
+    }
+    _save();
+  }
+
+  /// La imagen de una franja se va con ella: al renombrarla, a su nombre nuevo.
+  void _moveStripImage(String de, String a) {
+    final String origen = de.trim().toUpperCase(), destino = a.trim().toUpperCase();
+    final StripImage? img = _stripImages.remove(origen);
+    if (img == null || origen == destino) {
+      if (img != null) _stripImages[origen] = img;
+      return;
+    }
+    final File nuevo = _stripImageFile(destino);
+    img.file.renameSync(nuevo.path);
+    _stripImages[destino] = StripImage(mime: img.mime, file: nuevo, rev: ++_stripSeq);
+  }
 
   /// Dónde se escribe un escudo mientras llega: se renombra al acabar bien.
   File get crestUploadFile => File('${directory.path}/$teamCrestDirName/escudo.subida');
@@ -473,6 +515,9 @@ class GraphicsStore {
       'strip': strip.toJson(),
       'icon_mime': iconMime,
       'crests': <String, String>{for (final MapEntry<String, TeamCrest> e in _crests.entries) e.key: e.value.mime},
+      'strip_images': <String, String>{
+        for (final MapEntry<String, StripImage> e in _stripImages.entries) e.key: e.value.mime,
+      },
       'next_match': nextMatch?.toJson(),
       'fixtures': <Map<String, Object?>>[for (final Fixture f in fixtures) f.toJson()],
       'interview': interview.toJson(),

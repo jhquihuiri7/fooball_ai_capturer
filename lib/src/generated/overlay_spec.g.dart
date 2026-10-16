@@ -56,10 +56,8 @@ abstract final class OverlaySpec {
     'comp': 22,
     'live': 24,
     'crest': 26,
-    'slot': 22,
-    'sub': 15,
-    'claim': 30,
-    'ai': 16,
+    'strip_title': 34,
+    'strip_subtitle': 20,
   };
 
   /// Las familias: «display» es Barlow Condensed y «sans», Inter.
@@ -76,10 +74,8 @@ abstract final class OverlaySpec {
     'comp': 'display',
     'live': 'sans',
     'crest': 'display',
-    'slot': 'display',
-    'sub': 'sans',
-    'claim': 'display',
-    'ai': 'sans',
+    'strip_title': 'display',
+    'strip_subtitle': 'sans',
   };
 
   /// El peso de cada texto.
@@ -90,10 +86,8 @@ abstract final class OverlaySpec {
     'comp': 600,
     'live': 800,
     'crest': 800,
-    'slot': 700,
-    'sub': 500,
-    'claim': 700,
-    'ai': 500,
+    'strip_title': 700,
+    'strip_subtitle': 500,
   };
 
   /// La franja (overlay_preview.py).
@@ -101,17 +95,15 @@ abstract final class OverlaySpec {
     'edge_h': 2,
     'reserved_left': 360,
     'reserved_right': 300,
-    'logo_h': 48,
-    'logo_gap': 16,
     'logo_src_w': 97,
     'logo_src_h': 84,
-    'claim_line_h': 32,
-    'divider_pad': 26,
-    'slot_gap': 40,
-    'slot_icon_r': 14,
-    'raya_w': 6,
-    'raya_h': 28,
-    'raya_gap': 14,
+    'image_h': 84,
+    'image_max_w': 300,
+    'image_gap': 28,
+    'title_dy': -14,
+    'subtitle_dy': 20,
+    'title_max_chars': 48,
+    'subtitle_max_chars': 72,
   };
 
   /// La jornada (fixtures_card.py).
@@ -403,19 +395,9 @@ abstract final class OverlaySpec {
   static const int nextTextMaxChars = 32;
   static const String fixturesTitle = 'JORNADA';
   static const String interviewTitle = 'ENTREVISTAS';
-  /// Caracteres como mucho de cada texto editable de la franja.
-  static const int stripTextMaxChars = 32;
-  /// Las dos líneas del claim de partida.
-  static const List<String> stripClaimDefault = [
-    'EL DEPORTE',
-    'TAMBIÉN CONSERVA',
-  ];
-  /// Los tres mensajes de partida del centro: título y subtítulo.
-  static const List<(String, String)> stripSlotsDefault = [
-    ('GALÁPAGOS', 'SIEMPRE CONTIGO'),
-    ('NUESTRAS ISLAS', 'NUESTRO FUTURO'),
-    ('ENERGÍA LIMPIA', 'PARA UN MEJOR MAÑANA'),
-  ];
+  /// El título y el subtítulo de partida de la franja.
+  static const String stripTitleDefault = 'EL DEPORTE TAMBIÉN CONSERVA';
+  static const String stripSubtitleDefault = 'Transmisión automática con IA';
 
   /// La tarjeta SIN SEÑAL (live_panel.py, §21.6).
   static const String slateText = 'SIN SEÑAL';

@@ -631,12 +631,8 @@ void main() {
 
     test('los textos de la franja se guardan y sobreviven al partido', () async {
       final Map<String, Object?> textos = <String, Object?>{
-        'claim': <String>['VAMOS', 'GALÁPAGOS'],
-        'slots': <List<String>>[
-          <String>['FARMACIA ISLA', 'ABIERTO 24 HORAS'],
-          <String>['', ''],
-          <String>['RADIO MAR', '99.1 FM'],
-        ],
+        'title': 'FARMACIA ISLA',
+        'subtitle': 'Abierto las 24 horas',
       };
       final (int ok, Map<String, Object?> partido) =
           await pedir('POST', 'graphics/strip_texts', bearer: token(), body: textos);
@@ -645,13 +641,10 @@ void main() {
       final MatchEngine otro =
           MatchEngine.open(file: File('${dir.path}/match.json'), time: reloj, matchId: 'm_otro');
       expect(otro.toJson()['strip_texts'], textos, reason: 'del campeonato, no del partido');
-      final Map<String, Object?> largo = <String, Object?>{
-        ...textos,
-        'claim': <String>['x' * 40, 'B'],
-      };
+      final Map<String, Object?> largo = <String, Object?>{...textos, 'title': 'x' * 49};
       expect((await pedir('POST', 'graphics/strip_texts', bearer: token(), body: largo)).$1, 400);
       expect(
-        (await pedir('POST', 'graphics/strip_texts', bearer: token(), body: <String, Object?>{'claim': 'no'})).$1,
+        (await pedir('POST', 'graphics/strip_texts', bearer: token(), body: <String, Object?>{'title': 3})).$1,
         400,
       );
     });
@@ -746,10 +739,7 @@ void main() {
       'when': 'Sábado 25 oct · 16:00',
       'venue': 'Estadio Municipal',
     };
-    Map<String, Object?> textos(String claim) => <String, Object?>{
-      'claim': <String>[claim, 'B'],
-      'slots': <List<String>>[<String>['1', 'a'], <String>['2', 'b'], <String>['3', 'c']],
-    };
+    Map<String, Object?> textos(String titulo) => <String, Object?>{'title': titulo, 'subtitle': 'B'};
 
     test('una tarjeta a la vez: alineación, entretiempo, final y próximo partido', () async {
       engine.saveLineup(MatchTeam.home, 'Milan', '4-4-2', once);
@@ -839,7 +829,7 @@ void main() {
       final (_, Map<String, Object?> fuera) =
           await pedir('POST', 'graphics/strip', bearer: token(), body: <String, Object?>{'name': 'RADIO MAR'});
       expect(fuera['strip_preset'], 'Radio Mar');
-      expect((fuera['strip_texts']! as Map<String, Object?>)['claim'], <String>['RADIO MAR', 'B']);
+      expect(fuera['strip_texts'], <String, Object?>{'title': 'RADIO MAR', 'subtitle': 'B'});
       expect(fuera['strip_remaining_ms'], stripShowDefaultS * 1000);
       expect(
         (await pedir('POST', 'graphics/strip', bearer: token(), body: <String, Object?>{'name': 'Nadie'})).$1,
@@ -850,14 +840,43 @@ void main() {
       final (_, Map<String, Object?> editada) = await pedir('POST', 'graphics/strip_save', bearer: token(), body:
           <String, Object?>{'name': 'Radio Mar FM', 'previous_name': 'Radio Mar', ...textos('99.1 FM')});
       expect(editada['strip_preset'], 'Radio Mar FM');
-      expect((editada['strip_texts']! as Map<String, Object?>)['claim'], <String>['99.1 FM', 'B']);
+      expect(editada['strip_texts'], <String, Object?>{'title': '99.1 FM', 'subtitle': 'B'});
       expect(franjas(editada).length, 2);
 
+      // La imagen de la franja: subirla, verla en el estado de la puesta y que se vaya con ella.
+      final List<int> png = <int>[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, ...List<int>.filled(48, 4)];
+      Future<int> subirImagen(String franja) async {
+        final HttpClientRequest r = await http.openUrl(
+          'PUT',
+          Uri.parse('http://127.0.0.1:${server.port}/api/v1/$stripImageRoute/${Uri.encodeComponent(franja)}'),
+        );
+        r.headers.set(HttpHeaders.authorizationHeader, 'Bearer ${token()}');
+        r.contentLength = png.length;
+        r.add(png);
+        final HttpClientResponse res = await r.close();
+        await res.drain<void>();
+        return res.statusCode;
+      }
+
+      expect(await subirImagen('Nadie'), 404, reason: 'solo las franjas guardadas tienen imagen');
+      expect(await subirImagen('Radio Mar FM'), 200);
+      final Map<String, Object?> conImagen = engine.toJson();
+      expect(conImagen['strip_image'], isA<int>(), reason: 'es la puesta');
+      final Map<String, Object?> fila = (conImagen['strip_presets']! as List<Object?>)
+          .cast<Map<String, Object?>>()
+          .firstWhere((Map<String, Object?> f) => f['name'] == 'Radio Mar FM');
+      expect(fila['image'], conImagen['strip_image']);
+      await pedir('POST', 'graphics/strip_save', bearer: token(), body:
+          <String, Object?>{'name': 'Radio Mar', 'previous_name': 'Radio Mar FM', ...textos('99.1 FM')});
+      expect(engine.graphics.stripImageFor('Radio Mar'), isNotNull, reason: 'renombrarla se lleva su imagen');
+      expect(engine.graphics.stripImageFor('Radio Mar FM'), isNull);
+
       final (int borrada, Map<String, Object?> sin) =
-          await pedir('POST', 'graphics/strip_delete', bearer: token(), body: <String, Object?>{'name': 'Radio Mar FM'});
+          await pedir('POST', 'graphics/strip_delete', bearer: token(), body: <String, Object?>{'name': 'Radio Mar'});
       expect((borrada, franjas(sin).length, sin['strip_preset']), (200, 1, null));
+      expect(engine.graphics.stripImageFor('Radio Mar'), isNull, reason: 'y borrarla, también');
       expect(
-        (await pedir('POST', 'graphics/strip_delete', bearer: token(), body: <String, Object?>{'name': 'Radio Mar FM'})).$1,
+        (await pedir('POST', 'graphics/strip_delete', bearer: token(), body: <String, Object?>{'name': 'Radio Mar'})).$1,
         404,
       );
       final MatchEngine otro = MatchEngine.open(file: File('${dir.path}/match.json'), time: reloj, matchId: 'm_otro');

@@ -185,7 +185,11 @@
 
   /* ---------------- franjas guardadas (ADR 0029) ---------------- */
   .franjas { margin-top: 10px; }
-  .franjas li { grid-template-columns: 1fr auto auto auto; }
+  .franjas li { grid-template-columns: auto 1fr auto auto auto; }
+  .franjas .miniatura { width: 56px; height: 40px; border-radius: 6px; background: var(--profundo); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .franjas .miniatura img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  #franja-imagen-vista { height: 84px; }
+  #franja-imagen-vista img { max-height: 72px; }
   .franjas .puesta { color: var(--teal); }
 
   /* ---------------- la jornada (ADR 0030) ---------------- */
@@ -343,21 +347,12 @@
         <form class="campos" id="form-franja">
           <input type="hidden" name="previo">
           <label>Nombre<input type="text" name="nombre" maxlength="24" autocomplete="off" required></label>
-          <div class="pareja">
-            <label>Claim 1<input type="text" name="claim" maxlength="32" autocomplete="off"></label>
-            <label>Claim 2<input type="text" name="claim" maxlength="32" autocomplete="off"></label>
-          </div>
-          <div class="pareja">
-            <label>Mensaje 1<input type="text" name="titulo" maxlength="32" autocomplete="off"></label>
-            <label>Debajo<input type="text" name="sub" maxlength="32" autocomplete="off"></label>
-          </div>
-          <div class="pareja">
-            <label>Mensaje 2<input type="text" name="titulo" maxlength="32" autocomplete="off"></label>
-            <label>Debajo<input type="text" name="sub" maxlength="32" autocomplete="off"></label>
-          </div>
-          <div class="pareja">
-            <label>Mensaje 3<input type="text" name="titulo" maxlength="32" autocomplete="off"></label>
-            <label>Debajo<input type="text" name="sub" maxlength="32" autocomplete="off"></label>
+          <label>Título<input type="text" name="titulo" maxlength="48" autocomplete="off" required></label>
+          <label>Subtítulo<input type="text" name="sub" maxlength="72" autocomplete="off" placeholder="opcional"></label>
+          <div class="icono-vista" id="franja-imagen-vista">sin imagen</div>
+          <div class="acciones">
+            <label class="btn subir">Elegir imagen<input type="file" name="imagen" accept="image/png,image/jpeg"></label>
+            <button class="btn quitar" type="button" id="franja-quitar-imagen" data-propio disabled>Quitar imagen</button>
           </div>
           <div class="acciones">
             <button class="btn primario" type="submit">Guardar franja</button>
@@ -686,11 +681,14 @@ function pintaFranjas(lista, puesta) {
   $('franjas').replaceChildren(...lista.map(f => {
     const li = document.createElement('li');
     li.classList.toggle('suena', f.name === puesta);
+    const mini = document.createElement('div');
+    mini.className = 'miniatura';
+    if (f.image != null) imagenFranja(f.name, mini);
     const nombre = document.createElement('div');
     nombre.className = 'nombre';
     nombre.textContent = f.name;
     const datos = document.createElement('small');
-    datos.textContent = (f.name === puesta ? 'puesta · ' : '') + f.claim.filter(Boolean).join(' ');
+    datos.textContent = (f.name === puesta ? 'puesta · ' : '') + f.title;
     if (f.name === puesta) datos.classList.add('puesta');
     nombre.append(datos);
     const boton = (texto, clase, accion) => {
@@ -700,6 +698,7 @@ function pintaFranjas(lista, puesta) {
       return b;
     };
     li.append(
+      mini,
       nombre,
       boton('Sacar 15 s', 'acento', b => orden('graphics/strip', { show_s: 15, name: f.name }, b)),
       boton('Editar', '', () => editaFranja(f)),
@@ -710,13 +709,28 @@ function pintaFranjas(lista, puesta) {
     return li;
   }));
 }
+// La imagen de una franja guardada, en `donde` (enmienda del ADR 0027 del 2026-10-16).
+async function imagenFranja(nombre, donde) {
+  try {
+    const r = await fetch('/api/v1/assets/strip/' + encodeURIComponent(nombre), { headers: cab });
+    if (!r.ok) return;
+    const img = document.createElement('img');
+    img.alt = 'Imagen de la franja ' + nombre;
+    img.src = URL.createObjectURL(await r.blob());
+    donde.replaceChildren(img);
+  } catch {}
+}
 function editaFranja(f) {
   const form = $('form-franja');
   form.previo.value = f ? f.name : '';
   form.nombre.value = f ? f.name : '';
-  form.querySelectorAll('[name=claim]').forEach((el, i) => { el.value = f ? f.claim[i] : ''; });
-  form.querySelectorAll('[name=titulo]').forEach((el, i) => { el.value = f ? f.slots[i][0] : ''; });
-  form.querySelectorAll('[name=sub]').forEach((el, i) => { el.value = f ? f.slots[i][1] : ''; });
+  form.titulo.value = f ? f.title : '';
+  form.sub.value = f ? f.subtitle : '';
+  form.imagen.value = '';
+  const vista = $('franja-imagen-vista');
+  vista.textContent = 'sin imagen';
+  if (f && f.image != null) imagenFranja(f.name, vista);
+  $('franja-quitar-imagen').disabled = !(f && f.image != null);
   $('franja-editor-titulo').textContent = f ? 'Editar franja: ' + f.name : 'Agregar franja';
   $('franja-editor').open = !!f;
   if (f) form.nombre.focus();
@@ -757,13 +771,45 @@ $('form-equipos').addEventListener('submit', e => {
 $('form-franja').addEventListener('submit', e => {
   e.preventDefault();
   const f = $('form-franja');
-  const val = n => [...f.querySelectorAll('[name=' + n + ']')].map(el => el.value.trim());
-  const titulos = val('titulo'), subs = val('sub');
-  const cuerpo = { name: f.nombre.value.trim(), claim: val('claim'), slots: titulos.map((t, i) => [t, subs[i]]) };
+  const nombre = f.nombre.value.trim();
+  const cuerpo = { name: nombre, title: f.titulo.value.trim(), subtitle: f.sub.value.trim() };
   if (f.previo.value) cuerpo.previous_name = f.previo.value;
-  orden('graphics/strip_save', cuerpo, e.submitter).then(ok => { if (ok) editaFranja(null); });
+  const archivo = f.imagen.files[0];
+  if (archivo && archivo.size > 4 * 1024 * 1024) { aviso('La imagen pasa de 4 MB.'); return; }
+  orden('graphics/strip_save', cuerpo, e.submitter).then(async ok => {
+    if (!ok) return;
+    if (archivo) {
+      // La imagen va a la franja ya guardada, por su nombre.
+      try {
+        const r = await fetch('/api/v1/assets/strip/' + encodeURIComponent(nombre), {
+          method: 'PUT', headers: { ...cab, 'Content-Type': archivo.type || 'application/octet-stream' }, body: archivo,
+        });
+        const j = await r.json().catch(() => ({}));
+        if (r.ok) pinta(j); else aviso(j.detail || ('error ' + r.status));
+      } catch { aviso('Sin conexión con el maestro: la imagen no se subió.'); }
+    }
+    editaFranja(null);
+  });
 });
 $('franja-cancelar').addEventListener('click', () => editaFranja(null));
+$('form-franja').imagen.addEventListener('change', e => {
+  const archivo = e.target.files[0];
+  if (!archivo) return;
+  const img = document.createElement('img');
+  img.alt = 'Imagen elegida';
+  img.src = URL.createObjectURL(archivo);
+  $('franja-imagen-vista').replaceChildren(img);
+});
+$('franja-quitar-imagen').addEventListener('click', async () => {
+  const nombre = $('form-franja').previo.value;
+  if (!nombre || !confirm('¿Quitar la imagen de la franja ' + nombre + '?')) return;
+  try {
+    const r = await fetch('/api/v1/assets/strip/' + encodeURIComponent(nombre), { method: 'DELETE', headers: cab });
+    const j = await r.json().catch(() => ({}));
+    if (r.ok) { pinta(j); $('franja-imagen-vista').textContent = 'sin imagen'; $('franja-quitar-imagen').disabled = true; }
+    else aviso(j.detail || ('error ' + r.status));
+  } catch { aviso('Sin conexión con el maestro.'); }
+});
 $('form-jornada').addEventListener('input', () => { jornadaSucia = true; });
 $('jornada-agregar').addEventListener('click', () => {
   if ($('jornada-filas').children.length >= 8) return;
