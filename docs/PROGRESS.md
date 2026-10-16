@@ -12,6 +12,63 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-15 · El 0x8BADF00D del 17 al fondo: la vista previa ya no rehace la sesión en el hilo principal (329e6fc) · 🚧 sin probar en el iPhone
+
+**El fallo.** 18:32:57, el 17 emitiendo en «Una cámara (sin pareja)», Zero al fondo: iOS la
+mató (`Runner-2026-10-15-183257.ips`: `EXC_CRASH SIGKILL`, FRONTBOARD `0x8BADF00D` «Failed to
+terminate gracefully after 5.0s», WatchdogVisibility Background). El hilo principal estaba en
+`-[AVCaptureVideoPreviewLayer _initWithSession:makeConnection:]` → `setSession:` →
+`_addVideoPreviewLayer:` → **`_removeAllPreviewLayers`** → `setSession:` (la capa anterior) →
+`commitConfiguration` → `_buildAndRunGraph` → `AVRunLoopCondition _waitInMode:`; y el hilo
+`com.apple.coremedia.capturesession.notifications` en `objc_sync_enter` dentro de
+`_handleConfigurationCommittedNotificationWithPayload:`, contra el cerrojo que tenía el
+principal. Quién lo llamaba: `CapturePreviewFactory.create` → `CaptureEngine.makePreviewLayer`
+→ `AVCaptureVideoPreviewLayer(session:)`, **una capa nueva por cada montaje de la vista de
+plataforma** (el vistazo sobre la tarjeta, PARAR, EMITIR), y AVFoundation solo admite una: quita
+la anterior rehaciendo el grafo de captura, en el hilo que lo pide, con la sesión corriendo. Con
+la cámara interrumpida por el fondo (`videoDeviceNotAvailableInBackground`) esa espera no
+vuelve; cuando iOS pidió terminar, el principal no estaba para contestar.
+
+**Hecho** (`CaptureEngine`, `CapturePreview`, `AppDelegate`, `SplitBench`; `PreviewAttachGate`,
+`BoundedWait` y `LifecycleConstants` en RigMedia).
+- **Una sola capa de vista previa** para toda la vida de la sesión. Cada vista nueva se la trae
+  (`removeFromSuperlayer` + `addSublayer`: Core Animation, sin tocar la sesión). Montar y
+  desmontar la vista ya no rehace el grafo, tampoco en primer plano (antes lo hacía en cada
+  vistazo, con la 4K grabando).
+- **La sesión se le pone en la cola de captura**, nunca en el principal, y solo cuando la app
+  está delante y `session.isInterrupted` es falso (`PreviewAttachGate`). Si no, espera a
+  `willEnterForeground` y a `AVCaptureSessionInterruptionEnded` (en ese orden al volver del
+  fondo). La vista vuelve a aplicar el giro al recibir `.capturePreviewAttached`.
+- `applicationWillTerminate` (no existía): cierra la 4K con el plazo de
+  `LifecycleConstants.terminationFlushS` (1 s, `BoundedWait`) y no toca sesión, enlace ni vista
+  previa. Al fondo ya la cerraba `interruptionBegan`.
+- `app_events` del latido y del informe: «cámara interrumpida: la app pasó a segundo plano»,
+  «cámara de vuelta», «vista previa espera: …», «vista previa con sesión».
+
+**La emisión al volver del fondo ya se reanuda sola; no hace falta EMITIR.** Evidencia en
+`bench/partido-20261015-1605`: la pasada de 16:05 fue al fondo en 447,1 s y volvió en 450,7 s; el
+programa siguió hasta los 489 s (`publishing_s` 488, `connects` 1, `reconnects` 0,
+`program_encoder` rehecho 2 veces). La de 16:08, con tres idas de 12-24 s: `reconnects` 1 tras
+«SRT no envía (2001): Connection was broken». AVFoundation reanuda la sesión, el motor reabre
+la 4K en otro segmento, VideoToolbox se rehace (4fb5bf4) y `ProgramPublisher` reconecta. Lo
+que se ve «conectando» es el relé del VPS, que espera al siguiente IDR. Lo que el dueño vio
+hoy a las 18:32 era la app muerta, no una emisión parada.
+
+**Comprobado** (en el worktree `../wt-fondo`; el árbol principal y los iPhone sin tocar):
+- `swift test --skip ModelBench`: **558 tests, 4 saltados, 0 fallos** (8 nuevos:
+  `PreviewAttachGateTests` 5, `BoundedWaitTests` 3). Build en el scratchpad, borrado.
+- `tools/check_layers.sh`: limpio.
+- El Runner, sin `flutter build`: `swiftc -typecheck` de todos sus `.swift` contra RigCore,
+  RigNet y RigMedia emitidos para iOS desde este árbol y los módulos de Flutter y HaishinKit
+  del DerivedData: **0 errores y los mismos 34 avisos** que 296f058, texto a texto.
+
+**Para Alexander, en el 17**: abrir la cámara (la vista previa tiene que salir y girar como
+siempre), EMITIR, vistazo sobre la tarjeta, PARAR; luego EMITIR y dejar Zero al fondo medio
+minuto dos o tres veces: la app sigue viva, el programa vuelve solo y el `program-live-*.json`
+trae «cámara interrumpida» / «cámara de vuelta». Si alguna vez la vista previa saliera negra al
+volver a la pantalla de captura, mirar en el log `[preview]`: la capa comparte la sesión y la
+conexión se rehace con `configure`.
+
 ## 2026-10-15 · El foco: enfocar en el centro y congelar, no la posición 1 · 🚧 sin compilar; falta la prueba en el iPhone
 
 **El caso.** El programa de «Una cámara» salía blando aunque entraran 6 Mbit/s. Alexander
