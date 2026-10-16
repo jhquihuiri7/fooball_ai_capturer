@@ -11,6 +11,7 @@
 //      focos del campo, y ninguna corrección posterior las quita.
 
 import AVFoundation
+import CoreGraphics
 import RigCore
 
 enum CameraSetupError: LocalizedError {
@@ -40,12 +41,20 @@ struct AppliedCameraSettings {
     var whiteBalanceKelvin: Float = 0
     var whiteBalanceTint: Float = 0
     var focusLocked: Bool
+    /// Dónde quedó la lente (0 lo más cerca, 1 lo más lejos), para el log.
+    var lensPosition: Float = 0
 }
 
 enum UltraWideCamera {
-    /// Posición de la lente para el infinito. AVFoundation la normaliza de 0 (lo más
-    /// cerca) a 1 (lo más lejos), sin unidades ni distancia real.
-    static let infinityLensPosition: Float = 1.0
+    /// La posición más lejana de la lente. AVFoundation la normaliza de 0 (lo más cerca) a
+    /// 1 (lo más lejos), sin unidades ni distancia real, y **1 no es el infinito**: en el
+    /// iPhone 17 bloquearla ahí dejaba todo blando (2026-10-15, junto a la app Cámara a
+    /// 0,5×). Queda solo de reserva, para una lente que no enfoque sola.
+    static let farthestLensPosition: Float = 1.0
+
+    /// Dónde mide el enfoque automático: el centro de la imagen, en las coordenadas
+    /// normalizadas de AVFoundation (0 a 1 en cada eje). Es donde va el campo.
+    static let focusPoint = CGPoint(x: 0.5, y: 0.5)
 
     /// La cámara ultra gran angular trasera, si la hay.
     ///
@@ -129,15 +138,28 @@ enum UltraWideCamera {
             device.isVideoHDREnabled = false
         }
 
-        // Foco al infinito, y no «donde esté la lente ahora»: en los Pro la ultra gran
-        // angular enfoca hasta macro, y si la app arranca con el móvil sobre una mesa la
-        // lente se queda a dos centímetros y el campo sale borroso. A 13 mm todo lo que
-        // esté a más de un metro es nítido con la lente en el infinito, así que es el
-        // único valor que vale igual para las dos cámaras. La ultra gran angular de los
-        // iPhone 11 y 12 es de foco fijo: ahí no hay nada que mover, y no es un fallo.
+        // Foco: como la exposición, medir primero y congelar después. La cámara enfoca sola
+        // un momento en el centro, solo en lo lejano, y `lockFocus` congela donde quedó.
+        // Ni «donde esté la lente ahora» (la ultra gran angular enfoca hasta macro: sobre una
+        // mesa se quedaba a dos centímetros) ni la posición 1, que no es el infinito y lo
+        // dejaba todo blando. A 13 mm, con la lente en el infinito de verdad, todo lo que
+        // esté a más de un metro sale nítido. La ultra gran angular de los iPhone 11 y 12 es
+        // de foco fijo: ahí no hay nada que mover, y no es un fallo.
         var focusLocked = true
-        if device.isLockingFocusWithCustomLensPositionSupported {
-            device.setFocusModeLocked(lensPosition: infinityLensPosition, completionHandler: nil)
+        if device.isFocusModeSupported(.continuousAutoFocus), device.isLockingFocusWithCustomLensPositionSupported {
+            if device.isFocusPointOfInterestSupported {
+                device.focusPointOfInterest = focusPoint
+            }
+            if device.isAutoFocusRangeRestrictionSupported {
+                device.autoFocusRangeRestriction = .far
+            }
+            if device.isSmoothAutoFocusSupported {
+                device.isSmoothAutoFocusEnabled = false
+            }
+            device.focusMode = .continuousAutoFocus
+            focusLocked = false  // lo congela `lockFocus` en cuanto la cámara haya medido
+        } else if device.isLockingFocusWithCustomLensPositionSupported {
+            device.setFocusModeLocked(lensPosition: farthestLensPosition, completionHandler: nil)
         } else if device.isFocusModeSupported(.locked) {
             device.focusMode = .locked
         } else {
@@ -159,6 +181,21 @@ enum UltraWideCamera {
             actualFps: 1.0 / CMTimeGetSeconds(device.activeVideoMinFrameDuration),
             focusLocked: focusLocked
         )
+    }
+
+    /// Congela el foco donde lo dejó el enfoque automático de `lockSettings`. Si la lente
+    /// no enfoca sola (o ya quedó bloqueada en la reserva), solo apunta dónde está.
+    static func lockFocus(on device: AVCaptureDevice, applied: inout AppliedCameraSettings) throws {
+        guard device.focusMode == .continuousAutoFocus, device.isLockingFocusWithCustomLensPositionSupported else {
+            applied.lensPosition = device.lensPosition
+            return
+        }
+        let medida = device.lensPosition
+        try device.lockForConfiguration()
+        defer { device.unlockForConfiguration() }
+        device.setFocusModeLocked(lensPosition: medida, completionHandler: nil)
+        applied.focusLocked = true
+        applied.lensPosition = medida
     }
 
     /// Congela exposición y balance con lo que la cámara acaba de medir.

@@ -285,6 +285,9 @@ final class CaptureEngine: NSObject {
         // cualquiera.
         startRunning()
         await Self.waitForMetering(on: device)
+        // El foco, igual: la cámara enfoca sola en el centro mientras mide y se congela ahí.
+        try UltraWideCamera.lockFocus(on: device, applied: &applied)
+        NSLog("[foco] congelado en la posición %.3f de la lente (1 = lo más lejos)", Double(applied.lensPosition))
         try UltraWideCamera.lockExposureAndWhiteBalance(on: device, settings: settings, applied: &applied)
         // Si el maestro ya dijo cómo ve, manda él: lo medido aquí solo valía de reserva.
         if let masterLook {
@@ -346,7 +349,8 @@ final class CaptureEngine: NSObject {
     private static func waitForMetering(on device: AVCaptureDevice) async {
         for poll in 1...meteringMaxPolls {
             try? await Task.sleep(nanoseconds: meteringPollNs)
-            if poll >= meteringMinPolls, !device.isAdjustingExposure, !device.isAdjustingWhiteBalance {
+            if poll >= meteringMinPolls, !device.isAdjustingExposure, !device.isAdjustingWhiteBalance,
+               !device.isAdjustingFocus {
                 return
             }
         }

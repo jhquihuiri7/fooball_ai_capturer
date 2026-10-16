@@ -12,6 +12,36 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-15 · El foco: enfocar en el centro y congelar, no la posición 1 · 🚧 sin compilar; falta la prueba en el iPhone
+
+**El caso.** El programa de «Una cámara» salía blando aunque entraran 6 Mbit/s. Alexander
+grabó la misma habitación con la app Cámara a 0,5× (la misma ultra gran angular) y con Zero
+(`WhatsApp Video 2026-10-15 at 7.02.30 PM` y `7.03.21 PM`). Recortada a la zona que enseña
+Zero y ampliada 2×, la de la app Cámara sigue más nítida (el zigzag de la almohada, las
+flores de la colcha y los bordes de la mesita a 2-3 m), aun pasando por WhatsApp a 1024×576.
+No es ni la lente ni la luz: es cómo Zero pone la cámara. Lo único que pone a ciegas es el
+foco, bloqueado en `lensPosition` 1.0, y para AVFoundation 1 es «lo más lejos que llega la
+lente», no el infinito.
+
+**Hecho**: el foco, como la exposición, se mide y se congela.
+- `lockSettings` deja la cámara enfocando sola en el centro (`focusPointOfInterest`), solo en
+  lo lejano (`autoFocusRangeRestriction = .far`) y sin el enfoque suave.
+- `waitForMetering` espera también a `!isAdjustingFocus`, dentro de los mismos 3 s como mucho.
+- `lockFocus` (nuevo) bloquea la lente donde quedó y el log dice `[foco] congelado en la
+  posición …`.
+- Si la lente no enfoca sola, la reserva es la de siempre: la posición 1 o el foco fijo.
+
+**Tests**: `RunnerTests.testFocusIsMeasuredAtTheCentreAndTheReserveIsTheFarEnd` (el punto y la
+reserva). El enfoque en sí pide la cámara. **Sin compilar** (Windows).
+
+**Para Alexander, una prueba**: compilar, instalar y repetir lo mismo que con la app Cámara (la
+habitación, «Una cámara», con el móvil quieto y apuntando a algo a 2-4 m al abrir la cámara).
+Tiene que verse como la app Cámara. En el log, el número de `[foco]`: si sale muy por debajo
+de 1, era eso.
+
+**Riesgo con el soporte de dos**: cada móvil enfoca lo suyo, y el foco cambia un poco la
+focal. Si la costura empeora, recalibrar con el foco nuevo.
+
 ## 2026-10-15 · La primera emisión al VPS de verdad: el 17 en «Una cámara (sin pareja)» → VPS (167.71.31.225.sslip.io) → YouTube · ✅ mientras Zero estuvo delante
 
 Jonathan desplegó el VPS en el droplet de siempre (subido a 2 vCPU / 2 GB). El 17 con

@@ -17,6 +17,14 @@ final class FieldRobustnessTests: XCTestCase {
         XCTAssertLessThan(CaptureEngine.bitrateFraction(for: .critical), CaptureEngine.bitrateFraction(for: .serious))
         XCTAssertGreaterThan(CaptureEngine.bitrateFraction(for: .critical), 0.0)
     }
+
+    /// El foco se mide en el centro (donde va el campo) y solo cae a la posición más lejana
+    /// si la lente no enfoca sola. El enfoque en sí pide la cámara de verdad.
+    func testFocusIsMeasuredAtTheCentreAndTheReserveIsTheFarEnd() {
+        XCTAssertEqual(UltraWideCamera.focusPoint.x, 0.5)
+        XCTAssertEqual(UltraWideCamera.focusPoint.y, 0.5)
+        XCTAssertEqual(UltraWideCamera.farthestLensPosition, 1.0)
+    }
 }
 
 /// Lo que ata a RigLink con el enlace y con el contrato de pigeon.
