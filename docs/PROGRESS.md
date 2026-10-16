@@ -12,7 +12,7 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
-## 2026-10-15 · El 0x8BADF00D del 17 al fondo: la vista previa ya no rehace la sesión en el hilo principal (329e6fc) · 🚧 sin probar en el iPhone
+## 2026-10-15 · El 0x8BADF00D del 17 al fondo: la vista previa ya no rehace la sesión en el hilo principal (79588aa) · 🚧 sin probar en el iPhone
 
 **El fallo.** 18:32:57, el 17 emitiendo en «Una cámara (sin pareja)», Zero al fondo: iOS la
 mató (`Runner-2026-10-15-183257.ips`: `EXC_CRASH SIGKILL`, FRONTBOARD `0x8BADF00D` «Failed to
