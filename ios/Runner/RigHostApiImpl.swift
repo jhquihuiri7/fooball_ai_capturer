@@ -120,6 +120,10 @@ final class RigHostApiImpl: NSObject, RigHostApi {
         )
     }
 
+    func setBackdropBlur(on: Bool) throws {
+        OverlayHub.shared?.backdropBlur = on
+    }
+
     func setAdPlaylist(json: String) throws -> String {
         do {
             try AdHub.apply(json: json)

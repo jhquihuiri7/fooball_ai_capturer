@@ -100,6 +100,16 @@ public final class OverlayStore {
         }
     }
 
+    private var blur = false
+
+    /// La cancha desenfocada detrás del gráfico (ADR 0027, enmienda del 2026-10-16): la pide
+    /// la tarjeta de entretiempo, que tapa la pantalla entera con un velo translúcido. La
+    /// composición la lee en cada fotograma.
+    public var backdropBlur: Bool {
+        get { lock.lock(); defer { lock.unlock() }; return blur }
+        set { lock.lock(); blur = newValue; lock.unlock() }
+    }
+
     /// Hay alguna capa a la vista: si no, la composición no lee gráfico.
     public var hasContent: Bool {
         lock.lock(); defer { lock.unlock() }

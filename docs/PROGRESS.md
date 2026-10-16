@@ -12,6 +12,41 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-16 · Entretiempo a pantalla completa, con la cancha desenfocada detrás (IOS-102, enmienda del ADR 0027) · 🚧 Dart probado en Windows; el Swift, sin compilar
+
+Jhonatan lo vio en el iPhone: la tarjeta de entretiempo dejaba libre el hueco de la franja y
+tapaba la cancha con un fondo opaco. Pidió que ocupe toda la pantalla y que el fondo sea un
+blur translúcido, para que se siga viendo lo que pasa en la cancha.
+
+**Hecho**
+- La tarjeta (`halftime_card_painter.dart`, de football-ai f4757c4): un velo azul profundo
+  al 60 % (`OverlaySpec.halftime['veil_alpha']`) en toda la pantalla, franja incluida. Las
+  cajas no cambian.
+- Pigeon: `setBackdropBlur(on)` en `RigHostApi`. `OverlayBridge.setBackdropBlur` solo cruza
+  el canal cuando cambia. Con el entretiempo fuera, `ProgramGraphics` publica la tarjeta,
+  pide el desenfoque y quita el marcador, que se vería a través del velo; al salir, todo
+  vuelve.
+- Nativo: `OverlayStore.backdropBlur` y `RigMedia/Metal/BackdropBlur.swift`. Mientras está
+  pedido, `MetalProgramComposer` compone en tres pasadas sobre texturas propias reservadas al
+  crear el compositor: la cancha sola, un gaussiano de MPS por plano (sigma 24 px sobre 1920;
+  la croma, la mitad) y otra composición de una lente desde la cancha borrosa con el gráfico
+  encima. Sin la franja de anuncios. `ComposeProgramKernel` gana el `encode` sobre texturas
+  y `planes(of:)`.
+
+**Comprobado**: `flutter analyze` limpio; los tests de la tarjeta (el velo en las esquinas y
+en la franja, 0,31 % de píxeles distintos de Python), del puente y de `ProgramGraphics` (la
+secuencia tarjeta → desenfoque → sin marcador, y al revés) pasan. En Windows fallan los 8
+dorados de imagen de `test/graphics`, porque Alex los regeneró hoy en el Mac (1a07741) y son
+de su plataforma; `halftime.png`, además, cambia de verdad. Escrito sin compilar:
+`BackdropBlurTests` (las franjas pierden el detalle, el cuadrado del gráfico sigue igual, el
+borde no se oscurece, y el compositor solo desenfoca si se pide).
+
+**Pendiente (Mac e iPhone)**: compilar y pasar `BackdropBlurTests`. A vigilar:
+`MPSImageGaussianBlur` sobre `r8Unorm` y `rg8Unorm`. Regenerar `goldens/halftime.png` con
+`flutter test --update-goldens test/graphics/halftime_card_painter_test.dart`. En el
+iPhone: sacar el entretiempo emitiendo y ver la cancha desenfocada en movimiento detrás, sin
+marcador ni franja, y los ms de GPU del compositor en el informe con la tarjeta fuera.
+
 ## 2026-10-16 · IOS-103 — Vídeos MP4 desde el mando, a pantalla completa y con su sonido · 🚧 Dart probado en Windows; el Swift, sin compilar
 
 ADR 0027 de football-ai, decisiones 4 y 6. El operador sube MP4 desde el mando, los pasa en

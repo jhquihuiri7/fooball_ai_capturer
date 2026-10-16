@@ -440,6 +440,28 @@ class RigHostApi {
     ;
   }
 
+  /// La cancha desenfocada detrás del gráfico (ADR 0027, enmienda del 2026-10-16): con
+  /// `on`, el programa se compone con la imagen de las cámaras desenfocada (el sigma de
+  /// `OverlaySpec.halftime`) y sin la franja de anuncios. La pide la tarjeta de
+  /// entretiempo, que tapa la pantalla entera con un velo translúcido.
+  Future<void> setBackdropBlur(bool on) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.RigHostApi.setBackdropBlur$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[on]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
   /// La rotación de la franja (IOS-48), en JSON: `{"ads": [{"name", "dir", "fps"}],
   /// "slots": [{"name", "loops"}]}`. `dir` es un directorio de PNG RGBA de 1920×108
   /// dentro de `Documents/ads/`; en lugar de `dir`, `frames` es la lista de PNG de cada

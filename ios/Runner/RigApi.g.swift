@@ -387,6 +387,11 @@ protocol RigHostApi {
   func setOverlay(rgba: FlutterStandardTypedData, width: Int64, height: Int64, x: Int64, y: Int64, layer: Int64, generation: Int64) throws
   /// Quita una capa del gráfico.
   func clearOverlay(layer: Int64) throws
+  /// La cancha desenfocada detrás del gráfico (ADR 0027, enmienda del 2026-10-16): con
+  /// `on`, el programa se compone con la imagen de las cámaras desenfocada (el sigma de
+  /// `OverlaySpec.halftime`) y sin la franja de anuncios. La pide la tarjeta de
+  /// entretiempo, que tapa la pantalla entera con un velo translúcido.
+  func setBackdropBlur(on: Bool) throws
   /// La rotación de la franja (IOS-48), en JSON: `{"ads": [{"name", "dir", "fps"}],
   /// "slots": [{"name", "loops"}]}`. `dir` es un directorio de PNG RGBA de 1920×108
   /// dentro de `Documents/ads/`; en lugar de `dir`, `frames` es la lista de PNG de cada
@@ -527,6 +532,25 @@ class RigHostApiSetup {
       }
     } else {
       clearOverlayChannel.setMessageHandler(nil)
+    }
+    /// La cancha desenfocada detrás del gráfico (ADR 0027, enmienda del 2026-10-16): con
+    /// `on`, el programa se compone con la imagen de las cámaras desenfocada (el sigma de
+    /// `OverlaySpec.halftime`) y sin la franja de anuncios. La pide la tarjeta de
+    /// entretiempo, que tapa la pantalla entera con un velo translúcido.
+    let setBackdropBlurChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.RigHostApi.setBackdropBlur\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      setBackdropBlurChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let onArg = args[0] as! Bool
+        do {
+          try api.setBackdropBlur(on: onArg)
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      setBackdropBlurChannel.setMessageHandler(nil)
     }
     /// La rotación de la franja (IOS-48), en JSON: `{"ads": [{"name", "dir", "fps"}],
     /// "slots": [{"name", "loops"}]}`. `dir` es un directorio de PNG RGBA de 1920×108

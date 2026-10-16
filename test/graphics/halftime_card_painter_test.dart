@@ -1,6 +1,6 @@
 /// La tarjeta de entretiempo en Dart (IOS-102, ADR 0027): la geometría de la referencia de
-/// Python, opaca salvo la franja, un dorado propio y ≤3 % de píxeles distintos del PNG de
-/// Python.
+/// Python, el velo translúcido en toda la pantalla, un dorado propio y ≤3 % de píxeles
+/// distintos del PNG de Python.
 library;
 
 import 'dart:io';
@@ -61,15 +61,16 @@ void main() {
     expect(l.boxes['home_name']!.width, lessThanOrEqualTo(OverlaySpec.halftime['name_max_w']!));
   });
 
-  testWidgets('opaca salvo la franja', (WidgetTester tester) async {
+  testWidgets('el velo cubre toda la pantalla, franja incluida, y deja ver la cancha', (WidgetTester tester) async {
     await tester.runAsync(() async {
       final ui.Image img = await paintHalftimeCard(directo, 480, 270);
       final Uint8List rgba = await _rgba(img);
       int alfa(int x, int y) => rgba[(y * 480 + x) * 4 + 3];
-      final int franja = (OverlaySpec.stripHeight * 480 / 1920).round();
-      expect(alfa(5, 5), 255);
-      expect(alfa(240, 270 - franja - 2), 255);
-      expect(alfa(240, 270 - 2), 0);
+      final int velo = OverlaySpec.halftime['veil_alpha']!;
+      expect(velo, inExclusiveRange(0, 255));
+      for (final (int x, int y) in const <(int, int)>[(2, 2), (477, 2), (2, 267), (477, 267), (240, 265)]) {
+        expect(alfa(x, y), velo, reason: '($x, $y)');
+      }
       img.dispose();
     });
   });

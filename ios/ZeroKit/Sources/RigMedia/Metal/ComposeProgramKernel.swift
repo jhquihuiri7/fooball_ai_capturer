@@ -99,20 +99,39 @@ public final class ComposeProgramKernel {
         destination: CVPixelBuffer,
         commandBuffer: MTLCommandBuffer
     ) throws {
-        func planos(_ b: CVPixelBuffer?) throws -> (MTLTexture, MTLTexture)? {
-            guard let b else { return nil }
-            guard let l = context.texture(from: b, plane: 0, format: .r8Unorm),
-                  let c = context.texture(from: b, plane: 1, format: .rg8Unorm)
-            else {
-                throw ReprojectKernelError.texture("las partes tienen que ser NV12 con IOSurface")
-            }
-            return (l, c)
+        try encode(
+            masterPlanes: try master.map(planes(of:)), masterSide: masterSide,
+            slavePlanes: try slave.map(planes(of:)), view: view,
+            seamYawRad: seamYawRad, featherRad: featherRad, graphic: graphic, strip: strip,
+            destinationPlanes: try planes(of: destination), commandBuffer: commandBuffer
+        )
+    }
+
+    /// Los planos de un NV12 con IOSurface como texturas: luma r8 y croma rg8 a la mitad.
+    public func planes(of b: CVPixelBuffer) throws -> (MTLTexture, MTLTexture) {
+        guard let l = context.texture(from: b, plane: 0, format: .r8Unorm),
+              let c = context.texture(from: b, plane: 1, format: .rg8Unorm)
+        else {
+            throw ReprojectKernelError.texture("las partes tienen que ser NV12 con IOSurface")
         }
-        let m = try planos(master)
-        let s = try planos(slave)
-        guard let (dstLuma, dstCroma) = try planos(destination) else {
-            throw ReprojectKernelError.texture("falta el destino")
-        }
+        return (l, c)
+    }
+
+    /// Lo mismo sobre planos ya en texturas (luma r8, croma rg8 a la mitad): el desenfoque
+    /// de la cancha (BackdropBlur) compone en texturas propias, que Metal sabe ordenar.
+    public func encode(
+        masterPlanes m: (MTLTexture, MTLTexture)?,
+        masterSide: CameraSide,
+        slavePlanes s: (MTLTexture, MTLTexture)?,
+        view: RectilinearView,
+        seamYawRad: Double,
+        featherRad: Double = RigConstants.panoramaFeatherRad,
+        graphic: MTLTexture?,
+        strip: Strip?,
+        destinationPlanes: (MTLTexture, MTLTexture),
+        commandBuffer: MTLCommandBuffer
+    ) throws {
+        let (dstLuma, dstCroma) = destinationPlanes
         guard dstLuma.width % 2 == 0, dstLuma.height % 2 == 0 else {
             throw ReprojectKernelError.size("el programa NV12 tiene que tener lados pares")
         }

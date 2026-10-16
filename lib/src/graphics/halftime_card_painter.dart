@@ -1,8 +1,10 @@
 /// La tarjeta de entretiempo en Dart (IOS-102), portada de tools/halftime_card.py del repo
 /// football-ai (ADR 0027): el marcador del partido a pantalla completa.
 ///
-/// Opaca encima del programa y transparente en la franja, como la de alineación, con la
-/// que comparte capa. Lleva el título, la competición, el icono del campeonato grande en
+/// Tapa la pantalla entera, franja incluida, con un velo translúcido: detrás se ve la
+/// cancha, que el compositor nativo desenfoca mientras la tarjeta está fuera (enmienda del
+/// ADR 0027 del 2026-10-16). Comparte capa con la alineación. Lleva el título, la
+/// competición, el icono del campeonato grande en
 /// el centro (el isotipo de Gala Sports si no hay), los dos escudos con sus nombres y el
 /// marcador con las cajas inclinadas. Las medidas salen de OverlaySpec.halftime.
 library;
@@ -151,8 +153,10 @@ class HalftimeCardPainter extends CustomPainter {
   @override
   void paint(Canvas c, Size size) {
     final HalftimeLayout l = HalftimeLayout(size.width.round(), state);
-    final double alto = size.height - l.px(OverlaySpec.stripHeight.toDouble());
-    c.drawRect(Rect.fromLTWH(0, 0, size.width, alto), Paint()..color = GalaBrand.token('azul-profundo'));
+    c.drawRect(
+      Offset.zero & size,
+      Paint()..color = GalaBrand.token('azul-profundo').withAlpha(OverlaySpec.halftime['veil_alpha']!),
+    );
     final Color blanco = GalaBrand.token('blanco');
     final Color teal = Color(OverlaySpec.colorsArgb['home']!);
     final Color visita = Color(OverlaySpec.colorsArgb['away']!);

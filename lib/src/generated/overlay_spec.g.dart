@@ -142,6 +142,8 @@ abstract final class OverlaySpec {
     'goal_min_w': 150,
     'goal_pad_x': 28,
     'goal_dash_gap': 24,
+    'veil_alpha': 153,
+    'backdrop_blur_sigma': 24,
   };
 
   /// El marcador (overlay_preview.py).

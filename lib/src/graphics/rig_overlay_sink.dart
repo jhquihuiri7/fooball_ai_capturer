@@ -17,4 +17,7 @@ class RigOverlaySink implements OverlaySink {
 
   @override
   Future<void> clearOverlay(int layer) => _api.clearOverlay(layer);
+
+  @override
+  Future<void> setBackdropBlur(bool on) => _api.setBackdropBlur(on);
 }

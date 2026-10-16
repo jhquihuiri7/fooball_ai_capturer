@@ -66,6 +66,9 @@ public final class MetalProgramComposer: ProgramComposing {
     private let masterSide: CameraSide
     private let width: Int
     private let height: Int
+    /// La cancha desenfocada detrás de la tarjeta de entretiempo (ADR 0027): sus texturas se
+    /// reservan aquí, no en el bucle. Sin memoria para ellas, la tarjeta sale sin desenfoque.
+    private let backdrop: BackdropBlur?
     public private(set) var lastGpuMs: Double?
 
     public init(context: MetalContext, masterSide: CameraSide, width: Int, height: Int) throws {
@@ -74,6 +77,9 @@ public final class MetalProgramComposer: ProgramComposing {
         self.masterSide = masterSide
         self.width = width
         self.height = height
+        backdrop = try? BackdropBlur(
+            device: context.device, width: width, height: height, sigmaPx: BackdropBlur.sigma(forWidth: width)
+        )
     }
 
     public func compose(
@@ -89,12 +95,22 @@ public final class MetalProgramComposer: ProgramComposing {
         }
         let grafico = overlay?.beginFrame()
         defer { if grafico != nil { overlay?.endFrame() } }
-        try kernel.encode(
-            master: master, masterSide: masterSide, slave: slave, view: vista,
-            seamYawRad: view.seamYawRad, featherRad: view.featherRad,
-            graphic: grafico, strip: ads?.strip(atRigMs: atRigMs)?.0,
-            destination: destination, commandBuffer: buffer
-        )
+        if overlay?.backdropBlur == true, let backdrop {
+            // El entretiempo tapa la pantalla entera, franja incluida: la cancha desenfocada
+            // detrás de su velo y sin anuncios (ADR 0027, enmienda del 2026-10-16).
+            try backdrop.encode(
+                kernel: kernel, master: master, masterSide: masterSide, slave: slave, view: vista,
+                seamYawRad: view.seamYawRad, featherRad: view.featherRad,
+                graphic: grafico, destination: destination, commandBuffer: buffer
+            )
+        } else {
+            try kernel.encode(
+                master: master, masterSide: masterSide, slave: slave, view: vista,
+                seamYawRad: view.seamYawRad, featherRad: view.featherRad,
+                graphic: grafico, strip: ads?.strip(atRigMs: atRigMs)?.0,
+                destination: destination, commandBuffer: buffer
+            )
+        }
         buffer.commit()
         buffer.waitUntilCompleted()
         lastGpuMs = GpuTiming.milliseconds(buffer)

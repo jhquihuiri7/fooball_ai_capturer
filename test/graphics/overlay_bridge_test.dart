@@ -20,6 +20,9 @@ class _Sink implements OverlaySink {
 
   @override
   Future<void> clearOverlay(int layer) async => calls.add('clear $layer');
+
+  @override
+  Future<void> setBackdropBlur(bool on) async => calls.add(on ? 'blur on' : 'blur off');
 }
 
 OverlayFrame _frame(int w, int h, int generation, List<(int, int)> opacos) {

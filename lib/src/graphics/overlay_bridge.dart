@@ -92,6 +92,9 @@ CroppedOverlay? cropToContent(OverlayFrame frame) {
 abstract class OverlaySink {
   Future<void> setOverlay(Uint8List rgba, int width, int height, int x, int y, int layer, int generation);
   Future<void> clearOverlay(int layer);
+
+  /// La cancha desenfocada detrás del gráfico (la tarjeta de entretiempo, ADR 0027).
+  Future<void> setBackdropBlur(bool on);
 }
 
 class OverlayBridge {
@@ -131,5 +134,16 @@ class OverlayBridge {
     if (_sent.remove(layer) != null) {
       await sink.clearOverlay(layer.index);
     }
+  }
+
+  bool _blur = false;
+
+  /// Pide o quita la cancha desenfocada; solo cruza el canal cuando cambia.
+  Future<void> setBackdropBlur(bool on) async {
+    if (on == _blur) {
+      return;
+    }
+    _blur = on;
+    await sink.setBackdropBlur(on);
   }
 }

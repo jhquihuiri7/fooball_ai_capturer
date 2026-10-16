@@ -102,12 +102,19 @@ class ProgramGraphics {
         _again = false;
         final ui.Image? icono = await _championship();
         final ScoreboardState estado = scoreboardState();
-        await bridge.publish(OverlayLayerId.scoreboard, await _scoreboard.render(estado, championship: icono));
         // La capa de tarjetas: el entretiempo o una alineación, nunca las dos (ADR 0027).
         final (MatchTeam, Team)? alAire = engine.lineups.onAir;
         if (engine.halftimeOnAir) {
+          // El entretiempo tapa la pantalla entera con un velo translúcido sobre la cancha
+          // desenfocada: el marcador se quitaría a través del velo, así que sale.
           await bridge.publish(OverlayLayerId.lineup, await _cards.halftime(estado, icon: icono));
-        } else if (alAire == null) {
+          await bridge.setBackdropBlur(true);
+          await bridge.clear(OverlayLayerId.scoreboard);
+          continue;
+        }
+        await bridge.setBackdropBlur(false);
+        await bridge.publish(OverlayLayerId.scoreboard, await _scoreboard.render(estado, championship: icono));
+        if (alAire == null) {
           await bridge.clear(OverlayLayerId.lineup);
         } else {
           // El nombre es el del marcador: si el operador lo cambió desde el mando, también aquí.

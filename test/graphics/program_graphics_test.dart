@@ -33,6 +33,9 @@ class _Sink implements OverlaySink {
 
   @override
   Future<void> clearOverlay(int layer) async => calls.add('clear $layer');
+
+  @override
+  Future<void> setBackdropBlur(bool on) async => calls.add(on ? 'blur on' : 'blur off');
 }
 
 const String _milan = '1 Dida\n2 Cafu\n3 Maldini\n4 Gattuso\n13 Nesta\n21 Pirlo\n8 Seedorf\n'
@@ -74,13 +77,18 @@ void main() {
       expect(sink.calls.last, 'clear 1');
       expect(g.scoreboardState().home, 'MILAN', reason: 'el editor pone el nombre en el marcador');
 
-      // ADR 0027: el entretiempo va en la capa de tarjetas y la quita al salir.
+      // ADR 0027: el entretiempo va en la capa de tarjetas, pide la cancha desenfocada y
+      // quita el marcador, que se vería a través del velo; al salir, todo vuelve.
+      int desde = sink.calls.length;
       m.apply('graphics/halftime', <String, Object?>{'on_air': true});
       await g.refresh();
-      expect(sink.calls.last, 'set 1');
+      expect(sink.calls.sublist(desde), <String>['set 1', 'blur on', 'clear 0']);
+      desde = sink.calls.length;
+      await g.refresh();
+      expect(sink.calls.sublist(desde), isEmpty, reason: 'con el entretiempo fuera, cada segundo no manda nada');
       m.apply('graphics/halftime', <String, Object?>{'on_air': false});
       await g.refresh();
-      expect(sink.calls.last, 'clear 1');
+      expect(sink.calls.sublist(desde), <String>['blur off', 'set 0', 'clear 1']);
       // La franja va oculta y sale con la orden, hasta que se le acaba el tiempo.
       expect(g.scoreboardState().stripVisible, isFalse);
       m.apply('graphics/strip', <String, Object?>{'show_s': 15});
