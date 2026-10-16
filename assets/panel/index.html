@@ -183,6 +183,11 @@
   .escudo .btn { min-height: 44px; }
   .nota { margin: 10px 0 0; color: var(--oceanico); font-size: 12px; line-height: 1.4; }
 
+  /* ---------------- franjas guardadas (ADR 0029) ---------------- */
+  .franjas { margin-top: 10px; }
+  .franjas li { grid-template-columns: 1fr auto auto auto; }
+  .franjas .puesta { color: var(--teal); }
+
   /* ---------------- vídeos (ADR 0027) ---------------- */
   .sonando { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 10px; margin-bottom: 10px; padding: 10px 12px; border-radius: 10px; background: var(--tinte); box-shadow: inset 0 0 0 1px var(--teal); }
   .sonando[hidden] { display: none; }
@@ -311,6 +316,8 @@
         <button type="button" class="btn alin" data-alin="home" aria-pressed="false"><span id="alin-local">Local</span><small id="alin-local-estado">mostrar</small></button>
         <button type="button" class="btn alin" data-alin="away" aria-pressed="false"><span id="alin-visitante">Visitante</span><small id="alin-visitante-estado">mostrar</small></button>
         <button type="button" class="btn alin" style="grid-column: 1 / -1" id="entretiempo" data-propio aria-pressed="false"><span>Entretiempo</span><small id="entretiempo-estado">mostrar el marcador</small></button>
+        <button type="button" class="btn alin" style="grid-column: 1 / -1" id="final" data-propio aria-pressed="false"><span>Final del partido</span><small id="final-estado">mostrar el resultado</small></button>
+        <button type="button" class="btn alin" style="grid-column: 1 / -1" id="proximo" data-propio aria-pressed="false"><span>Próximo partido</span><small id="proximo-estado">mostrar</small></button>
       </div>
     </section>
 
@@ -320,9 +327,12 @@
         <button class="btn acento" id="franja-sacar" type="button" data-propio>Sacar <span class="cuenta" id="franja-cuenta">15 s</span></button>
         <button class="btn" id="franja-ocultar" type="button" data-propio disabled>Ocultar</button>
       </div>
-      <details class="editar">
-        <summary>Editar textos</summary>
+      <ul class="videos franjas" id="franjas"></ul>
+      <details class="editar" id="franja-editor">
+        <summary id="franja-editor-titulo">Agregar franja</summary>
         <form class="campos" id="form-franja">
+          <input type="hidden" name="previo">
+          <label>Nombre<input type="text" name="nombre" maxlength="24" autocomplete="off" required></label>
           <div class="pareja">
             <label>Claim 1<input type="text" name="claim" maxlength="32" autocomplete="off"></label>
             <label>Claim 2<input type="text" name="claim" maxlength="32" autocomplete="off"></label>
@@ -339,9 +349,42 @@
             <label>Mensaje 3<input type="text" name="titulo" maxlength="32" autocomplete="off"></label>
             <label>Debajo<input type="text" name="sub" maxlength="32" autocomplete="off"></label>
           </div>
-          <button class="btn primario" type="submit">Guardar textos</button>
+          <div class="acciones">
+            <button class="btn primario" type="submit">Guardar franja</button>
+            <button class="btn" type="button" id="franja-cancelar" data-propio>Cancelar</button>
+          </div>
         </form>
       </details>
+    </section>
+
+    <section class="card" aria-labelledby="t-proximo">
+      <h2 id="t-proximo">Próximo partido</h2>
+      <form class="campos" id="form-proximo">
+        <div class="pareja">
+          <label>Local<input type="text" id="px-local" maxlength="24" autocomplete="off" required></label>
+          <label>Visitante<input type="text" id="px-visitante" maxlength="24" autocomplete="off" required></label>
+        </div>
+        <label>Cuándo<input type="text" id="px-cuando" maxlength="32" autocomplete="off" placeholder="Sábado 25 oct · 16:00" required></label>
+        <label>Dónde<input type="text" id="px-donde" maxlength="32" autocomplete="off" placeholder="Estadio municipal"></label>
+        <button class="btn primario" type="submit">Guardar próximo partido</button>
+      </form>
+      <div class="escudos">
+        <div class="escudo">
+          <span class="lado">Escudo local</span>
+          <span class="nombre" id="escudo-next_home-nombre">—</span>
+          <div class="icono-vista" id="escudo-next_home">sin escudo</div>
+          <label class="btn subir">Cargar escudo<input type="file" data-escudo="next_home" accept="image/png,image/jpeg"></label>
+          <button class="btn quitar" type="button" data-propio data-quitar-escudo="next_home" disabled>Quitar</button>
+        </div>
+        <div class="escudo">
+          <span class="lado">Escudo visitante</span>
+          <span class="nombre" id="escudo-next_away-nombre">—</span>
+          <div class="icono-vista" id="escudo-next_away">sin escudo</div>
+          <label class="btn subir">Cargar escudo<input type="file" data-escudo="next_away" accept="image/png,image/jpeg"></label>
+          <button class="btn quitar" type="button" data-propio data-quitar-escudo="next_away" disabled>Quitar</button>
+        </div>
+      </div>
+      <p class="nota">Los escudos van con el nombre de cada equipo: guarda antes el próximo partido.</p>
     </section>
 
     <section class="card" aria-labelledby="t-videos">
@@ -446,18 +489,23 @@ function pinta(p) {
   const enDescanso = !!p.halftime_on_air;
   $('entretiempo').setAttribute('aria-pressed', enDescanso ? 'true' : 'false');
   $('entretiempo-estado').textContent = enDescanso ? 'al aire · quitar' : 'mostrar el marcador';
+  // Final y próximo partido (ADR 0029).
+  const enFinal = !!p.fulltime_on_air, conProximo = !!p.next_match_on_air;
+  $('final').setAttribute('aria-pressed', enFinal ? 'true' : 'false');
+  $('final-estado').textContent = enFinal ? 'al aire · quitar' : 'mostrar el resultado';
+  $('proximo').setAttribute('aria-pressed', conProximo ? 'true' : 'false');
+  $('proximo').disabled = !p.next_match && !conProximo;
+  $('proximo-estado').textContent = conProximo ? 'al aire · quitar' : (p.next_match ? 'mostrar' : 'guárdalo abajo');
+  const px = p.next_match;
+  rellena($('px-local'), px?.home); rellena($('px-visitante'), px?.away);
+  rellena($('px-cuando'), px?.when); rellena($('px-donde'), px?.venue);
   franjaHasta = performance.now() + (p.strip_remaining_ms || 0);
   rellena($('in-local'), p.home.name); rellena($('in-visitante'), p.away.name);
-  if (p.strip_texts) {
-    const f = $('form-franja');
-    f.querySelectorAll('[name=claim]').forEach((el, i) => rellena(el, p.strip_texts.claim[i]));
-    f.querySelectorAll('[name=titulo]').forEach((el, i) => rellena(el, p.strip_texts.slots[i][0]));
-    f.querySelectorAll('[name=sub]').forEach((el, i) => rellena(el, p.strip_texts.slots[i][1]));
-  }
+  pintaFranjas(p.strip_presets || [], p.strip_preset);
   if (p.championship_icon !== iconoVisto) { iconoVisto = p.championship_icon; pintaIcono(); }
-  for (const lado of ['home', 'away']) {
-    $('escudo-' + lado + '-nombre').textContent = p[lado].name;
-    const version = p[lado].crest ?? null;
+  for (const lado of ['home', 'away', 'next_home', 'next_away']) {
+    $('escudo-' + lado + '-nombre').textContent = nombreDe(lado) ?? '—';
+    const version = (lado.startsWith('next_') ? px?.[lado.slice(5) + '_crest'] : p[lado].crest) ?? null;
     if (version !== escudosVistos[lado]) { escudosVistos[lado] = version; pintaEscudo(lado); }
   }
   $('video-sonando').hidden = !p.video;
@@ -477,7 +525,58 @@ const limpia = form => form.querySelectorAll('input').forEach(el => delete el.da
 let franjaHasta = 0;
 let videoHasta = 0;
 let iconoVisto;
-const escudosVistos = { home: undefined, away: undefined };
+const escudosVistos = { home: undefined, away: undefined, next_home: undefined, next_away: undefined };
+// El equipo de una ranura de escudo: los que juegan, o los del próximo partido.
+function nombreDe(lado) {
+  if (!partido) return null;
+  if (lado.startsWith('next_')) return partido.next_match ? partido.next_match[lado.slice(5)] : null;
+  return partido[lado].name;
+}
+
+// ---------------- franjas guardadas (ADR 0029) ----------------
+let franjasVistas = '';
+function pintaFranjas(lista, puesta) {
+  const clave = JSON.stringify([lista, puesta]);
+  if (clave === franjasVistas) return;
+  franjasVistas = clave;
+  $('franjas').replaceChildren(...lista.map(f => {
+    const li = document.createElement('li');
+    li.classList.toggle('suena', f.name === puesta);
+    const nombre = document.createElement('div');
+    nombre.className = 'nombre';
+    nombre.textContent = f.name;
+    const datos = document.createElement('small');
+    datos.textContent = (f.name === puesta ? 'puesta · ' : '') + f.claim.filter(Boolean).join(' ');
+    if (f.name === puesta) datos.classList.add('puesta');
+    nombre.append(datos);
+    const boton = (texto, clase, accion) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'btn ' + clase; b.dataset.propio = ''; b.textContent = texto;
+      b.addEventListener('click', () => accion(b));
+      return b;
+    };
+    li.append(
+      nombre,
+      boton('Sacar 15 s', 'acento', b => orden('graphics/strip', { show_s: 15, name: f.name }, b)),
+      boton('Editar', '', () => editaFranja(f)),
+      boton('Borrar', 'quitar', b => {
+        if (confirm('¿Borrar la franja ' + f.name + '?')) orden('graphics/strip_delete', { name: f.name }, b);
+      }),
+    );
+    return li;
+  }));
+}
+function editaFranja(f) {
+  const form = $('form-franja');
+  form.previo.value = f ? f.name : '';
+  form.nombre.value = f ? f.name : '';
+  form.querySelectorAll('[name=claim]').forEach((el, i) => { el.value = f ? f.claim[i] : ''; });
+  form.querySelectorAll('[name=titulo]').forEach((el, i) => { el.value = f ? f.slots[i][0] : ''; });
+  form.querySelectorAll('[name=sub]').forEach((el, i) => { el.value = f ? f.slots[i][1] : ''; });
+  $('franja-editor-titulo').textContent = f ? 'Editar franja: ' + f.name : 'Agregar franja';
+  $('franja-editor').open = !!f;
+  if (f) form.nombre.focus();
+}
 // El escudo del equipo que juega de `lado` (ADR 0028): va con su nombre.
 async function pintaEscudo(lado) {
   const vista = $('escudo-' + lado);
@@ -516,8 +615,17 @@ $('form-franja').addEventListener('submit', e => {
   const f = $('form-franja');
   const val = n => [...f.querySelectorAll('[name=' + n + ']')].map(el => el.value.trim());
   const titulos = val('titulo'), subs = val('sub');
-  orden('graphics/strip_texts', { claim: val('claim'), slots: titulos.map((t, i) => [t, subs[i]]) }, e.submitter)
-    .then(() => limpia(f));
+  const cuerpo = { name: f.nombre.value.trim(), claim: val('claim'), slots: titulos.map((t, i) => [t, subs[i]]) };
+  if (f.previo.value) cuerpo.previous_name = f.previo.value;
+  orden('graphics/strip_save', cuerpo, e.submitter).then(ok => { if (ok) editaFranja(null); });
+});
+$('franja-cancelar').addEventListener('click', () => editaFranja(null));
+$('form-proximo').addEventListener('submit', e => {
+  e.preventDefault();
+  orden('match/next', {
+    home: $('px-local').value.trim(), away: $('px-visitante').value.trim(),
+    when: $('px-cuando').value.trim(), venue: $('px-donde').value.trim(),
+  }, e.submitter).then(() => limpia($('form-proximo')));
 });
 $('in-icono').addEventListener('change', async e => {
   const archivo = e.target.files[0]; e.target.value = '';
@@ -546,7 +654,7 @@ document.querySelectorAll('[data-escudo]').forEach(input => input.addEventListen
 }));
 document.querySelectorAll('[data-quitar-escudo]').forEach(b => b.addEventListener('click', async () => {
   const lado = b.dataset.quitarEscudo;
-  if (!confirm('¿Quitar el escudo de ' + (partido ? partido[lado].name : lado) + '?')) return;
+  if (!confirm('¿Quitar el escudo de ' + (nombreDe(lado) ?? lado) + '?')) return;
   try {
     const r = await fetch('/api/v1/assets/crest/' + lado, { method: 'DELETE', headers: cab });
     const j = await r.json().catch(() => ({}));
@@ -642,6 +750,8 @@ $('video-parar').addEventListener('click', e => orden('video/stop', {}, e.curren
 $('franja-sacar').addEventListener('click', e => orden('graphics/strip', { show_s: 15 }, e.currentTarget));
 $('franja-ocultar').addEventListener('click', e => orden('graphics/strip', { show_s: 0 }, e.currentTarget));
 $('entretiempo').addEventListener('click', e => orden('graphics/halftime', { on_air: !(partido && partido.halftime_on_air) }, e.currentTarget));
+$('final').addEventListener('click', e => orden('graphics/fulltime', { on_air: !(partido && partido.fulltime_on_air) }, e.currentTarget));
+$('proximo').addEventListener('click', e => orden('graphics/next_match', { on_air: !(partido && partido.next_match_on_air) }, e.currentTarget));
 
 async function orden(ruta, cuerpo, boton) {
   if (boton) boton.classList.add('ocupado');
@@ -652,9 +762,11 @@ async function orden(ruta, cuerpo, boton) {
     if (r.ok) {
       pinta(j); aviso('');
       if (boton) { boton.classList.add('hecho'); setTimeout(() => boton.classList.remove('hecho'), 700); }
+      return true;
     } else { aviso(j.detail || ('error ' + r.status)); if (j.state) pinta(j.state); }
   } catch { aviso('Sin conexión con el maestro: la orden no llegó.'); }
   finally { if (boton) boton.classList.remove('ocupado'); }
+  return false;
 }
 
 document.addEventListener('click', e => {

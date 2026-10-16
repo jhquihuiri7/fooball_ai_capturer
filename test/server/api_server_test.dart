@@ -737,6 +737,134 @@ void main() {
     });
   });
 
+  group('final, próximo partido y varias franjas (ADR 0029)', () {
+    const String once = '1 Dida\n2 Cafu\n3 Maldini\n4 Gattuso\n13 Nesta\n21 Pirlo\n8 Seedorf\n'
+        '22 Kaka\n10 Rui Costa\n7 Shevchenko\n11 Gilardino\n';
+    final Map<String, Object?> proximo = <String, Object?>{
+      'home': 'Progreso',
+      'away': 'Bellavista',
+      'when': 'Sábado 25 oct · 16:00',
+      'venue': 'Estadio Municipal',
+    };
+    Map<String, Object?> textos(String claim) => <String, Object?>{
+      'claim': <String>[claim, 'B'],
+      'slots': <List<String>>[<String>['1', 'a'], <String>['2', 'b'], <String>['3', 'c']],
+    };
+
+    test('una tarjeta a la vez: alineación, entretiempo, final y próximo partido', () async {
+      engine.saveLineup(MatchTeam.home, 'Milan', '4-4-2', once);
+      expect(
+        (await pedir('POST', 'graphics/next_match', bearer: token(), body: <String, Object?>{'on_air': true})).$1,
+        409,
+        reason: 'sin datos del próximo partido no hay tarjeta',
+      );
+      await pedir('POST', 'match/lineup', bearer: token(), body: <String, Object?>{'team': 'home', 'on_air': true});
+      final (int ok, Map<String, Object?> fin) =
+          await pedir('POST', 'graphics/fulltime', bearer: token(), body: <String, Object?>{'on_air': true});
+      expect(ok, 200);
+      expect((fin['fulltime_on_air'], fin['halftime_on_air'], fin['lineup_on_air']), (true, false, null));
+      await pedir('POST', 'match/next', bearer: token(), body: proximo);
+      final (_, Map<String, Object?> sig) =
+          await pedir('POST', 'graphics/next_match', bearer: token(), body: <String, Object?>{'on_air': true});
+      expect((sig['next_match_on_air'], sig['fulltime_on_air']), (true, false));
+      // Quitar otra que no está no tumba la que está.
+      final (_, Map<String, Object?> sigue) =
+          await pedir('POST', 'graphics/halftime', bearer: token(), body: <String, Object?>{'on_air': false});
+      expect(sigue['next_match_on_air'], isTrue);
+      final (_, Map<String, Object?> alin) =
+          await pedir('POST', 'match/lineup', bearer: token(), body: <String, Object?>{'team': 'home', 'on_air': true});
+      expect((alin['next_match_on_air'], alin['lineup_on_air']), (false, 'home'));
+    });
+
+    test('el próximo partido: sus datos, que se validan y sobreviven, y sus escudos', () async {
+      final (int ok, Map<String, Object?> partido) = await pedir('POST', 'match/next', bearer: token(), body: proximo);
+      expect(ok, 200);
+      expect(partido['next_match'], <String, Object?>{
+        ...proximo,
+        'home_crest': null,
+        'away_crest': null,
+      });
+      for (final Map<String, Object?> malo in <Map<String, Object?>>[
+        <String, Object?>{...proximo, 'home': ''},
+        <String, Object?>{...proximo, 'when': 'x' * 33},
+        <String, Object?>{...proximo, 'venue': 'dos\nlineas'},
+      ]) {
+        expect((await pedir('POST', 'match/next', bearer: token(), body: malo)).$1, 400, reason: '$malo');
+      }
+      final MatchEngine otro = MatchEngine.open(file: File('${dir.path}/match.json'), time: reloj, matchId: 'm_otro');
+      expect(otro.graphics.nextMatch?.when, 'Sábado 25 oct · 16:00', reason: 'del campeonato, no del partido');
+
+      // El escudo de Bellavista, subido para el próximo partido, es el de Bellavista siempre.
+      final List<int> png = <int>[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, ...List<int>.filled(64, 1)];
+      final HttpClientRequest r = await http.openUrl(
+        'PUT',
+        Uri.parse('http://127.0.0.1:${server.port}/api/v1/$teamCrestAssetRoute/next_away'),
+      );
+      r.headers.set(HttpHeaders.authorizationHeader, 'Bearer ${token()}');
+      r.contentLength = png.length;
+      r.add(png);
+      final HttpClientResponse res = await r.close();
+      await res.drain<void>();
+      expect(res.statusCode, 200);
+      expect((engine.toJson()['next_match']! as Map<String, Object?>)['away_crest'], isA<int>());
+      expect(engine.graphics.crestFor('BELLAVISTA'), isNotNull);
+      expect((await pedir('DELETE', '$teamCrestAssetRoute/next_away', bearer: token())).$1, 200);
+      expect(engine.graphics.crestFor('BELLAVISTA'), isNull);
+    });
+
+    test('varias franjas: guardar, renombrar, sacar la que toca y borrar', () async {
+      List<Object?> franjas(Map<String, Object?> j) => j['strip_presets']! as List<Object?>;
+      Map<String, Object?> partido = engine.toJson();
+      expect(franjas(partido).length, 1);
+      expect(partido['strip_preset'], stripPresetDefaultName);
+
+      final (int ok, Map<String, Object?> guardada) = await pedir(
+        'POST',
+        'graphics/strip_save',
+        bearer: token(),
+        body: <String, Object?>{'name': 'Radio Mar', ...textos('RADIO MAR')},
+      );
+      expect(ok, 200);
+      expect(franjas(guardada).length, 2);
+      expect(
+        (await pedir('POST', 'graphics/strip_save', bearer: token(), body: <String, Object?>{
+          'name': 'radio mar',
+          'previous_name': stripPresetDefaultName,
+          ...textos('X'),
+        })).$1,
+        409,
+        reason: 'el nombre ya es de otra',
+      );
+
+      final (_, Map<String, Object?> fuera) =
+          await pedir('POST', 'graphics/strip', bearer: token(), body: <String, Object?>{'name': 'RADIO MAR'});
+      expect(fuera['strip_preset'], 'Radio Mar');
+      expect((fuera['strip_texts']! as Map<String, Object?>)['claim'], <String>['RADIO MAR', 'B']);
+      expect(fuera['strip_remaining_ms'], stripShowDefaultS * 1000);
+      expect(
+        (await pedir('POST', 'graphics/strip', bearer: token(), body: <String, Object?>{'name': 'Nadie'})).$1,
+        404,
+      );
+
+      // Editar la que está puesta cambia la franja; renombrarla la sigue.
+      final (_, Map<String, Object?> editada) = await pedir('POST', 'graphics/strip_save', bearer: token(), body:
+          <String, Object?>{'name': 'Radio Mar FM', 'previous_name': 'Radio Mar', ...textos('99.1 FM')});
+      expect(editada['strip_preset'], 'Radio Mar FM');
+      expect((editada['strip_texts']! as Map<String, Object?>)['claim'], <String>['99.1 FM', 'B']);
+      expect(franjas(editada).length, 2);
+
+      final (int borrada, Map<String, Object?> sin) =
+          await pedir('POST', 'graphics/strip_delete', bearer: token(), body: <String, Object?>{'name': 'Radio Mar FM'});
+      expect((borrada, franjas(sin).length, sin['strip_preset']), (200, 1, null));
+      expect(
+        (await pedir('POST', 'graphics/strip_delete', bearer: token(), body: <String, Object?>{'name': 'Radio Mar FM'})).$1,
+        404,
+      );
+      final MatchEngine otro = MatchEngine.open(file: File('${dir.path}/match.json'), time: reloj, matchId: 'm_otro');
+      expect(otro.graphics.stripPresets.single.name, stripPresetDefaultName, reason: 'se guardan con el campeonato');
+    });
+  });
+
   group('los vídeos del mando (ADR 0027)', () {
     Future<(int, Map<String, Object?>)> subir(String nombre, List<int> bytes, {String? bearer}) async {
       final HttpClientRequest r = await http.openUrl(

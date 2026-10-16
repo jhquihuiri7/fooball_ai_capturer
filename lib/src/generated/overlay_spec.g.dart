@@ -144,6 +144,13 @@ abstract final class OverlaySpec {
     'goal_dash_gap': 24,
     'veil_alpha': 153,
     'backdrop_blur_sigma': 24,
+    'when_y': 770,
+    'when_h': 104,
+    'when_size': 56,
+    'when_pad_x': 48,
+    'when_min_w': 300,
+    'venue_y': 872,
+    'venue_size': 34,
   };
 
   /// El marcador (overlay_preview.py).
@@ -366,6 +373,10 @@ abstract final class OverlaySpec {
   ];
 
   static const String halftimeTitle = 'ENTRETIEMPO';
+  static const String fulltimeTitle = 'FINAL DEL PARTIDO';
+  static const String nextMatchTitle = 'PRÓXIMO PARTIDO';
+  /// Caracteres como mucho del cuándo y del dónde del próximo partido.
+  static const int nextTextMaxChars = 32;
   /// Caracteres como mucho de cada texto editable de la franja.
   static const int stripTextMaxChars = 32;
   /// Las dos líneas del claim de partida.

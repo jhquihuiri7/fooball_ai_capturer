@@ -291,6 +291,16 @@ const String championshipIconFileName = 'campeonato.img';
 /// Donde vive el icono bajo `/api/v1/`: `PUT` lo sube, `GET` lo da y `DELETE` lo quita.
 const String championshipAssetRoute = 'assets/championship';
 
+/// Franjas guardadas como mucho (ADR 0029): las que caben en la tarjeta del mando sin
+/// buscar.
+const int stripPresetsMax = 12;
+
+/// Caracteres como mucho del nombre de una franja guardada.
+const int stripPresetNameMaxChars = 24;
+
+/// La franja guardada con la que se empieza, con los textos que hubiera.
+const String stripPresetDefaultName = 'PRINCIPAL';
+
 /// Los escudos de los equipos (ADR 0028): bajo `/api/v1/`, `assets/crest/home` y
 /// `assets/crest/away`; `PUT` sube el del equipo que juega de ese lado, `GET` lo da y
 /// `DELETE` lo quita.

@@ -13,11 +13,12 @@ import 'package:flutter/foundation.dart';
 import 'package:football_ai_capture/src/constants.dart';
 import 'package:football_ai_capture/src/generated/overlay_spec.g.dart';
 
-/// Un cambio del gráfico que no se acepta, con el porqué para el mando.
+/// Un cambio del gráfico que no se acepta, con el código HTTP y el porqué para el mando.
 class GraphicsError implements Exception {
-  GraphicsError(this.message);
+  GraphicsError(this.message, {this.status = 400});
 
   final String message;
+  final int status;
 
   @override
   String toString() => 'GraphicsError: $message';
@@ -88,6 +89,61 @@ class StripTexts {
   int get hashCode => Object.hash(Object.hashAll(claim), Object.hashAll(slots));
 }
 
+/// Un texto de 1 a `max` caracteres (o de 0 si `vacio`), sin saltos de línea y sin
+/// espacios de sobra en los bordes; [GraphicsError] si no.
+String _texto(Object? valor, String campo, int max, {bool vacio = false}) {
+  final String limpio = valor is String ? valor.trim() : '';
+  if (valor is! String || (limpio.isEmpty && !vacio) || limpio.length > max || limpio.contains('\n')) {
+    throw GraphicsError('$campo: ${vacio ? 'hasta' : 'de 1 a'} $max caracteres, sin saltos');
+  }
+  return limpio;
+}
+
+/// El próximo partido (ADR 0029): los dos equipos, cuándo y dónde, en texto libre.
+@immutable
+class NextMatch {
+  const NextMatch({required this.home, required this.away, required this.when, this.venue = ''});
+
+  /// Lee `{home, away, when, venue}`; [GraphicsError] si no vale.
+  factory NextMatch.fromJson(Object? json) {
+    if (json is! Map<String, Object?>) {
+      throw GraphicsError('se espera {home, away, when, venue}');
+    }
+    return NextMatch(
+      home: _texto(json['home'], 'home', matchTeamNameMaxChars),
+      away: _texto(json['away'], 'away', matchTeamNameMaxChars),
+      when: _texto(json['when'], 'when', OverlaySpec.nextTextMaxChars),
+      venue: _texto(json['venue'] ?? '', 'venue', OverlaySpec.nextTextMaxChars, vacio: true),
+    );
+  }
+
+  final String home;
+  final String away;
+  final String when;
+  final String venue;
+
+  Map<String, Object?> toJson() => <String, Object?>{'home': home, 'away': away, 'when': when, 'venue': venue};
+}
+
+/// Una franja guardada (ADR 0029): su nombre y sus textos.
+@immutable
+class StripPreset {
+  const StripPreset(this.name, this.texts);
+
+  /// Lee `{name, claim, slots}`; [GraphicsError] si no vale.
+  factory StripPreset.fromJson(Object? json) {
+    if (json is! Map<String, Object?>) {
+      throw GraphicsError('se espera {name, claim, slots}');
+    }
+    return StripPreset(_texto(json['name'], 'name', stripPresetNameMaxChars), StripTexts.fromJson(json));
+  }
+
+  final String name;
+  final StripTexts texts;
+
+  Map<String, Object?> toJson() => <String, Object?>{'name': name, ...texts.toJson()};
+}
+
 /// El escudo de un equipo (ADR 0028): su fichero, PNG o JPEG, y su versión, que cambia con
 /// cada subida para que el gráfico y el mando sepan que hay que volver a leerlo.
 @immutable
@@ -111,6 +167,14 @@ class GraphicsStore {
           strip = StripTexts.fromJson(json['strip']);
           final Object? tipo = json['icon_mime'];
           iconMime = tipo is String && iconFile.existsSync() ? tipo : null;
+          final Object? proximo = json['next_match'];
+          nextMatch = proximo == null ? null : NextMatch.fromJson(proximo);
+          final Object? franjas = json['strip_presets'];
+          if (franjas is List<Object?>) {
+            stripPresets = <StripPreset>[for (final Object? f in franjas) StripPreset.fromJson(f)];
+          }
+          final Object? puesta = json['strip_preset'];
+          stripPreset = puesta is String && _preset(puesta) != null ? puesta : null;
           final Object? escudos = json['crests'];
           if (escudos is Map<String, Object?>) {
             for (final MapEntry<String, Object?> e in escudos.entries) {
@@ -125,9 +189,89 @@ class GraphicsStore {
         strip = StripTexts.defaults();
         iconMime = null;
         _crests.clear();
+        nextMatch = null;
+        stripPresets = <StripPreset>[];
+        stripPreset = null;
       }
     }
     iconRev = iconMime == null ? 0 : 1;
+    if (stripPresets.isEmpty) {
+      // Sin ninguna guardada, la de partida lleva los textos que hubiera (ADR 0029).
+      stripPresets = <StripPreset>[StripPreset(stripPresetDefaultName, strip)];
+      stripPreset = stripPresetDefaultName;
+    }
+  }
+
+  /// El próximo partido, si el operador lo guardó (ADR 0029).
+  NextMatch? nextMatch;
+
+  /// Las franjas guardadas, en el orden del mando, y el nombre de la que está puesta (null
+  /// si los textos se editaron a mano).
+  List<StripPreset> stripPresets = <StripPreset>[];
+  String? stripPreset;
+
+  StripPreset? _preset(String name) {
+    final String clave = name.trim().toUpperCase();
+    for (final StripPreset p in stripPresets) {
+      if (p.name.toUpperCase() == clave) {
+        return p;
+      }
+    }
+    return null;
+  }
+
+  void setNextMatch(NextMatch next) {
+    nextMatch = next;
+    _save();
+  }
+
+  /// Guarda una franja: sustituye a la del mismo nombre o a `previousName` (renombrarla), o
+  /// la añade al final. Si es la que está puesta, la franja cambia con ella.
+  void savePreset(StripPreset preset, {String? previousName}) {
+    final StripPreset? vieja = _preset(previousName ?? preset.name);
+    final StripPreset? choca = _preset(preset.name);
+    if (choca != null && choca != vieja) {
+      throw GraphicsError('ya hay una franja que se llama ${choca.name}', status: 409);
+    }
+    if (vieja == null && stripPresets.length >= stripPresetsMax) {
+      throw GraphicsError('caben $stripPresetsMax franjas: borra una antes', status: 409);
+    }
+    if (vieja == null) {
+      stripPresets = <StripPreset>[...stripPresets, preset];
+    } else {
+      stripPresets = <StripPreset>[for (final StripPreset p in stripPresets) p == vieja ? preset : p];
+      if (stripPreset != null && stripPreset!.toUpperCase() == vieja.name.toUpperCase()) {
+        stripPreset = preset.name;
+        strip = preset.texts;
+      }
+    }
+    _save();
+  }
+
+  /// Borra la franja `name`; false si no existía. Los textos puestos se quedan.
+  bool deletePreset(String name) {
+    final StripPreset? p = _preset(name);
+    if (p == null) {
+      return false;
+    }
+    stripPresets = <StripPreset>[for (final StripPreset q in stripPresets) if (q != p) q];
+    if (stripPreset != null && stripPreset!.toUpperCase() == p.name.toUpperCase()) {
+      stripPreset = null;
+    }
+    _save();
+    return true;
+  }
+
+  /// Pone los textos de la franja `name`; false si no existe.
+  bool selectPreset(String name) {
+    final StripPreset? p = _preset(name);
+    if (p == null) {
+      return false;
+    }
+    strip = p.texts;
+    stripPreset = p.name;
+    _save();
+    return true;
   }
 
   /// Los escudos por la clave de su equipo (`crestKey`), y la última versión dada.
@@ -188,8 +332,11 @@ class GraphicsStore {
   /// Dónde se escribe una subida mientras llega: se renombra al acabar bien.
   File get uploadFile => File('${directory.path}/$championshipIconFileName.subida');
 
+  /// Los textos de la franja editados a mano (`graphics/strip_texts`): ya no son los de
+  /// ninguna franja guardada.
   void setStrip(StripTexts texts) {
     strip = texts;
+    stripPreset = null;
     _save();
   }
 
@@ -229,6 +376,9 @@ class GraphicsStore {
       'strip': strip.toJson(),
       'icon_mime': iconMime,
       'crests': <String, String>{for (final MapEntry<String, TeamCrest> e in _crests.entries) e.key: e.value.mime},
+      'next_match': nextMatch?.toJson(),
+      'strip_presets': <Map<String, Object?>>[for (final StripPreset p in stripPresets) p.toJson()],
+      'strip_preset': stripPreset,
     }));
     tmp.renameSync(_file.path);
   }

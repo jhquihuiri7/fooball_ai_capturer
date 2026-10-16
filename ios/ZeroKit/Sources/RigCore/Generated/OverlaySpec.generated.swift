@@ -144,6 +144,13 @@ public enum OverlaySpec {
         "goal_dash_gap": 24,
         "veil_alpha": 153,
         "backdrop_blur_sigma": 24,
+        "when_y": 770,
+        "when_h": 104,
+        "when_size": 56,
+        "when_pad_x": 48,
+        "when_min_w": 300,
+        "venue_y": 872,
+        "venue_size": 34,
     ]
 
     /// El marcador (overlay_preview.py).

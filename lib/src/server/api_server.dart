@@ -260,12 +260,13 @@ class MasterApi {
             ? ApiResponse.problem(HttpStatus.notFound, 'no hay icono del campeonato')
             : ApiResponse(HttpStatus.ok, tipo, await engine.graphics.iconFile.readAsBytes());
       }
-      final MatchTeam? lado = crestSide(request.path);
-      if (lado != null) {
-        // El escudo del equipo que juega de ese lado (ADR 0028).
-        final TeamCrest? escudo = engine.graphics.crestFor(engine.teamName(lado));
+      final String? ranura = crestSlot(request.path);
+      if (ranura != null) {
+        // El escudo del equipo de esa ranura (ADR 0028 y 0029).
+        final String? equipo = engine.crestTeam(ranura);
+        final TeamCrest? escudo = equipo == null ? null : engine.graphics.crestFor(equipo);
         return escudo == null
-            ? ApiResponse.problem(HttpStatus.notFound, '${engine.teamName(lado)} no tiene escudo')
+            ? ApiResponse.problem(HttpStatus.notFound, '${equipo ?? 'el próximo partido'} no tiene escudo')
             : ApiResponse(HttpStatus.ok, escudo.mime, await escudo.file.readAsBytes());
       }
       if (ruta == videosRoute) {
@@ -286,13 +287,17 @@ class MasterApi {
       engine.deleteChampionshipIcon();
       return ApiResponse.json(engine.toJson(scopes: acceso.$1!));
     }
-    final MatchTeam? escudo = crestSide(request.path);
+    final String? escudo = crestSlot(request.path);
     if (request.method == 'DELETE' && escudo != null) {
       final (Set<String>?, ApiResponse?) acceso = _access(request, panelScopeMatch);
       if (acceso.$2 != null) {
         return acceso.$2!;
       }
-      engine.deleteTeamCrest(escudo);
+      final String? equipo = engine.crestTeam(escudo);
+      if (equipo == null) {
+        return ApiResponse.problem(HttpStatus.conflict, 'no hay próximo partido');
+      }
+      engine.deleteCrestFor(equipo);
       return ApiResponse.json(engine.toJson(scopes: acceso.$1!));
     }
     final String? video = videoName(request.path);
@@ -343,12 +348,12 @@ class MasterApi {
   (Set<String>?, ApiResponse?) uploadAccess(Map<String, String> headers) =>
       _access(ApiRequest(method: 'PUT', path: '', headers: headers), panelScopeMatch);
 
-  /// El lado de una ruta `/api/v1/assets/crest/home|away` (ADR 0028), o null si no es de un
-  /// escudo.
-  static MatchTeam? crestSide(String path) {
-    for (final MatchTeam lado in MatchTeam.values) {
-      if (path == '$panelApiPrefix$teamCrestAssetRoute/${lado.name}') {
-        return lado;
+  /// La ranura de una ruta `/api/v1/assets/crest/<ranura>`: `home` y `away` (ADR 0028),
+  /// `next_home` y `next_away` (ADR 0029); null si la ruta no es de un escudo.
+  static String? crestSlot(String path) {
+    for (final String ranura in const <String>['home', 'away', 'next_home', 'next_away']) {
+      if (path == '$panelApiPrefix$teamCrestAssetRoute/$ranura') {
+        return ranura;
       }
     }
     return null;
@@ -476,8 +481,13 @@ class MasterApi {
     'match/roster',
     'match/teams',
     'graphics/halftime',
+    'graphics/fulltime',
+    'graphics/next_match',
+    'match/next',
     'graphics/strip',
     'graphics/strip_texts',
+    'graphics/strip_save',
+    'graphics/strip_delete',
     'video/play',
     'video/stop',
     'clips/mark',
@@ -673,16 +683,22 @@ class MasterApiServer {
         await _reply(request, respuesta);
         return;
       }
-      final MatchTeam? escudo = MasterApi.crestSide(request.uri.path);
+      final String? escudo = MasterApi.crestSlot(request.uri.path);
       if (request.method == 'PUT' && escudo != null) {
         final MatchEngine motor = api.engine;
-        respuesta = await _putImage(
-          request,
-          que: 'el escudo',
-          maxBytes: teamCrestMaxBytes,
-          destino: motor.graphics.crestUploadFile,
-          adoptar: (String tipo) => motor.adoptTeamCrest(escudo, tipo),
-        );
+        final String? equipo = motor.crestTeam(escudo);
+        if (equipo == null) {
+          await request.drain<void>();
+          respuesta = ApiResponse.problem(HttpStatus.conflict, 'no hay próximo partido: guárdalo antes');
+        } else {
+          respuesta = await _putImage(
+            request,
+            que: 'el escudo',
+            maxBytes: teamCrestMaxBytes,
+            destino: motor.graphics.crestUploadFile,
+            adoptar: (String tipo) => motor.adoptCrestFor(equipo, tipo),
+          );
+        }
         await _reply(request, respuesta);
         return;
       }

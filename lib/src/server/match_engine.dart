@@ -215,9 +215,18 @@ class MatchEngine {
   /// que sobreviven al partido.
   final GraphicsStore graphics;
 
-  /// La tarjeta de entretiempo al aire (ADR 0027). Comparte capa con la alineación: sacar
-  /// una quita la otra.
-  bool halftimeOnAir = false;
+  /// Las tarjetas de pantalla completa (ADR 0027 y 0029), por el nombre de su orden.
+  static const String cardHalftime = 'halftime';
+  static const String cardFulltime = 'fulltime';
+  static const String cardNextMatch = 'next_match';
+
+  /// La tarjeta de pantalla completa al aire: [cardHalftime], [cardFulltime] o
+  /// [cardNextMatch], o null. Comparte capa con la alineación: sacar una quita la otra.
+  String? fullScreenCard;
+
+  bool get halftimeOnAir => fullScreenCard == cardHalftime;
+  bool get fulltimeOnAir => fullScreenCard == cardFulltime;
+  bool get nextMatchOnAir => fullScreenCard == cardNextMatch;
 
   /// Hasta cuándo sale la franja, en el tiempo monótono de [MatchTimeSource]; null, oculta.
   int? stripUntilMs;
@@ -314,19 +323,35 @@ class MatchEngine {
           _lineup(body);
         case 'match/teams':
           _teams(body);
-        case 'graphics/halftime':
-          final Object? alAire = body['on_air'];
-          if (alAire is! bool) {
-            throw OrderError(400, 'on_air tiene que ser true o false');
+        case 'graphics/halftime' || 'graphics/fulltime' || 'graphics/next_match':
+          _fullScreenCard(name.substring('graphics/'.length), body);
+        case 'match/next':
+          try {
+            graphics.setNextMatch(NextMatch.fromJson(body));
+          } on GraphicsError catch (error) {
+            throw OrderError(error.status, error.message);
           }
-          halftimeOnAir = alAire;
-          if (alAire) {
-            lineups.setOnAir(null);
+        case 'graphics/strip_save':
+          final Object? anterior = body['previous_name'];
+          try {
+            graphics.savePreset(StripPreset.fromJson(body), previousName: anterior is String ? anterior : null);
+          } on GraphicsError catch (error) {
+            throw OrderError(error.status, error.message);
+          }
+        case 'graphics/strip_delete':
+          final Object? nombre = body['name'];
+          if (nombre is! String || !graphics.deletePreset(nombre)) {
+            throw OrderError(404, 'no hay ninguna franja que se llame $nombre');
           }
         case 'graphics/strip':
           final Object segundos = body['show_s'] ?? stripShowDefaultS;
           if (segundos is! int || segundos < 0 || segundos > stripShowMaxS) {
             throw OrderError(400, 'show_s tiene que ser un entero de 0 a $stripShowMaxS');
+          }
+          // Con `name`, la franja guardada que toca (ADR 0029).
+          final Object? franja = body['name'];
+          if (franja != null && (franja is! String || !graphics.selectPreset(franja))) {
+            throw OrderError(404, 'no hay ninguna franja que se llame $franja');
           }
           stripUntilMs = segundos == 0 ? null : _time.nowMs() + segundos * Duration.millisecondsPerSecond;
         case 'graphics/strip_texts':
@@ -483,11 +508,31 @@ class MatchEngine {
     }
     if (alAire == true) {
       lineups.setOnAir(equipo);
-      halftimeOnAir = false;
+      fullScreenCard = null;
     } else if (alAire == false && lineups.onAirSide == equipo) {
       // Ocultar la propia, nunca la del otro equipo que haya salido después.
       lineups.setOnAir(null);
     }
+  }
+
+  /// Saca o quita una tarjeta de pantalla completa. Quitarla solo quita esa: el «quitar»
+  /// atrasado de otra no tumba la que está.
+  void _fullScreenCard(String tarjeta, Map<String, Object?> body) {
+    final Object? alAire = body['on_air'];
+    if (alAire is! bool) {
+      throw OrderError(400, 'on_air tiene que ser true o false');
+    }
+    if (!alAire) {
+      if (fullScreenCard == tarjeta) {
+        fullScreenCard = null;
+      }
+      return;
+    }
+    if (tarjeta == cardNextMatch && graphics.nextMatch == null) {
+      throw OrderError(409, 'no hay próximo partido: guárdalo antes con match/next');
+    }
+    fullScreenCard = tarjeta;
+    lineups.setOnAir(null);
   }
 
   /// Los nombres desde el mando (ADR 0027): uno o los dos, recortados y sin saltos.
@@ -528,16 +573,29 @@ class MatchEngine {
 
   /// Adopta el escudo recién subido a `graphics.crestUploadFile` como el del equipo que
   /// juega de `side` ahora (ADR 0028): va con su nombre, no con el lado.
-  void adoptTeamCrest(MatchTeam side, String mime) {
-    graphics.adoptCrest(teamName(side), mime);
+  void adoptTeamCrest(MatchTeam side, String mime) => adoptCrestFor(teamName(side), mime);
+
+  /// Lo mismo para el equipo `name`, juegue ahora o no (los del próximo partido, ADR 0029).
+  void adoptCrestFor(String name, String mime) {
+    graphics.adoptCrest(name, mime);
     _changed();
   }
 
-  /// Quita el escudo del equipo que juega de `side`.
-  void deleteTeamCrest(MatchTeam side) {
-    graphics.deleteCrest(teamName(side));
+  /// Quita el escudo del equipo `name`.
+  void deleteCrestFor(String name) {
+    graphics.deleteCrest(name);
     _changed();
   }
+
+  /// El equipo de una ranura de escudo: `home` y `away`, los que juegan; `next_home` y
+  /// `next_away`, los del próximo partido (null si no lo hay).
+  String? crestTeam(String slot) => switch (slot) {
+    'home' => home,
+    'away' => away,
+    'next_home' => graphics.nextMatch?.home,
+    'next_away' => graphics.nextMatch?.away,
+    _ => null,
+  };
 
   /// Guarda la alineación de un equipo desde el editor (`/api/lineup` del panel). Su
   /// nombre pasa también al marcador. [LineupError] si no se acepta.
@@ -643,6 +701,18 @@ class MatchEngine {
       'clock_restored': clock.restored,
       'lineup_on_air': lineups.onAirSide?.name,
       'halftime_on_air': halftimeOnAir,
+      'fulltime_on_air': fulltimeOnAir,
+      'next_match_on_air': nextMatchOnAir,
+      'next_match': switch (graphics.nextMatch) {
+        null => null,
+        final NextMatch n => <String, Object?>{
+          ...n.toJson(),
+          'home_crest': graphics.crestFor(n.home)?.rev,
+          'away_crest': graphics.crestFor(n.away)?.rev,
+        },
+      },
+      'strip_presets': <Map<String, Object?>>[for (final StripPreset p in graphics.stripPresets) p.toJson()],
+      'strip_preset': graphics.stripPreset,
       'strip_remaining_ms': stripRemainingMs,
       'strip_texts': graphics.strip.toJson(),
       'championship_icon': graphics.hasIcon ? graphics.iconRev : null,
