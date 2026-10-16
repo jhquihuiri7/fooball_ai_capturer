@@ -17,6 +17,7 @@ import 'package:football_ai_capture/src/match_state.dart';
 import 'package:football_ai_capture/src/server/graphics_store.dart';
 import 'package:football_ai_capture/src/server/lineups.dart';
 import 'package:football_ai_capture/src/server/match_record.dart';
+import 'package:football_ai_capture/src/server/video_store.dart';
 
 /// Tiempo monótono en ms y el reloj al que pertenece (ADR 0023 §4).
 abstract class MatchTimeSource {
@@ -128,10 +129,18 @@ class OrderError implements Exception {
 }
 
 class MatchEngine {
-  MatchEngine._(this._file, this._time, this.clock, this.matchId, this.boot, (LineupBook, String?) lineups)
-    : lineups = lineups.$1,
+  MatchEngine._(
+    this._file,
+    this._time,
+    this.clock,
+    this.matchId,
+    this.boot,
+    (LineupBook, String?) lineups,
+    int? Function()? freeBytes,
+  ) : lineups = lineups.$1,
       lineupsError = lineups.$2,
-      graphics = GraphicsStore(_file.parent);
+      graphics = GraphicsStore(_file.parent),
+      videos = VideoStore(_file.parent, freeBytes: freeBytes);
 
   /// Abre el partido guardado en `file`, o empieza uno nuevo si no hay fichero.
   /// Con el mismo `clock_domain` el cronómetro sigue en marcha; con otro vuelve
@@ -140,6 +149,7 @@ class MatchEngine {
   ///
   /// `matchId` es el partido que trae el enlace (IOS-80): si el guardado es otro, se
   /// aparta (`match-<id>.json`, con sus alineaciones) y se empieza este de cero.
+  /// `freeBytes` dice lo libre del disco, para la reserva de grabación de los vídeos.
   factory MatchEngine.open({
     required File file,
     required MatchTimeSource time,
@@ -147,6 +157,7 @@ class MatchEngine {
     String home = 'LOCAL',
     String away = 'VISITANTE',
     Random? random,
+    int? Function()? freeBytes,
   }) {
     final Random azar = random ?? Random.secure();
     final MatchClock reloj = MatchClock(time);
@@ -162,6 +173,7 @@ class MatchEngine {
       guardado?.matchId ?? matchId ?? 'm_${_hex(azar, 6)}',
       _hex(azar, 8),
       _loadLineups(File('${file.parent.path}/$lineupsFileName')),
+      freeBytes,
     );
     if (guardado == null) {
       engine
@@ -213,6 +225,39 @@ class MatchEngine {
   int get stripRemainingMs {
     final int? hasta = stripUntilMs;
     return hasta == null ? 0 : max(0, hasta - _time.nowMs());
+  }
+
+  /// Los vídeos que se suben desde el mando (ADR 0027): como el icono, sobreviven al partido.
+  final VideoStore videos;
+
+  /// El vídeo que se pidió por última vez: `id` sube con cada `video/play`, para que el
+  /// programa distinga volver a pasar el mismo. No se guarda: tras reiniciar no suena nada.
+  VideoPlay? _video;
+  int _videoIds = 0;
+
+  /// El vídeo que suena en el programa, o null. Pasado su final y un margen sin que el
+  /// programa avise, cuenta como acabado.
+  VideoPlay? get video {
+    final VideoPlay? v = _video;
+    if (v == null || _time.nowMs() - v.startedMs > v.durationMs + videoEndGraceMs) {
+      return null;
+    }
+    return v;
+  }
+
+  /// Lo que le queda al vídeo que suena, en ms.
+  int get videoRemainingMs {
+    final VideoPlay? v = video;
+    return v == null ? 0 : max(0, min(v.durationMs, v.startedMs + v.durationMs - _time.nowMs()));
+  }
+
+  /// El programa avisa de que el vídeo `id` acabó (o no pudo empezar): vuelve el programa.
+  void videoFinished(int id) {
+    if (_video?.id != id) {
+      return;
+    }
+    _video = null;
+    _changed();
   }
 
   /// Identificador de este arranque: cambia en cada uno.
@@ -286,6 +331,21 @@ class MatchEngine {
           } on GraphicsError catch (error) {
             throw OrderError(400, error.message);
           }
+        case 'video/play':
+          final Object? nombre = body['name'];
+          final VideoInfo? info = nombre is String ? videos.find(nombre) : null;
+          if (info == null) {
+            throw OrderError(404, 'no hay ningún vídeo que se llame $nombre');
+          }
+          _videoIds += 1;
+          _video = VideoPlay(
+            id: _videoIds,
+            name: info.name,
+            startedMs: _time.nowMs() + videoStartLeadMs,
+            durationMs: info.durationMs,
+          );
+        case 'video/stop':
+          _video = null;
         case 'clips/mark':
           final void Function()? marca = onClipMark;
           if (marca == null) {
@@ -565,6 +625,10 @@ class MatchEngine {
       'strip_remaining_ms': stripRemainingMs,
       'strip_texts': graphics.strip.toJson(),
       'championship_icon': graphics.hasIcon ? graphics.iconRev : null,
+      'video': switch (video) {
+        null => null,
+        final VideoPlay v => <String, Object?>{'name': v.name, 'remaining_ms': videoRemainingMs},
+      },
       'streaming': streaming,
       'can_stream': canStream,
       'formations': matchFormations,
@@ -572,4 +636,15 @@ class MatchEngine {
       'scopes': scopes.toList()..sort(),
     };
   }
+}
+
+/// Un vídeo que suena en el programa (ADR 0027): la `id` de su `video/play`, su nombre,
+/// cuándo empezó en el tiempo monótono y lo que dura.
+class VideoPlay {
+  const VideoPlay({required this.id, required this.name, required this.startedMs, required this.durationMs});
+
+  final int id;
+  final String name;
+  final int startedMs;
+  final int durationMs;
 }

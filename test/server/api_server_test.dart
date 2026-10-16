@@ -20,6 +20,8 @@ import 'package:football_ai_capture/src/server/control_token.dart';
 import 'package:football_ai_capture/src/server/idempotency.dart';
 import 'package:football_ai_capture/src/server/match_engine.dart';
 
+import 'mp4_fixture.dart';
+
 const int _ahoraS = 1790000000;
 const String _pin = '482913';
 
@@ -661,6 +663,76 @@ void main() {
       final (int quitado, Map<String, Object?> sin) = await pedir('DELETE', championshipAssetRoute, bearer: token());
       expect((quitado, sin['championship_icon']), (200, null));
       expect((await pedir('GET', championshipAssetRoute, bearer: token())).$1, 404);
+    });
+  });
+
+  group('los vídeos del mando (ADR 0027)', () {
+    Future<(int, Map<String, Object?>)> subir(String nombre, List<int> bytes, {String? bearer}) async {
+      final HttpClientRequest r = await http.openUrl(
+        'PUT',
+        Uri.parse('http://127.0.0.1:${server.port}/api/v1/$videosRoute/${Uri.encodeComponent(nombre)}'),
+      );
+      if (bearer != null) {
+        r.headers.set(HttpHeaders.authorizationHeader, 'Bearer $bearer');
+      }
+      r.headers.contentType = ContentType.parse('video/mp4');
+      r.contentLength = bytes.length;
+      r.add(bytes);
+      final HttpClientResponse res = await r.close();
+      final String texto = await res.transform(utf8.decoder).join();
+      return (res.statusCode, texto.isEmpty ? <String, Object?>{} : jsonDecode(texto) as Map<String, Object?>);
+    }
+
+    List<Object?> lista(Map<String, Object?> json) => json['videos']! as List<Object?>;
+
+    test('subir, listar, pasar, parar y borrar', () async {
+      final List<int> mp4 = fakeMp4(durationMs: 20000);
+      expect((await subir('anuncio.mp4', mp4)).$1, 401, reason: 'sin token no se lee ni un byte');
+      final (int ok, Map<String, Object?> info) = await subir('Gol de Kaká.mp4', mp4, bearer: token());
+      expect(ok, 200);
+      expect(info, <String, Object?>{'name': 'Gol de Kaká.mp4', 'bytes': mp4.length, 'duration_ms': 20000});
+      expect((await subir('falso.mp4', utf8.encode('hola'), bearer: token())).$1, 415);
+      expect((await subir('..mp4', mp4, bearer: token())).$1, 400);
+
+      final (int listado, Map<String, Object?> videos) = await pedir('GET', videosRoute, bearer: token());
+      expect((listado, lista(videos).length), (200, 1));
+
+      final (int suena, Map<String, Object?> partido) =
+          await pedir('POST', 'video/play', bearer: token(), body: <String, Object?>{'name': 'Gol de Kaká.mp4'});
+      expect(suena, 200);
+      expect(partido['video'], <String, Object?>{'name': 'Gol de Kaká.mp4', 'remaining_ms': 20000});
+      reloj.ms += videoStartLeadMs + 5000;
+      expect((engine.toJson()['video']! as Map<String, Object?>)['remaining_ms'], 15000);
+      expect((await subir('Gol de Kaká.mp4', mp4, bearer: token())).$1, 409, reason: 'no se cambia el que suena');
+      expect((await pedir('DELETE', '$videosRoute/Gol%20de%20Kak%C3%A1.mp4', bearer: token())).$1, 409);
+
+      final (_, Map<String, Object?> parado) = await pedir('POST', 'video/stop', bearer: token(), body: <String, Object?>{});
+      expect(parado['video'], isNull);
+      final (int borrado, _) = await pedir('DELETE', '$videosRoute/Gol%20de%20Kak%C3%A1.mp4', bearer: token());
+      expect(borrado, 200);
+      expect(lista((await pedir('GET', videosRoute, bearer: token())).$2), isEmpty);
+      expect((await pedir('POST', 'video/play', bearer: token(), body: <String, Object?>{'name': 'Gol de Kaká.mp4'})).$1, 404);
+    });
+
+    test('al acabar vuelve el programa: con el aviso o, si no llega, con el margen', () async {
+      await subir('a.mp4', fakeMp4(durationMs: 4000), bearer: token());
+      await pedir('POST', 'video/play', bearer: token(), body: <String, Object?>{'name': 'a.mp4'});
+      final int primero = engine.video!.id;
+      await pedir('POST', 'video/play', bearer: token(), body: <String, Object?>{'name': 'a.mp4'});
+      final int segundo = engine.video!.id;
+      expect(segundo, isNot(primero), reason: 'volver a pasarlo es otra reproducción');
+      final int antes = engine.rev;
+      engine.videoFinished(primero);
+      expect((engine.video?.id, engine.rev), (segundo, antes), reason: 'el aviso de la vieja no quita la nueva');
+      engine.videoFinished(segundo);
+      expect(engine.video, isNull);
+      expect(engine.rev, antes + 1);
+
+      await pedir('POST', 'video/play', bearer: token(), body: <String, Object?>{'name': 'a.mp4'});
+      reloj.ms += videoStartLeadMs + 4000 + videoEndGraceMs;
+      expect(engine.video, isNotNull);
+      reloj.ms += 1;
+      expect(engine.video, isNull, reason: 'sin aviso, el margen lo da por acabado');
     });
   });
 

@@ -29,6 +29,7 @@ import 'package:football_ai_capture/src/server/lineups.dart';
 import 'package:football_ai_capture/src/server/idempotency.dart';
 import 'package:football_ai_capture/src/server/graphics_store.dart';
 import 'package:football_ai_capture/src/server/match_engine.dart';
+import 'package:football_ai_capture/src/server/video_store.dart';
 
 /// Tipo de los errores de la API (`PROBLEM_CONTENT_TYPE`, RFC 7807).
 const String problemContentType = 'application/problem+json';
@@ -259,6 +260,11 @@ class MasterApi {
             ? ApiResponse.problem(HttpStatus.notFound, 'no hay icono del campeonato')
             : ApiResponse(HttpStatus.ok, tipo, await engine.graphics.iconFile.readAsBytes());
       }
+      if (ruta == videosRoute) {
+        return ApiResponse.json(<String, Object?>{
+          'videos': <Map<String, Object?>>[for (final VideoInfo v in engine.videos.list()) v.toJson()],
+        });
+      }
       if (ruta != _matchRoute) {
         return ApiResponse.problem(HttpStatus.notFound, 'no existe ${request.path}');
       }
@@ -271,6 +277,19 @@ class MasterApi {
       }
       engine.deleteChampionshipIcon();
       return ApiResponse.json(engine.toJson(scopes: acceso.$1!));
+    }
+    final String? video = videoName(request.path);
+    if (request.method == 'DELETE' && video != null) {
+      final (Set<String>?, ApiResponse?) acceso = _access(request, panelScopeMatch);
+      if (acceso.$2 != null) {
+        return acceso.$2!;
+      }
+      if (engine.video?.name == video) {
+        return ApiResponse.problem(HttpStatus.conflict, '$video está sonando: páralo antes de borrarlo');
+      }
+      return engine.videos.delete(video)
+          ? ApiResponse.json(<String, Object?>{'deleted': video})
+          : ApiResponse.problem(HttpStatus.notFound, 'no hay ningún vídeo que se llame $video');
     }
     if (request.method != 'POST') {
       return ApiResponse.problem(HttpStatus.methodNotAllowed, 'solo GET y POST');
@@ -306,6 +325,21 @@ class MasterApi {
   /// que hay que contestar antes de leer un solo byte del cuerpo.
   (Set<String>?, ApiResponse?) uploadAccess(Map<String, String> headers) =>
       _access(ApiRequest(method: 'PUT', path: '', headers: headers), panelScopeMatch);
+
+  /// El nombre del vídeo de una ruta `/api/v1/videos/<nombre>` (ya sin el %-escapado), o
+  /// null si la ruta no es de un vídeo.
+  static String? videoName(String path) {
+    const String prefijo = '$panelApiPrefix$videosRoute/';
+    if (!path.startsWith(prefijo)) {
+      return null;
+    }
+    try {
+      final String nombre = Uri.decodeComponent(path.substring(prefijo.length));
+      return nombre.isEmpty || nombre.contains('/') ? null : nombre;
+    } on ArgumentError {
+      return null;
+    }
+  }
 
   /// El DTO del `state` del túnel: sin `scopes`, que son de cada petición (ADR 0022 §5).
   Map<String, Object?> stateDto() => engine.toJson()..remove('scopes');
@@ -416,6 +450,8 @@ class MasterApi {
     'graphics/halftime',
     'graphics/strip',
     'graphics/strip_texts',
+    'video/play',
+    'video/stop',
     'clips/mark',
     'stream/start',
     'stream/stop',
@@ -566,6 +602,7 @@ String _phrase(int status) => switch (status) {
   HttpStatus.gone => 'Gone',
   HttpStatus.requestEntityTooLarge => 'Request Entity Too Large',
   HttpStatus.unsupportedMediaType => 'Unsupported Media Type',
+  HttpStatus.insufficientStorage => 'Insufficient Storage',
   HttpStatus.serviceUnavailable => 'Service Unavailable',
   HttpStatus.gatewayTimeout => 'Gateway Timeout',
   _ => 'Error',
@@ -598,6 +635,12 @@ class MasterApiServer {
     try {
       if (request.method == 'PUT' && request.uri.path == '$panelApiPrefix$championshipAssetRoute') {
         respuesta = await _putIcon(request);
+        await _reply(request, respuesta);
+        return;
+      }
+      final String? video = MasterApi.videoName(request.uri.path);
+      if (request.method == 'PUT' && video != null) {
+        respuesta = await _putVideo(request, video);
         await _reply(request, respuesta);
         return;
       }
@@ -682,6 +725,53 @@ class MasterApiServer {
     }
     api.engine.adoptChampionshipIcon(tipo);
     return ApiResponse.json(api.engine.toJson(scopes: acceso.$1!));
+  }
+
+  /// Un vídeo (ADR 0027): la puerta, el nombre, el tope y la reserva de grabación antes
+  /// del cuerpo; el cuerpo a disco por trozos, y solo se adopta si es un MP4 que se lee.
+  Future<ApiResponse> _putVideo(HttpRequest request, String nombre) async {
+    final (Set<String>?, ApiResponse?) acceso = api.uploadAccess(_headers(request));
+    if (acceso.$2 != null) {
+      await request.drain<void>();
+      return acceso.$2!;
+    }
+    final VideoStore store = api.engine.videos;
+    try {
+      store.checkUpload(nombre, request.contentLength);
+    } on VideoError catch (error) {
+      await request.drain<void>();
+      return ApiResponse.problem(error.status, error.message);
+    }
+    if (api.engine.video?.name == nombre) {
+      await request.drain<void>();
+      return ApiResponse.problem(HttpStatus.conflict, '$nombre está sonando: páralo antes de cambiarlo');
+    }
+    store.directory.createSync(recursive: true);
+    final File destino = store.uploadFile(nombre);
+    final IOSink salida = destino.openWrite();
+    int total = 0;
+    bool grande = false;
+    try {
+      await for (final List<int> trozo in request) {
+        total += trozo.length;
+        // Como el icono: pasado el tope se sigue leyendo sin escribir, para que llegue el 413.
+        grande = grande || total > videoMaxBytes;
+        if (!grande) {
+          salida.add(trozo);
+        }
+      }
+    } finally {
+      await salida.close();
+    }
+    if (grande) {
+      destino.deleteSync();
+      return ApiResponse.problem(HttpStatus.requestEntityTooLarge, 'el vídeo pasa de ${videoMaxBytes ~/ (1 << 30)} GB');
+    }
+    try {
+      return ApiResponse.json(store.adopt(nombre).toJson());
+    } on VideoError catch (error) {
+      return ApiResponse.problem(error.status, error.message);
+    }
   }
 
   static Future<void> _reply(HttpRequest request, ApiResponse respuesta) async {

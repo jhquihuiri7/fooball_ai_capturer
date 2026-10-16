@@ -291,6 +291,30 @@ const String championshipIconFileName = 'campeonato.img';
 /// Donde vive el icono bajo `/api/v1/`: `PUT` lo sube, `GET` lo da y `DELETE` lo quita.
 const String championshipAssetRoute = 'assets/championship';
 
+/// Los vídeos que se pasan en el programa (ADR 0027, decisión 4): bajo `/api/v1/`, `GET`
+/// los lista y `PUT` y `DELETE` en `videos/<nombre>.mp4` suben y borran uno.
+const String videosRoute = 'videos';
+
+/// La carpeta de los vídeos, junto al partido. Como el icono, no se aparta con él.
+const String videoDirName = 'videos';
+
+/// Lo que se añade al nombre de un vídeo mientras se sube: se renombra al acabar bien.
+const String videoUploadSuffix = '.subida';
+
+/// Caracteres como mucho del nombre de un vídeo, `.mp4` incluido.
+const int videoNameMaxChars = 80;
+
+/// Bytes como mucho de un vídeo: 1 GB son 15 min a 8 Mbit/s, de sobra para un anuncio.
+const int videoMaxBytes = 1 << 30;
+
+/// Lo que tarda en sonar un vídeo desde `video/play`, en ms: el lector nativo tiene listos
+/// los primeros fotogramas y el audio antes de que el programa los pida.
+const int videoStartLeadMs = 300;
+
+/// Margen, en ms, tras el final de un vídeo en que se espera el aviso del programa: sin
+/// él, el vídeo se da por acabado.
+const int videoEndGraceMs = 3000;
+
 /// Cada cuánto el maestro manda la réplica aunque nada cambie (REPLICA_INTERVAL_S,
 /// ADR 0023 §11).
 const Duration replicaInterval = Duration(seconds: 5);

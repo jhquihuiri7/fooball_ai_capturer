@@ -173,6 +173,24 @@
   .campos label.btn { display: inline-flex; font: 700 17px/1.1 var(--display); letter-spacing: .04em; color: var(--claro); }
   .subir input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 
+  /* ---------------- vídeos (ADR 0027) ---------------- */
+  .sonando { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 10px; margin-bottom: 10px; padding: 10px 12px; border-radius: 10px; background: var(--tinte); box-shadow: inset 0 0 0 1px var(--teal); }
+  .sonando[hidden] { display: none; }
+  .sonando b { display: block; font: 700 17px/1.15 var(--display); letter-spacing: .03em; overflow-wrap: anywhere; }
+  .sonando small { font: 600 10px/1.2 var(--sans); letter-spacing: .1em; text-transform: uppercase; color: var(--teal); }
+  .videos { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 6px; }
+  .videos li { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 8px; padding: 8px 8px 8px 12px; border-radius: 10px; background: var(--profundo); box-shadow: inset 0 0 0 1px var(--linea); }
+  .videos li.suena { box-shadow: inset 0 0 0 2px var(--teal); }
+  .videos .nombre { min-width: 0; font: 700 15px/1.2 var(--display); letter-spacing: .02em; overflow-wrap: anywhere; }
+  .videos .nombre small { display: block; font: 500 12px/1.3 var(--sans); letter-spacing: 0; color: var(--oceanico); }
+  .videos .btn { min-height: 44px; padding: 0 12px; }
+  .videos .vacio { display: block; padding: 12px; text-align: center; color: var(--oceanico); font-size: 13px; background: none; box-shadow: none; }
+  .progreso { position: relative; height: 34px; margin-bottom: 10px; border-radius: 10px; background: var(--profundo); box-shadow: inset 0 0 0 1px var(--linea); overflow: hidden; }
+  .progreso[hidden] { display: none; }
+  .progreso i { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--teal); opacity: .55; transition: width .2s; }
+  .progreso span { position: relative; display: flex; align-items: center; justify-content: center; height: 100%; font: 700 14px/1 var(--display); letter-spacing: .04em; font-variant-numeric: tabular-nums; }
+  .subir.ancho { display: flex; width: 100%; }
+
   /* ---------------- avisos ---------------- */
   #aviso {
     position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 10; transform: translateX(-50%);
@@ -299,6 +317,20 @@
       </details>
     </section>
 
+    <section class="card" aria-labelledby="t-videos">
+      <h2 id="t-videos">Vídeos</h2>
+      <div class="sonando" id="video-sonando" hidden>
+        <div><small>Al aire</small><b id="video-nombre"></b></div>
+        <span class="cuenta" id="video-cuenta">0:00</span>
+        <button class="btn quitar" id="video-parar" type="button" data-propio>Parar</button>
+      </div>
+      <ul class="videos" id="videos"><li class="vacio">cargando…</li></ul>
+      <div class="progreso" id="video-progreso" hidden><i id="video-barra"></i><span id="video-progreso-texto"></span></div>
+      <div class="campos">
+        <label class="btn subir ancho">Subir MP4<input type="file" id="in-video" accept="video/mp4,.mp4"></label>
+      </div>
+    </section>
+
     <section class="card" aria-labelledby="t-jugada">
       <h2 id="t-jugada">Repetición</h2>
       <button class="btn acento grande" style="width:100%" data-orden="clips/mark">
@@ -354,6 +386,8 @@ function tic() {
   $('franja-cuenta').textContent = queda > 0 ? queda + ' s' : '15 s';
   $('franja-sacar').classList.toggle('hecho', queda > 0);
   $('franja-ocultar').disabled = queda === 0;
+  // El vídeo: lo que le queda mientras suena.
+  if (partido.video) $('video-cuenta').textContent = mmss(Math.max(0, videoHasta - performance.now()) + 999);
 }
 
 const PLAY = 'M8 5.2v13.6a.8.8 0 0 0 1.23.67l10.4-6.8a.8.8 0 0 0 0-1.34L9.23 4.53A.8.8 0 0 0 8 5.2z';
@@ -394,6 +428,9 @@ function pinta(p) {
     f.querySelectorAll('[name=sub]').forEach((el, i) => rellena(el, p.strip_texts.slots[i][1]));
   }
   if (p.championship_icon !== iconoVisto) { iconoVisto = p.championship_icon; pintaIcono(); }
+  $('video-sonando').hidden = !p.video;
+  if (p.video) { $('video-nombre').textContent = p.video.name.replace(/\.mp4$/i, ''); videoHasta = performance.now() + p.video.remaining_ms; }
+  document.querySelectorAll('#videos li[data-nombre]').forEach(li => li.classList.toggle('suena', !!p.video && li.dataset.nombre === p.video.name));
   if (p.save_error) aviso('El maestro no pudo guardar el partido: ' + p.save_error);
   tic();
 }
@@ -406,6 +443,7 @@ document.addEventListener('input', e => { if (e.target.matches('.campos input[ty
 const limpia = form => form.querySelectorAll('input').forEach(el => delete el.dataset.sucio);
 
 let franjaHasta = 0;
+let videoHasta = 0;
 let iconoVisto;
 async function pintaIcono() {
   const vista = $('icono-vista');
@@ -454,6 +492,84 @@ $('quitar-icono').addEventListener('click', async e => {
     if (r.ok) pinta(j); else aviso(j.detail || ('error ' + r.status));
   } catch { aviso('Sin conexión con el maestro.'); }
 });
+// ---------------- vídeos (ADR 0027) ----------------
+const MAX_VIDEO = 1024 * 1024 * 1024;
+const megas = b => b >= 1e9 ? (b / 1e9).toFixed(1) + ' GB' : Math.max(1, Math.round(b / 1e6)) + ' MB';
+// El nombre que acepta el maestro: letras, cifras, espacios y ._()-, y .mp4 al final.
+function nombreVideo(n) {
+  const base = n.replace(/\.[^.]*$/, '').replace(/[^\p{L}\p{N} ._()-]/gu, '_').replace(/^[^\p{L}\p{N}]+/u, '');
+  return (base || 'video').slice(0, 75).trim() + '.mp4';
+}
+async function cargaVideos() {
+  try {
+    const r = await fetch('/api/v1/videos', { headers: cab });
+    if (!r.ok) return;
+    pintaVideos((await r.json()).videos || []);
+  } catch {}
+}
+function pintaVideos(lista) {
+  const ul = $('videos');
+  if (!lista.length) { ul.innerHTML = '<li class="vacio">Sin vídeos. Sube un MP4 para pasarlo en el programa.</li>'; return; }
+  ul.replaceChildren(...lista.map(v => {
+    const li = document.createElement('li');
+    li.dataset.nombre = v.name;
+    li.classList.toggle('suena', !!(partido && partido.video && partido.video.name === v.name));
+    const nombre = document.createElement('div');
+    nombre.className = 'nombre';
+    nombre.textContent = v.name.replace(/\.mp4$/i, '');
+    const datos = document.createElement('small');
+    datos.textContent = mmss(v.duration_ms) + ' · ' + megas(v.bytes);
+    nombre.append(datos);
+    const pasar = document.createElement('button');
+    pasar.className = 'btn acento'; pasar.type = 'button'; pasar.dataset.propio = ''; pasar.textContent = 'Pasar';
+    pasar.addEventListener('click', () => orden('video/play', { name: v.name }, pasar));
+    const borrar = document.createElement('button');
+    borrar.className = 'btn quitar'; borrar.type = 'button'; borrar.dataset.propio = ''; borrar.textContent = 'Borrar';
+    borrar.setAttribute('aria-label', 'Borrar ' + v.name);
+    borrar.addEventListener('click', async () => {
+      if (!confirm('¿Borrar ' + v.name + '?')) return;
+      try {
+        const r = await fetch('/api/v1/videos/' + encodeURIComponent(v.name), { method: 'DELETE', headers: cab });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) aviso(j.detail || ('error ' + r.status));
+      } catch { aviso('Sin conexión con el maestro.'); }
+      cargaVideos();
+    });
+    li.append(nombre, pasar, borrar);
+    return li;
+  }));
+}
+$('in-video').addEventListener('change', e => {
+  const archivo = e.target.files[0]; e.target.value = '';
+  if (!archivo) return;
+  if (archivo.size > MAX_VIDEO) { aviso('El vídeo pasa de 1 GB.'); return; }
+  const nombre = nombreVideo(archivo.name);
+  const boton = e.target.closest('.btn'); boton.classList.add('ocupado');
+  const barra = $('video-progreso');
+  barra.hidden = false; $('video-barra').style.width = '0';
+  $('video-progreso-texto').textContent = nombre + ' · 0 %';
+  // XMLHttpRequest y no fetch: es lo que da el progreso de la subida.
+  const x = new XMLHttpRequest();
+  x.open('PUT', '/api/v1/videos/' + encodeURIComponent(nombre));
+  for (const [k, v] of Object.entries(cab)) x.setRequestHeader(k, v);
+  x.setRequestHeader('Content-Type', 'video/mp4');
+  x.upload.onprogress = ev => {
+    if (!ev.lengthComputable) return;
+    const pc = Math.floor(100 * ev.loaded / ev.total);
+    $('video-barra').style.width = pc + '%';
+    $('video-progreso-texto').textContent = nombre + ' · ' + pc + ' %';
+  };
+  const fin = () => { boton.classList.remove('ocupado'); barra.hidden = true; cargaVideos(); };
+  x.onload = () => {
+    let j = {}; try { j = JSON.parse(x.responseText); } catch {}
+    if (x.status === 200) aviso(''); else aviso(j.detail || ('error ' + x.status));
+    fin();
+  };
+  x.onerror = () => { aviso('Sin conexión con el maestro: el vídeo no se subió.'); fin(); };
+  x.send(archivo);
+});
+$('video-parar').addEventListener('click', e => orden('video/stop', {}, e.currentTarget));
+
 $('franja-sacar').addEventListener('click', e => orden('graphics/strip', { show_s: 15 }, e.currentTarget));
 $('franja-ocultar').addEventListener('click', e => orden('graphics/strip', { show_s: 0 }, e.currentTarget));
 $('entretiempo').addEventListener('click', e => orden('graphics/halftime', { on_air: !(partido && partido.halftime_on_air) }, e.currentTarget));
@@ -537,7 +653,8 @@ async function miniaturas() {
 }
 
 if (token) {
-  espera(); miniaturas(); setInterval(miniaturas, 1000); setInterval(tic, 250);
+  espera(); miniaturas(); cargaVideos(); setInterval(miniaturas, 1000); setInterval(tic, 250);
+  setInterval(cargaVideos, 30000); // lo que suban otros mandos
 } else {
   conexion(false, 'sin token');
   document.querySelector('main').innerHTML =
