@@ -12,6 +12,62 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-16 · IOS-103 — Vídeos MP4 desde el mando, a pantalla completa y con su sonido · 🚧 Dart probado en Windows; el Swift, sin compilar
+
+ADR 0027 de football-ai, decisiones 4 y 6. El operador sube MP4 desde el mando, los pasa en
+el programa a pantalla completa por encima del gráfico y con su sonido, y al acabar vuelven
+el programa y el micro. En dos commits: el servidor y el mando web (1/2) y el nativo (2/2).
+
+**Hecho**
+- `VideoStore` (`Documents/partido/videos/`, como el icono no se aparta con el partido):
+  `PUT /api/v1/videos/<nombre>.mp4` a disco por trozos, con la puerta, el nombre, el tope de
+  1 GB y la reserva de grabación (`phoneDiskReserveBytes` libres después, si el disco se sabe:
+  507 si no) antes del cuerpo; solo se adopta si empieza por `ftyp` y se le lee la duración
+  del `moov/mvhd` (delante o detrás, v0 y v1). `GET /api/v1/videos` la lista y `DELETE` borra
+  (409 si suena).
+- El motor: `video/play` (`{name}`) y `video/stop`, con su `id` de reproducción. El cero va
+  `videoStartLeadMs` (300 ms) por delante para que el lector tenga listo el principio. El
+  estado lleva `video: {name, remaining_ms}` o null, como el dorado del túnel de football-ai
+  19ad9e8. Si el nativo no avisa del final, el vídeo se da por acabado a su duración más
+  `videoEndGraceMs`.
+- El mando web: la tarjeta «Vídeos» con la lista (duración y tamaño), Pasar y Borrar en cada
+  uno, lo que suena con su cuenta atrás y Parar, y la subida con barra de progreso
+  (XMLHttpRequest). El nombre se limpia en el navegador a lo que acepta el maestro.
+- Pigeon: `playVideo(id, path, leadMs)` (asíncrono, devuelve "" o el error) y `stopVideo`
+  en `RigHostApi`; `onVideoEnded(id)` en `CaptureFlutterApi`, que `CaptureSession` pasa a
+  `MatchEngine.videoFinished`. `ProgramVideo` (Dart) lleva al nativo lo que dice el motor, una
+  vez por reproducción, con los cambios del motor y cada segundo; lo que el nativo no puede
+  abrir no se queda «sonando».
+- `RigMedia/Video/ProgramVideoPlayer.swift`: dos AVAssetReader (vídeo y audio, para que uno
+  no espere al otro); el vídeo escalado a 1920×1080 NV12 con bandas por VTPixelTransferSession
+  en un anillo de 12 fotogramas de un pool preasignado, y enderezado con la composición de sus
+  propiedades si viene girado; el audio a 48 kHz estéreo en una cola de 500 ms por delante.
+  `ProgramVideoHub` tiene uno a la vez y avisa una vez al acabar (no al parar).
+- El fotograma: `SplitBench.program(_:t:)` lo cambia por el del vídeo antes de la miniatura y
+  el codificador, así tapa también el gráfico, la franja, SIN SEÑAL y el fotograma repetido de
+  un hueco de cámara.
+- El sonido: `AacEncoder` gana un sustituto (`ProgramAudioSubstitute`) al que pide cada trozo
+  de su eje ya corregido, venga del micro o del silencio del vigilante: el AAC del programa
+  lleva el vídeo con su sello y sin huecos, y `onAligned` (la 4K) sigue con el micro.
+
+**Comprobado**: `flutter analyze` limpio y `flutter test` en verde (476): el almacén y su
+lectura del MP4, la API (subida, 401, 415, 400, 409, lista, borrar), el estado y el margen
+sin aviso, y el conductor. Escritos sin compilar: `ProgramVideoPlayerTests` (MP4 generados en
+el test: el fotograma de cada instante, las bandas de 4:3 y de un vídeo vertical, el sonido
+en el eje, un vídeo mudo, el aviso del hub, un fichero que no es vídeo) y
+`AudioSubstituteTests` (el AAC lleva el tono del sustituto solo en su tramo y la 4K el micro).
+El Chrome sin cabeza ya no arranca en esta máquina: la tarjeta se revisó con la sintaxis de
+Node y la limpieza de nombres, no en pantalla.
+
+**Pendiente (Mac e iPhone)**: compilar ZeroKit y el Runner y pasar los dos tests nuevos;
+dudosos de compilar: `AVVideoComposition.videoComposition(withPropertiesOf:)` y la
+`AVAssetReaderAudioMixOutput` con sus ajustes. En el iPhone: subir un MP4 de ~30 s desde el
+Samsung, pasarlo y ver y oír en el programa emitido que tapa el gráfico, que suena en sincronía
+y que al acabar vuelven el gráfico y el micro; probar Parar a mitad y un vídeo vertical.
+**Queda fuera**: el vídeo no se ve en la vista previa local de la app ni en la tarjeta de
+SIN SEÑAL del VPS (NUBE-18), solo en el programa; sin programa en marcha (sin EMITIR) solo
+suena su audio en el AAC y el motor lo quita a su duración.
+
 ## 2026-10-16 · IOS-102 — Equipos, entretiempo, icono del campeonato y franja a demanda desde el mando · 🚧 hecho y probado en Windows; falta verlo emitido en el iPhone
 
 ADR 0027 de football-ai, decisiones 1, 2, 3, 5 y 6. Lo pidió el propietario: desde el mando,

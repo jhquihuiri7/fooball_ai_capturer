@@ -22,6 +22,7 @@ import 'package:football_ai_capture/src/server/api_server.dart';
 import 'package:football_ai_capture/src/server/control_token.dart';
 import 'package:football_ai_capture/src/server/match_engine.dart';
 import 'package:football_ai_capture/src/server/match_migration.dart';
+import 'package:football_ai_capture/src/server/program_video.dart';
 import 'package:football_ai_capture/src/server/replica.dart';
 import 'package:football_ai_capture/src/server/rig_time.dart';
 
@@ -66,6 +67,8 @@ class MasterHost extends ChangeNotifier {
     this.term,
     this.adSink,
     this.adPacks,
+    this.videoSink,
+    this.freeDiskBytes,
   }) : wallS = wallS ?? _wallClockS,
        _time = time ?? StopwatchTimeSource(),
        _monotonic = Stopwatch()..start();
@@ -130,6 +133,18 @@ class MasterHost extends ChangeNotifier {
 
   /// La franja mientras se sirve.
   AdDirector? get ads => _ads;
+
+  /// El vídeo nativo del programa (IOS-103); sin él, `video/play` no suena.
+  final VideoSink? videoSink;
+
+  /// Lo libre del disco del móvil, para la reserva de grabación al subir vídeos.
+  final int? Function()? freeDiskBytes;
+  ProgramVideo? _video;
+  StreamSubscription<void>? _videoChanges;
+  Timer? _videoTick;
+
+  /// El vídeo del programa mientras se sirve.
+  ProgramVideo? get video => _video;
   StreamSubscription<void>? _replicaChanges;
   Timer? _replicaTick;
   int _replicaSeq = 0;
@@ -180,6 +195,7 @@ class MasterHost extends ChangeNotifier {
         file: File('${directory.path}/$matchFileName'),
         time: _time,
         matchId: matchId,
+        freeBytes: freeDiskBytes,
       );
       if (matchId == null) {
         await announceMatch(engine.matchId);
@@ -201,6 +217,7 @@ class MasterHost extends ChangeNotifier {
       _engine = engine;
       _api = api;
       _startGraphics(engine);
+      _startVideo(engine);
       _startReplica(engine);
       await _startAds(engine);
       problem = engine.lineupsError;
@@ -240,6 +257,29 @@ class MasterHost extends ChangeNotifier {
     _changes = engine.changes.listen((_) => unawaited(g.refresh()));
     _clockTick = Timer.periodic(const Duration(seconds: 1), (_) => unawaited(g.refresh()));
     unawaited(g.refresh());
+  }
+
+  /// El vídeo del programa: con cada cambio y cada segundo, que es lo que tarda en verse
+  /// un vídeo que se da por acabado sin aviso del nativo.
+  void _startVideo(MatchEngine engine) {
+    final VideoSink? sink = videoSink;
+    if (sink == null) {
+      return;
+    }
+    final ProgramVideo v = ProgramVideo(engine: engine, sink: sink);
+    _video = v;
+    _videoChanges = engine.changes.listen((_) => unawaited(v.refresh()));
+    _videoTick = Timer.periodic(const Duration(seconds: 1), (_) => unawaited(v.refresh()));
+  }
+
+  Future<void> _stopVideo() async {
+    unawaited(_videoChanges?.cancel());
+    _videoChanges = null;
+    _videoTick?.cancel();
+    _videoTick = null;
+    final ProgramVideo? v = _video;
+    _video = null;
+    await v?.close();
   }
 
   /// La franja: el paquete vigente, cada uno nuevo y los eventos del partido.
@@ -325,6 +365,7 @@ class MasterHost extends ChangeNotifier {
   /// Deja de servir: otro móvil dirige, o se cerró la sesión.
   Future<void> stepDown() async {
     _stopGraphics();
+    await _stopVideo();
     _stopReplica();
     _stopAds();
     final MasterApiServer? server = _server;

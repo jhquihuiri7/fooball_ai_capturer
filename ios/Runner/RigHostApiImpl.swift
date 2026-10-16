@@ -70,6 +70,12 @@ enum OverlayHub {
     }
 }
 
+/// El vídeo del mando en el programa (IOS-103, ADR 0027): lo pone Dart con `playVideo`,
+/// lo toma el programa del maestro antes del codificador y su sonido el AAC del micro.
+enum VideoHub {
+    static let shared = ProgramVideoHub()
+}
+
 final class RigHostApiImpl: NSObject, RigHostApi {
     private let flutter: RigFlutterApi
 
@@ -130,6 +136,27 @@ final class RigHostApiImpl: NSObject, RigHostApi {
     func setAdOverride(name: String, loops: Int64) throws {
         let clip = name.isEmpty ? nil : AdHub.store?.clip(named: name)
         AdHub.rotation?.set(override: clip, loops: max(1, Int(loops)), atRigMs: AdHub.nowRigMs())
+    }
+
+    // IOS-103: los vídeos del mando. El cero se fija al llegar la orden, como en Dart: lo
+    // que tarde en abrirse el fichero sale del margen `leadMs`, no del vídeo.
+    func playVideo(id: Int64, path: String, leadMs: Int64) async throws -> String {
+        let cero = Double(AdHub.nowRigMs() + leadMs)
+        do {
+            let jugador = try await ProgramVideoPlayer.open(
+                url: URL(fileURLWithPath: path), id: id, startRigMs: cero,
+                width: OverlayHub.programWidth, height: OverlayHub.programHeight
+            )
+            VideoHub.shared.play(jugador)
+            return ""
+        } catch {
+            NSLog("[video] %@ no se puede pasar: %@", (path as NSString).lastPathComponent, "\(error)")
+            return "\(error)"
+        }
+    }
+
+    func stopVideo() throws {
+        VideoHub.shared.stop()
     }
 
     // IOS-58: EMITIR en la arquitectura B. La pasada vive con la cámara y el enlace.

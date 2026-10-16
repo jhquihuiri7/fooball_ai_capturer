@@ -57,6 +57,12 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
         CaptureHostApiSetup.setUp(binaryMessenger: binaryMessenger, api: self)
         observeInterruptions()
         ProgramHub.capture = self
+        // IOS-103: el vídeo del mando acabó en el programa; el motor de Dart lo quita.
+        VideoHub.shared.onEnded = { [weak self] id in
+            Task { @MainActor in
+                try? await self?.flutter.onVideoEnded(id: id)
+            }
+        }
         // 2026-10-14: un lanzamiento con RIG_LINK_SECRET lo guarda en el Keychain ya, al
         // arrancar. Antes solo se guardaba al abrir el enlace de Network (`startLink`): lanzar
         // con el secreto y cerrar sin abrir la cámara (el paso 2 de IOS-58) no guardaba nada.

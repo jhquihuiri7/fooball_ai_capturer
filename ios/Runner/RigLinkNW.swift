@@ -2116,10 +2116,13 @@ final class SplitBench {
     private var programIntervalsMs: [Double] = []
     private var lastProgramNs: UInt64?
 
-    private func program(_ buffer: CVPixelBuffer, t: Int64) {
+    private func program(_ compuesto: CVPixelBuffer, t: Int64) {
         let ahoraNs = DispatchTime.now().uptimeNanoseconds
         if let previo = lastProgramNs { programIntervalsMs.append(Double(ahoraNs - previo) / 1e6) }
         lastProgramNs = ahoraNs
+        // IOS-103 (ADR 0027): un vídeo del mando tapa el programa entero, gráfico incluido,
+        // también cuando falta una cámara o el programa repite su último fotograma.
+        let buffer = VideoHub.shared.frame(atRigMs: Double(t)) ?? compuesto
         ThumbHub.shared.program(buffer)
         programEncoder?.encode(buffer, ptsNs: t * 1_000_000, rigMs: UInt64(max(0, t)))
         programFrames += 1

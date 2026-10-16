@@ -399,6 +399,13 @@ protocol RigHostApi {
   func thumbnail(name: String) throws -> FlutterStandardTypedData
   /// Un anuncio ya cargado que se cuela desde ahora `loops` vueltas; nombre vacío lo quita.
   func setAdOverride(name: String, loops: Int64) throws
+  /// Pasa el MP4 de `path` en el programa (ADR 0027, decisión 4): a pantalla completa por
+  /// encima del gráfico y con su sonido en lugar del micro, desde dentro de `leadMs`. `id`
+  /// es la reproducción: vuelve en `onVideoEnded` al acabar. Quita el que sonara.
+  /// Devuelve "" o el error (sin vídeo que leer, códec que no se decodifica…).
+  func playVideo(id: Int64, path: String, leadMs: Int64) async throws -> String
+  /// Quita el vídeo que suena, si suena: vuelven el programa y el micro.
+  func stopVideo() throws
 }
 
 /// Generated setup class from Pigeon to handle messages through the `binaryMessenger`.
@@ -575,6 +582,43 @@ class RigHostApiSetup {
       }
     } else {
       setAdOverrideChannel.setMessageHandler(nil)
+    }
+    /// Pasa el MP4 de `path` en el programa (ADR 0027, decisión 4): a pantalla completa por
+    /// encima del gráfico y con su sonido en lugar del micro, desde dentro de `leadMs`. `id`
+    /// es la reproducción: vuelve en `onVideoEnded` al acabar. Quita el que sonara.
+    /// Devuelve "" o el error (sin vídeo que leer, códec que no se decodifica…).
+    let playVideoChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.RigHostApi.playVideo\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      playVideoChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let idArg = args[0] as! Int64
+        let pathArg = args[1] as! String
+        let leadMsArg = args[2] as! Int64
+        Task { @MainActor in
+          do {
+            let result = try await api.playVideo(id: idArg, path: pathArg, leadMs: leadMsArg)
+            reply(wrapResult(result))
+          } catch {
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      playVideoChannel.setMessageHandler(nil)
+    }
+    /// Quita el vídeo que suena, si suena: vuelven el programa y el micro.
+    let stopVideoChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.RigHostApi.stopVideo\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      stopVideoChannel.setMessageHandler { _, reply in
+        do {
+          try api.stopVideo()
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      stopVideoChannel.setMessageHandler(nil)
     }
   }
 }

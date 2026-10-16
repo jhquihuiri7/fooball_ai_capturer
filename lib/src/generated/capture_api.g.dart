@@ -1477,6 +1477,10 @@ abstract class CaptureFlutterApi {
   /// Llegó la pizarra del maestro (IOS-82). Solo la recibe el esclavo.
   void onReplica(String json);
 
+  /// El vídeo `id` de `playVideo` acabó, o no pudo seguir (ADR 0027): el programa
+  /// vuelve con su gráfico y su micro.
+  void onVideoEnded(int id);
+
   static void setUp(CaptureFlutterApi? api, {
     BinaryMessenger? binaryMessenger, 
     String messageChannelSuffix = '',
@@ -1691,6 +1695,27 @@ abstract class CaptureFlutterApi {
           final String arg_json = args[0]! as String;
           try {
             api.onReplica(arg_json);
+            return wrapResponse(empty: true);
+          } on PlatformException catch (e) {
+            return wrapResponse(error: e);
+          }          catch (e) {
+            return wrapResponse(error: PlatformException(code: 'error', message: e.toString()));
+          }
+        });
+      }
+    }
+    {
+      final pigeonVar_channel = BasicMessageChannel<Object?>(
+          'dev.flutter.pigeon.football_ai_capture.CaptureFlutterApi.onVideoEnded$messageChannelSuffix', pigeonChannelCodec,
+          binaryMessenger: binaryMessenger);
+      if (api == null) {
+        pigeonVar_channel.setMessageHandler(null);
+      } else {
+        pigeonVar_channel.setMessageHandler((Object? message) async {
+          final List<Object?> args = message! as List<Object?>;
+          final int arg_id = args[0]! as int;
+          try {
+            api.onVideoEnded(arg_id);
             return wrapResponse(empty: true);
           } on PlatformException catch (e) {
             return wrapResponse(error: e);

@@ -513,4 +513,8 @@ abstract class CaptureFlutterApi {
 
   /// Llegó la pizarra del maestro (IOS-82). Solo la recibe el esclavo.
   void onReplica(String json);
+
+  /// El vídeo `id` de `playVideo` acabó, o no pudo seguir (ADR 0027): el programa
+  /// vuelve con su gráfico y su micro.
+  void onVideoEnded(int id);
 }

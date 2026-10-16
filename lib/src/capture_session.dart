@@ -900,6 +900,10 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
     notifyListeners();
   }
 
+  /// El nativo acabó el vídeo `id` (ADR 0027): el motor del maestro lo quita.
+  @override
+  void onVideoEnded(int id) => masterHost?.engine?.videoFinished(id);
+
   @override
   void onReplica(String json) {
     final ReplicaStore? store = replicaStore;

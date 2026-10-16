@@ -504,6 +504,48 @@ class RigHostApi {
     )
     ;
   }
+
+  /// Pasa el MP4 de `path` en el programa (ADR 0027, decisión 4): a pantalla completa por
+  /// encima del gráfico y con su sonido en lugar del micro, desde dentro de `leadMs`. `id`
+  /// es la reproducción: vuelve en `onVideoEnded` al acabar. Quita el que sonara.
+  /// Devuelve "" o el error (sin vídeo que leer, códec que no se decodifica…).
+  Future<String> playVideo(int id, String path, int leadMs) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.RigHostApi.playVideo$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[id, path, leadMs]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as String;
+  }
+
+  /// Quita el vídeo que suena, si suena: vuelven el programa y el micro.
+  Future<void> stopVideo() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.RigHostApi.stopVideo$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
 }
 
 abstract class RigFlutterApi {

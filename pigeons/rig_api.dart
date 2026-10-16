@@ -145,6 +145,16 @@ abstract class RigHostApi {
 
   /// Un anuncio ya cargado que se cuela desde ahora `loops` vueltas; nombre vacío lo quita.
   void setAdOverride(String name, int loops);
+
+  /// Pasa el MP4 de `path` en el programa (ADR 0027, decisión 4): a pantalla completa por
+  /// encima del gráfico y con su sonido en lugar del micro, desde dentro de `leadMs`. `id`
+  /// es la reproducción: vuelve en `onVideoEnded` al acabar. Quita el que sonara.
+  /// Devuelve "" o el error (sin vídeo que leer, códec que no se decodifica…).
+  @async
+  String playVideo(int id, String path, int leadMs);
+
+  /// Quita el vídeo que suena, si suena: vuelven el programa y el micro.
+  void stopVideo();
 }
 
 @FlutterApi()

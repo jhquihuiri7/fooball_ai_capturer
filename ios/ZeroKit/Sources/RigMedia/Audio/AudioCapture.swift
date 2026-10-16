@@ -82,6 +82,12 @@ public final class AudioCapture: NSObject, AVCaptureAudioDataOutputSampleBufferD
         }
     }
 
+    /// Lo que suena en el programa en lugar del micro (el vídeo del ADR 0027), o nil. La
+    /// 4K y el DSP del silbato siguen oyendo el micro.
+    public func setProgramSubstitute(_ s: ProgramAudioSubstitute?) {
+        encoder.setSubstitute(s)
+    }
+
     /// El vigilante: lo llama quien tiene el reloj (CaptureEngine, cada `silenceTickMs`)
     /// con «ahora» en ms del soporte. Si el micro lleva más de `micStallMs` sin entregar,
     /// el AAC sigue con silencio hasta `nowRigMs − micStallMs`; cuando el micro vuelve, el

@@ -39,6 +39,15 @@ public enum AudioConstants {
     static let silenceChunk = 4096
 }
 
+/// Lo que suena en el programa en lugar del micro (ADR 0027: el sonido de un vídeo).
+/// El codificador le pide cada trozo de su eje ya corregido: `count` muestras en su
+/// formato canónico (Float32 sin intercalar, 48 kHz, sus canales) cuya primera es del
+/// instante `rigMs`. nil es «aquí suena el micro». Se llama con el cerrojo del
+/// codificador tomado: tiene que contestar ya, con lo que tenga preparado.
+public protocol ProgramAudioSubstitute: AnyObject {
+    func samples(count: Int, atRigMs rigMs: Double, format: AVAudioFormat) -> AVAudioPCMBuffer?
+}
+
 /// Una trama AAC lista para el mux: ADTS + AAC crudo, y su instante.
 public struct AacFrame: Sendable {
     public let adts: Data
@@ -82,6 +91,15 @@ public final class AacEncoder {
     /// deriva se acumulaba (medido en el Mac: a 300 ppm, 51 ms a los 3 min). Se llama con
     /// el cerrojo tomado: rápido, y sin volver al codificador.
     public var onAligned: ((AVAudioPCMBuffer, Double) -> Void)?
+    private weak var substitute: ProgramAudioSubstitute?
+
+    /// Lo que suena en el programa en lugar del micro, o nil para el micro. Solo cambia el
+    /// AAC: `onAligned` (la pista de la 4K) sigue con lo que oyó el micro.
+    public func setSubstitute(_ s: ProgramAudioSubstitute?) {
+        lock.lock()
+        defer { lock.unlock() }
+        substitute = s
+    }
 
     public init(channels: Int = AudioConstants.programChannels, bitrateBps: Int = AudioConstants.aacBitrateBps) throws {
         guard let canon = AVAudioFormat(
@@ -225,9 +243,18 @@ public final class AacEncoder {
 
     private func feed(_ pcm: AVAudioPCMBuffer?) {
         guard let pcm, pcm.frameLength > 0 else { return }
-        if let onAligned, let ms = timeline.rigMs(ofSample: timeline.samples) { onAligned(pcm, ms) }
-        pending.append(pcm)
-        timeline.advance(by: Int(pcm.frameLength))
+        let ms = timeline.rigMs(ofSample: timeline.samples)
+        if let onAligned, let ms { onAligned(pcm, ms) }
+        // El trozo del eje es el mismo, venga del micro o del vídeo: el sustituto solo
+        // cambia lo que suena, nunca cuántas muestras ni cuándo (ADR 0027).
+        let n = Int(pcm.frameLength)
+        if let ms, let otro = substitute?.samples(count: n, atRigMs: ms, format: canonical),
+           otro.format == canonical, Int(otro.frameLength) == n {
+            pending.append(otro)
+        } else {
+            pending.append(pcm)
+        }
+        timeline.advance(by: n)
     }
 
     private func feedSilence(_ muestras: Int) {

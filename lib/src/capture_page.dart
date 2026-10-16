@@ -34,6 +34,7 @@ import 'package:football_ai_capture/src/graphics/rig_overlay_sink.dart';
 import 'package:football_ai_capture/src/mando_qr_sheet.dart';
 import 'package:football_ai_capture/src/match_state.dart' show matchStateKey;
 import 'package:football_ai_capture/src/server/master_host.dart';
+import 'package:football_ai_capture/src/server/program_video.dart';
 import 'package:football_ai_capture/src/server/replica.dart';
 import 'package:football_ai_capture/src/server/rig_time.dart';
 import 'package:football_ai_capture/src/theme/zero_colors.dart';
@@ -142,6 +143,9 @@ class _CapturePageState extends State<CapturePage> {
               // La franja (IOS-48/49); los paquetes los baja el túnel (IOS-65).
               adSink: RigAdSink(),
               adPacks: _adPacks,
+              // Los vídeos del mando (IOS-103): el lector nativo y el disco que queda.
+              videoSink: RigVideoSink(),
+              freeDiskBytes: () => _session.status?.freeDiskBytes,
             );
 
   /// Lo que enseña el panel local del estado del soporte (IOS-64).

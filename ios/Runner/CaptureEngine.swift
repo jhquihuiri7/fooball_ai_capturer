@@ -458,6 +458,8 @@ final class CaptureEngine: NSObject {
                     return Double(ns + offset) / 1e6
                 }
                 captura.onFrame = { [weak self] trama in self?.writeAudio(trama) }
+                // IOS-103: mientras suena un vídeo del mando, el AAC lleva su sonido.
+                captura.setProgramSubstitute(VideoHub.shared)
                 // La 4K se lleva el PCM ya en el eje del AAC: con el del micro tal cual, el
                 // escritor apila las muestras y la deriva del micro se acumula.
                 captura.onAlignedPcm = { [weak self] pcm, ms in self?.queue.async { self?.appendAudio(pcm, rigMs: ms) } }

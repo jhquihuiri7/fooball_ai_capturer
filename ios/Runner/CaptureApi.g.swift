@@ -1533,6 +1533,9 @@ protocol CaptureFlutterApiProtocol {
   @MainActor func onRigRole(role roleArg: RigRole, term termArg: Int64, matchId matchIdArg: String?) async throws
   /// Llegó la pizarra del maestro (IOS-82). Solo la recibe el esclavo.
   @MainActor func onReplica(json jsonArg: String) async throws
+  /// El vídeo `id` de `playVideo` acabó, o no pudo seguir (ADR 0027): el programa
+  /// vuelve con su gráfico y su micro.
+  @MainActor func onVideoEnded(id idArg: Int64) async throws
 }
 class CaptureFlutterApi: CaptureFlutterApiProtocol {
   private let binaryMessenger: FlutterBinaryMessenger
@@ -1743,6 +1746,28 @@ class CaptureFlutterApi: CaptureFlutterApiProtocol {
       let channelName: String = "dev.flutter.pigeon.football_ai_capture.CaptureFlutterApi.onReplica\(messageChannelSuffix)"
       let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
       channel.sendMessage([jsonArg] as [Any?]) { response in
+        guard let listResponse = response as? [Any?] else {
+          continuation.resume(throwing: createConnectionError(withChannelName: channelName))
+          return
+        }
+        if listResponse.count > 1 {
+          let code: String = listResponse[0] as! String
+          let message: String? = nilOrValue(listResponse[1])
+          let details: String? = nilOrValue(listResponse[2])
+          continuation.resume(throwing: PigeonError(code: code, message: message, details: details))
+        } else {
+          continuation.resume()
+        }
+      }
+    }
+  }
+  /// El vídeo `id` de `playVideo` acabó, o no pudo seguir (ADR 0027): el programa
+  /// vuelve con su gráfico y su micro.
+  @MainActor func onVideoEnded(id idArg: Int64) async throws {
+    return try await withCheckedThrowingContinuation { continuation in
+      let channelName: String = "dev.flutter.pigeon.football_ai_capture.CaptureFlutterApi.onVideoEnded\(messageChannelSuffix)"
+      let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
+      channel.sendMessage([idArg] as [Any?]) { response in
         guard let listResponse = response as? [Any?] else {
           continuation.resume(throwing: createConnectionError(withChannelName: channelName))
           return
