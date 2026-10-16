@@ -42,6 +42,12 @@ el móvil siempre (copia .mov al 100 %), y en el VPS, cuando la red lo dejaba, 3
 5. **iOS mató Zero al ir al fondo** (18:32, 0x8BADF00D): la vista previa rehacía la sesión
    en el hilo principal. Arreglado en 79588aa.
 
+**Primera prueba de ffe1f05 en el 17 (21:41, 487 s, «Una cámara» al VPS):** 1 atasco y 1
+reconexión del vigía (`stall_reconnects` 1, `connects` 2), y siguió: 13 917 de 14 584 fotogramas
+enviados (95 %), último vídeo a los 484 s, `send_holds` 612 (antes, 80 975), bitrate de vuelta a
+3 Mbit/s, 5 746 paquetes perdidos en la Wi-Fi recuperados. Antes de ffe1f05, el mismo bache
+dejaba la emisión muerta hasta PARAR.
+
 **Instalado en el 17 a las 21:31: ffe1f05** (vigía + latencia que crece + vista previa +
 foco de Jonathan). **La IPA 1.0.0 (4) de TestFlight es de 09f9bc4: lleva el vigía y la vista
 previa, no la latencia que crece.** Sin probar en el iPhone todavía: el próximo informe del
