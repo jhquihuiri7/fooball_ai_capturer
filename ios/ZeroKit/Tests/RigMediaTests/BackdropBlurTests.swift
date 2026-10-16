@@ -74,8 +74,10 @@ final class BackdropBlurTests: XCTestCase {
         let antes = desviacion(fila(yNitido, 4)), despues = desviacion(fila(yBorroso, 4))
         XCTAssertGreaterThan(antes, 80, "las franjas nítidas")
         XCTAssertLessThan(despues, antes * 0.2, "desenfocadas")
-        // Sin oscurecer el borde: la primera columna, cerca del gris medio de las franjas.
-        XCTAssertEqual(Double(yBorroso[4 * ancho]), Double(yBorroso[4 * ancho + ancho / 2 - 20]), accuracy: 25)
+        // Sin oscurecer el borde: con `.clamp`, fuera del cuadro se repite la primera
+        // columna (aquí blanca, x 0-3), así que el borde sale igual o más claro que el gris
+        // medio de las franjas; con relleno negro saldría mucho más oscuro.
+        XCTAssertGreaterThan(Double(yBorroso[4 * ancho]), Double(yBorroso[4 * ancho + ancho / 2 - 20]) - 25)
 
         // El cuadrado rojo, encima y nítido: el mismo valor que sin desenfoque.
         let centro = (alto / 2) * ancho + ancho / 2
