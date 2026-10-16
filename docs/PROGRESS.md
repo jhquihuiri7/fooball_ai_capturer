@@ -12,6 +12,37 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-16 · IOS-102 — Equipos, entretiempo, icono del campeonato y franja a demanda desde el mando · 🚧 hecho y probado en Windows; falta verlo emitido en el iPhone
+
+ADR 0027 de football-ai, decisiones 1, 2, 3, 5 y 6. Lo pidió el propietario: desde el mando,
+los nombres, el entretiempo con su icono, el icono junto al marcador y la franja que sale
+15 s. En dos commits: el servidor y el mando web (1/2) y los painters (2/2).
+
+**Hecho**
+- El motor y la API (1/2): `match/teams`, `graphics/halftime` (una tarjeta a la vez con la
+  alineación), `graphics/strip` (15 s por defecto, 0 la quita, hasta 120) y
+  `graphics/strip_texts`; el icono por `PUT`/`GET`/`DELETE /api/v1/assets/championship`,
+  escrito a disco por trozos con la puerta antes del cuerpo, tope de 4 MB y solo PNG o JPEG.
+  Los textos de la franja y el icono son del campeonato (`GraphicsStore`) y sobreviven al
+  partido. El estado lleva `halftime_on_air`, `strip_remaining_ms`, `strip_texts` y
+  `championship_icon`, como el dorado del túnel de football-ai.
+- El mando web (1/2): las tarjetas Equipos, Al aire (con el entretiempo), Franja (sacar 15 s
+  con su cuenta atrás, ocultar, editar el claim y los tres mensajes) e Icono del campeonato.
+- Los painters (2/2): `halftime_card_painter.dart`, portado de `tools/halftime_card.py`
+  (sin icono, el isotipo); el marcador con el icono en el chip de la competición y la franja
+  solo cuando está fuera, con los textos del estado. `ProgramGraphics` decodifica el icono
+  cuando cambia su versión, publica el entretiempo en la capa de tarjetas (en lugar de la
+  alineación) y la tarjeta de alineación usa el nombre del marcador.
+
+**Comprobado**: `flutter analyze` limpio y `flutter test` en verde (467). La tarjeta de
+entretiempo difiere un 0,32 % de píxeles del PNG de Python; el icono cae en la caja de
+`directo_icono` (292,94; 51) y la tarjeta en las de `halftime`. El dorado nuevo
+`test/graphics/goldens/halftime.png` salió de Windows: hay que regenerarlo en el Mac con
+`flutter test --update-goldens test/graphics`.
+
+**Pendiente**: verlo emitido en el iPhone (aceptación de la tarjeta). Siguiente: IOS-103,
+los vídeos.
+
 ## 2026-10-15 · IOS-101 — «Una cámara»: el programa es la lente tal cual · 🚧 escrito sin compilar (Windows)
 
 Jhonatan probó «Una cámara» con el 17 y el programa salía como un acercamiento de la lente:

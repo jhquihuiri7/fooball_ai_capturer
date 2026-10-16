@@ -159,6 +159,61 @@ void main() {
     });
   });
 
+  group('el icono, la franja oculta y sus textos (ADR 0027)', () {
+    ScoreboardState con({bool franja = true, int? icono, List<String>? claim}) => ScoreboardState(
+      competition: directo.competition,
+      home: directo.home,
+      away: directo.away,
+      homeGoals: directo.homeGoals,
+      awayGoals: directo.awayGoals,
+      clockS: directo.clockS,
+      live: true,
+      cameraMode: 'AUTO',
+      stripVisible: franja,
+      iconRev: icono,
+      stripClaim: claim ?? OverlaySpec.stripClaimDefault,
+    );
+    ScoreboardLayout medir(ScoreboardState s) =>
+        ScoreboardLayout.measure(OverlaySpec.programWidth, OverlaySpec.programHeight, s);
+
+    test('el icono va en el chip de la competición, donde en Python, sin mover la barra', () {
+      final ScoreboardLayout sin = medir(con());
+      final ScoreboardLayout l = medir(con(icono: 1, franja: false));
+      // `directo_icono` de boxes.json: el chip de la competición arranca en 276,94.
+      final ui.Rect icono = l.boxes['championship']!;
+      expect(icono.left, closeTo(292.94, 0.01));
+      expect((icono.top, icono.bottom), (51.0, 81.0));
+      expect(icono.width, OverlaySpec.scoreboard['status_icon']);
+      expect(l.boxes['bug'], sin.boxes['bug']);
+      expect(
+        l.boxes['competition']!.width,
+        closeTo(sin.boxes['competition']!.width + 30 + 10, 1e-9),
+      );
+    });
+
+    test('sin franja no se mide ni se pinta nada abajo', () {
+      final ScoreboardLayout l = medir(con(franja: false));
+      for (final String clave in <String>['strip', 'logo', 'claim', 'sellable', 'ai', 'slot_0']) {
+        expect(l.boxes.containsKey(clave), isFalse, reason: clave);
+      }
+    });
+
+    test('los textos editados de la franja cambian lo que se mide', () {
+      final double antes = medir(con()).boxes['claim']!.width;
+      final double despues = medir(con(claim: <String>['VAMOS', 'ISLAS'])).boxes['claim']!.width;
+      expect(despues, lessThan(antes));
+    });
+
+    testWidgets('sin franja, la parte de abajo queda transparente', (WidgetTester tester) async {
+      await tester.runAsync(() async {
+        final OverlayFrame frame = await OverlayRaster().render(con(franja: false));
+        int alfa(int x, int y) => frame.rgba[(y * frame.width + x) * 4 + 3];
+        expect(alfa(960, 1050), 0);
+        expect(alfa(300, 120), greaterThan(200), reason: 'el marcador sigue');
+      });
+    });
+  });
+
   group('el raster', () {
     testWidgets('solo rasteriza cuando cambia el contenido', (WidgetTester tester) async {
       await tester.runAsync(() async {

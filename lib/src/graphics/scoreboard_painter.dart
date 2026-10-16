@@ -34,6 +34,10 @@ class ScoreboardState {
     required this.clockS,
     required this.live,
     required this.cameraMode,
+    this.stripVisible = true,
+    this.stripClaim = OverlaySpec.stripClaimDefault,
+    this.stripSlots = OverlaySpec.stripSlotsDefault,
+    this.iconRev,
   });
 
   final String competition;
@@ -44,6 +48,17 @@ class ScoreboardState {
   final int clockS;
   final bool live;
   final String cameraMode;
+
+  /// La franja fuera (ADR 0027: en el programa va oculta salvo cuando el operador la saca).
+  final bool stripVisible;
+
+  /// Lo que el operador editó de la franja: las dos líneas del claim y los tres mensajes.
+  final List<String> stripClaim;
+  final List<(String, String)> stripSlots;
+
+  /// La versión del icono del campeonato si hay; null sin icono. Cambiarla obliga a
+  /// rasterizar de nuevo aunque lo demás sea igual.
+  final int? iconRev;
 
   String get clockText =>
       '${(clockS ~/ 60).toString().padLeft(2, '0')}:${(clockS % 60).toString().padLeft(2, '0')}';
@@ -58,22 +73,22 @@ class ScoreboardState {
       other.awayGoals == awayGoals &&
       other.clockS == clockS &&
       other.live == live &&
-      other.cameraMode == cameraMode;
+      other.cameraMode == cameraMode &&
+      other.stripVisible == stripVisible &&
+      listEquals(other.stripClaim, stripClaim) &&
+      listEquals(other.stripSlots, stripSlots) &&
+      other.iconRev == iconRev;
 
   @override
-  int get hashCode =>
-      Object.hash(competition, home, away, homeGoals, awayGoals, clockS, live, cameraMode);
+  int get hashCode => Object.hash(competition, home, away, homeGoals, awayGoals, clockS, live, cameraMode,
+      stripVisible, Object.hashAll(stripClaim), Object.hashAll(stripSlots), iconRev);
 }
 
 // Textos fijos y colores de la maqueta que REF-32 no exporta porque solo los usa el
-// dibujo (overlay_preview.py: SLOT_TEXTS, AI_TEXT y CLAIM_LINES).
+// dibujo (overlay_preview.py: AI_TEXT y SLOT_ICON_COLOURS). El claim y los mensajes de la
+// franja ya no son fijos: los edita el operador (ADR 0027) y llegan en el estado.
 const String _aiText = 'Transmisión automática con IA';
-const List<String> _claimLines = <String>['EL DEPORTE', 'TAMBIÉN CONSERVA'];
-const List<(String, String, Color)> _slotTexts = <(String, String, Color)>[
-  ('GALÁPAGOS', 'SIEMPRE CONTIGO', Color(0xFFDDE7E4)),
-  ('NUESTRAS ISLAS', 'NUESTRO FUTURO', Color(0xFF7FC4DC)),
-  ('ENERGÍA LIMPIA', 'PARA UN MEJOR MAÑANA', Color(0xFFF5C542)),
-];
+const List<Color> _slotIconColours = <Color>[Color(0xFFDDE7E4), Color(0xFF7FC4DC), Color(0xFFF5C542)];
 const List<String> _slotIcons = <String>['mountain', 'waves', 'sun'];
 const List<Color> _waveShades = <Color>[Color(0xFF7FC4DC), Color(0xFF4E93B4), Color(0xFF31708F)];
 
@@ -189,7 +204,10 @@ class ScoreboardLayout {
             sb('live_pad_r') +
             textWidth(OverlaySpec.scoreboardTexts['live']!, 'live')
         : 0;
-    final double compW = textWidth(competition, 'comp') + 2 * sb('chip_pad_x');
+    final bool conIcono = state.iconRev != null;
+    final double compW = textWidth(competition, 'comp') +
+        2 * sb('chip_pad_x') +
+        (conIcono ? sb('status_icon') + sb('status_icon_gap') : 0);
     final double clockW = tabularWidth(state.clockText, 'clock') + 2 * sb('chip_pad_x');
     final double estadoW = 2 * sb('status_pad_x') + liveW + compW + sb('status_gap') + clockW;
     final double ancho = math.max(barW, estadoW);
@@ -206,6 +224,10 @@ class ScoreboardLayout {
     final double ex = x0 + sb('status_pad_x');
     if (state.live) boxes['live'] = Rect.fromLTRB(ex, yEstado, ex + liveW, yEstado + eh);
     boxes['competition'] = Rect.fromLTRB(ex + liveW, yEstado, ex + liveW + compW, yEstado + eh);
+    if (conIcono) {
+      final double ix = ex + liveW + sb('chip_pad_x'), lado = sb('status_icon');
+      boxes['championship'] = Rect.fromLTWH(ix, yEstado + (eh - lado) / 2, lado, lado);
+    }
     final double relojX = x0 + ancho - sb('status_pad_x') - clockW;
     boxes['clock'] = Rect.fromLTRB(relojX, yEstado, relojX + clockW, yEstado + eh);
 
@@ -255,6 +277,9 @@ class ScoreboardLayout {
     _v['cam_label_w'] = camLabelW;
 
     // ---------------- barra de patrocinio ----------------
+    if (!state.stripVisible) {
+      return;
+    }
     final double sh = px(OverlaySpec.stripHeight.toDouble()).toDouble();
     final double sy0 = height - sh, scy = sy0 + sh / 2;
     boxes['strip'] = Rect.fromLTRB(0, sy0, width.toDouble(), height.toDouble());
@@ -266,7 +291,7 @@ class ScoreboardLayout {
     boxes['logo'] = Rect.fromLTWH(lx, ly, logoW.toDouble(), logoH.toDouble());
     final double claimX = lx + logoW + st('logo_gap');
     final double claimW =
-        math.max(textWidth(_claimLines[0], 'claim'), textWidth(_claimLines[1], 'claim'));
+        math.max(textWidth(state.stripClaim[0], 'claim'), textWidth(state.stripClaim[1], 'claim'));
     boxes['claim'] = Rect.fromLTRB(lx, sy0, claimX + claimW, height.toDouble());
 
     // El hueco vendible es fijo: lo que dejan las dos zonas reservadas.
@@ -283,8 +308,8 @@ class ScoreboardLayout {
 
     double cursor = sellX0 + st('slot_gap');
     if (sponsorSlots) {
-      for (int i = 0; i < _slotTexts.length; i++) {
-        final (String title, String sub, Color _) = _slotTexts[i];
+      for (int i = 0; i < state.stripSlots.length; i++) {
+        final (String title, String sub) = state.stripSlots[i];
         final double textX = cursor + st('slot_icon_r') * 2 + px(13);
         final double a = math.max(textWidth(title, 'slot'), textWidth(sub, 'sub'));
         boxes['slot_$i'] = Rect.fromLTRB(cursor, sy0, textX + a, height.toDouble());
@@ -303,9 +328,13 @@ class ScoreboardLayout {
 
 /// Pinta la capa RGBA del gráfico entera, con fondo transparente.
 class ScoreboardPainter extends CustomPainter {
-  ScoreboardPainter(this.state, {required this.isotipo, this.sponsorSlots = true});
+  ScoreboardPainter(this.state, {required this.isotipo, this.championship, this.sponsorSlots = true});
 
   final ScoreboardState state;
+
+  /// El icono del campeonato, ya decodificado; va en el chip de la competición si el
+  /// estado dice que hay (`iconRev`).
+  final ui.Image? championship;
 
   /// El isotipo de la franja, ya decodificado (`GalaBrand.isotipo()`).
   final ui.Image isotipo;
@@ -325,12 +354,17 @@ class ScoreboardPainter extends CustomPainter {
     _paintStatus(canvas, l);
     _paintBar(canvas, l);
     _paintCamera(canvas, l);
-    _paintStrip(canvas, l);
+    if (state.stripVisible) {
+      _paintStrip(canvas, l);
+    }
   }
 
   @override
   bool shouldRepaint(ScoreboardPainter old) =>
-      old.state != state || old.sponsorSlots != sponsorSlots || old.isotipo != isotipo;
+      old.state != state ||
+      old.sponsorSlots != sponsorSlots ||
+      old.isotipo != isotipo ||
+      old.championship != championship;
 
   static Paint _fill(Color c) => Paint()..color = c;
 
@@ -399,8 +433,22 @@ class ScoreboardPainter extends CustomPainter {
       _text(c, l, OverlaySpec.scoreboardTexts['live']!, 'live', _palette('white'),
           Offset(px0 + punto + l.sb('live_gap'), ecy));
     }
-    _text(c, l, l.competition, 'comp', GalaBrand.token('gris-claro'),
-        Offset(comp.left + pad, ecy));
+    double compX = comp.left + pad;
+    final Rect? caja = l.boxes['championship'];
+    final ui.Image? icono = championship;
+    if (caja != null && icono != null) {
+      final double escala = math.min(caja.width / icono.width, caja.height / icono.height);
+      c.drawImageRect(
+        icono,
+        Rect.fromLTWH(0, 0, icono.width.toDouble(), icono.height.toDouble()),
+        Rect.fromCenter(center: caja.center, width: icono.width * escala, height: icono.height * escala),
+        Paint()..filterQuality = FilterQuality.high,
+      );
+    }
+    if (caja != null) {
+      compX = caja.right + l.sb('status_icon_gap');
+    }
+    _text(c, l, l.competition, 'comp', GalaBrand.token('gris-claro'), Offset(compX, ecy));
 
     // El reloj con cifras tabulares: cada dígito centrado en su celda.
     final double celda = l.digitCell('clock');
@@ -500,8 +548,8 @@ class ScoreboardPainter extends CustomPainter {
     );
     final double claimX = l.v('claim_x');
     final double mitadLinea = l.st('claim_line_h') / 2;
-    _text(c, l, _claimLines[0], 'claim', _palette('white'), Offset(claimX, mid - mitadLinea));
-    _text(c, l, _claimLines[1], 'claim', _palette('white'), Offset(claimX, mid + mitadLinea));
+    _text(c, l, state.stripClaim[0], 'claim', _palette('white'), Offset(claimX, mid - mitadLinea));
+    _text(c, l, state.stripClaim[1], 'claim', _palette('white'), Offset(claimX, mid + mitadLinea));
     final double dx = l.v('divider_x'), pad = l.st('divider_pad');
     _line(c, Offset(dx, sy0 + pad), Offset(dx, height - pad),
         GalaBrand.token('gris-oceanico').withValues(alpha: _lineaAlfa), math.max(1, l.px(1)).toDouble());
@@ -509,7 +557,8 @@ class ScoreboardPainter extends CustomPainter {
     if (sponsorSlots) {
       for (int i = 0; i < l._slotXs.length; i++) {
         final (double iconX, double textX) = l._slotXs[i];
-        final (String title, String sub, Color colour) = _slotTexts[i];
+        final (String title, String sub) = state.stripSlots[i];
+        final Color colour = _slotIconColours[i];
         _paintSponsorIcon(
             c, _slotIcons[i], iconX, mid, l.st('slot_icon_r'), colour, math.max(1, l.px(2)).toDouble());
         _text(c, l, title, 'slot', _palette('white'), Offset(textX, mid - l.px(11)));
@@ -568,11 +617,11 @@ class ScoreboardPainter extends CustomPainter {
 
 /// Atajo para quien solo quiere la imagen: pinta `state` en un ui.Image.
 Future<ui.Image> paintScoreboard(ScoreboardState state, int width, int height,
-    {bool sponsorSlots = true}) async {
+    {bool sponsorSlots = true, ui.Image? championship}) async {
   final ui.Image isotipo = await GalaBrand.isotipo();
   final ui.PictureRecorder recorder = ui.PictureRecorder();
   final Canvas canvas = Canvas(recorder);
-  ScoreboardPainter(state, isotipo: isotipo, sponsorSlots: sponsorSlots)
+  ScoreboardPainter(state, isotipo: isotipo, championship: championship, sponsorSlots: sponsorSlots)
       .paint(canvas, Size(width.toDouble(), height.toDouble()));
   final ui.Picture picture = recorder.endRecording();
   return picture.toImage(width, height).whenComplete(picture.dispose);

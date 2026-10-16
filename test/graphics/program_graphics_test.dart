@@ -73,6 +73,20 @@ void main() {
       await g.refresh();
       expect(sink.calls.last, 'clear 1');
       expect(g.scoreboardState().home, 'MILAN', reason: 'el editor pone el nombre en el marcador');
+
+      // ADR 0027: el entretiempo va en la capa de tarjetas y la quita al salir.
+      m.apply('graphics/halftime', <String, Object?>{'on_air': true});
+      await g.refresh();
+      expect(sink.calls.last, 'set 1');
+      m.apply('graphics/halftime', <String, Object?>{'on_air': false});
+      await g.refresh();
+      expect(sink.calls.last, 'clear 1');
+      // La franja va oculta y sale con la orden, hasta que se le acaba el tiempo.
+      expect(g.scoreboardState().stripVisible, isFalse);
+      m.apply('graphics/strip', <String, Object?>{'show_s': 15});
+      expect(g.scoreboardState().stripVisible, isTrue);
+      reloj.ms += 16000;
+      expect(g.scoreboardState().stripVisible, isFalse);
       dir.deleteSync(recursive: true);
     });
   });

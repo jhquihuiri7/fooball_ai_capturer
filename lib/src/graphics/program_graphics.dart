@@ -6,6 +6,10 @@
 /// una generación nueva: con el reloj en marcha, un raster y una subida por segundo.
 library;
 
+import 'dart:io';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
 import 'package:football_ai_capture/src/graphics/lineup_card_painter.dart';
 import 'package:football_ai_capture/src/graphics/overlay_bridge.dart';
 import 'package:football_ai_capture/src/graphics/overlay_raster.dart';
@@ -37,6 +41,33 @@ class ProgramGraphics {
   bool _again = false;
   bool _slateSent = false;
 
+  /// El icono del campeonato decodificado y la versión de la que salió (ADR 0027).
+  ui.Image? _icon;
+  int _iconRev = 0;
+
+  /// Decodifica el icono si cambió desde el último; sin icono, null.
+  Future<ui.Image?> _championship() async {
+    final int rev = engine.graphics.iconRev;
+    if (rev == _iconRev) {
+      return _icon;
+    }
+    _iconRev = rev;
+    _icon?.dispose();
+    _icon = null;
+    if (!engine.graphics.hasIcon) {
+      return null;
+    }
+    try {
+      final Uint8List bytes = await File(engine.graphics.iconFile.path).readAsBytes();
+      final ui.Codec codec = await ui.instantiateImageCodec(bytes);
+      _icon = (await codec.getNextFrame()).image;
+      codec.dispose();
+    } on Exception {
+      _icon = null; // un fichero que no se decodifica: el marcador sigue, sin icono
+    }
+    return _icon;
+  }
+
   ScoreboardState scoreboardState() => ScoreboardState(
     competition: competition,
     home: engine.home,
@@ -46,6 +77,10 @@ class ProgramGraphics {
     clockS: engine.clock.elapsedMs ~/ Duration.millisecondsPerSecond,
     live: engine.streaming,
     cameraMode: programCameraModeAuto,
+    stripVisible: engine.stripVisible,
+    stripClaim: engine.graphics.strip.claim,
+    stripSlots: engine.graphics.strip.slots,
+    iconRev: engine.graphics.hasIcon ? engine.graphics.iconRev : null,
   );
 
   /// Pone el gráfico al día. Si se llama mientras pinta, repite una vez al acabar: nunca
@@ -65,13 +100,20 @@ class ProgramGraphics {
       }
       do {
         _again = false;
-        await bridge.publish(OverlayLayerId.scoreboard, await _scoreboard.render(scoreboardState()));
+        final ui.Image? icono = await _championship();
+        final ScoreboardState estado = scoreboardState();
+        await bridge.publish(OverlayLayerId.scoreboard, await _scoreboard.render(estado, championship: icono));
+        // La capa de tarjetas: el entretiempo o una alineación, nunca las dos (ADR 0027).
         final (MatchTeam, Team)? alAire = engine.lineups.onAir;
-        if (alAire == null) {
+        if (engine.halftimeOnAir) {
+          await bridge.publish(OverlayLayerId.lineup, await _cards.halftime(estado, icon: icono));
+        } else if (alAire == null) {
           await bridge.clear(OverlayLayerId.lineup);
         } else {
+          // El nombre es el del marcador: si el operador lo cambió desde el mando, también aquí.
+          final String nombre = alAire.$1 == MatchTeam.home ? engine.home : engine.away;
           final OverlayFrame tarjeta =
-              await _cards.lineup(cardTeam(alAire.$2), home: alAire.$1 == MatchTeam.home);
+              await _cards.lineup(cardTeam(alAire.$2, name: nombre), home: alAire.$1 == MatchTeam.home);
           await bridge.publish(OverlayLayerId.lineup, tarjeta);
         }
       } while (_again);
@@ -81,9 +123,9 @@ class ProgramGraphics {
   }
 }
 
-/// La alineación del partido, como la pinta la tarjeta.
-LineupCardTeam cardTeam(Team t) => LineupCardTeam(
-  name: t.name,
+/// La alineación del partido, como la pinta la tarjeta; `name` sustituye al de la plantilla.
+LineupCardTeam cardTeam(Team t, {String? name}) => LineupCardTeam(
+  name: name ?? t.name,
   lines: t.lines,
   starters: <LineupEntry>[for (final RosterPlayer p in t.starters) LineupEntry(p.number, p.name)],
   substitutes: <LineupEntry>[for (final RosterPlayer p in t.substitutes) LineupEntry(p.number, p.name)],

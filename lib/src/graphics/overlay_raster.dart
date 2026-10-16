@@ -10,6 +10,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import '../generated/overlay_spec.g.dart';
+import 'halftime_card_painter.dart';
 import 'lineup_card_painter.dart';
 import 'scoreboard_painter.dart';
 import 'slate_painter.dart';
@@ -53,13 +54,16 @@ class OverlayRaster {
 
   /// La capa para `state`. Si nada cambió desde la última, devuelve la misma sin
   /// volver a pintar.
-  Future<OverlayFrame> render(ScoreboardState state, {bool sponsorSlots = true}) async {
+  /// `championship` es el icono del campeonato ya decodificado; el estado lleva su
+  /// versión (`iconRev`), que es lo que decide si hay que volver a pintar.
+  Future<OverlayFrame> render(ScoreboardState state, {bool sponsorSlots = true, ui.Image? championship}) async {
     final OverlayFrame? previa = _last;
     if (previa != null && state == _lastState && sponsorSlots == _lastSlots) {
       return previa;
     }
-    final Uint8List rgba =
-        await _rgbaOf(await paintScoreboard(state, width, height, sponsorSlots: sponsorSlots));
+    final Uint8List rgba = await _rgbaOf(
+      await paintScoreboard(state, width, height, sponsorSlots: sponsorSlots, championship: championship),
+    );
     _generation += 1;
     _lastState = state;
     _lastSlots = sponsorSlots;
@@ -94,6 +98,7 @@ class CardRaster {
   final int height;
 
   final Map<bool, (LineupCardTeam, OverlayFrame)> _lineups = <bool, (LineupCardTeam, OverlayFrame)>{};
+  (ScoreboardState, OverlayFrame)? _halftime;
   OverlayFrame? _slate;
   int _generation = 0;
 
@@ -111,6 +116,32 @@ class CardRaster {
     final OverlayFrame frame =
         OverlayFrame(rgba: rgba, width: width, height: height, generation: _generation);
     _lineups[home] = (team, frame);
+    return frame;
+  }
+
+  /// La tarjeta de entretiempo (ADR 0027): solo se pinta de nuevo si cambia lo que enseña
+  /// (los nombres, los goles, la competición o el icono). El reloj no sale en ella.
+  Future<OverlayFrame> halftime(ScoreboardState state, {ui.Image? icon}) async {
+    final ScoreboardState clave = ScoreboardState(
+      competition: state.competition,
+      home: state.home,
+      away: state.away,
+      homeGoals: state.homeGoals,
+      awayGoals: state.awayGoals,
+      clockS: 0,
+      live: false,
+      cameraMode: '',
+      iconRev: state.iconRev,
+    );
+    final (ScoreboardState, OverlayFrame)? previa = _halftime;
+    if (previa != null && previa.$1 == clave) {
+      return previa.$2;
+    }
+    final Uint8List rgba = await _rgbaOf(await paintHalftimeCard(clave, width, height, icon: icon));
+    _generation += 1;
+    final OverlayFrame frame =
+        OverlayFrame(rgba: rgba, width: width, height: height, generation: _generation);
+    _halftime = (clave, frame);
     return frame;
   }
 
