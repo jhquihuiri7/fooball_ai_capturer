@@ -242,13 +242,13 @@
       <div class="goles-grid">
         <div class="lado">
           <div class="nombre" id="nombre-local">Local</div>
-          <button class="btn primario grande" data-gol="home,1" aria-label="Gol del local">+ Gol</button>
-          <button class="btn quitar" data-gol="home,-1" aria-label="Quitar un gol al local">− 1</button>
+          <button type="button" class="btn primario grande" data-gol="home,1" aria-label="Gol del local">+ Gol</button>
+          <button type="button" class="btn quitar" data-gol="home,-1" aria-label="Quitar un gol al local">− 1</button>
         </div>
         <div class="lado">
           <div class="nombre" id="nombre-visitante">Visitante</div>
-          <button class="btn blanco grande" data-gol="away,1" aria-label="Gol del visitante">+ Gol</button>
-          <button class="btn quitar" data-gol="away,-1" aria-label="Quitar un gol al visitante">− 1</button>
+          <button type="button" class="btn blanco grande" data-gol="away,1" aria-label="Gol del visitante">+ Gol</button>
+          <button type="button" class="btn quitar" data-gol="away,-1" aria-label="Quitar un gol al visitante">− 1</button>
         </div>
       </div>
     </section>
@@ -256,13 +256,13 @@
     <section class="card" aria-labelledby="t-reloj">
       <h2 id="t-reloj">Reloj</h2>
       <div class="reloj-grid">
-        <button class="btn acento grande toggle" id="toggle" data-reloj="start">
+        <button type="button" class="btn acento grande toggle" id="toggle" data-reloj="start">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path id="icono-toggle" fill="currentColor" d="M8 5.2v13.6a.8.8 0 0 0 1.23.67l10.4-6.8a.8.8 0 0 0 0-1.34L9.23 4.53A.8.8 0 0 0 8 5.2z"/></svg>
           <span id="texto-toggle">Iniciar</span>
         </button>
-        <button class="btn" data-nudge="-60" aria-label="Restar un minuto">−1 min</button>
-        <button class="btn" data-nudge="60" aria-label="Sumar un minuto">+1 min</button>
-        <button class="btn" data-reloj="reset" data-confirma="¿Poner el reloj a 00:00?">↺ Cero</button>
+        <button type="button" class="btn" data-nudge="-60" aria-label="Restar un minuto">−1 min</button>
+        <button type="button" class="btn" data-nudge="60" aria-label="Sumar un minuto">+1 min</button>
+        <button type="button" class="btn" data-reloj="reset" data-confirma="¿Poner el reloj a 00:00?">↺ Cero</button>
       </div>
     </section>
 
@@ -308,9 +308,9 @@
     <section class="card" aria-labelledby="t-alin">
       <h2 id="t-alin">Al aire</h2>
       <div class="alin-grid">
-        <button class="btn alin" data-alin="home" aria-pressed="false"><span id="alin-local">Local</span><small id="alin-local-estado">mostrar</small></button>
-        <button class="btn alin" data-alin="away" aria-pressed="false"><span id="alin-visitante">Visitante</span><small id="alin-visitante-estado">mostrar</small></button>
-        <button class="btn alin" style="grid-column: 1 / -1" id="entretiempo" data-propio aria-pressed="false"><span>Entretiempo</span><small id="entretiempo-estado">mostrar el marcador</small></button>
+        <button type="button" class="btn alin" data-alin="home" aria-pressed="false"><span id="alin-local">Local</span><small id="alin-local-estado">mostrar</small></button>
+        <button type="button" class="btn alin" data-alin="away" aria-pressed="false"><span id="alin-visitante">Visitante</span><small id="alin-visitante-estado">mostrar</small></button>
+        <button type="button" class="btn alin" style="grid-column: 1 / -1" id="entretiempo" data-propio aria-pressed="false"><span>Entretiempo</span><small id="entretiempo-estado">mostrar el marcador</small></button>
       </div>
     </section>
 
@@ -360,7 +360,7 @@
 
     <section class="card" aria-labelledby="t-jugada">
       <h2 id="t-jugada">Repetición</h2>
-      <button class="btn acento grande" style="width:100%" data-orden="clips/mark">
+      <button type="button" class="btn acento grande" style="width:100%" data-orden="clips/mark">
         <svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/></g><circle cx="12" cy="12" r="1.8" fill="currentColor"/></svg>
         <span>Marcar jugada</span>
       </button>
@@ -658,7 +658,10 @@ async function orden(ruta, cuerpo, boton) {
 }
 
 document.addEventListener('click', e => {
-  const b = e.target.closest('button'); if (!b || !partido || b.disabled || b.type === 'submit' || 'propio' in b.dataset) return;
+  // Los botones de un formulario los lleva su `submit`; los que tienen manejador propio,
+  // el suyo. Ojo: el `type` de un <button> sin atributo vale «submit» aunque no esté en un
+  // formulario, así que no sirve para distinguirlos (así se rompieron los goles y el reloj).
+  const b = e.target.closest('button'); if (!b || !partido || b.disabled || b.form || 'propio' in b.dataset) return;
   if (b.dataset.confirma && !confirm(b.dataset.confirma)) return;
   if (navigator.vibrate) navigator.vibrate(12);
   if (b.dataset.gol) { const [team, d] = b.dataset.gol.split(','); orden('match/goal', { team, delta: +d, expect: partido[team].goals }, b); }

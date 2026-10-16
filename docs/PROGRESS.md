@@ -12,6 +12,15 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-16 · Arreglo: los goles y el reloj del mando web no respondían · ✅ en el código; falta comprobarlo en el iPhone
+
+Jhonatan lo vio en el mando que abre la URL: ni «+ Gol» ni «− 1», ni iniciar, pausar o poner
+a cero el reloj hacían nada. Lo rompió IOS-102: para que los formularios nuevos (equipos,
+franja) los atendiera su `submit`, el reparto de clics descartaba los botones con
+`type === 'submit'`, y el `type` de un `<button>` sin atributo vale «submit» aunque no esté
+en un formulario. Ahora el reparto mira si el botón es de un formulario (`b.form`) y todos
+los botones declaran su `type`. Un test de `api_server_test.dart` lo vigila.
+
 ## 2026-10-16 · IOS-104 — Los escudos de los equipos desde el mando · 🚧 probado en Windows; falta verlo emitido en el iPhone
 
 ADR 0028 de football-ai, pedido por Jhonatan: subir desde el mando el escudo de cada equipo,

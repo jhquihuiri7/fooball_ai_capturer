@@ -539,6 +539,21 @@ void main() {
       expect(html, contains("get('mando')"));
       expect(html, contains('/api/v1/rig/thumb/'));
     });
+
+    test('cada botón declara su type y el reparto de clics no depende de él', () {
+      // 2026-10-16: los goles y el reloj dejaron de responder. El reparto descartaba los
+      // botones con type «submit» (los de los formularios), y un <button> sin atributo vale
+      // «submit» aunque no esté en ningún formulario.
+      final String html = File('assets/panel/index.html').readAsStringSync();
+      for (final RegExpMatch m in RegExp(r'<button[^>]*>').allMatches(html)) {
+        expect(m.group(0), contains(' type='), reason: m.group(0));
+      }
+      expect(html, isNot(contains("b.type === 'submit'")));
+      expect(html, contains('b.form'));
+      for (final String accion in <String>['data-gol="home,1"', 'data-gol="away,-1"', 'data-reloj="start"', 'data-nudge="60"']) {
+        expect(html, contains(accion));
+      }
+    });
   });
 
   group('del mando: equipos, entretiempo, franja e icono (ADR 0027)', () {
