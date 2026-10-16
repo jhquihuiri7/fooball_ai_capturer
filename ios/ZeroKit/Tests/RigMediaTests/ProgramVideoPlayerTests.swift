@@ -161,7 +161,9 @@ final class ProgramVideoPlayerTests: XCTestCase {
         let antes = Array(UnsafeBufferPointer(start: cabalgando.floatChannelData![0], count: 480))
         XCTAssertEqual(AudioSignals.energia(antes), 0)
 
-        espera(p, audioMs: 800)
+        // El lector solo deja `audioAheadMs` (500 ms) por delante de lo servido: el trozo
+        // de 200 a 300 ms es lo que hay que esperar, no más.
+        espera(p, audioMs: 300)
         let trozo = try XCTUnwrap(p.samples(count: 4800, atRigMs: cero + 200, format: canonico))
         XCTAssertEqual(Int(trozo.frameLength), 4800)
         for c in 0..<2 {
@@ -194,8 +196,9 @@ final class ProgramVideoPlayerTests: XCTestCase {
         let p = try await abre(url, id: 3)
         hub.play(p)
         XCTAssertEqual(hub.playingId, 3)
-        espera(p, videoMs: 500)
-        XCTAssertNotNil(hub.frame(atRigMs: cero + 500))
+        // Sin nadie que consuma, el lector se para en `frameSlots` (12, ~366 ms).
+        espera(p, videoMs: 300)
+        XCTAssertNotNil(hub.frame(atRigMs: cero + 300))
         XCTAssertNil(hub.frame(atRigMs: cero + p.durationMs + 1))
         XCTAssertNil(hub.frame(atRigMs: cero + p.durationMs + 40))
         XCTAssertEqual(avisos, [3])

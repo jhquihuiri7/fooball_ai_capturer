@@ -42,7 +42,8 @@ final class FullLensViewTests: XCTestCase {
         let vista = try FullLensView.view(rig: rig, side: .left, width: 1920, height: 1080)
         XCTAssertEqual(vista.yawRad, rig.camera(.left).pose.yawRad)
         XCTAssertEqual(vista.pitchRad, rig.camera(.left).pose.pitchRad)
-        XCTAssertEqual((vista.width, vista.height), (1920, 1080))
+        XCTAssertEqual(vista.width, 1920)
+        XCTAssertEqual(vista.height, 1080)
     }
 
     func testNingunaEsquinaSeSaleDeLaLenteAunqueElMovilVayaGirado() throws {
