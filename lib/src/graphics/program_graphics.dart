@@ -11,6 +11,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:football_ai_capture/src/generated/overlay_spec.g.dart';
+import 'package:football_ai_capture/src/graphics/fixtures_card_painter.dart';
 import 'package:football_ai_capture/src/graphics/halftime_card_painter.dart';
 import 'package:football_ai_capture/src/graphics/lineup_card_painter.dart';
 import 'package:football_ai_capture/src/graphics/overlay_bridge.dart';
@@ -218,6 +219,29 @@ extension on ProgramGraphics {
           icon: icono,
           crests: await _crestsOf(n.home, n.away),
           next: NextMatchCard(home: n.home, away: n.away, when: n.when, venue: n.venue),
+        );
+      case MatchEngine.cardInterview:
+        final Interview e = engine.graphics.interview;
+        return _cards.halftime(estado, icon: icono, interview: InterviewCard(name: e.name, role: e.role));
+      case MatchEngine.cardFixtures:
+        final List<Fixture> jornada = engine.graphics.fixtures;
+        final Map<String, ui.Image> escudos = <String, ui.Image>{};
+        final List<int?> versiones = <int?>[];
+        for (final Fixture f in jornada) {
+          for (final String equipo in <String>[f.home, f.away]) {
+            versiones.add(engine.graphics.crestFor(equipo)?.rev);
+            if (await _crest(equipo) case final ui.Image i) {
+              escudos[fixtureCrestKey(equipo)] = i;
+            }
+          }
+        }
+        return _cards.fixtures(
+          estado.competition,
+          <FixtureCard>[
+            for (final Fixture f in jornada) FixtureCard(home: f.home, away: f.away, time: f.time, subtitle: f.subtitle),
+          ],
+          crests: escudos,
+          crestRevs: versiones,
         );
       default:
         return null;

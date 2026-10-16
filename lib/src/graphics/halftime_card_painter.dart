@@ -40,13 +40,34 @@ class NextMatchCard {
   int get hashCode => Object.hash(home, away, when, venue);
 }
 
+/// Quién habla en la sección de entrevistas y su cargo (ADR 0030).
+@immutable
+class InterviewCard {
+  const InterviewCard({this.name = '', this.role = ''});
+
+  final String name;
+  final String role;
+
+  @override
+  bool operator ==(Object other) => other is InterviewCard && other.name == name && other.role == role;
+
+  @override
+  int get hashCode => Object.hash(name, role);
+}
+
 /// La geometría de la tarjeta sobre un lienzo de `width` de ancho: las mismas claves que
 /// `halftime` de boxes.json. Con `title`, la de final (`fulltime`); con `next`, la de
 /// próximo partido (`next_match`), que lleva sus equipos y el cuándo y el dónde en lugar
 /// del marcador (ADR 0029).
 class HalftimeLayout {
-  HalftimeLayout(this.width, this.state, {String? title, this.next})
-    : title = title ?? (next != null ? OverlaySpec.nextMatchTitle : OverlaySpec.halftimeTitle),
+  HalftimeLayout(this.width, this.state, {String? title, this.next, this.interview})
+    : title =
+          title ??
+          (next != null
+              ? OverlaySpec.nextMatchTitle
+              : interview != null
+              ? OverlaySpec.interviewTitle
+              : OverlaySpec.halftimeTitle),
       s = width / OverlaySpec.refWidth {
     _measure();
   }
@@ -55,6 +76,9 @@ class HalftimeLayout {
   final ScoreboardState state;
   final String title;
   final NextMatchCard? next;
+
+  /// Con ella, la de entrevistas: sin equipos, con quién habla y su cargo (ADR 0030).
+  final InterviewCard? interview;
   final double s;
   final Map<String, Rect> boxes = <String, Rect>{};
   final Map<String, double> v = <String, double>{};
@@ -69,6 +93,8 @@ class HalftimeLayout {
     'score' => GalaBrand.text('display', 800, h('score_size'), color: color),
     'when' => GalaBrand.text('display', 800, h('when_size'), color: color),
     'venue' => GalaBrand.text('display', 600, h('venue_size'), color: color),
+    'guest' => GalaBrand.text('display', 800, h('guest_size'), color: color),
+    'role' => GalaBrand.text('display', 600, h('role_size'), color: color),
     _ => GalaBrand.text('display', 800, h('crest_initials_size'), color: color),
   };
 
@@ -113,6 +139,22 @@ class HalftimeLayout {
     boxes['competition'] = Rect.fromLTRB(cx - compW / 2, h('comp_y') - mitad, cx + compW / 2, h('comp_y') + mitad);
     final double lado = h('icon_box');
     boxes['icon'] = Rect.fromLTRB(cx - lado / 2, h('icon_cy') - lado / 2, cx + lado / 2, h('icon_cy') + lado / 2);
+    final InterviewCard? e = interview;
+    if (e != null) {
+      // Entrevistas: sin equipos ni marcador; quién habla y su cargo, si los hay.
+      for (final (String clave, String texto, String y, String cuerpo) in <(String, String, String, String)>[
+        ('guest', e.name, 'guest_y', 'guest_size'),
+        ('role', e.role, 'role_y', 'role_size'),
+      ]) {
+        if (texto.trim().isEmpty) {
+          continue;
+        }
+        final double ancho = textWidth(fit(texto.toUpperCase(), clave, h('guest_max_w')), clave);
+        mitad = h(cuerpo) / 2;
+        boxes[clave] = Rect.fromLTRB(cx - ancho / 2, h(y) - mitad, cx + ancho / 2, h(y) + mitad);
+      }
+      return;
+    }
 
     final double crestW = h('crest_w');
     final double crestH = crestW * OverlaySpec.crest['box_h']! / OverlaySpec.crest['box_w']!;
@@ -172,7 +214,11 @@ class HalftimeCardPainter extends CustomPainter {
     this.crests = const <String, ui.Image>{},
     this.title,
     this.next,
+    this.interview,
   });
+
+  /// Quién habla: con ella, la tarjeta es la de entrevistas (ADR 0030).
+  final InterviewCard? interview;
 
   /// El título: el del entretiempo si no se dice otro (la de final lleva el suyo).
   final String? title;
@@ -191,7 +237,12 @@ class HalftimeCardPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(HalftimeCardPainter old) =>
-      old.state != state || old.icon != icon || old.crests != crests || old.title != title || old.next != next;
+      old.state != state ||
+      old.icon != icon ||
+      old.crests != crests ||
+      old.title != title ||
+      old.next != next ||
+      old.interview != interview;
 
   void _text(Canvas c, HalftimeLayout l, String text, String fuente, Color color, Offset at, {bool centred = true}) {
     final TextPainter tp = TextPainter(
@@ -216,7 +267,8 @@ class HalftimeCardPainter extends CustomPainter {
 
   @override
   void paint(Canvas c, Size size) {
-    final HalftimeLayout l = HalftimeLayout(size.width.round(), state, title: title, next: next);
+    final HalftimeLayout l =
+        HalftimeLayout(size.width.round(), state, title: title, next: next, interview: interview);
     c.drawRect(
       Offset.zero & size,
       Paint()..color = GalaBrand.token('azul-profundo').withAlpha(OverlaySpec.halftime['veil_alpha']!),
@@ -247,6 +299,21 @@ class HalftimeCardPainter extends CustomPainter {
       final double ih = l.h('isotipo_h');
       final double iw = (isotipo.width * ih / isotipo.height).roundToDouble();
       _image(c, isotipo, Rect.fromCenter(center: l.boxes['icon']!.center, width: iw, height: ih));
+    }
+
+    // ---------------- la de entrevistas: quién habla, sin equipos ----------------
+    if (interview != null) {
+      for (final (String clave, Color color) in <(String, Color)>[
+        ('guest', blanco),
+        ('role', GalaBrand.token('teal-electrico')),
+      ]) {
+        final Rect? caja = l.boxes[clave];
+        if (caja != null) {
+          final String texto = clave == 'guest' ? interview!.name : interview!.role;
+          _text(c, l, l.fit(texto.toUpperCase(), clave, l.h('guest_max_w')), clave, color, caja.center);
+        }
+      }
+      return;
     }
 
     // ---------------- los equipos ----------------
@@ -299,10 +366,19 @@ Future<ui.Image> paintHalftimeCard(
   Map<String, ui.Image> crests = const <String, ui.Image>{},
   String? title,
   NextMatchCard? next,
+  InterviewCard? interview,
 }) async {
   final ui.Image isotipo = await GalaBrand.isotipo();
   final ui.PictureRecorder recorder = ui.PictureRecorder();
-  HalftimeCardPainter(state, isotipo: isotipo, icon: icon, crests: crests, title: title, next: next)
+  HalftimeCardPainter(
+    state,
+    isotipo: isotipo,
+    icon: icon,
+    crests: crests,
+    title: title,
+    next: next,
+    interview: interview,
+  )
       .paint(Canvas(recorder), Size(width.toDouble(), height.toDouble()));
   final ui.Picture picture = recorder.endRecording();
   return picture.toImage(width, height).whenComplete(picture.dispose);

@@ -12,6 +12,37 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-16 · IOS-107 — La jornada y las entrevistas desde el mando · 🚧 probado en Windows; falta verlo emitido en el iPhone
+
+ADR 0030 de football-ai, pedido por Jhonatan: todos los partidos de la jornada (con sus
+escudos, la hora y un subtítulo opcional como FINAL o TERCER Y CUARTO LUGAR) y una tarjeta para
+la sección de entrevistas, las dos con el velo y la cancha desenfocada.
+
+**Hecho**
+- `GraphicsStore`: la jornada (`Fixture`, de 1 a 8 partidos) y la entrevista (`Interview`,
+  quién habla y su cargo), del campeonato. Órdenes `match/fixtures` (sustituye la jornada
+  entera), `graphics/fixtures` (409 sin partidos), `match/interview` y `graphics/interview`;
+  las dos tarjetas se suman a las de pantalla completa, una a la vez.
+- Los escudos por nombre: `assets/crests/<nombre>` (`PUT`, `GET`, `DELETE`), para los equipos
+  de la jornada que no juegan ahora.
+- El estado: `fixtures_on_air`, `fixtures` (con los escudos de cada equipo),
+  `interview_on_air` e `interview`, como el dorado del túnel de football-ai 3e473fa.
+- Los painters: `fixtures_card_painter.dart`, portado de `tools/fixtures_card.py`; la de
+  entrevistas es la del entretiempo con `interview` (sin equipos, con quién habla y su
+  cargo). `CardRaster.fixtures` y `ProgramGraphics` las sacan con el velo y la cancha
+  desenfocada.
+- El mando web: «Jornada» y «Entrevistas» en «Al aire»; la tarjeta «Jornada» con un partido
+  por fila (local, visitante, hora y subtítulo; agregar, quitar, guardar) y los escudos de
+  sus equipos debajo; la tarjeta «Entrevistas» con quién habla y su cargo.
+
+**Comprobado**: `flutter analyze` limpio; la API (la jornada, sus límites, los escudos por
+nombre, las entrevistas, una tarjeta a la vez), la jornada frente a `fixtures.png` (0,80 % de
+píxeles distintos), las entrevistas frente a `interview.png` (0,56 %) y `ProgramGraphics`.
+Fallan en Windows los 8 dorados de imagen del Mac y, a ratos, «se pinta en ≤50 ms».
+
+**Pendiente**: en el iPhone, cargar una jornada con sus escudos desde el Samsung y sacarla, y
+la de entrevistas.
+
 ## 2026-10-16 · IOS-105 e IOS-106 — Final del partido, próximo partido y varias franjas desde el mando · 🚧 probado en Windows; falta verlo emitido en el iPhone
 
 ADR 0029 de football-ai, pedido por Jhonatan: como el entretiempo, una tarjeta de final del

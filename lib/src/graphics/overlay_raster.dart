@@ -10,6 +10,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import '../generated/overlay_spec.g.dart';
+import 'fixtures_card_painter.dart';
 import 'halftime_card_painter.dart';
 import 'lineup_card_painter.dart';
 import 'scoreboard_painter.dart';
@@ -111,7 +112,8 @@ class CardRaster {
   final int height;
 
   final Map<bool, (LineupCardTeam, int?, OverlayFrame)> _lineups = <bool, (LineupCardTeam, int?, OverlayFrame)>{};
-  ((String?, NextMatchCard?, ScoreboardState), OverlayFrame)? _fullScreen;
+  /// La última tarjeta de pantalla completa pintada y lo que la decide: solo hay una al aire.
+  (Object, OverlayFrame)? _fullScreen;
   OverlayFrame? _slate;
   int _generation = 0;
 
@@ -145,6 +147,7 @@ class CardRaster {
     Map<String, ui.Image> crests = const <String, ui.Image>{},
     String? title,
     NextMatchCard? next,
+    InterviewCard? interview,
   }) async {
     final ScoreboardState clave = ScoreboardState(
       competition: state.competition,
@@ -159,14 +162,44 @@ class CardRaster {
       homeCrestRev: state.homeCrestRev,
       awayCrestRev: state.awayCrestRev,
     );
-    final (String?, NextMatchCard?, ScoreboardState) llave = (title, next, clave);
-    final ((String?, NextMatchCard?, ScoreboardState), OverlayFrame)? previa = _fullScreen;
+    final Object llave = (title, next, interview, clave);
+    final (Object, OverlayFrame)? previa = _fullScreen;
     if (previa != null && previa.$1 == llave) {
       return previa.$2;
     }
     final Uint8List rgba = await _rgbaOf(
-      await paintHalftimeCard(clave, width, height, icon: icon, crests: crests, title: title, next: next),
+      await paintHalftimeCard(
+        clave,
+        width,
+        height,
+        icon: icon,
+        crests: crests,
+        title: title,
+        next: next,
+        interview: interview,
+      ),
     );
+    _generation += 1;
+    final OverlayFrame frame =
+        OverlayFrame(rgba: rgba, width: width, height: height, generation: _generation);
+    _fullScreen = (llave, frame);
+    return frame;
+  }
+
+  /// La jornada (ADR 0030): se pinta de nuevo si cambian los partidos, la competición o la
+  /// versión de algún escudo (`crestRevs`, en el orden de los equipos).
+  Future<OverlayFrame> fixtures(
+    String competition,
+    List<FixtureCard> partidos, {
+    Map<String, ui.Image> crests = const <String, ui.Image>{},
+    List<int?> crestRevs = const <int?>[],
+  }) async {
+    final Object llave = (competition, Object.hashAll(partidos), partidos.length, Object.hashAll(crestRevs));
+    final (Object, OverlayFrame)? previa = _fullScreen;
+    if (previa != null && previa.$1 == llave) {
+      return previa.$2;
+    }
+    final Uint8List rgba = await _rgbaOf(await paintFixturesCard(competition, partidos, width, height, crests: crests));
     _generation += 1;
     final OverlayFrame frame =
         OverlayFrame(rgba: rgba, width: width, height: height, generation: _generation);

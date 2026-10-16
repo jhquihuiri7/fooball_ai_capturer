@@ -104,6 +104,21 @@ void main() {
       await g.refresh();
       expect(sink.calls.sublist(desde), <String>['blur off', 'set 0', 'clear 1']);
 
+      // ADR 0030: la jornada y las entrevistas, en la misma capa.
+      m.apply('match/fixtures', <String, Object?>{
+        'matches': <Map<String, Object?>>[<String, Object?>{'home': 'A', 'away': 'B', 'time': '10:00'}],
+      });
+      m.apply('graphics/fixtures', <String, Object?>{'on_air': true});
+      desde = sink.calls.length;
+      await g.refresh();
+      expect(sink.calls.sublist(desde), <String>['set 1', 'blur on', 'clear 0']);
+      m.apply('graphics/interview', <String, Object?>{'on_air': true});
+      desde = sink.calls.length;
+      await g.refresh();
+      expect(sink.calls.sublist(desde), <String>['set 1']);
+      m.apply('graphics/interview', <String, Object?>{'on_air': false});
+      await g.refresh();
+
       // ADR 0028: el escudo del equipo vuelve a pintar el marcador, y va con su nombre.
       m.graphics.crestUploadFile.parent.createSync(recursive: true);
       File('assets/brand/gala-sports-isotipo.png').copySync(m.graphics.crestUploadFile.path);
