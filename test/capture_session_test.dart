@@ -1201,6 +1201,17 @@ void main() {
       expect(standalone.modeLabel, 'un solo móvil · SIN RELOJ');
     });
 
+    test('el foco: automático continuo con «Una cámara», congelado con el soporte', () async {
+      final FakeCaptureApi sola = FakeCaptureApi();
+      await CaptureSession(role: CameraRole.left, api: sola, linkMode: LinkMode.single).prepare();
+      expect(sola.lastSettings?.autoFocus, isTrue, reason: 'como la app Cámara del iPhone');
+
+      final FakeCaptureApi soporte = FakeCaptureApi();
+      await CaptureSession(role: CameraRole.left, api: soporte, linkMode: LinkMode.aware).prepare();
+      expect(soporte.lastSettings?.autoFocus, isFalse, reason: 'la calibración cuenta con una focal fija');
+      expect(defaultSettings(CameraRole.left).autoFocus, isFalse);
+    });
+
     test('IOS-99: EMITIR pide al nativo la resolución elegida, 1080p de partida', () async {
       for (final ProgramResolution elegida in ProgramResolution.values) {
         final FakeRigApi rig = FakeRigApi();

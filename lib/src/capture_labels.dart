@@ -417,11 +417,16 @@ class CaptureReadout {
         session.whiteBalanceLabel,
         tone: applied.whiteBalanceLocked ? ZeroTone.ok : ZeroTone.bad,
       ),
-      CaptureReading(
-        'Foco',
-        applied.focusLocked ? 'bloqueado' : 'AUTOMÁTICO',
-        tone: applied.focusLocked ? ZeroTone.ok : ZeroTone.bad,
-      ),
+      // Con «Una cámara» el foco automático es lo pedido, como en la app Cámara; con el
+      // soporte, uno sin bloquear mueve la focal que da por buena la calibración.
+      if (session.singleCamera)
+        const CaptureReading('Foco', 'automático, como la cámara del iPhone', tone: ZeroTone.ok)
+      else
+        CaptureReading(
+          'Foco',
+          applied.focusLocked ? 'bloqueado' : 'AUTOMÁTICO',
+          tone: applied.focusLocked ? ZeroTone.ok : ZeroTone.bad,
+        ),
       // Tener intrínsecas es lo normal, no una confirmación: va neutro, como en el
       // diseño. Solo su ausencia merece color.
       CaptureReading(

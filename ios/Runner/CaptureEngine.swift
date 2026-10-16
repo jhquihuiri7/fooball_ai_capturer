@@ -285,9 +285,11 @@ final class CaptureEngine: NSObject {
         // cualquiera.
         startRunning()
         await Self.waitForMetering(on: device)
-        // El foco, igual: la cámara enfoca sola en el centro mientras mide y se congela ahí.
-        try UltraWideCamera.lockFocus(on: device, applied: &applied)
-        NSLog("[foco] congelado en la posición %.3f de la lente (1 = lo más lejos)", Double(applied.lensPosition))
+        // El foco: con «Una cámara» sigue solo, como la app Cámara; con el soporte, la cámara
+        // enfoca en el centro mientras mide y se congela ahí.
+        try UltraWideCamera.lockFocus(on: device, settings: settings, applied: &applied)
+        NSLog("[foco] %@, lente en %.3f (1 = lo más lejos)",
+              settings.autoFocus ? "automático continuo" : "congelado", Double(applied.lensPosition))
         try UltraWideCamera.lockExposureAndWhiteBalance(on: device, settings: settings, applied: &applied)
         // Si el maestro ya dijo cómo ve, manda él: lo medido aquí solo valía de reserva.
         if let masterLook {

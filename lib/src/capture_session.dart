@@ -599,7 +599,8 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
         );
         return;
       }
-      status = await _api.configure(settings ?? defaultSettings(role));
+      // Con «Una cámara», el foco sigue a la escena como la app Cámara del iPhone.
+      status = await _api.configure(settings ?? defaultSettings(role, autoFocus: singleCamera));
       final String? wrong = _whatIsWrong(status!);
       if (wrong != null) {
         _set(SessionPhase.fallo, problem: wrong);
@@ -1053,7 +1054,8 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
 }
 
 /// Los ajustes del ADR 0012. No son preferencias: cambiarlos invalida la calibración.
-CaptureSettings defaultSettings(CameraRole role) {
+/// `autoFocus`: el foco continuo de «Una cámara» (sin calibración que proteger).
+CaptureSettings defaultSettings(CameraRole role, {bool autoFocus = false}) {
   return CaptureSettings(
     role: role,
     width: 3840,
@@ -1067,5 +1069,6 @@ CaptureSettings defaultSettings(CameraRole role) {
     shutterDenominator: 100,
     iso: 200,
     cropToPlayableBand: true,
+    autoFocus: autoFocus,
   );
 }

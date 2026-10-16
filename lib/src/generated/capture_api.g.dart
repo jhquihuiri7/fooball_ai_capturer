@@ -216,6 +216,7 @@ class CaptureSettings {
     required this.shutterDenominator,
     required this.iso,
     required this.cropToPlayableBand,
+    required this.autoFocus,
   });
 
   CameraRole role;
@@ -248,6 +249,11 @@ class CaptureSettings {
   /// tercio del bitrate tirando cielo y grada, que no se usan para nada.
   bool cropToPlayableBand;
 
+  /// Foco automático continuo, como la app Cámara del iPhone (2026-10-15, lo pidió
+  /// Jhonatan): con «Una cámara (sin pareja)». Con el soporte de dos, el foco se mide al
+  /// abrir la cámara y se congela, porque la calibración cuenta con una focal fija.
+  bool autoFocus;
+
   List<Object?> _toList() {
     return <Object?>[
       role,
@@ -258,6 +264,7 @@ class CaptureSettings {
       shutterDenominator,
       iso,
       cropToPlayableBand,
+      autoFocus,
     ];
   }
 
@@ -275,6 +282,7 @@ class CaptureSettings {
       shutterDenominator: result[5]! as int,
       iso: result[6]! as int,
       cropToPlayableBand: result[7]! as bool,
+      autoFocus: result[8]! as bool,
     );
   }
 
@@ -287,7 +295,7 @@ class CaptureSettings {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(role, other.role) && _deepEquals(width, other.width) && _deepEquals(height, other.height) && _deepEquals(fps, other.fps) && _deepEquals(bitrateBps, other.bitrateBps) && _deepEquals(shutterDenominator, other.shutterDenominator) && _deepEquals(iso, other.iso) && _deepEquals(cropToPlayableBand, other.cropToPlayableBand);
+    return _deepEquals(role, other.role) && _deepEquals(width, other.width) && _deepEquals(height, other.height) && _deepEquals(fps, other.fps) && _deepEquals(bitrateBps, other.bitrateBps) && _deepEquals(shutterDenominator, other.shutterDenominator) && _deepEquals(iso, other.iso) && _deepEquals(cropToPlayableBand, other.cropToPlayableBand) && _deepEquals(autoFocus, other.autoFocus);
   }
 
   @override
@@ -296,7 +304,7 @@ class CaptureSettings {
 
   @override
   String toString() {
-    return 'CaptureSettings(role: $role, width: $width, height: $height, fps: $fps, bitrateBps: $bitrateBps, shutterDenominator: $shutterDenominator, iso: $iso, cropToPlayableBand: $cropToPlayableBand)';
+    return 'CaptureSettings(role: $role, width: $width, height: $height, fps: $fps, bitrateBps: $bitrateBps, shutterDenominator: $shutterDenominator, iso: $iso, cropToPlayableBand: $cropToPlayableBand, autoFocus: $autoFocus)';
   }
 }
 

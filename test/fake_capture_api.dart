@@ -125,9 +125,13 @@ class FakeCaptureApi extends CaptureHostApi {
   @override
   Future<bool> hasUltraWideCamera() async => ultraWide;
 
+  /// Los ajustes con los que se abrió la cámara la última vez.
+  CaptureSettings? lastSettings;
+
   @override
   Future<CaptureStatus> configure(CaptureSettings settings) async {
     configureCalls++;
+    lastSettings = settings;
     await configureGate?.future;
     return applied;
   }

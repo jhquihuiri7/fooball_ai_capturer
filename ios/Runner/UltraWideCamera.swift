@@ -145,8 +145,25 @@ enum UltraWideCamera {
         // dejaba todo blando. A 13 mm, con la lente en el infinito de verdad, todo lo que
         // esté a más de un metro sale nítido. La ultra gran angular de los iPhone 11 y 12 es
         // de foco fijo: ahí no hay nada que mover, y no es un fallo.
+        //
+        // Con `settings.autoFocus` («Una cámara», 2026-10-15) el foco no se congela nunca:
+        // sigue a la escena como en la app Cámara, sin restringir distancias y con el
+        // enfoque suave del vídeo. Con el soporte de dos sí, porque la calibración cuenta
+        // con una focal fija y enfocar la mueve un poco.
         var focusLocked = true
-        if device.isFocusModeSupported(.continuousAutoFocus), device.isLockingFocusWithCustomLensPositionSupported {
+        if device.isFocusModeSupported(.continuousAutoFocus), settings.autoFocus {
+            if device.isFocusPointOfInterestSupported {
+                device.focusPointOfInterest = focusPoint
+            }
+            if device.isAutoFocusRangeRestrictionSupported {
+                device.autoFocusRangeRestriction = .none
+            }
+            if device.isSmoothAutoFocusSupported {
+                device.isSmoothAutoFocusEnabled = true
+            }
+            device.focusMode = .continuousAutoFocus
+            focusLocked = false
+        } else if device.isFocusModeSupported(.continuousAutoFocus), device.isLockingFocusWithCustomLensPositionSupported {
             if device.isFocusPointOfInterestSupported {
                 device.focusPointOfInterest = focusPoint
             }
@@ -183,10 +200,17 @@ enum UltraWideCamera {
         )
     }
 
-    /// Congela el foco donde lo dejó el enfoque automático de `lockSettings`. Si la lente
-    /// no enfoca sola (o ya quedó bloqueada en la reserva), solo apunta dónde está.
-    static func lockFocus(on device: AVCaptureDevice, applied: inout AppliedCameraSettings) throws {
-        guard device.focusMode == .continuousAutoFocus, device.isLockingFocusWithCustomLensPositionSupported else {
+    /// Congela el foco donde lo dejó el enfoque automático de `lockSettings`. Con
+    /// `settings.autoFocus` lo deja seguir, como la app Cámara; si la lente no enfoca sola
+    /// (o ya quedó bloqueada en la reserva), solo apunta dónde está.
+    static func lockFocus(
+        on device: AVCaptureDevice,
+        settings: CaptureSettings,
+        applied: inout AppliedCameraSettings
+    ) throws {
+        guard !settings.autoFocus, device.focusMode == .continuousAutoFocus,
+              device.isLockingFocusWithCustomLensPositionSupported
+        else {
             applied.lensPosition = device.lensPosition
             return
         }

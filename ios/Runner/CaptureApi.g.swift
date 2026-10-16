@@ -312,6 +312,10 @@ struct CaptureSettings: Hashable, CustomStringConvertible {
   /// Recorta verticalmente a la banda jugable antes de codificar (TASK A6). Ahorra un
   /// tercio del bitrate tirando cielo y grada, que no se usan para nada.
   var cropToPlayableBand: Bool
+  /// Foco automático continuo, como la app Cámara del iPhone (2026-10-15, lo pidió
+  /// Jhonatan): con «Una cámara (sin pareja)». Con el soporte de dos, el foco se mide al
+  /// abrir la cámara y se congela, porque la calibración cuenta con una focal fija.
+  var autoFocus: Bool
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
@@ -324,6 +328,7 @@ struct CaptureSettings: Hashable, CustomStringConvertible {
     let shutterDenominator = pigeonVar_list[5] as! Int64
     let iso = pigeonVar_list[6] as! Int64
     let cropToPlayableBand = pigeonVar_list[7] as! Bool
+    let autoFocus = pigeonVar_list[8] as! Bool
 
     return CaptureSettings(
       role: role,
@@ -333,7 +338,8 @@ struct CaptureSettings: Hashable, CustomStringConvertible {
       bitrateBps: bitrateBps,
       shutterDenominator: shutterDenominator,
       iso: iso,
-      cropToPlayableBand: cropToPlayableBand
+      cropToPlayableBand: cropToPlayableBand,
+      autoFocus: autoFocus
     )
   }
   func toList() -> [Any?] {
@@ -346,13 +352,14 @@ struct CaptureSettings: Hashable, CustomStringConvertible {
       shutterDenominator,
       iso,
       cropToPlayableBand,
+      autoFocus,
     ]
   }
   static func == (lhs: CaptureSettings, rhs: CaptureSettings) -> Bool {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return CaptureApiPigeonInternal.deepEquals(lhs.role, rhs.role) && CaptureApiPigeonInternal.deepEquals(lhs.width, rhs.width) && CaptureApiPigeonInternal.deepEquals(lhs.height, rhs.height) && CaptureApiPigeonInternal.deepEquals(lhs.fps, rhs.fps) && CaptureApiPigeonInternal.deepEquals(lhs.bitrateBps, rhs.bitrateBps) && CaptureApiPigeonInternal.deepEquals(lhs.shutterDenominator, rhs.shutterDenominator) && CaptureApiPigeonInternal.deepEquals(lhs.iso, rhs.iso) && CaptureApiPigeonInternal.deepEquals(lhs.cropToPlayableBand, rhs.cropToPlayableBand)
+    return CaptureApiPigeonInternal.deepEquals(lhs.role, rhs.role) && CaptureApiPigeonInternal.deepEquals(lhs.width, rhs.width) && CaptureApiPigeonInternal.deepEquals(lhs.height, rhs.height) && CaptureApiPigeonInternal.deepEquals(lhs.fps, rhs.fps) && CaptureApiPigeonInternal.deepEquals(lhs.bitrateBps, rhs.bitrateBps) && CaptureApiPigeonInternal.deepEquals(lhs.shutterDenominator, rhs.shutterDenominator) && CaptureApiPigeonInternal.deepEquals(lhs.iso, rhs.iso) && CaptureApiPigeonInternal.deepEquals(lhs.cropToPlayableBand, rhs.cropToPlayableBand) && CaptureApiPigeonInternal.deepEquals(lhs.autoFocus, rhs.autoFocus)
   }
 
   func hash(into hasher: inout Hasher) {
@@ -365,10 +372,11 @@ struct CaptureSettings: Hashable, CustomStringConvertible {
     CaptureApiPigeonInternal.deepHash(value: shutterDenominator, hasher: &hasher)
     CaptureApiPigeonInternal.deepHash(value: iso, hasher: &hasher)
     CaptureApiPigeonInternal.deepHash(value: cropToPlayableBand, hasher: &hasher)
+    CaptureApiPigeonInternal.deepHash(value: autoFocus, hasher: &hasher)
   }
 
   public var description: String {
-    return "CaptureSettings(role: \(String(describing: role)), width: \(String(describing: width)), height: \(String(describing: height)), fps: \(String(describing: fps)), bitrateBps: \(String(describing: bitrateBps)), shutterDenominator: \(String(describing: shutterDenominator)), iso: \(String(describing: iso)), cropToPlayableBand: \(String(describing: cropToPlayableBand)))"
+    return "CaptureSettings(role: \(String(describing: role)), width: \(String(describing: width)), height: \(String(describing: height)), fps: \(String(describing: fps)), bitrateBps: \(String(describing: bitrateBps)), shutterDenominator: \(String(describing: shutterDenominator)), iso: \(String(describing: iso)), cropToPlayableBand: \(String(describing: cropToPlayableBand)), autoFocus: \(String(describing: autoFocus)))"
   }
 }
 

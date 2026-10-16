@@ -131,6 +131,7 @@ class CaptureSettings {
     required this.shutterDenominator,
     required this.iso,
     required this.cropToPlayableBand,
+    required this.autoFocus,
   });
 
   final CameraRole role;
@@ -161,6 +162,11 @@ class CaptureSettings {
   /// Recorta verticalmente a la banda jugable antes de codificar (TASK A6). Ahorra un
   /// tercio del bitrate tirando cielo y grada, que no se usan para nada.
   final bool cropToPlayableBand;
+
+  /// Foco automático continuo, como la app Cámara del iPhone (2026-10-15, lo pidió
+  /// Jhonatan): con «Una cámara (sin pareja)». Con el soporte de dos, el foco se mide al
+  /// abrir la cámara y se congela, porque la calibración cuenta con una focal fija.
+  final bool autoFocus;
 }
 
 /// Lo que la cámara consiguió aplicar de verdad.

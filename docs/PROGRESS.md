@@ -23,7 +23,14 @@ No es ni la lente ni la luz: es cómo Zero pone la cámara. Lo único que pone a
 foco, bloqueado en `lensPosition` 1.0, y para AVFoundation 1 es «lo más lejos que llega la
 lente», no el infinito.
 
-**Hecho**: el foco, como la exposición, se mide y se congela.
+**Después, a petición de Jhonatan: con «Una cámara» el foco es automático continuo, como la
+app Cámara** (`CaptureSettings.autoFocus`, que la sesión pide con `singleCamera`): enfoca en el
+centro sin restringir distancias, con el enfoque suave del vídeo, y no se congela nunca. La
+fila Foco dice «automático, como la cámara del iPhone». Con el soporte de dos sigue lo de
+abajo. Sin `flutter analyze` ni tests pasados en este último cambio: se subió para que Alex
+compilara.
+
+**Hecho** (el soporte de dos): el foco, como la exposición, se mide y se congela.
 - `lockSettings` deja la cámara enfocando sola en el centro (`focusPointOfInterest`), solo en
   lo lejano (`autoFocusRangeRestriction = .far`) y sin el enfoque suave.
 - `waitForMetering` espera también a `!isAdjustingFocus`, dentro de los mismos 3 s como mucho.
