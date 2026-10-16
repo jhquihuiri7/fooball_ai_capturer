@@ -66,6 +66,20 @@ La Mac va para calibrar, para el plan B y para recoger al final.
    ```
    Al final da un ✅ o ❌ por cada cosa. Pásame la carpeta.
 
+## Con internet (el día del Starlink): el móvil que emite, solo por esa Wi-Fi
+
+Medido el 2026-10-15 emitiendo al VPS desde casa: el iPhone saltaba entre la Wi-Fi floja y
+los datos móviles (la «Asistencia Wi-Fi» de iOS), cada salto cortaba la conexión y YouTube
+daba el directo por terminado; por datos móviles llegaba del 2 al 43 % del vídeo. Desde la
+Wi-Fi cerca del router, el 100 % a 5 Mbit/s.
+
+- En el móvil que emite: **datos móviles apagados** (o al menos Ajustes → Datos móviles →
+  «Asistencia Wi-Fi» apagada) y conectado a la Wi-Fi del Starlink, cerca del router.
+- Antes del partido, desde la Mac en esa misma Wi-Fi: `./deploy/vps-prueba.sh 120` en
+  football-ai (mide la subida real al VPS) y `./deploy/vps-estado.sh`.
+- Mientras emite, **no salir de Zero** en ese móvil: la cámara no corre en segundo plano
+  y iOS puede matar la app al volver (visto el 2026-10-15 a las 18:32).
+
 ## Si algo falla
 
 | Qué pasa | Qué hacer |
