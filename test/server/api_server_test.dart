@@ -539,6 +539,131 @@ void main() {
     });
   });
 
+  group('del mando: equipos, entretiempo, franja e icono (ADR 0027)', () {
+    const String once = '1 Dida\n2 Cafu\n3 Maldini\n4 Gattuso\n13 Nesta\n21 Pirlo\n8 Seedorf\n'
+        '22 Kaka\n10 Rui Costa\n7 Shevchenko\n11 Gilardino\n';
+    // Un PNG de verdad para el olfato: la firma y un trozo cualquiera detrás.
+    final List<int> png = <int>[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, ...List<int>.filled(200, 7)];
+
+    Future<(int, Map<String, Object?>)> subir(List<int> bytes, {String? bearer, String tipo = 'image/png'}) async {
+      final HttpClientRequest r = await http.openUrl(
+        'PUT',
+        Uri.parse('http://127.0.0.1:${server.port}/api/v1/$championshipAssetRoute'),
+      );
+      if (bearer != null) {
+        r.headers.set(HttpHeaders.authorizationHeader, 'Bearer $bearer');
+      }
+      r.headers.contentType = ContentType.parse(tipo);
+      r.contentLength = bytes.length; // como el navegador al subir un fichero
+      r.add(bytes);
+      final HttpClientResponse res = await r.close();
+      final String texto = await res.transform(utf8.decoder).join();
+      return (res.statusCode, texto.isEmpty ? <String, Object?>{} : jsonDecode(texto) as Map<String, Object?>);
+    }
+
+    test('los nombres de los equipos', () async {
+      final (int ok, Map<String, Object?> partido) = await pedir(
+        'POST',
+        'match/teams',
+        bearer: token(),
+        body: <String, Object?>{'home': ' Santa Cruz ', 'away': 'San Cristóbal'},
+      );
+      expect(ok, 200);
+      expect((partido['home']! as Map<String, Object?>)['name'], 'Santa Cruz');
+      expect((partido['away']! as Map<String, Object?>)['name'], 'San Cristóbal');
+      for (final Map<String, Object?> malo in <Map<String, Object?>>[
+        <String, Object?>{},
+        <String, Object?>{'home': '   '},
+        <String, Object?>{'away': 'x' * (matchTeamNameMaxChars + 1)},
+        <String, Object?>{'home': 'dos\nlineas'},
+      ]) {
+        expect((await pedir('POST', 'match/teams', bearer: token(), body: malo)).$1, 400, reason: '$malo');
+      }
+      expect(engine.home, 'Santa Cruz');
+    });
+
+    test('el entretiempo y la alineación se quitan el sitio', () async {
+      engine.saveLineup(MatchTeam.home, 'Milan', '4-4-2', once);
+      await pedir('POST', 'match/lineup', bearer: token(), body: <String, Object?>{'team': 'home', 'on_air': true});
+      final (int ok, Map<String, Object?> descanso) =
+          await pedir('POST', 'graphics/halftime', bearer: token(), body: <String, Object?>{'on_air': true});
+      expect(ok, 200);
+      expect((descanso['halftime_on_air'], descanso['lineup_on_air']), (true, null));
+      final (_, Map<String, Object?> alin) =
+          await pedir('POST', 'match/lineup', bearer: token(), body: <String, Object?>{'team': 'home', 'on_air': true});
+      expect((alin['halftime_on_air'], alin['lineup_on_air']), (false, 'home'));
+      expect((await pedir('POST', 'graphics/halftime', bearer: token(), body: <String, Object?>{'on_air': 'si'})).$1, 400);
+    });
+
+    test('la franja sale 15 s y se va sola', () async {
+      final (_, Map<String, Object?> fuera) =
+          await pedir('POST', 'graphics/strip', bearer: token(), body: <String, Object?>{});
+      expect(fuera['strip_remaining_ms'], stripShowDefaultS * 1000);
+      reloj.ms += 10000;
+      expect(engine.stripVisible, isTrue);
+      expect(engine.toJson()['strip_remaining_ms'], 5000);
+      reloj.ms += 6000;
+      expect(engine.stripVisible, isFalse);
+      expect(engine.toJson()['strip_remaining_ms'], 0);
+      await pedir('POST', 'graphics/strip', bearer: token(), body: <String, Object?>{'show_s': 30});
+      final (_, Map<String, Object?> oculta) =
+          await pedir('POST', 'graphics/strip', bearer: token(), body: <String, Object?>{'show_s': 0});
+      expect(oculta['strip_remaining_ms'], 0);
+      expect((await pedir('POST', 'graphics/strip', bearer: token(), body: <String, Object?>{'show_s': 500})).$1, 400);
+    });
+
+    test('los textos de la franja se guardan y sobreviven al partido', () async {
+      final Map<String, Object?> textos = <String, Object?>{
+        'claim': <String>['VAMOS', 'GALÁPAGOS'],
+        'slots': <List<String>>[
+          <String>['FARMACIA ISLA', 'ABIERTO 24 HORAS'],
+          <String>['', ''],
+          <String>['RADIO MAR', '99.1 FM'],
+        ],
+      };
+      final (int ok, Map<String, Object?> partido) =
+          await pedir('POST', 'graphics/strip_texts', bearer: token(), body: textos);
+      expect(ok, 200);
+      expect(partido['strip_texts'], textos);
+      final MatchEngine otro =
+          MatchEngine.open(file: File('${dir.path}/match.json'), time: reloj, matchId: 'm_otro');
+      expect(otro.toJson()['strip_texts'], textos, reason: 'del campeonato, no del partido');
+      final Map<String, Object?> largo = <String, Object?>{
+        ...textos,
+        'claim': <String>['x' * 40, 'B'],
+      };
+      expect((await pedir('POST', 'graphics/strip_texts', bearer: token(), body: largo)).$1, 400);
+      expect(
+        (await pedir('POST', 'graphics/strip_texts', bearer: token(), body: <String, Object?>{'claim': 'no'})).$1,
+        400,
+      );
+    });
+
+    test('el icono del campeonato: subirlo, verlo y quitarlo', () async {
+      expect((await subir(png)).$1, 401, reason: 'sin token no se lee ni un byte');
+      expect(engine.graphics.hasIcon, isFalse);
+      final (int ok, Map<String, Object?> partido) = await subir(png, bearer: token());
+      expect(ok, 200);
+      expect(partido['championship_icon'], 1);
+
+      final HttpClientRequest r =
+          await http.getUrl(Uri.parse('http://127.0.0.1:${server.port}/api/v1/$championshipAssetRoute'));
+      r.headers.set(HttpHeaders.authorizationHeader, 'Bearer ${token()}');
+      final HttpClientResponse res = await r.close();
+      expect((res.statusCode, res.headers.contentType?.mimeType), (200, 'image/png'));
+      expect(await res.fold<List<int>>(<int>[], (List<int> a, List<int> b) => a..addAll(b)), png);
+
+      expect((await subir(utf8.encode('<svg/>'), bearer: token(), tipo: 'image/svg+xml')).$1, 415);
+      expect((await subir(List<int>.filled(championshipIconMaxBytes + 1, 0), bearer: token())).$1, 413);
+      expect(engine.graphics.iconRev, 1, reason: 'lo que no vale no toca el que había');
+      expect(engine.graphics.uploadFile.existsSync(), isFalse);
+
+      final (int quitado, Map<String, Object?> sin) = await pedir('DELETE', championshipAssetRoute, bearer: token());
+      expect((quitado, sin['championship_icon']), (200, null));
+      expect((await pedir('GET', championshipAssetRoute, bearer: token())).$1, 404);
+    });
+  });
+
   group('piezas', () {
     test('parseSince y deviceName', () {
       expect(parseSince('b1:7'), ('b1', 7));

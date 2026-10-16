@@ -264,6 +264,33 @@ const Duration apiCommandTimeout = Duration(seconds: 5);
 /// alineación ~1 KiB; con más es un error o un abuso.
 const int apiMaxBodyBytes = 64 * 1024;
 
+// --------------------------------------------------------------------------- //
+// Del mando: equipos, entretiempo, icono del campeonato y franja (ADR 0027)
+// --------------------------------------------------------------------------- //
+
+/// Caracteres como mucho del nombre de un equipo puesto desde el mando: con más, el
+/// marcador se estira por encima del tercio de la pantalla.
+const int matchTeamNameMaxChars = 24;
+
+/// Segundos que sale la franja con «Sacar» si la orden no dice otros.
+const int stripShowDefaultS = 15;
+
+/// Segundos como mucho que se puede pedir la franja de una vez.
+const int stripShowMaxS = 120;
+
+/// Bytes como mucho del icono del campeonato: un PNG de 1024 px con alfa ronda 1 MB.
+const int championshipIconMaxBytes = 4 * 1024 * 1024;
+
+/// La marca del campeonato (los textos de la franja y el tipo del icono), junto al
+/// partido. No se aparta con el partido viejo: es del campeonato, no de un partido.
+const String graphicsFileName = 'grafico.json';
+
+/// El icono del campeonato tal como se subió (PNG o JPEG).
+const String championshipIconFileName = 'campeonato.img';
+
+/// Donde vive el icono bajo `/api/v1/`: `PUT` lo sube, `GET` lo da y `DELETE` lo quita.
+const String championshipAssetRoute = 'assets/championship';
+
 /// Cada cuánto el maestro manda la réplica aunque nada cambie (REPLICA_INTERVAL_S,
 /// ADR 0023 §11).
 const Duration replicaInterval = Duration(seconds: 5);

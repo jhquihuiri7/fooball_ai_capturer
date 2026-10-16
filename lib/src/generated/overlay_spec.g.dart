@@ -117,6 +117,33 @@ abstract final class OverlaySpec {
     'raya_gap': 14,
   };
 
+  /// El entretiempo (halftime_card.py).
+  static const Map<String, int> halftime = {
+    'title_y': 118,
+    'title_size': 80,
+    'title_raya_w': 10,
+    'title_raya_h': 56,
+    'title_raya_gap': 28,
+    'comp_y': 190,
+    'comp_size': 30,
+    'icon_cy': 430,
+    'icon_box': 280,
+    'isotipo_h': 200,
+    'crest_w': 176,
+    'crest_cy': 410,
+    'crest_dx': 520,
+    'crest_initials_size': 55,
+    'name_y': 590,
+    'name_size': 46,
+    'name_max_w': 480,
+    'score_y': 770,
+    'score_h': 130,
+    'score_size': 104,
+    'goal_min_w': 150,
+    'goal_pad_x': 28,
+    'goal_dash_gap': 24,
+  };
+
   /// El marcador (overlay_preview.py).
   static const Map<String, int> scoreboard = {
     'margin': 48,
@@ -152,6 +179,8 @@ abstract final class OverlaySpec {
     'shadow_blur': 16,
     'shadow_alpha_pct': 40,
     'bar_shadow_alpha_pct': 45,
+    'status_icon': 30,
+    'status_icon_gap': 10,
   };
 
   /// La alineación (lineup_card.py).
@@ -332,6 +361,21 @@ abstract final class OverlaySpec {
     (4.5992, 28.4764),
     (4.5, 26.0),
     (4.5, 8.5),
+  ];
+
+  static const String halftimeTitle = 'ENTRETIEMPO';
+  /// Caracteres como mucho de cada texto editable de la franja.
+  static const int stripTextMaxChars = 32;
+  /// Las dos líneas del claim de partida.
+  static const List<String> stripClaimDefault = [
+    'EL DEPORTE',
+    'TAMBIÉN CONSERVA',
+  ];
+  /// Los tres mensajes de partida del centro: título y subtítulo.
+  static const List<(String, String)> stripSlotsDefault = [
+    ('GALÁPAGOS', 'SIEMPRE CONTIGO'),
+    ('NUESTRAS ISLAS', 'NUESTRO FUTURO'),
+    ('ENERGÍA LIMPIA', 'PARA UN MEJOR MAÑANA'),
   ];
 
   /// La tarjeta SIN SEÑAL (live_panel.py, §21.6).

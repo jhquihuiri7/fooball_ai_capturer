@@ -153,6 +153,26 @@
   .datos dd { margin: 4px 0 0; font: 700 18px/1.1 var(--display); letter-spacing: .02em; overflow-wrap: anywhere; }
   .datos .malo dd { color: #ff9a9c; }
 
+  /* ---------------- formularios (ADR 0027) ---------------- */
+  .campos { display: grid; gap: 10px; }
+  .campos label { display: grid; gap: 4px; font: 600 11px/1.2 var(--sans); letter-spacing: .1em; text-transform: uppercase; color: var(--oceanico); }
+  .campos input[type=text] {
+    min-height: 48px; padding: 0 12px; border: 0; border-radius: 10px; background: var(--profundo); color: var(--claro);
+    box-shadow: inset 0 0 0 1px var(--linea); font: 700 18px/1 var(--display); letter-spacing: .03em; text-transform: uppercase;
+  }
+  .campos input[type=text]:focus { outline: none; box-shadow: inset 0 0 0 2px var(--teal); }
+  .pareja { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .acciones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px; }
+  .uno { grid-template-columns: 1fr; }
+  details.editar > summary { margin-top: 10px; padding: 10px 0 0; border-top: 1px solid var(--linea); font: 600 12px/1 var(--sans); letter-spacing: .1em; text-transform: uppercase; color: var(--oceanico); }
+  details.editar[open] > summary { margin-bottom: 10px; }
+  .cuenta { font: 700 20px/1 var(--display); font-variant-numeric: tabular-nums; }
+  .icono-vista { display: flex; align-items: center; justify-content: center; height: 120px; border-radius: 10px; background: var(--profundo); box-shadow: inset 0 0 0 1px var(--linea); color: var(--oceanico); font-size: 13px; overflow: hidden; }
+  .icono-vista img { max-width: 100%; max-height: 104px; object-fit: contain; }
+  .subir { position: relative; overflow: hidden; }
+  .campos label.btn { display: inline-flex; font: 700 17px/1.1 var(--display); letter-spacing: .04em; color: var(--claro); }
+  .subir input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
   /* ---------------- avisos ---------------- */
   #aviso {
     position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 10; transform: translateX(-50%);
@@ -217,15 +237,66 @@
         <button class="btn" data-reloj="reset" data-confirma="¿Poner el reloj a 00:00?">↺ Cero</button>
       </div>
     </section>
+
+    <section class="card" aria-labelledby="t-equipos">
+      <h2 id="t-equipos">Equipos</h2>
+      <form class="campos" id="form-equipos">
+        <label>Local<input type="text" id="in-local" maxlength="24" autocomplete="off" required></label>
+        <label>Visitante<input type="text" id="in-visitante" maxlength="24" autocomplete="off" required></label>
+        <button class="btn primario" type="submit">Guardar nombres</button>
+      </form>
+    </section>
+
+    <section class="card" aria-labelledby="t-icono">
+      <h2 id="t-icono">Icono del campeonato</h2>
+      <div class="campos">
+        <div class="icono-vista" id="icono-vista">sin icono</div>
+        <div class="acciones">
+          <label class="btn subir">Cargar icono<input type="file" id="in-icono" accept="image/png,image/jpeg"></label>
+          <button class="btn quitar" id="quitar-icono" type="button" data-propio data-confirma="¿Quitar el icono del campeonato?">Quitar</button>
+        </div>
+      </div>
+    </section>
   </div>
 
   <div class="col">
     <section class="card" aria-labelledby="t-alin">
-      <h2 id="t-alin">Alineaciones al aire</h2>
+      <h2 id="t-alin">Al aire</h2>
       <div class="alin-grid">
         <button class="btn alin" data-alin="home" aria-pressed="false"><span id="alin-local">Local</span><small id="alin-local-estado">mostrar</small></button>
         <button class="btn alin" data-alin="away" aria-pressed="false"><span id="alin-visitante">Visitante</span><small id="alin-visitante-estado">mostrar</small></button>
+        <button class="btn alin" style="grid-column: 1 / -1" id="entretiempo" data-propio aria-pressed="false"><span>Entretiempo</span><small id="entretiempo-estado">mostrar el marcador</small></button>
       </div>
+    </section>
+
+    <section class="card" aria-labelledby="t-franja">
+      <h2 id="t-franja">Franja inferior</h2>
+      <div class="acciones">
+        <button class="btn acento" id="franja-sacar" type="button" data-propio>Sacar <span class="cuenta" id="franja-cuenta">15 s</span></button>
+        <button class="btn" id="franja-ocultar" type="button" data-propio disabled>Ocultar</button>
+      </div>
+      <details class="editar">
+        <summary>Editar textos</summary>
+        <form class="campos" id="form-franja">
+          <div class="pareja">
+            <label>Claim 1<input type="text" name="claim" maxlength="32" autocomplete="off"></label>
+            <label>Claim 2<input type="text" name="claim" maxlength="32" autocomplete="off"></label>
+          </div>
+          <div class="pareja">
+            <label>Mensaje 1<input type="text" name="titulo" maxlength="32" autocomplete="off"></label>
+            <label>Debajo<input type="text" name="sub" maxlength="32" autocomplete="off"></label>
+          </div>
+          <div class="pareja">
+            <label>Mensaje 2<input type="text" name="titulo" maxlength="32" autocomplete="off"></label>
+            <label>Debajo<input type="text" name="sub" maxlength="32" autocomplete="off"></label>
+          </div>
+          <div class="pareja">
+            <label>Mensaje 3<input type="text" name="titulo" maxlength="32" autocomplete="off"></label>
+            <label>Debajo<input type="text" name="sub" maxlength="32" autocomplete="off"></label>
+          </div>
+          <button class="btn primario" type="submit">Guardar textos</button>
+        </form>
+      </details>
     </section>
 
     <section class="card" aria-labelledby="t-jugada">
@@ -278,6 +349,11 @@ function tic() {
   if (!partido) return;
   const ms = partido.clock_ms + (partido.clock_running ? performance.now() - recibido : 0);
   $('reloj').textContent = mmss(ms);
+  // La franja: cuenta atrás mientras está fuera.
+  const queda = Math.max(0, Math.ceil((franjaHasta - performance.now()) / 1000));
+  $('franja-cuenta').textContent = queda > 0 ? queda + ' s' : '15 s';
+  $('franja-sacar').classList.toggle('hecho', queda > 0);
+  $('franja-ocultar').disabled = queda === 0;
 }
 
 const PLAY = 'M8 5.2v13.6a.8.8 0 0 0 1.23.67l10.4-6.8a.8.8 0 0 0 0-1.34L9.23 4.53A.8.8 0 0 0 8 5.2z';
@@ -305,9 +381,82 @@ function pinta(p) {
     b.disabled = !hay && !alAire;
     $((lado === 'home' ? 'alin-local' : 'alin-visitante') + '-estado').textContent = alAire ? 'al aire · quitar' : (hay ? 'mostrar' : 'sin alineación');
   }
+  // Entretiempo, franja, nombres e icono (ADR 0027).
+  const enDescanso = !!p.halftime_on_air;
+  $('entretiempo').setAttribute('aria-pressed', enDescanso ? 'true' : 'false');
+  $('entretiempo-estado').textContent = enDescanso ? 'al aire · quitar' : 'mostrar el marcador';
+  franjaHasta = performance.now() + (p.strip_remaining_ms || 0);
+  rellena($('in-local'), p.home.name); rellena($('in-visitante'), p.away.name);
+  if (p.strip_texts) {
+    const f = $('form-franja');
+    f.querySelectorAll('[name=claim]').forEach((el, i) => rellena(el, p.strip_texts.claim[i]));
+    f.querySelectorAll('[name=titulo]').forEach((el, i) => rellena(el, p.strip_texts.slots[i][0]));
+    f.querySelectorAll('[name=sub]').forEach((el, i) => rellena(el, p.strip_texts.slots[i][1]));
+  }
+  if (p.championship_icon !== iconoVisto) { iconoVisto = p.championship_icon; pintaIcono(); }
   if (p.save_error) aviso('El maestro no pudo guardar el partido: ' + p.save_error);
   tic();
 }
+
+// Un campo se rellena con lo del maestro salvo mientras el operador lo está editando.
+function rellena(el, valor) {
+  if (document.activeElement !== el && !el.dataset.sucio) el.value = valor ?? '';
+}
+document.addEventListener('input', e => { if (e.target.matches('.campos input[type=text]')) e.target.dataset.sucio = '1'; });
+const limpia = form => form.querySelectorAll('input').forEach(el => delete el.dataset.sucio);
+
+let franjaHasta = 0;
+let iconoVisto;
+async function pintaIcono() {
+  const vista = $('icono-vista');
+  $('quitar-icono').disabled = iconoVisto == null;
+  if (iconoVisto == null) { vista.textContent = 'sin icono'; return; }
+  try {
+    const r = await fetch('/api/v1/assets/championship', { headers: cab });
+    if (!r.ok) return;
+    const img = document.createElement('img');
+    img.alt = 'Icono del campeonato';
+    img.src = URL.createObjectURL(await r.blob());
+    vista.replaceChildren(img);
+  } catch {}
+}
+
+$('form-equipos').addEventListener('submit', e => {
+  e.preventDefault();
+  orden('match/teams', { home: $('in-local').value.trim(), away: $('in-visitante').value.trim() }, e.submitter)
+    .then(() => limpia($('form-equipos')));
+});
+$('form-franja').addEventListener('submit', e => {
+  e.preventDefault();
+  const f = $('form-franja');
+  const val = n => [...f.querySelectorAll('[name=' + n + ']')].map(el => el.value.trim());
+  const titulos = val('titulo'), subs = val('sub');
+  orden('graphics/strip_texts', { claim: val('claim'), slots: titulos.map((t, i) => [t, subs[i]]) }, e.submitter)
+    .then(() => limpia(f));
+});
+$('in-icono').addEventListener('change', async e => {
+  const archivo = e.target.files[0]; e.target.value = '';
+  if (!archivo) return;
+  if (archivo.size > 4 * 1024 * 1024) { aviso('El icono pasa de 4 MB.'); return; }
+  const boton = e.target.closest('.btn'); boton.classList.add('ocupado');
+  try {
+    const r = await fetch('/api/v1/assets/championship', { method: 'PUT', headers: { ...cab, 'Content-Type': archivo.type || 'application/octet-stream' }, body: archivo });
+    const j = await r.json().catch(() => ({}));
+    if (r.ok) { pinta(j); aviso(''); } else aviso(j.detail || ('error ' + r.status));
+  } catch { aviso('Sin conexión con el maestro: el icono no se subió.'); }
+  finally { boton.classList.remove('ocupado'); }
+});
+$('quitar-icono').addEventListener('click', async e => {
+  if (!confirm(e.currentTarget.dataset.confirma)) return;
+  try {
+    const r = await fetch('/api/v1/assets/championship', { method: 'DELETE', headers: cab });
+    const j = await r.json().catch(() => ({}));
+    if (r.ok) pinta(j); else aviso(j.detail || ('error ' + r.status));
+  } catch { aviso('Sin conexión con el maestro.'); }
+});
+$('franja-sacar').addEventListener('click', e => orden('graphics/strip', { show_s: 15 }, e.currentTarget));
+$('franja-ocultar').addEventListener('click', e => orden('graphics/strip', { show_s: 0 }, e.currentTarget));
+$('entretiempo').addEventListener('click', e => orden('graphics/halftime', { on_air: !(partido && partido.halftime_on_air) }, e.currentTarget));
 
 async function orden(ruta, cuerpo, boton) {
   if (boton) boton.classList.add('ocupado');
@@ -324,7 +473,7 @@ async function orden(ruta, cuerpo, boton) {
 }
 
 document.addEventListener('click', e => {
-  const b = e.target.closest('button'); if (!b || !partido || b.disabled) return;
+  const b = e.target.closest('button'); if (!b || !partido || b.disabled || b.type === 'submit' || 'propio' in b.dataset) return;
   if (b.dataset.confirma && !confirm(b.dataset.confirma)) return;
   if (navigator.vibrate) navigator.vibrate(12);
   if (b.dataset.gol) { const [team, d] = b.dataset.gol.split(','); orden('match/goal', { team, delta: +d, expect: partido[team].goals }, b); }

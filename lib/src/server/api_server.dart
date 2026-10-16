@@ -27,6 +27,7 @@ import 'package:football_ai_capture/src/match_state.dart' show MatchTeam;
 import 'package:football_ai_capture/src/server/control_token.dart';
 import 'package:football_ai_capture/src/server/lineups.dart';
 import 'package:football_ai_capture/src/server/idempotency.dart';
+import 'package:football_ai_capture/src/server/graphics_store.dart';
 import 'package:football_ai_capture/src/server/match_engine.dart';
 
 /// Tipo de los errores de la API (`PROBLEM_CONTENT_TYPE`, RFC 7807).
@@ -251,10 +252,25 @@ class MasterApi {
       if (ruta == 'rig/status' && rigStatus != null) {
         return ApiResponse.json(rigStatus!());
       }
+      if (ruta == championshipAssetRoute) {
+        // El icono del campeonato (ADR 0027), para que el mando lo enseñe.
+        final String? tipo = engine.graphics.iconMime;
+        return tipo == null
+            ? ApiResponse.problem(HttpStatus.notFound, 'no hay icono del campeonato')
+            : ApiResponse(HttpStatus.ok, tipo, await engine.graphics.iconFile.readAsBytes());
+      }
       if (ruta != _matchRoute) {
         return ApiResponse.problem(HttpStatus.notFound, 'no existe ${request.path}');
       }
       return _match(request, acceso.$1!);
+    }
+    if (request.method == 'DELETE' && ruta == championshipAssetRoute) {
+      final (Set<String>?, ApiResponse?) acceso = _access(request, panelScopeMatch);
+      if (acceso.$2 != null) {
+        return acceso.$2!;
+      }
+      engine.deleteChampionshipIcon();
+      return ApiResponse.json(engine.toJson(scopes: acceso.$1!));
     }
     if (request.method != 'POST') {
       return ApiResponse.problem(HttpStatus.methodNotAllowed, 'solo GET y POST');
@@ -285,6 +301,11 @@ class MasterApi {
     final ApiResponse respuesta = await handle(request);
     return CommandReply(engine.rev == antes ? null : stateDto(), respuesta);
   }
+
+  /// La puerta de una subida por la LAN (ADR 0027): los ámbitos de quien sube, o el error
+  /// que hay que contestar antes de leer un solo byte del cuerpo.
+  (Set<String>?, ApiResponse?) uploadAccess(Map<String, String> headers) =>
+      _access(ApiRequest(method: 'PUT', path: '', headers: headers), panelScopeMatch);
 
   /// El DTO del `state` del túnel: sin `scopes`, que son de cada petición (ADR 0022 §5).
   Map<String, Object?> stateDto() => engine.toJson()..remove('scopes');
@@ -391,6 +412,10 @@ class MasterApi {
     'match/clock',
     'match/lineup',
     'match/roster',
+    'match/teams',
+    'graphics/halftime',
+    'graphics/strip',
+    'graphics/strip_texts',
     'clips/mark',
     'stream/start',
     'stream/stop',
@@ -571,6 +596,11 @@ class MasterApiServer {
   Future<void> _serve(HttpRequest request) async {
     ApiResponse respuesta;
     try {
+      if (request.method == 'PUT' && request.uri.path == '$panelApiPrefix$championshipAssetRoute') {
+        respuesta = await _putIcon(request);
+        await _reply(request, respuesta);
+        return;
+      }
       final List<int>? cuerpo = await _readBody(request);
       if (cuerpo == null) {
         respuesta = ApiResponse.problem(
@@ -578,21 +608,83 @@ class MasterApiServer {
           'el cuerpo pasa de $apiMaxBodyBytes bytes',
         );
       } else {
-        final Map<String, String> cabeceras = <String, String>{};
-        request.headers.forEach((String nombre, List<String> valores) {
-          cabeceras[nombre.toLowerCase()] = valores.join(',');
-        });
         respuesta = await api.handle(ApiRequest(
           method: request.method,
           path: request.uri.path,
           query: request.uri.queryParameters,
-          headers: cabeceras,
+          headers: _headers(request),
           body: cuerpo,
         ));
       }
     } on Exception {
       respuesta = ApiResponse.problem(HttpStatus.badRequest, 'peticion ilegible');
     }
+    await _reply(request, respuesta);
+  }
+
+  static Map<String, String> _headers(HttpRequest request) {
+    final Map<String, String> cabeceras = <String, String>{};
+    request.headers.forEach((String nombre, List<String> valores) {
+      cabeceras[nombre.toLowerCase()] = valores.join(',');
+    });
+    return cabeceras;
+  }
+
+  /// El icono del campeonato (ADR 0027): la puerta antes del cuerpo, y el cuerpo a disco,
+  /// con su tope, sin pasar entero por la memoria. Solo se adopta si es PNG o JPEG de
+  /// verdad y llegó entero.
+  Future<ApiResponse> _putIcon(HttpRequest request) async {
+    final (Set<String>?, ApiResponse?) acceso = api.uploadAccess(_headers(request));
+    if (acceso.$2 != null) {
+      await request.drain<void>();
+      return acceso.$2!;
+    }
+    if (request.contentLength > championshipIconMaxBytes) {
+      await request.drain<void>();
+      return ApiResponse.problem(
+        HttpStatus.requestEntityTooLarge,
+        'el icono pasa de ${championshipIconMaxBytes ~/ (1024 * 1024)} MB',
+      );
+    }
+    final GraphicsStore store = api.engine.graphics;
+    store.directory.createSync(recursive: true);
+    final File destino = store.uploadFile;
+    final IOSink salida = destino.openWrite();
+    final List<int> cabeza = <int>[];
+    int total = 0;
+    bool grande = false;
+    try {
+      await for (final List<int> trozo in request) {
+        total += trozo.length;
+        // Pasado el tope se sigue leyendo sin escribir: si se deja de leer, dart:io corta
+        // la conexión y el mando no recibe el 413 que explica por qué.
+        grande = grande || total > championshipIconMaxBytes;
+        if (grande) {
+          continue;
+        }
+        if (cabeza.length < 16) {
+          cabeza.addAll(trozo.take(16 - cabeza.length));
+        }
+        salida.add(trozo);
+      }
+    } finally {
+      await salida.close();
+    }
+    final String? tipo = GraphicsStore.sniff(cabeza);
+    if (grande || tipo == null) {
+      destino.deleteSync();
+      return grande
+          ? ApiResponse.problem(
+              HttpStatus.requestEntityTooLarge,
+              'el icono pasa de ${championshipIconMaxBytes ~/ (1024 * 1024)} MB',
+            )
+          : ApiResponse.problem(HttpStatus.unsupportedMediaType, 'el icono tiene que ser PNG o JPEG');
+    }
+    api.engine.adoptChampionshipIcon(tipo);
+    return ApiResponse.json(api.engine.toJson(scopes: acceso.$1!));
+  }
+
+  static Future<void> _reply(HttpRequest request, ApiResponse respuesta) async {
     try {
       request.response
         ..statusCode = respuesta.status

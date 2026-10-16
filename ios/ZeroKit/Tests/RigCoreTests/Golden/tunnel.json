@@ -115,7 +115,7 @@
       "fn": "tunnel.parse",
       "inputs": {
         "sender": "master",
-        "text": "{\"v\":1,\"type\":\"state\",\"id\":\"k3v9q2m7x1:2\",\"rig_ms\":5400002,\"data\":{\"match_id\":\"m_20260703_2030_a1b2\",\"boot\":\"k3v9q2m7x1\",\"rev\":12,\"home\":{\"name\":\"Atlético Norte\",\"goals\":1,\"formation\":\"4-4-2\",\"players\":18},\"away\":{\"name\":\"Deportivo Sur\",\"goals\":0,\"formation\":null,\"players\":0},\"clock_ms\":1754000,\"clock_running\":true,\"clock_restored\":false,\"lineup_on_air\":null,\"streaming\":true,\"can_stream\":true,\"formations\":[\"4-4-2\",\"4-3-3\"],\"save_error\":null}}"
+        "text": "{\"v\":1,\"type\":\"state\",\"id\":\"k3v9q2m7x1:2\",\"rig_ms\":5400002,\"data\":{\"match_id\":\"m_20260703_2030_a1b2\",\"boot\":\"k3v9q2m7x1\",\"rev\":12,\"home\":{\"name\":\"Atlético Norte\",\"goals\":1,\"formation\":\"4-4-2\",\"players\":18},\"away\":{\"name\":\"Deportivo Sur\",\"goals\":0,\"formation\":null,\"players\":0},\"clock_ms\":1754000,\"clock_running\":true,\"clock_restored\":false,\"lineup_on_air\":null,\"halftime_on_air\":false,\"strip_remaining_ms\":0,\"strip_texts\":{\"claim\":[\"EL DEPORTE\",\"TAMBIÉN CONSERVA\"],\"slots\":[[\"GALÁPAGOS\",\"SIEMPRE CONTIGO\"],[\"NUESTRAS ISLAS\",\"NUESTRO FUTURO\"],[\"ENERGÍA LIMPIA\",\"PARA UN MEJOR MAÑANA\"]]},\"championship_icon\":null,\"streaming\":true,\"can_stream\":true,\"formations\":[\"4-4-2\",\"4-3-3\"],\"save_error\":null}}"
       },
       "expected": {
         "message": {
@@ -143,6 +143,29 @@
             "clock_running": true,
             "clock_restored": false,
             "lineup_on_air": null,
+            "halftime_on_air": false,
+            "strip_remaining_ms": 0,
+            "strip_texts": {
+              "claim": [
+                "EL DEPORTE",
+                "TAMBIÉN CONSERVA"
+              ],
+              "slots": [
+                [
+                  "GALÁPAGOS",
+                  "SIEMPRE CONTIGO"
+                ],
+                [
+                  "NUESTRAS ISLAS",
+                  "NUESTRO FUTURO"
+                ],
+                [
+                  "ENERGÍA LIMPIA",
+                  "PARA UN MEJOR MAÑANA"
+                ]
+              ]
+            },
+            "championship_icon": null,
             "streaming": true,
             "can_stream": true,
             "formations": [
@@ -398,7 +421,7 @@
       "fn": "tunnel.parse",
       "inputs": {
         "sender": "master",
-        "text": "{\"v\":1,\"type\":\"response\",\"id\":\"k3v9q2m7x1:9\",\"reply_to\":\"h:2\",\"rig_ms\":5400009,\"data\":{\"status\":200,\"headers\":{\"content-type\":\"application/json\"},\"body\":{\"match_id\":\"m_20260703_2030_a1b2\",\"boot\":\"k3v9q2m7x1\",\"rev\":12,\"home\":{\"name\":\"Atlético Norte\",\"goals\":1,\"formation\":\"4-4-2\",\"players\":18},\"away\":{\"name\":\"Deportivo Sur\",\"goals\":0,\"formation\":null,\"players\":0},\"clock_ms\":1754000,\"clock_running\":true,\"clock_restored\":false,\"lineup_on_air\":null,\"streaming\":true,\"can_stream\":true,\"formations\":[\"4-4-2\",\"4-3-3\"],\"save_error\":null,\"scopes\":[\"match\",\"stream\"]}}}"
+        "text": "{\"v\":1,\"type\":\"response\",\"id\":\"k3v9q2m7x1:9\",\"reply_to\":\"h:2\",\"rig_ms\":5400009,\"data\":{\"status\":200,\"headers\":{\"content-type\":\"application/json\"},\"body\":{\"match_id\":\"m_20260703_2030_a1b2\",\"boot\":\"k3v9q2m7x1\",\"rev\":12,\"home\":{\"name\":\"Atlético Norte\",\"goals\":1,\"formation\":\"4-4-2\",\"players\":18},\"away\":{\"name\":\"Deportivo Sur\",\"goals\":0,\"formation\":null,\"players\":0},\"clock_ms\":1754000,\"clock_running\":true,\"clock_restored\":false,\"lineup_on_air\":null,\"halftime_on_air\":false,\"strip_remaining_ms\":0,\"strip_texts\":{\"claim\":[\"EL DEPORTE\",\"TAMBIÉN CONSERVA\"],\"slots\":[[\"GALÁPAGOS\",\"SIEMPRE CONTIGO\"],[\"NUESTRAS ISLAS\",\"NUESTRO FUTURO\"],[\"ENERGÍA LIMPIA\",\"PARA UN MEJOR MAÑANA\"]]},\"championship_icon\":null,\"streaming\":true,\"can_stream\":true,\"formations\":[\"4-4-2\",\"4-3-3\"],\"save_error\":null,\"scopes\":[\"match\",\"stream\"]}}}"
       },
       "expected": {
         "message": {
@@ -432,6 +455,29 @@
               "clock_running": true,
               "clock_restored": false,
               "lineup_on_air": null,
+              "halftime_on_air": false,
+              "strip_remaining_ms": 0,
+              "strip_texts": {
+                "claim": [
+                  "EL DEPORTE",
+                  "TAMBIÉN CONSERVA"
+                ],
+                "slots": [
+                  [
+                    "GALÁPAGOS",
+                    "SIEMPRE CONTIGO"
+                  ],
+                  [
+                    "NUESTRAS ISLAS",
+                    "NUESTRO FUTURO"
+                  ],
+                  [
+                    "ENERGÍA LIMPIA",
+                    "PARA UN MEJOR MAÑANA"
+                  ]
+                ]
+              },
+              "championship_icon": null,
               "streaming": true,
               "can_stream": true,
               "formations": [
@@ -966,7 +1012,7 @@
       "fn": "tunnel.parse",
       "inputs": {
         "sender": "slave",
-        "text": "{\"v\":1,\"type\":\"state\",\"id\":\"k3v9q2m7x1:2\",\"rig_ms\":5400002,\"data\":{\"match_id\":\"m_20260703_2030_a1b2\",\"boot\":\"k3v9q2m7x1\",\"rev\":12,\"home\":{\"name\":\"Atlético Norte\",\"goals\":1,\"formation\":\"4-4-2\",\"players\":18},\"away\":{\"name\":\"Deportivo Sur\",\"goals\":0,\"formation\":null,\"players\":0},\"clock_ms\":1754000,\"clock_running\":true,\"clock_restored\":false,\"lineup_on_air\":null,\"streaming\":true,\"can_stream\":true,\"formations\":[\"4-4-2\",\"4-3-3\"],\"save_error\":null}}"
+        "text": "{\"v\":1,\"type\":\"state\",\"id\":\"k3v9q2m7x1:2\",\"rig_ms\":5400002,\"data\":{\"match_id\":\"m_20260703_2030_a1b2\",\"boot\":\"k3v9q2m7x1\",\"rev\":12,\"home\":{\"name\":\"Atlético Norte\",\"goals\":1,\"formation\":\"4-4-2\",\"players\":18},\"away\":{\"name\":\"Deportivo Sur\",\"goals\":0,\"formation\":null,\"players\":0},\"clock_ms\":1754000,\"clock_running\":true,\"clock_restored\":false,\"lineup_on_air\":null,\"halftime_on_air\":false,\"strip_remaining_ms\":0,\"strip_texts\":{\"claim\":[\"EL DEPORTE\",\"TAMBIÉN CONSERVA\"],\"slots\":[[\"GALÁPAGOS\",\"SIEMPRE CONTIGO\"],[\"NUESTRAS ISLAS\",\"NUESTRO FUTURO\"],[\"ENERGÍA LIMPIA\",\"PARA UN MEJOR MAÑANA\"]]},\"championship_icon\":null,\"streaming\":true,\"can_stream\":true,\"formations\":[\"4-4-2\",\"4-3-3\"],\"save_error\":null}}"
       },
       "expected": {
         "error": {
@@ -1403,7 +1449,7 @@
       "fn": "tunnel.parse",
       "inputs": {
         "sender": "master",
-        "text": "{\"v\":1,\"type\":\"state\",\"id\":\"k3v9q2m7x1:2\",\"rig_ms\":5400002,\"data\":{\"match_id\":\"m_20260703_2030_a1b2\",\"boot\":\"k3v9q2m7x1\",\"rev\":12,\"home\":{\"name\":\"Atlético Norte\",\"goals\":1,\"formation\":\"4-4-2\",\"players\":18},\"away\":{\"name\":\"Deportivo Sur\",\"goals\":0,\"formation\":null,\"players\":0},\"clock_ms\":1754000,\"clock_running\":true,\"clock_restored\":false,\"lineup_on_air\":null,\"streaming\":true,\"can_stream\":true,\"formations\":[\"4-4-2\",\"4-3-3\"],\"save_error\":null,\"scopes\":[\"match\"]}}"
+        "text": "{\"v\":1,\"type\":\"state\",\"id\":\"k3v9q2m7x1:2\",\"rig_ms\":5400002,\"data\":{\"match_id\":\"m_20260703_2030_a1b2\",\"boot\":\"k3v9q2m7x1\",\"rev\":12,\"home\":{\"name\":\"Atlético Norte\",\"goals\":1,\"formation\":\"4-4-2\",\"players\":18},\"away\":{\"name\":\"Deportivo Sur\",\"goals\":0,\"formation\":null,\"players\":0},\"clock_ms\":1754000,\"clock_running\":true,\"clock_restored\":false,\"lineup_on_air\":null,\"halftime_on_air\":false,\"strip_remaining_ms\":0,\"strip_texts\":{\"claim\":[\"EL DEPORTE\",\"TAMBIÉN CONSERVA\"],\"slots\":[[\"GALÁPAGOS\",\"SIEMPRE CONTIGO\"],[\"NUESTRAS ISLAS\",\"NUESTRO FUTURO\"],[\"ENERGÍA LIMPIA\",\"PARA UN MEJOR MAÑANA\"]]},\"championship_icon\":null,\"streaming\":true,\"can_stream\":true,\"formations\":[\"4-4-2\",\"4-3-3\"],\"save_error\":null,\"scopes\":[\"match\"]}}"
       },
       "expected": {
         "error": {

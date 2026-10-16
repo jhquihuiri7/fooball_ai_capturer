@@ -14,6 +14,7 @@ import 'dart:math';
 
 import 'package:football_ai_capture/src/constants.dart';
 import 'package:football_ai_capture/src/match_state.dart';
+import 'package:football_ai_capture/src/server/graphics_store.dart';
 import 'package:football_ai_capture/src/server/lineups.dart';
 import 'package:football_ai_capture/src/server/match_record.dart';
 
@@ -129,7 +130,8 @@ class OrderError implements Exception {
 class MatchEngine {
   MatchEngine._(this._file, this._time, this.clock, this.matchId, this.boot, (LineupBook, String?) lineups)
     : lineups = lineups.$1,
-      lineupsError = lineups.$2;
+      lineupsError = lineups.$2,
+      graphics = GraphicsStore(_file.parent);
 
   /// Abre el partido guardado en `file`, o empieza uno nuevo si no hay fichero.
   /// Con el mismo `clock_domain` el cronómetro sigue en marcha; con otro vuelve
@@ -193,6 +195,26 @@ class MatchEngine {
   /// Por qué no se pudieron leer las alineaciones guardadas, si no se pudieron.
   final String? lineupsError;
 
+  /// Los textos de la franja y el icono del campeonato (ADR 0027): del campeonato, así
+  /// que sobreviven al partido.
+  final GraphicsStore graphics;
+
+  /// La tarjeta de entretiempo al aire (ADR 0027). Comparte capa con la alineación: sacar
+  /// una quita la otra.
+  bool halftimeOnAir = false;
+
+  /// Hasta cuándo sale la franja, en el tiempo monótono de [MatchTimeSource]; null, oculta.
+  int? stripUntilMs;
+
+  /// Si la franja está fuera ahora (ADR 0027: oculta salvo cuando el operador la saca).
+  bool get stripVisible => stripRemainingMs > 0;
+
+  /// Lo que le queda fuera a la franja, en ms (0 si está oculta).
+  int get stripRemainingMs {
+    final int? hasta = stripUntilMs;
+    return hasta == null ? 0 : max(0, hasta - _time.nowMs());
+  }
+
   /// Identificador de este arranque: cambia en cada uno.
   final String boot;
   int rev = 0;
@@ -241,6 +263,29 @@ class MatchEngine {
           _clock(body);
         case 'match/lineup':
           _lineup(body);
+        case 'match/teams':
+          _teams(body);
+        case 'graphics/halftime':
+          final Object? alAire = body['on_air'];
+          if (alAire is! bool) {
+            throw OrderError(400, 'on_air tiene que ser true o false');
+          }
+          halftimeOnAir = alAire;
+          if (alAire) {
+            lineups.setOnAir(null);
+          }
+        case 'graphics/strip':
+          final Object segundos = body['show_s'] ?? stripShowDefaultS;
+          if (segundos is! int || segundos < 0 || segundos > stripShowMaxS) {
+            throw OrderError(400, 'show_s tiene que ser un entero de 0 a $stripShowMaxS');
+          }
+          stripUntilMs = segundos == 0 ? null : _time.nowMs() + segundos * Duration.millisecondsPerSecond;
+        case 'graphics/strip_texts':
+          try {
+            graphics.setStrip(StripTexts.fromJson(body));
+          } on GraphicsError catch (error) {
+            throw OrderError(400, error.message);
+          }
         case 'clips/mark':
           final void Function()? marca = onClipMark;
           if (marca == null) {
@@ -374,10 +419,44 @@ class MatchEngine {
     }
     if (alAire == true) {
       lineups.setOnAir(equipo);
+      halftimeOnAir = false;
     } else if (alAire == false && lineups.onAirSide == equipo) {
       // Ocultar la propia, nunca la del otro equipo que haya salido después.
       lineups.setOnAir(null);
     }
+  }
+
+  /// Los nombres desde el mando (ADR 0027): uno o los dos, recortados y sin saltos.
+  void _teams(Map<String, Object?> body) {
+    final Map<MatchTeam, String> nuevos = <MatchTeam, String>{};
+    for (final MatchTeam lado in MatchTeam.values) {
+      final Object? nombre = body[lado.name];
+      if (nombre == null) {
+        continue;
+      }
+      final String limpio = nombre is String ? nombre.trim() : '';
+      if (limpio.isEmpty || limpio.length > matchTeamNameMaxChars || limpio.contains('\n')) {
+        throw OrderError(400, '${lado.name}: un nombre de 1 a $matchTeamNameMaxChars caracteres');
+      }
+      nuevos[lado] = limpio;
+    }
+    if (nuevos.isEmpty) {
+      throw OrderError(400, 'falta home o away');
+    }
+    home = nuevos[MatchTeam.home] ?? home;
+    away = nuevos[MatchTeam.away] ?? away;
+  }
+
+  /// Adopta el icono del campeonato recién subido a `graphics.uploadFile` (ADR 0027).
+  void adoptChampionshipIcon(String mime) {
+    graphics.adoptIcon(mime);
+    _changed();
+  }
+
+  /// Quita el icono del campeonato.
+  void deleteChampionshipIcon() {
+    graphics.deleteIcon();
+    _changed();
   }
 
   /// Guarda la alineación de un equipo desde el editor (`/api/lineup` del panel). Su
@@ -482,6 +561,10 @@ class MatchEngine {
       'clock_running': clock.running,
       'clock_restored': clock.restored,
       'lineup_on_air': lineups.onAirSide?.name,
+      'halftime_on_air': halftimeOnAir,
+      'strip_remaining_ms': stripRemainingMs,
+      'strip_texts': graphics.strip.toJson(),
+      'championship_icon': graphics.hasIcon ? graphics.iconRev : null,
       'streaming': streaming,
       'can_stream': canStream,
       'formations': matchFormations,
