@@ -260,10 +260,10 @@ class MasterApi {
             ? ApiResponse.problem(HttpStatus.notFound, 'no hay icono del campeonato')
             : ApiResponse(HttpStatus.ok, tipo, await engine.graphics.iconFile.readAsBytes());
       }
-      final String? ranura = crestSlot(request.path);
-      if (ranura != null) {
-        // El escudo del equipo de esa ranura (ADR 0028 y 0029).
-        final String? equipo = engine.crestTeam(ranura);
+      final String? ranura = crestSlot(request.path), nombrado = crestNamed(request.path);
+      if (ranura != null || nombrado != null) {
+        // El escudo del equipo de esa ranura (ADR 0028 y 0029), o el del nombre (ADR 0030).
+        final String? equipo = nombrado ?? engine.crestTeam(ranura!);
         final TeamCrest? escudo = equipo == null ? null : engine.graphics.crestFor(equipo);
         return escudo == null
             ? ApiResponse.problem(HttpStatus.notFound, '${equipo ?? 'el próximo partido'} no tiene escudo')
@@ -287,13 +287,13 @@ class MasterApi {
       engine.deleteChampionshipIcon();
       return ApiResponse.json(engine.toJson(scopes: acceso.$1!));
     }
-    final String? escudo = crestSlot(request.path);
-    if (request.method == 'DELETE' && escudo != null) {
+    final String? escudo = crestSlot(request.path), escudoNombrado = crestNamed(request.path);
+    if (request.method == 'DELETE' && (escudo != null || escudoNombrado != null)) {
       final (Set<String>?, ApiResponse?) acceso = _access(request, panelScopeMatch);
       if (acceso.$2 != null) {
         return acceso.$2!;
       }
-      final String? equipo = engine.crestTeam(escudo);
+      final String? equipo = escudoNombrado ?? engine.crestTeam(escudo!);
       if (equipo == null) {
         return ApiResponse.problem(HttpStatus.conflict, 'no hay próximo partido');
       }
@@ -357,6 +357,21 @@ class MasterApi {
       }
     }
     return null;
+  }
+
+  /// El equipo de una ruta `/api/v1/assets/crests/<nombre>` (ADR 0030), ya sin el
+  /// %-escapado; null si la ruta no es de un escudo por nombre.
+  static String? crestNamed(String path) {
+    const String prefijo = '$panelApiPrefix$teamCrestsByNameRoute/';
+    if (!path.startsWith(prefijo)) {
+      return null;
+    }
+    try {
+      final String nombre = Uri.decodeComponent(path.substring(prefijo.length)).trim();
+      return nombre.isEmpty || nombre.length > matchTeamNameMaxChars || nombre.contains('/') ? null : nombre;
+    } on ArgumentError {
+      return null;
+    }
   }
 
   /// El nombre del vídeo de una ruta `/api/v1/videos/<nombre>` (ya sin el %-escapado), o
@@ -484,6 +499,10 @@ class MasterApi {
     'graphics/fulltime',
     'graphics/next_match',
     'match/next',
+    'graphics/fixtures',
+    'match/fixtures',
+    'graphics/interview',
+    'match/interview',
     'graphics/strip',
     'graphics/strip_texts',
     'graphics/strip_save',
@@ -684,9 +703,10 @@ class MasterApiServer {
         return;
       }
       final String? escudo = MasterApi.crestSlot(request.uri.path);
-      if (request.method == 'PUT' && escudo != null) {
+      final String? escudoNombrado = MasterApi.crestNamed(request.uri.path);
+      if (request.method == 'PUT' && (escudo != null || escudoNombrado != null)) {
         final MatchEngine motor = api.engine;
-        final String? equipo = motor.crestTeam(escudo);
+        final String? equipo = escudoNombrado ?? motor.crestTeam(escudo!);
         if (equipo == null) {
           await request.drain<void>();
           respuesta = ApiResponse.problem(HttpStatus.conflict, 'no hay próximo partido: guárdalo antes');

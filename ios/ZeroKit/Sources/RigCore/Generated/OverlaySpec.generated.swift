@@ -117,6 +117,30 @@ public enum OverlaySpec {
         "raya_gap": 14,
     ]
 
+    /// La jornada (fixtures_card.py).
+    public static let fixtures: [String: Int] = [
+        "max": 8,
+        "time_max_chars": 16,
+        "subtitle_max_chars": 32,
+        "list_cy": 628,
+        "row_pitch": 96,
+        "band_half_w": 700,
+        "band_h": 80,
+        "band_alpha": 200,
+        "time_w": 176,
+        "time_h": 46,
+        "time_size": 30,
+        "time_dy_with_subtitle": 12,
+        "subtitle_dy": -25,
+        "subtitle_size": 20,
+        "crest_w": 54,
+        "crest_gap": 28,
+        "crest_initials_size": 17,
+        "name_gap": 18,
+        "name_size": 38,
+        "name_max_w": 430,
+    ]
+
     /// El entretiempo (halftime_card.py).
     public static let halftime: [String: Int] = [
         "title_y": 118,
@@ -151,6 +175,11 @@ public enum OverlaySpec {
         "when_min_w": 300,
         "venue_y": 872,
         "venue_size": 34,
+        "guest_y": 664,
+        "guest_size": 64,
+        "guest_max_w": 1400,
+        "role_y": 738,
+        "role_size": 36,
     ]
 
     /// El marcador (overlay_preview.py).

@@ -188,6 +188,14 @@
   .franjas li { grid-template-columns: 1fr auto auto auto; }
   .franjas .puesta { color: var(--teal); }
 
+  /* ---------------- la jornada (ADR 0030) ---------------- */
+  .partido { display: grid; gap: 8px; padding: 10px 0; border-top: 1px solid var(--linea); }
+  .partido:first-child { border-top: 0; padding-top: 0; }
+  .partido .cabeza { display: flex; justify-content: space-between; align-items: center; font: 600 11px/1.2 var(--sans); letter-spacing: .1em; text-transform: uppercase; color: var(--oceanico); }
+  .partido .cabeza .btn { min-height: 36px; padding: 0 12px; }
+  .escudos-jornada { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--linea); }
+  .escudos-jornada:empty { display: none; }
+
   /* ---------------- vídeos (ADR 0027) ---------------- */
   .sonando { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 10px; margin-bottom: 10px; padding: 10px 12px; border-radius: 10px; background: var(--tinte); box-shadow: inset 0 0 0 1px var(--teal); }
   .sonando[hidden] { display: none; }
@@ -318,6 +326,8 @@
         <button type="button" class="btn alin" style="grid-column: 1 / -1" id="entretiempo" data-propio aria-pressed="false"><span>Entretiempo</span><small id="entretiempo-estado">mostrar el marcador</small></button>
         <button type="button" class="btn alin" style="grid-column: 1 / -1" id="final" data-propio aria-pressed="false"><span>Final del partido</span><small id="final-estado">mostrar el resultado</small></button>
         <button type="button" class="btn alin" style="grid-column: 1 / -1" id="proximo" data-propio aria-pressed="false"><span>Próximo partido</span><small id="proximo-estado">mostrar</small></button>
+        <button type="button" class="btn alin" id="jornada-aire" data-propio aria-pressed="false"><span>Jornada</span><small id="jornada-estado">mostrar</small></button>
+        <button type="button" class="btn alin" id="entrevista-aire" data-propio aria-pressed="false"><span>Entrevistas</span><small id="entrevista-estado">mostrar</small></button>
       </div>
     </section>
 
@@ -355,6 +365,28 @@
           </div>
         </form>
       </details>
+    </section>
+
+    <section class="card" aria-labelledby="t-jornada">
+      <h2 id="t-jornada">Jornada</h2>
+      <form class="campos" id="form-jornada">
+        <div id="jornada-filas"></div>
+        <div class="acciones">
+          <button class="btn" type="button" id="jornada-agregar" data-propio>Agregar partido</button>
+          <button class="btn primario" type="submit">Guardar jornada</button>
+        </div>
+      </form>
+      <div class="escudos-jornada" id="jornada-escudos"></div>
+      <p class="nota">Hasta 8 partidos. El subtítulo (final, semifinal, tercer y cuarto lugar…) es opcional. Los escudos van con el nombre de cada equipo: guarda la jornada y súbelos debajo.</p>
+    </section>
+
+    <section class="card" aria-labelledby="t-entrevista">
+      <h2 id="t-entrevista">Entrevistas</h2>
+      <form class="campos" id="form-entrevista">
+        <label>Quién habla<input type="text" id="en-nombre" maxlength="32" autocomplete="off" placeholder="opcional"></label>
+        <label>Cargo<input type="text" id="en-cargo" maxlength="32" autocomplete="off" placeholder="opcional"></label>
+        <button class="btn primario" type="submit">Guardar</button>
+      </form>
     </section>
 
     <section class="card" aria-labelledby="t-proximo">
@@ -502,6 +534,17 @@ function pinta(p) {
   franjaHasta = performance.now() + (p.strip_remaining_ms || 0);
   rellena($('in-local'), p.home.name); rellena($('in-visitante'), p.away.name);
   pintaFranjas(p.strip_presets || [], p.strip_preset);
+  // La jornada y las entrevistas (ADR 0030).
+  const conJornada = !!p.fixtures_on_air, conEntrevista = !!p.interview_on_air;
+  const partidos = p.fixtures || [];
+  $('jornada-aire').setAttribute('aria-pressed', conJornada ? 'true' : 'false');
+  $('jornada-aire').disabled = !partidos.length && !conJornada;
+  $('jornada-estado').textContent = conJornada ? 'al aire · quitar' : (partidos.length ? 'mostrar' : 'cárgala abajo');
+  $('entrevista-aire').setAttribute('aria-pressed', conEntrevista ? 'true' : 'false');
+  $('entrevista-estado').textContent = conEntrevista ? 'al aire · quitar' : 'mostrar';
+  if (p.interview) { rellena($('en-nombre'), p.interview.name); rellena($('en-cargo'), p.interview.role); }
+  if (!jornadaSucia) pintaJornada(partidos);
+  pintaEscudosJornada(partidos);
   if (p.championship_icon !== iconoVisto) { iconoVisto = p.championship_icon; pintaIcono(); }
   for (const lado of ['home', 'away', 'next_home', 'next_away']) {
     $('escudo-' + lado + '-nombre').textContent = nombreDe(lado) ?? '—';
@@ -531,6 +574,107 @@ function nombreDe(lado) {
   if (!partido) return null;
   if (lado.startsWith('next_')) return partido.next_match ? partido.next_match[lado.slice(5)] : null;
   return partido[lado].name;
+}
+
+// ---------------- la jornada (ADR 0030) ----------------
+let jornadaSucia = false;
+let jornadaVista = '';
+function filaPartido(f) {
+  const fila = document.createElement('div');
+  fila.className = 'partido';
+  const campo = (nombre, texto, max, valor, opcional) => {
+    const l = document.createElement('label');
+    l.textContent = texto;
+    const i = document.createElement('input');
+    i.type = 'text'; i.name = nombre; i.maxLength = max; i.autocomplete = 'off'; i.value = valor || '';
+    if (opcional) i.placeholder = 'opcional'; else i.required = true;
+    l.append(i);
+    return l;
+  };
+  const cabeza = document.createElement('div');
+  cabeza.className = 'cabeza';
+  const titulo = document.createElement('span');
+  const quitar = document.createElement('button');
+  quitar.type = 'button'; quitar.className = 'btn quitar'; quitar.dataset.propio = ''; quitar.textContent = 'Quitar';
+  quitar.addEventListener('click', () => { fila.remove(); jornadaSucia = true; numeraJornada(); });
+  cabeza.append(titulo, quitar);
+  const equipos = document.createElement('div'); equipos.className = 'pareja';
+  equipos.append(campo('home', 'Local', 24, f?.home), campo('away', 'Visitante', 24, f?.away));
+  const cuando = document.createElement('div'); cuando.className = 'pareja';
+  cuando.append(campo('time', 'Hora', 16, f?.time), campo('subtitle', 'Subtítulo', 32, f?.subtitle, true));
+  fila.append(cabeza, equipos, cuando);
+  return fila;
+}
+function numeraJornada() {
+  const filas = [...$('jornada-filas').children];
+  filas.forEach((f, i) => { f.querySelector('.cabeza span').textContent = 'Partido ' + (i + 1); });
+  $('jornada-agregar').disabled = filas.length >= 8;
+}
+function pintaJornada(partidos) {
+  const clave = JSON.stringify(partidos.map(f => [f.home, f.away, f.time, f.subtitle]));
+  if (clave === jornadaVista && $('jornada-filas').children.length) return;
+  jornadaVista = clave;
+  const filas = partidos.length ? partidos : [null];
+  $('jornada-filas').replaceChildren(...filas.map(filaPartido));
+  numeraJornada();
+}
+// Los escudos de los equipos de la jornada guardada, por su nombre.
+let escudosJornadaVistos = '';
+function pintaEscudosJornada(partidos) {
+  const equipos = new Map();
+  for (const f of partidos) {
+    for (const [n, v] of [[f.home, f.home_crest], [f.away, f.away_crest]]) {
+      const k = n.trim().replace(/\s+/g, ' ').toUpperCase();
+      if (!equipos.has(k)) equipos.set(k, [n, v ?? null]);
+    }
+  }
+  const clave = JSON.stringify([...equipos]);
+  if (clave === escudosJornadaVistos) return;
+  escudosJornadaVistos = clave;
+  $('jornada-escudos').replaceChildren(...[...equipos.values()].map(([nombre, version]) => {
+    const caja = document.createElement('div');
+    caja.className = 'escudo';
+    const n = document.createElement('span'); n.className = 'nombre'; n.textContent = nombre;
+    const vista = document.createElement('div'); vista.className = 'icono-vista'; vista.textContent = 'sin escudo';
+    const ruta = '/api/v1/assets/crests/' + encodeURIComponent(nombre);
+    if (version != null) {
+      fetch(ruta, { headers: cab }).then(async r => {
+        if (!r.ok) return;
+        const img = document.createElement('img');
+        img.alt = 'Escudo de ' + nombre;
+        img.src = URL.createObjectURL(await r.blob());
+        vista.replaceChildren(img);
+      }).catch(() => {});
+    }
+    const subir = document.createElement('label'); subir.className = 'btn subir'; subir.textContent = 'Cargar';
+    const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/png,image/jpeg';
+    input.addEventListener('change', async () => {
+      const archivo = input.files[0]; input.value = '';
+      if (!archivo) return;
+      if (archivo.size > 4 * 1024 * 1024) { aviso('El escudo pasa de 4 MB.'); return; }
+      subir.classList.add('ocupado');
+      try {
+        const r = await fetch(ruta, { method: 'PUT', headers: { ...cab, 'Content-Type': archivo.type || 'application/octet-stream' }, body: archivo });
+        const j = await r.json().catch(() => ({}));
+        if (r.ok) { pinta(j); aviso(''); } else aviso(j.detail || ('error ' + r.status));
+      } catch { aviso('Sin conexión con el maestro: el escudo no se subió.'); }
+      finally { subir.classList.remove('ocupado'); }
+    });
+    subir.append(input);
+    const quitar = document.createElement('button');
+    quitar.type = 'button'; quitar.className = 'btn quitar'; quitar.dataset.propio = ''; quitar.textContent = 'Quitar';
+    quitar.disabled = version == null;
+    quitar.addEventListener('click', async () => {
+      if (!confirm('¿Quitar el escudo de ' + nombre + '?')) return;
+      try {
+        const r = await fetch(ruta, { method: 'DELETE', headers: cab });
+        const j = await r.json().catch(() => ({}));
+        if (r.ok) pinta(j); else aviso(j.detail || ('error ' + r.status));
+      } catch { aviso('Sin conexión con el maestro.'); }
+    });
+    caja.append(n, vista, subir, quitar);
+    return caja;
+  }));
 }
 
 // ---------------- franjas guardadas (ADR 0029) ----------------
@@ -620,6 +764,28 @@ $('form-franja').addEventListener('submit', e => {
   orden('graphics/strip_save', cuerpo, e.submitter).then(ok => { if (ok) editaFranja(null); });
 });
 $('franja-cancelar').addEventListener('click', () => editaFranja(null));
+$('form-jornada').addEventListener('input', () => { jornadaSucia = true; });
+$('jornada-agregar').addEventListener('click', () => {
+  if ($('jornada-filas').children.length >= 8) return;
+  $('jornada-filas').append(filaPartido(null));
+  jornadaSucia = true;
+  numeraJornada();
+});
+$('form-jornada').addEventListener('submit', e => {
+  e.preventDefault();
+  const matches = [...$('jornada-filas').children].map(fila => {
+    const v = n => fila.querySelector('[name=' + n + ']').value.trim();
+    return { home: v('home'), away: v('away'), time: v('time'), subtitle: v('subtitle') };
+  });
+  orden('match/fixtures', { matches }, e.submitter).then(ok => {
+    if (ok) { jornadaSucia = false; jornadaVista = ''; pintaJornada(partido.fixtures || []); }
+  });
+});
+$('form-entrevista').addEventListener('submit', e => {
+  e.preventDefault();
+  orden('match/interview', { name: $('en-nombre').value.trim(), role: $('en-cargo').value.trim() }, e.submitter)
+    .then(() => limpia($('form-entrevista')));
+});
 $('form-proximo').addEventListener('submit', e => {
   e.preventDefault();
   orden('match/next', {
@@ -752,6 +918,8 @@ $('franja-ocultar').addEventListener('click', e => orden('graphics/strip', { sho
 $('entretiempo').addEventListener('click', e => orden('graphics/halftime', { on_air: !(partido && partido.halftime_on_air) }, e.currentTarget));
 $('final').addEventListener('click', e => orden('graphics/fulltime', { on_air: !(partido && partido.fulltime_on_air) }, e.currentTarget));
 $('proximo').addEventListener('click', e => orden('graphics/next_match', { on_air: !(partido && partido.next_match_on_air) }, e.currentTarget));
+$('jornada-aire').addEventListener('click', e => orden('graphics/fixtures', { on_air: !(partido && partido.fixtures_on_air) }, e.currentTarget));
+$('entrevista-aire').addEventListener('click', e => orden('graphics/interview', { on_air: !(partido && partido.interview_on_air) }, e.currentTarget));
 
 async function orden(ruta, cuerpo, boton) {
   if (boton) boton.classList.add('ocupado');

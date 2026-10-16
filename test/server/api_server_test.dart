@@ -865,6 +865,89 @@ void main() {
     });
   });
 
+  group('la jornada y las entrevistas (ADR 0030)', () {
+    final Map<String, Object?> jornada = <String, Object?>{
+      'matches': <Map<String, Object?>>[
+        <String, Object?>{'home': 'Bellavista', 'away': 'Progreso', 'time': '16:00', 'subtitle': 'Final'},
+        <String, Object?>{'home': 'Santa Cruz', 'away': 'San Cristóbal', 'time': '14:00'},
+      ],
+    };
+
+    test('la jornada: se guarda, se valida, sale y lleva los escudos por nombre', () async {
+      expect(
+        (await pedir('POST', 'graphics/fixtures', bearer: token(), body: <String, Object?>{'on_air': true})).$1,
+        409,
+        reason: 'sin partidos no hay tarjeta',
+      );
+      final (int ok, Map<String, Object?> partido) = await pedir('POST', 'match/fixtures', bearer: token(), body: jornada);
+      expect(ok, 200);
+      final List<Object?> filas = partido['fixtures']! as List<Object?>;
+      expect(filas.length, 2);
+      expect(filas[1], <String, Object?>{
+        'home': 'Santa Cruz',
+        'away': 'San Cristóbal',
+        'time': '14:00',
+        'subtitle': '',
+        'home_crest': null,
+        'away_crest': null,
+      });
+      for (final Map<String, Object?> mala in <Map<String, Object?>>[
+        <String, Object?>{'matches': <Object?>[]},
+        <String, Object?>{
+          'matches': List<Map<String, Object?>>.filled(9, <String, Object?>{'home': 'A', 'away': 'B', 'time': '1'}),
+        },
+        <String, Object?>{
+          'matches': <Map<String, Object?>>[<String, Object?>{'home': 'A', 'away': 'B', 'time': 'x' * 17}],
+        },
+      ]) {
+        expect((await pedir('POST', 'match/fixtures', bearer: token(), body: mala)).$1, 400);
+      }
+
+      // Un escudo por nombre, para un equipo que no juega ahora.
+      final List<int> png = <int>[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, ...List<int>.filled(32, 2)];
+      final HttpClientRequest r = await http.openUrl(
+        'PUT',
+        Uri.parse('http://127.0.0.1:${server.port}/api/v1/$teamCrestsByNameRoute/${Uri.encodeComponent('San Cristóbal')}'),
+      );
+      r.headers.set(HttpHeaders.authorizationHeader, 'Bearer ${token()}');
+      r.contentLength = png.length;
+      r.add(png);
+      final HttpClientResponse res = await r.close();
+      await res.drain<void>();
+      expect(res.statusCode, 200);
+      final List<Object?> conEscudo = engine.toJson()['fixtures']! as List<Object?>;
+      expect((conEscudo[1]! as Map<String, Object?>)['away_crest'], isA<int>());
+
+      final (_, Map<String, Object?> fuera) =
+          await pedir('POST', 'graphics/fixtures', bearer: token(), body: <String, Object?>{'on_air': true});
+      expect((fuera['fixtures_on_air'], fuera['halftime_on_air']), (true, false));
+      final (int quitado, _) =
+          await pedir('DELETE', '$teamCrestsByNameRoute/San%20Crist%C3%B3bal', bearer: token());
+      expect(quitado, 200);
+      expect(engine.graphics.crestFor('SAN CRISTÓBAL'), isNull);
+    });
+
+    test('las entrevistas: quién habla, opcional, y su tarjeta', () async {
+      final (int ok, Map<String, Object?> sin) =
+          await pedir('POST', 'graphics/interview', bearer: token(), body: <String, Object?>{'on_air': true});
+      expect((ok, sin['interview_on_air']), (200, true), reason: 'sin nombre también sale');
+      final (_, Map<String, Object?> con) = await pedir(
+        'POST',
+        'match/interview',
+        bearer: token(),
+        body: <String, Object?>{'name': ' Juan Pérez ', 'role': 'DT de Bellavista'},
+      );
+      expect(con['interview'], <String, Object?>{'name': 'Juan Pérez', 'role': 'DT de Bellavista'});
+      expect(
+        (await pedir('POST', 'match/interview', bearer: token(), body: <String, Object?>{'name': 'x' * 33})).$1,
+        400,
+      );
+      final (_, Map<String, Object?> otra) =
+          await pedir('POST', 'graphics/halftime', bearer: token(), body: <String, Object?>{'on_air': true});
+      expect((otra['interview_on_air'], otra['halftime_on_air']), (false, true), reason: 'una a la vez');
+    });
+  });
+
   group('los vídeos del mando (ADR 0027)', () {
     Future<(int, Map<String, Object?>)> subir(String nombre, List<int> bytes, {String? bearer}) async {
       final HttpClientRequest r = await http.openUrl(

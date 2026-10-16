@@ -219,6 +219,8 @@ class MatchEngine {
   static const String cardHalftime = 'halftime';
   static const String cardFulltime = 'fulltime';
   static const String cardNextMatch = 'next_match';
+  static const String cardFixtures = 'fixtures';
+  static const String cardInterview = 'interview';
 
   /// La tarjeta de pantalla completa al aire: [cardHalftime], [cardFulltime] o
   /// [cardNextMatch], o null. Comparte capa con la alineación: sacar una quita la otra.
@@ -227,6 +229,8 @@ class MatchEngine {
   bool get halftimeOnAir => fullScreenCard == cardHalftime;
   bool get fulltimeOnAir => fullScreenCard == cardFulltime;
   bool get nextMatchOnAir => fullScreenCard == cardNextMatch;
+  bool get fixturesOnAir => fullScreenCard == cardFixtures;
+  bool get interviewOnAir => fullScreenCard == cardInterview;
 
   /// Hasta cuándo sale la franja, en el tiempo monótono de [MatchTimeSource]; null, oculta.
   int? stripUntilMs;
@@ -323,8 +327,24 @@ class MatchEngine {
           _lineup(body);
         case 'match/teams':
           _teams(body);
-        case 'graphics/halftime' || 'graphics/fulltime' || 'graphics/next_match':
+        case 'graphics/halftime' ||
+            'graphics/fulltime' ||
+            'graphics/next_match' ||
+            'graphics/fixtures' ||
+            'graphics/interview':
           _fullScreenCard(name.substring('graphics/'.length), body);
+        case 'match/fixtures':
+          try {
+            graphics.setFixtures(Fixture.listFromJson(body));
+          } on GraphicsError catch (error) {
+            throw OrderError(error.status, error.message);
+          }
+        case 'match/interview':
+          try {
+            graphics.setInterview(Interview.fromJson(body));
+          } on GraphicsError catch (error) {
+            throw OrderError(error.status, error.message);
+          }
         case 'match/next':
           try {
             graphics.setNextMatch(NextMatch.fromJson(body));
@@ -531,6 +551,9 @@ class MatchEngine {
     if (tarjeta == cardNextMatch && graphics.nextMatch == null) {
       throw OrderError(409, 'no hay próximo partido: guárdalo antes con match/next');
     }
+    if (tarjeta == cardFixtures && graphics.fixtures.isEmpty) {
+      throw OrderError(409, 'no hay jornada: guarda sus partidos antes con match/fixtures');
+    }
     fullScreenCard = tarjeta;
     lineups.setOnAir(null);
   }
@@ -713,6 +736,17 @@ class MatchEngine {
       },
       'strip_presets': <Map<String, Object?>>[for (final StripPreset p in graphics.stripPresets) p.toJson()],
       'strip_preset': graphics.stripPreset,
+      'fixtures_on_air': fixturesOnAir,
+      'fixtures': <Map<String, Object?>>[
+        for (final Fixture f in graphics.fixtures)
+          <String, Object?>{
+            ...f.toJson(),
+            'home_crest': graphics.crestFor(f.home)?.rev,
+            'away_crest': graphics.crestFor(f.away)?.rev,
+          },
+      ],
+      'interview_on_air': interviewOnAir,
+      'interview': graphics.interview.toJson(),
       'strip_remaining_ms': stripRemainingMs,
       'strip_texts': graphics.strip.toJson(),
       'championship_icon': graphics.hasIcon ? graphics.iconRev : null,

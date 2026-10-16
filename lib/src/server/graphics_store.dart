@@ -125,6 +125,77 @@ class NextMatch {
   Map<String, Object?> toJson() => <String, Object?>{'home': home, 'away': away, 'when': when, 'venue': venue};
 }
 
+/// Un partido de la jornada (ADR 0030): los equipos, la hora y la fase, en texto libre.
+@immutable
+class Fixture {
+  const Fixture({required this.home, required this.away, required this.time, this.subtitle = ''});
+
+  /// Lee `{home, away, time, subtitle}`; [GraphicsError] si no vale.
+  factory Fixture.fromJson(Object? json) {
+    if (json is! Map<String, Object?>) {
+      throw GraphicsError('cada partido es {home, away, time, subtitle}');
+    }
+    return Fixture(
+      home: _texto(json['home'], 'home', matchTeamNameMaxChars),
+      away: _texto(json['away'], 'away', matchTeamNameMaxChars),
+      time: _texto(json['time'], 'time', OverlaySpec.fixtures['time_max_chars']!),
+      subtitle: _texto(json['subtitle'] ?? '', 'subtitle', OverlaySpec.fixtures['subtitle_max_chars']!, vacio: true),
+    );
+  }
+
+  /// La jornada entera de `{matches: [...]}`: de 1 a `OverlaySpec.fixtures['max']` partidos.
+  static List<Fixture> listFromJson(Object? json) {
+    final Object? partidos = json is Map<String, Object?> ? json['matches'] : null;
+    final int tope = OverlaySpec.fixtures['max']!;
+    if (partidos is! List<Object?> || partidos.isEmpty || partidos.length > tope) {
+      throw GraphicsError('matches: de 1 a $tope partidos');
+    }
+    return <Fixture>[for (final Object? p in partidos) Fixture.fromJson(p)];
+  }
+
+  final String home;
+  final String away;
+  final String time;
+  final String subtitle;
+
+  Map<String, Object?> toJson() => <String, Object?>{'home': home, 'away': away, 'time': time, 'subtitle': subtitle};
+
+  @override
+  bool operator ==(Object other) =>
+      other is Fixture && other.home == home && other.away == away && other.time == time && other.subtitle == subtitle;
+
+  @override
+  int get hashCode => Object.hash(home, away, time, subtitle);
+}
+
+/// Quién habla en la sección de entrevistas y su cargo (ADR 0030); los dos pueden ir vacíos.
+@immutable
+class Interview {
+  const Interview({this.name = '', this.role = ''});
+
+  /// Lee `{name, role}`; [GraphicsError] si no vale.
+  factory Interview.fromJson(Object? json) {
+    if (json is! Map<String, Object?>) {
+      throw GraphicsError('se espera {name, role}');
+    }
+    return Interview(
+      name: _texto(json['name'] ?? '', 'name', OverlaySpec.nextTextMaxChars, vacio: true),
+      role: _texto(json['role'] ?? '', 'role', OverlaySpec.nextTextMaxChars, vacio: true),
+    );
+  }
+
+  final String name;
+  final String role;
+
+  Map<String, Object?> toJson() => <String, Object?>{'name': name, 'role': role};
+
+  @override
+  bool operator ==(Object other) => other is Interview && other.name == name && other.role == role;
+
+  @override
+  int get hashCode => Object.hash(name, role);
+}
+
 /// Una franja guardada (ADR 0029): su nombre y sus textos.
 @immutable
 class StripPreset {
@@ -167,6 +238,14 @@ class GraphicsStore {
           strip = StripTexts.fromJson(json['strip']);
           final Object? tipo = json['icon_mime'];
           iconMime = tipo is String && iconFile.existsSync() ? tipo : null;
+          final Object? jornada = json['fixtures'];
+          if (jornada is List<Object?> && jornada.isNotEmpty) {
+            fixtures = Fixture.listFromJson(<String, Object?>{'matches': jornada});
+          }
+          final Object? entrevista = json['interview'];
+          if (entrevista != null) {
+            interview = Interview.fromJson(entrevista);
+          }
           final Object? proximo = json['next_match'];
           nextMatch = proximo == null ? null : NextMatch.fromJson(proximo);
           final Object? franjas = json['strip_presets'];
@@ -190,6 +269,8 @@ class GraphicsStore {
         iconMime = null;
         _crests.clear();
         nextMatch = null;
+        fixtures = const <Fixture>[];
+        interview = const Interview();
         stripPresets = <StripPreset>[];
         stripPreset = null;
       }
@@ -204,6 +285,22 @@ class GraphicsStore {
 
   /// El próximo partido, si el operador lo guardó (ADR 0029).
   NextMatch? nextMatch;
+
+  /// Los partidos de la jornada (ADR 0030), vacía si no se cargó.
+  List<Fixture> fixtures = const <Fixture>[];
+
+  /// Quién habla en la sección de entrevistas (ADR 0030).
+  Interview interview = const Interview();
+
+  void setFixtures(List<Fixture> partidos) {
+    fixtures = List<Fixture>.unmodifiable(partidos);
+    _save();
+  }
+
+  void setInterview(Interview entrevista) {
+    interview = entrevista;
+    _save();
+  }
 
   /// Las franjas guardadas, en el orden del mando, y el nombre de la que está puesta (null
   /// si los textos se editaron a mano).
@@ -377,6 +474,8 @@ class GraphicsStore {
       'icon_mime': iconMime,
       'crests': <String, String>{for (final MapEntry<String, TeamCrest> e in _crests.entries) e.key: e.value.mime},
       'next_match': nextMatch?.toJson(),
+      'fixtures': <Map<String, Object?>>[for (final Fixture f in fixtures) f.toJson()],
+      'interview': interview.toJson(),
       'strip_presets': <Map<String, Object?>>[for (final StripPreset p in stripPresets) p.toJson()],
       'strip_preset': stripPreset,
     }));

@@ -306,6 +306,10 @@ const String stripPresetDefaultName = 'PRINCIPAL';
 /// `DELETE` lo quita.
 const String teamCrestAssetRoute = 'assets/crest';
 
+/// Los escudos por el nombre del equipo (ADR 0030), para los que no juegan ahora (los de la
+/// jornada): `assets/crests/<nombre>`, con el nombre %-escapado.
+const String teamCrestsByNameRoute = 'assets/crests';
+
 /// La carpeta de los escudos, junto al partido: como el icono, del campeonato.
 const String teamCrestDirName = 'escudos';
 
