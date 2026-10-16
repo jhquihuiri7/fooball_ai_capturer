@@ -911,10 +911,10 @@ final class LinkPartsLoad {
 //
 // «Una cámara (sin pareja)» (2026-10-15, `ProgramRunConfig.single`): la misma pasada de EMITIR
 // con un solo móvil, sobre la sesión sola (`RigSoloLink`). Sin parte (ni su codificador ni su
-// render), el maestro no espera ninguna, y el director va con el lienzo de su lente desde el
-// primer instante (`DirectorLoop.singleCamera`): recorre su lente entera, el plano abierto es el
-// más abierto que cabe en ella (en la franja del campo, como con dos) y no pide vistas de la otra
-// lente, así que no hay retrocesos que contar. El informe y el latido lo dicen con `single_camera`.
+// render), el maestro no espera ninguna, y el programa es la lente tal cual (enmienda del ADR
+// 0025): sin director, la vista fija de `scriptedView` mira por el eje de la cámara con el campo
+// más ancho que cabe en ella (`FullLensView`), enderezada. Solo pide su lado, así que no hay
+// retrocesos que contar. El informe y el latido lo dicen con `single_camera`.
 //
 // IOS-06 (2026-10-15): la escalera de degradación ACTÚA en el banco y en EMITIR
 // (LadderGovernor). Una vez por segundo avanza con los sensores del CaptureEngine y su nivel
@@ -1597,14 +1597,7 @@ final class SplitBench {
             }
             if env["RIG_SPLIT_SCRIPT"] == "spk04" {
                 spk04 = Spk04Script(rig: modelo)
-            } else if config.singleCamera, config.director {
-                let loop = try DirectorLoop.singleCamera(
-                    rig: modelo, side: side, pitchLimitsRad: Self.directorPitchLimitsRad,
-                    width: Self.programWidth, height: Self.programHeight, plan: ShotPlan.at(),
-                    frameDurationMs: 1000 / Self.fps
-                )
-                director = DirectorService(loop: loop, soloSide: side)
-            } else if config.director {
+            } else if config.director, !config.singleCamera {
                 let loop = try DirectorLoop(
                     rig: modelo, canvas: CylindricalCanvas.fit(modelo, pitchLimitsRad: Self.directorPitchLimitsRad),
                     width: Self.programWidth, height: Self.programHeight, plan: ShotPlan.at(),
@@ -1717,9 +1710,11 @@ final class SplitBench {
         }
         let lados: [CameraSide]
         if config.singleCamera {
-            // «Una cámara»: sin barrido que cruce a la otra lente; quieta, al centro de la suya.
+            // «Una cámara» tal cual (enmienda del ADR 0025): quieta, por el eje de su lente y
+            // con todo lo que ve; sin barrido que cruce a la otra lente.
             yaw = rig.camera(side).pose.yawRad
             pitch = rig.camera(side).pose.pitchRad
+            hfov = FullLensView.hfovRad(of: rig.camera(side), width: Self.programWidth, height: Self.programHeight)
             lados = [side]
         } else if let v = try? RectilinearView(yawRad: yaw, pitchRad: pitch, hfovRad: hfov,
                                                width: Self.programWidth, height: Self.programHeight) {
@@ -1907,9 +1902,10 @@ final class SplitBench {
         detectTick()
     }
 
-    /// Quién da las vistas: el guion de SPK-04, el director o el barrido de siempre.
+    /// Quién da las vistas: el guion de SPK-04, el director, la lente tal cual de «Una
+    /// cámara» o el barrido de siempre.
     private var scriptName: String {
-        spk04 != nil ? "spk04" : director != nil ? "director" : "script"
+        spk04 != nil ? "spk04" : director != nil ? "director" : config.singleCamera ? "lens" : "script"
     }
 
     // MARK: - SPK-04: las vistas de cada instante y la 4K local

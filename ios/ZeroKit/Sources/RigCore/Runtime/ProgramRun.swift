@@ -41,8 +41,8 @@ public struct ProgramRunConfig: Equatable, Sendable {
     /// deja siempre a sus sensores.
     public var ladderForce: LadderForce?
     /// «Una cámara (sin pareja)» (2026-10-15): el programa sale de la lente de este móvil y
-    /// de nada más. Sin parte que pintar ni que esperar, y el director encuadra dentro de su
-    /// lente desde el primer instante (`DirectorLoop.singleCamera`).
+    /// de nada más. Sin parte que pintar ni que esperar, y tal cual: la lente entera, sin
+    /// director ni recorte (`FullLensView`, enmienda del ADR 0025).
     public var singleCamera: Bool
     /// El tamaño y el techo con los que sale el programa (IOS-99, ADR 0025). 1080p salvo con
     /// «Una cámara», que puede ir a 720p.
@@ -99,13 +99,14 @@ public struct ProgramRunConfig: Equatable, Sendable {
         )
     }
 
-    /// EMITIR con «Una cámara (sin pareja)»: lo mismo que `production` (el director con su
-    /// IA, el detector, el gráfico y la franja, la copia .mov y el SRT si hay QR Soporte), sin
-    /// enlace y con el programa de una sola lente. Sin parte, su bitrate no se usa. Sale a la
-    /// resolución que eligió el operador (IOS-99): 1080p de partida.
+    /// EMITIR con «Una cámara (sin pareja)»: lo mismo que `production` (el detector, el
+    /// gráfico y la franja, la copia .mov y el SRT si hay QR Soporte), sin enlace y con el
+    /// programa de una sola lente **tal cual**: sin director, la lente entera enderezada
+    /// (`FullLensView`; ADR 0025, enmienda del 2026-10-15). Sin parte, su bitrate no se usa.
+    /// Sale a la resolución que eligió el operador (IOS-99): 1080p de partida.
     public static func single(detectorPackage: String?, output: ProgramOutput = .hd1080) -> ProgramRunConfig {
         ProgramRunConfig(
-            purpose: .production, durationS: .infinity, director: true, publish: true, record4K: false,
+            purpose: .production, durationS: .infinity, director: false, publish: true, record4K: false,
             detectorPackage: detectorPackage, partBitrateBps: noPartBitrateBps, benchFiles: false,
             singleCamera: true, output: output
         )

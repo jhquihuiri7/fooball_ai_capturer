@@ -12,6 +12,30 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-15 · IOS-101 — «Una cámara»: el programa es la lente tal cual · 🚧 escrito sin compilar (Windows)
+
+Jhonatan probó «Una cámara» con el 17 y el programa salía como un acercamiento de la lente:
+el director encuadraba dentro de la franja del campo con la geometría nominal (un soporte a
+~5 m), y su plano más abierto no llegaba a la lente entera. Pidió que, con una cámara, la
+transmisión sea la imagen tal cual. Enmienda del ADR 0025 en football-ai.
+
+**Hecho**
+- `RigCore/Direction/FullLensView.swift`: el campo más ancho que cabe entero en la lente a
+  16:9, por su eje óptico y con el giro del móvil descontado, al 99 % para que el redondeo de
+  la vista no deje bordes negros. Sin giro, 105,5° de los 106° de la ultra gran angular.
+- `ProgramRunConfig.single` va sin director, y `RigLinkNW` ya no monta
+  `DirectorLoop.singleCamera`: la vista fija de `scriptedView` mira por el eje de la lente con
+  ese campo (antes, 60°). En el N0 sus vistas salen como `lens`. Con dos móviles, nada cambia.
+- El detector sigue corriendo para el N0 y no mueve nada.
+
+**Comprobado**: las cuentas de `FullLensViewTests`, replicadas en Python con la misma
+proyección (sin giro, la lente entera menos el 1 %; con giros de hasta 0,12 rad ninguna
+esquina se sale; un 1 % más abierta ya se sale). **Sin compilar**: en Windows no hay Swift.
+
+**Pendiente**: compilar y pasar `FullLensViewTests` y `ProgramRunTests` en el Mac; probar en
+el iPhone con «Una cámara» que el programa enseña lo mismo que la miniatura de la lente. El
+chip «CÁMARA IA · AUTO» del gráfico no cambia con una cámara (anotado en el ADR).
+
 ## 2026-10-15 · El mando web del maestro, rediseñado para el móvil (IOS-64) · 🚧 probado con un maestro simulado; falta en la cancha
 
 El propietario usa un Samsung de operador: la app Zero no corre en Android (todo lo nativo

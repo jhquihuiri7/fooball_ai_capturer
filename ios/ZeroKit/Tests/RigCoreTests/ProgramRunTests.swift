@@ -52,12 +52,13 @@ final class ProgramRunTests: XCTestCase {
     }
 
     func testOneCameraIsTheSameEmitirWithoutAPartner() {
-        // «Una cámara (sin pareja)», 2026-10-15: lo mismo que EMITIR, de una sola lente.
+        // «Una cámara (sin pareja)», 2026-10-15: lo mismo que EMITIR, de una sola lente y tal
+        // cual (enmienda del ADR 0025): sin director, la lente entera.
         let c = ProgramRunConfig.single(detectorPackage: "p.mlpackage")
         XCTAssertTrue(c.singleCamera)
         XCTAssertEqual(c.purpose, .production)
         XCTAssertEqual(c.durationS, .infinity)
-        XCTAssertTrue(c.director)
+        XCTAssertFalse(c.director, "tal cual: la lente entera, sin director")
         XCTAssertTrue(c.publish)
         XCTAssertFalse(c.record4K)
         XCTAssertFalse(c.benchFiles)
