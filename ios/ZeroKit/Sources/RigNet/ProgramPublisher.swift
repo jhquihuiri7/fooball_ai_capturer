@@ -13,7 +13,14 @@
 //   búfer baja.
 // - El vigía de atasco (2026-10-15): si la conexión sigue viva pero en `stallReconnectS`
 //   no ha entrado ningún fotograma de vídeo en SRT aunque el codificador los traiga, se
-//   cierra y se vuelve a conectar como tras un corte (`stallReconnects` lo cuenta).
+//   cierra y se vuelve a conectar al segundo (`stallReconnects` lo cuenta). Lo mismo si el
+//   búfer de envío lleva dos GOP por encima de la latencia, o si la muestra lleva
+//   `sustainedCongestionReconnectS` congestionada y queda latencia que subir.
+// - La latencia SRT sube cuando la red lo pide (ProgramSrtLatency, 2026-10-15): al
+//   reconectar por atasco o congestión sostenida, y al cerrarse una conexión cuyo RTT o
+//   búfer de envío máximos pasaron de la mitad de la latencia, la siguiente conexión va con
+//   el escalón siguiente (1500 → 2500 → 4000 ms). El umbral de retención es la mitad de la
+//   latencia en uso. No baja en la pasada; `latency_ms` y `latency_raises` lo cuentan.
 // - Bitrate adaptativo (AdaptiveRate) con las estadísticas de SRT una vez por segundo; el
 //   bitrate nuevo sale por `onBitrate` para el codificador.
 // - Reconexión cada 3 s (ReconnectBackoff; tras rechazos seguidos, hasta 30 s). Un
@@ -58,6 +65,8 @@ public final class ProgramPublisher {
         public var statsEveryS = ProgramPublish.statsEveryS
         /// Multiplica las esperas de reconexión: 1 en la app; las pruebas las acortan.
         public var reconnectScale = 1.0
+        /// La latencia SRT con la que empieza la pasada; sube sola por los escalones de
+        /// `ProgramSrt.latencyStepsMs` cuando la red lo pide.
         public var latencyMs = ProgramSrt.latencyMs
         public var connectTimeoutMs = ProgramSrt.connectTimeoutMs
         /// El reloj monótono, en ms: la espera de la cola se mide con él.
@@ -100,8 +109,12 @@ public final class ProgramPublisher {
         public var partialSends = 0
         public var sendHolds = 0
         /// Reconexiones del vigía de atasco: la conexión seguía viva y en `stallReconnectS`
-        /// no entró vídeo en SRT.
+        /// no entró vídeo en SRT (o el búfer pasó de la latencia, o la congestión duró).
         public var stallReconnects = 0
+        /// La latencia SRT en uso (la de la conexión vigente, o la de la próxima), en ms.
+        public var latencyMs = Int(ProgramSrt.latencyMs)
+        /// Veces que la latencia subió de escalón en la pasada.
+        public var latencyRaises = 0
         /// El rigMs del último fotograma entregado a SRT: el `anchor` del túnel (IOS-65).
         public var lastSentRigMs: UInt64?
         /// Segundos desde que el último fotograma de vídeo entró en SRT, en cualquier
@@ -150,6 +163,15 @@ public final class ProgramPublisher {
     /// Desde cuándo (reloj monótono) la muestra ve el búfer de envío por encima de la
     /// latencia SRT; nil cuando baja.
     private var bufferOverLatencySinceMs: Double?
+    /// Desde cuándo (reloj monótono) la muestra sale congestionada seguido; nil al aflojar.
+    private var congestedSinceMs: Double?
+    /// La latencia SRT de la pasada: la que lleva cada conexión y de la que sale el umbral
+    /// de retención. Solo sube.
+    private var latency: ProgramSrtLatency
+    /// El RTT y el búfer de envío máximos de la conexión vigente: al cerrarse dicen si pidió
+    /// más latencia.
+    private var sessionRttMsMax = 0.0
+    private var sessionSendBufferMsMax = 0
 
     /// `maximumBps` es el techo de fábrica (PROGRAM_VIDEO_BITRATE_BPS); `startBps`, el
     /// bitrate con el que arranca el codificador (por defecto, el techo).
@@ -163,8 +185,10 @@ public final class ProgramPublisher {
         self.makeSink = makeSink
         muxer = TsMuxer(audio: audio)
         rate = AdaptiveRate(maximumBps: maximumBps, startBps: startBps)
+        latency = ProgramSrtLatency(startMs: timing.latencyMs)
         stats.bitrateBps = rate.currentBps
         stats.bitrateMinBps = rate.currentBps
+        stats.latencyMs = Int(latency.ms)
     }
 
     deinit {
@@ -229,8 +253,9 @@ public final class ProgramPublisher {
         setState(.connecting)
         let gen = generation
         let nuevo = makeSink()
+        let latenciaMs = latency.ms
         connectQueue.async { [weak self, target, query, timing] in
-            let resultado = Result { try nuevo.connect(to: target, query: query, latencyMs: timing.latencyMs,
+            let resultado = Result { try nuevo.connect(to: target, query: query, latencyMs: latenciaMs,
                                                        timeoutMs: timing.connectTimeoutMs) }
             guard let self else { nuevo.close(); return }
             queue.async { self.connected(nuevo, resultado, gen) }
@@ -263,9 +288,12 @@ public final class ProgramPublisher {
             partialsAtSample = stats.partialSends
             firstUnsentVideoAtMs = nil
             bufferOverLatencySinceMs = nil
+            congestedSinceMs = nil
+            sessionRttMsMax = 0
+            sessionSendBufferMsMax = 0
             idrPending = false
             setState(.publishing)
-            log("conectado a \(target.host):\(target.port)")
+            log("conectado a \(target.host):\(target.port) · \(latency)")
             requestIdr()
         case .failure(let error):
             nuevo.close()
@@ -288,9 +316,12 @@ public final class ProgramPublisher {
         case .rejected?:
             stats.rejections += 1
             fallo = .rejected
+        case .stalled?, .sendBufferOverLatency?, .sustainedCongestion?:
+            fallo = .stalled
         default:
             fallo = wasPublishing ? .lost : .unreachable
         }
+        if wasPublishing { raiseLatencyIfTheNetworkAsked(after: fallo) }
         let espera = backoff.delayS(after: fallo)
         setState(.waiting(porque))
         log("\(porque); otra vez en \(Int(espera)) s")
@@ -299,6 +330,30 @@ public final class ProgramPublisher {
             guard let self, gen == generation, case .waiting = state else { return }
             connect()
         }
+    }
+
+    /// Al cerrarse una conexión que publicaba: si la cerramos por atasco o congestión
+    /// sostenida, o si su RTT o su búfer de envío máximos pasaron de la mitad de la latencia
+    /// con la que iba, la siguiente va con el escalón de latencia siguiente. En el tope se
+    /// queda; nunca baja en la pasada.
+    private func raiseLatencyIfTheNetworkAsked(after fallo: ReconnectBackoff.Failure) {
+        let medida = String(format: "rtt máx %.0f ms, búfer máx %d ms", sessionRttMsMax, sessionSendBufferMsMax)
+        let porque: String
+        if fallo == .stalled {
+            porque = "atasco (\(medida))"
+        } else if latency.sessionAsksForMore(rttMsMax: sessionRttMsMax, sendBufferMsMax: sessionSendBufferMsMax) {
+            porque = medida
+        } else {
+            return
+        }
+        let antes = latency.label
+        guard latency.raise() else {
+            log("latencia SRT en el tope (\(antes)); \(porque)")
+            return
+        }
+        stats.latencyRaises += 1
+        stats.latencyMs = Int(latency.ms)
+        log("latencia SRT \(antes) → \(latency.label): \(porque)")
     }
 
     private func closeSink() {
@@ -332,9 +387,10 @@ public final class ProgramPublisher {
         drain()
     }
 
-    /// Retenido: el búfer de envío de SRT por encima del tope; no se le mete más.
+    /// Retenido: el búfer de envío de SRT por encima del tope (la mitad de la latencia en
+    /// uso); no se le mete más.
     private func isHeld(_ s: ProgramSrtSink) -> Bool {
-        (s.sendBufferMs() ?? 0) > ProgramPublish.congestionSendBufferMs
+        (s.sendBufferMs() ?? 0) > latency.congestionSendBufferMs
     }
 
     private func drain() {
@@ -420,11 +476,18 @@ public final class ProgramPublisher {
         stats.rttMs = muestra.rttMs
         stats.rttMsMax = max(stats.rttMsMax, muestra.rttMs)
         stats.sendBufferMsMax = max(stats.sendBufferMsMax, Int(muestra.sendBufferMs))
-        if stalled(muestra) { return }
-        let congestionado = Int(muestra.sendBufferMs) > ProgramPublish.congestionSendBufferMs
+        sessionRttMsMax = max(sessionRttMsMax, muestra.rttMs)
+        sessionSendBufferMsMax = max(sessionSendBufferMsMax, Int(muestra.sendBufferMs))
+        let congestionado = Int(muestra.sendBufferMs) > latency.congestionSendBufferMs
             || sendQueue.counts.congestions > congestionsAtSample || stats.partialSends > partialsAtSample
         congestionsAtSample = sendQueue.counts.congestions
         partialsAtSample = stats.partialSends
+        if congestionado {
+            if congestedSinceMs == nil { congestedSinceMs = timing.nowMs() }
+        } else {
+            congestedSinceMs = nil
+        }
+        if stalled(muestra) { return }
         if let nuevo = rate.sample(congested: congestionado, measuredBps: Int(muestra.sendRateMbps * 1e6),
                                    ceilingBps: ceilingBps) {
             stats.bitrateChanges += 1
@@ -438,14 +501,19 @@ public final class ProgramPublisher {
 
     /// El vigía de atasco (2026-10-15), en cada muestra. Reconecta, y devuelve true, si la
     /// conexión está viva pero (a) llevan `stallReconnectS` llegando fotogramas sin que
-    /// ninguno entre en SRT, o (b) el búfer de envío lleva `bufferOverLatencyReconnectS`
-    /// por encima de la latencia SRT. El búfer que mira `drain` es «el más nuevo menos el
-    /// más viejo sin confirmar»: si el otro lado deja de confirmar, esa lectura se congela
-    /// y la retención no acabaría nunca (medido: 1100 s «publishing» sin un fotograma).
+    /// ninguno entre en SRT (también cuando el que falta es el IDR pedido al codificador:
+    /// la cola tira todo hasta que llegue), (b) el búfer de envío lleva
+    /// `bufferOverLatencyReconnectS` por encima de la latencia SRT, o (c) la muestra lleva
+    /// `sustainedCongestionReconnectS` congestionada y queda un escalón de latencia que
+    /// subir. El búfer que mira `drain` es «el más nuevo menos el más viejo sin confirmar»:
+    /// si el otro lado deja de confirmar, esa lectura se congela y la retención no acabaría
+    /// nunca (medido: 1100 s «publishing» sin un fotograma). La reconexión que sigue va con
+    /// más latencia (`raiseLatencyIfTheNetworkAsked`).
     private func stalled(_ muestra: SrtStats) -> Bool {
         let ahora = timing.nowMs()
         let bufferMs = Int(muestra.sendBufferMs)
-        if bufferMs > Int(timing.latencyMs) {
+        let latenciaMs = Int(latency.ms)
+        if bufferMs > latenciaMs {
             if bufferOverLatencySinceMs == nil { bufferOverLatencySinceMs = ahora }
         } else {
             bufferOverLatencySinceMs = nil
@@ -455,8 +523,12 @@ public final class ProgramPublisher {
             porque = .stalled(stalledS: Int((ahora - desde) / 1000), sendBufferMs: bufferMs)
         } else if let desde = bufferOverLatencySinceMs,
                   (ahora - desde) / 1000 >= ProgramPublish.bufferOverLatencyReconnectS {
-            porque = .sendBufferOverLatency(sendBufferMs: bufferMs, latencyMs: Int(timing.latencyMs),
+            porque = .sendBufferOverLatency(sendBufferMs: bufferMs, latencyMs: latenciaMs,
                                             heldS: Int((ahora - desde) / 1000))
+        } else if let desde = congestedSinceMs, latency.canRaise,
+                  (ahora - desde) / 1000 >= ProgramPublish.sustainedCongestionReconnectS {
+            porque = .sustainedCongestion(congestedS: Int((ahora - desde) / 1000), sendBufferMs: bufferMs,
+                                          latencyMs: latenciaMs)
         } else {
             return false
         }
@@ -483,6 +555,7 @@ public final class ProgramPublisher {
         var s = stats
         s.state = Self.name(state)
         s.bitrateBps = rate.currentBps
+        s.latencyMs = Int(latency.ms)
         s.srtPacketsSent = closed.sent + lastTotals.packetsSent
         s.srtBytesSent = closed.bytes + lastTotals.bytesSent
         s.srtPacketsLost = closed.lost + Int64(lastTotals.packetsLost)

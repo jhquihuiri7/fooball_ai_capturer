@@ -3,7 +3,8 @@
 //
 // - El streamid se comprueba ANTES de enviarlo (ProgramSrtStreamId): MediaMTX escribe en su
 //   log el que no entiende, con la clave dentro.
-// - SRTO_LATENCY = ProgramSrt.latencyMs (1500 ms de partida; SPK-07 lo fija).
+// - SRTO_LATENCY = la latencia que pida el publicador: ProgramSrt.latencyMs (1500 ms) al
+//   empezar, y un escalón de ProgramSrt.latencyStepsMs al reconectar si la red lo pidió.
 // - SRTO_PASSPHRASE: la del QR Soporte (ProgramSrtTarget), que IOS-68 guarda en el Keychain.
 //   Aquí no se guarda ni se escribe en ningún log.
 // - El envío no bloquea: trozos de ProgramSrt.payloadBytes (1316 B) y, si el búfer de envío
@@ -37,6 +38,9 @@ public enum SrtError: Error, Equatable, CustomStringConvertible {
     /// El búfer de envío lleva `heldS` segundos por encima de la latencia SRT: libsrt tira
     /// paquetes sueltos y no baja; se reconecta en vez de retener.
     case sendBufferOverLatency(sendBufferMs: Int, latencyMs: Int, heldS: Int)
+    /// La muestra lleva `congestedS` segundos seguidos congestionada con la latencia
+    /// `latencyMs` y queda un escalón por subir: se reconecta con el siguiente.
+    case sustainedCongestion(congestedS: Int, sendBufferMs: Int, latencyMs: Int)
 
     /// La passphrase no cuadra con la del otro lado (libsrt en escucha).
     public static let rejectBadSecret = Int32(truncatingIfNeeded: SRT_REJ_BADSECRET.rawValue)
@@ -59,6 +63,8 @@ public enum SrtError: Error, Equatable, CustomStringConvertible {
         case .stalled(let s, let ms): return "SRT vivo pero \(s) s sin sacar vídeo (búfer de envío \(ms) ms)"
         case .sendBufferOverLatency(let ms, let lat, let s):
             return "SRT con el búfer de envío (\(ms) ms) por encima de la latencia (\(lat) ms) durante \(s) s"
+        case .sustainedCongestion(let s, let ms, let lat):
+            return "SRT congestionado \(s) s seguidos (búfer de envío \(ms) ms, latencia \(lat) ms): más latencia"
         }
     }
 }

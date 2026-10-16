@@ -310,15 +310,17 @@ class CaptureReadout {
       (_program?.problem.isNotEmpty == true ||
           const <String>{'failed', 'none', 'waiting'}.contains(_program?.srtState));
 
-  /// `programa a 192.0.2.1:8890`, o qué le falta para salir al VPS.
+  /// `publicando a 192.0.2.1:8890 · latencia 1,5 s`, o qué le falta para salir al VPS. El
+  /// detalle, publicando o conectando, es la latencia SRT en uso (sube sola cuando la red lo
+  /// pide, 2026-10-15); reconectando o fallado, el porqué.
   String get _srtLabel {
     final ProgramStatus p = _program!;
     final String destino = p.srtTarget;
     final String detalle = p.srtDetail.isEmpty ? '' : ' · ${p.srtDetail}';
     final String reconexiones = p.srtReconnects > 0 ? ' · ${p.srtReconnects} reconexiones' : '';
     return switch (p.srtState) {
-      'publishing' => 'publicando a $destino$reconexiones',
-      'connecting' => 'conectando a $destino…',
+      'publishing' => 'publicando a $destino$detalle$reconexiones',
+      'connecting' => 'conectando a $destino$detalle…',
       'waiting' => 'RECONECTANDO a $destino$detalle',
       'failed' => 'FALLO$detalle',
       // Sin VPS (la cancha sin internet) el programa sigue y se graba en el maestro.

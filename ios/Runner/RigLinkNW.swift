@@ -2264,10 +2264,19 @@ final class SplitBench {
         } else {
             nota = ""
         }
+        // El detalle de la fila SRT: publicando o conectando, la latencia SRT en uso (sube
+        // cuando la red lo pide, 2026-10-15); reconectando o fallado, el porqué.
+        let srtDetalle: String
+        switch (srt?.state, srt?.latencyMs) {
+        case ("publishing"?, let ms?), ("connecting"?, let ms?):
+            srtDetalle = "latencia \(ProgramSrtLatency.label(ms: ms))"
+        default:
+            srtDetalle = srt?.lastError ?? ""
+        }
         let nuevo = ProgramStatus(
             running: !finished, master: esMaestro, programFps: esMaestro ? fps : 0,
             programFrames: Int64(programFrames), srtState: srtState, srtTarget: destino,
-            srtDetail: srt?.lastError ?? "", srtBitrateBps: Int64(srt?.bitrateBps ?? 0), srtRttMs: srt?.rttMs ?? 0,
+            srtDetail: srtDetalle, srtBitrateBps: Int64(srt?.bitrateBps ?? 0), srtRttMs: srt?.rttMs ?? 0,
             srtReconnects: Int64(srt?.reconnects ?? 0),
             partMbps: esMaestro ? (enlace?.mbps ?? 0) : bytesPorS * Self.bitsPerByte / Self.bitsPerMegabit,
             partFallbacks: Int64(esMaestro ? partFallbacks : (slave?.stats.withoutView ?? 0)),

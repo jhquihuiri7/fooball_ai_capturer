@@ -25,15 +25,36 @@ public enum ProgramPublish {
     /// muestras a 48 kHz); el doble, por si un reloj se para y la espera no crece.
     public static let queueMaxUnits = 160
 
-    /// Milisegundos del búfer de envío de SRT (lo que aún no ha confirmado el VPS) por
-    /// encima de los que no se le mete más: la mitad de la latencia SRT (1500 ms). Por
-    /// encima de la latencia, libsrt tira paquetes sueltos por su cuenta (TLPKTDROP) y
-    /// rompe fotogramas a medias; antes, se retiene en la cola y, si no se vacía, se tira
-    /// hasta el IDR, entero.
-    public static let congestionSendBufferMs = 750
+    /// Divisor de la latencia SRT en uso que da los milisegundos del búfer de envío (lo que
+    /// aún no ha confirmado el VPS) por encima de los que no se le mete más: la mitad (750 ms
+    /// con 1500 de latencia; 1250 con 2500; 2000 con 4000). Por encima de la latencia, libsrt
+    /// tira paquetes sueltos por su cuenta (TLPKTDROP) y rompe fotogramas a medias; antes, se
+    /// retiene en la cola y, si no se vacía, se tira hasta el IDR, entero. Era una constante
+    /// (750) hasta el 2026-10-15; con la latencia que sube (ProgramSrtLatency) va con ella.
+    public static let congestionSendBufferDivisor: Int32 = 2
+
+    /// El umbral de retención para una latencia dada, en ms.
+    public static func congestionSendBufferMs(latencyMs: Int32) -> Int {
+        Int(latencyMs / congestionSendBufferDivisor)
+    }
 
     /// Segundos entre un fallo y el siguiente intento de conectar (ADR 0022 §8).
     public static let reconnectDelayS = 3.0
+
+    /// Segundos entre cerrar una conexión atascada (el vigía, o la congestión sostenida) y
+    /// volver a conectar. Menos que `reconnectDelayS`: la conexión no se cayó, la cerramos
+    /// nosotros con el servidor contestando, y MediaMTX (overridePublisher) acepta al nuevo
+    /// aunque aún tenga al viejo. Con el vigía (5 s) y el conectar, el programa vuelve en
+    /// ~6-7 s desde que dejó de salir vídeo.
+    public static let stallReconnectDelayS = 1.0
+
+    /// Segundos seguidos con la muestra congestionada (búfer de envío por encima de la mitad
+    /// de la latencia, o la cola tirando) antes de reconectar con el escalón de latencia
+    /// siguiente, mientras quede uno: la red tiene más RTT del que la latencia aguanta y el
+    /// bitrate no lo arregla (medido el 2026-10-15: RTT 1,2-2,8 s contra 1500 ms, 2-15 % de
+    /// los fotogramas enviados). Un corte de ~2 s a cambio de dejar de retener. Sin escalón
+    /// que subir no se reconecta: no ganaría nada.
+    public static let sustainedCongestionReconnectS = 10.0
 
     /// Segundos que puede seguir «publishing» una conexión viva a la que llegan fotogramas
     /// del codificador sin que ninguno entre en SRT, antes de cerrarla y volver a conectar:
@@ -178,7 +199,8 @@ public struct ProgramSendQueue: Sendable {
 }
 
 /// Cuándo volver a intentar conectar: cada 3 s (ADR 0022 §8), salvo tras rechazos seguidos
-/// del servidor, que esperan el doble cada vez hasta 30 s.
+/// del servidor, que esperan el doble cada vez hasta 30 s, y salvo tras cerrar nosotros una
+/// conexión atascada, que espera 1 s.
 public struct ReconnectBackoff: Sendable {
     public enum Failure: Sendable, Equatable {
         /// Sin respuesta, sin red o sin resolver el host.
@@ -187,6 +209,8 @@ public struct ReconnectBackoff: Sendable {
         case lost
         /// El servidor dijo que no (credenciales o passphrase).
         case rejected
+        /// Estaba publicando, viva, y la cerramos por atasco o congestión sostenida.
+        case stalled
     }
 
     public private(set) var consecutiveRejections = 0
@@ -195,6 +219,7 @@ public struct ReconnectBackoff: Sendable {
 
     /// Segundos hasta el próximo intento.
     public mutating func delayS(after failure: Failure) -> Double {
+        if failure == .stalled { return ProgramPublish.stallReconnectDelayS }
         guard failure == .rejected else { return ProgramPublish.reconnectDelayS }
         consecutiveRejections += 1
         let doble = ProgramPublish.reconnectDelayS * pow(2, Double(consecutiveRejections - 1))

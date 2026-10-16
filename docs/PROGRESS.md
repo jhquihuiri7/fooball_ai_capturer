@@ -12,6 +12,90 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-15 · La latencia SRT sube cuando la red lo pide (1500 → 2500 → 4000 ms) y el atasco reconecta al segundo · 🚧 probado con el socket falso; falta la emisión real
+
+**El caso, medido emitiendo de verdad al VPS (MediaMTX 1.21 en 167.71.31.225) desde el Wi-Fi
+de casa con bufferbloat.** Sesión de las 20:52 (476 s): perfecta 346 s (30 fps, 5-6 Mbit/s en
+el VPS) y al empeorar la Wi-Fi (`srt_packets_lost` 1712, `rtt_ms_max` 779, `send_buffer_ms_max`
+**1514**, por encima de la latencia SRT de 1500) el publicador se quedó reteniendo (`send_holds`
+9965, `congestions` 131, un IDR por segundo) y no envió nada en los últimos 130 s con la
+conexión viva. La de las 20:19: lo mismo a los 32 s, 18 min sin enviar. Las de 18:44-18:52: RTT
+1,2-2,8 s (> la latencia), 2-15 % de los fotogramas enviados. El vigía de bfaab04 reconecta
+cuando no sale vídeo en 5 s, pero **con el RTT bajo carga por encima de la latencia SRT,
+libsrt no entrega a tiempo, tira por TLPKTDROP, el búfer de envío se queda por encima del
+umbral de retención (750 ms, constante fija) y el publicador retiene**: reconectar con la
+misma latencia se atasca otra vez en segundos (visto a las 21:01). Alexander prefiere emitir
+con 1-2 s más de retardo antes que cortarse.
+
+**Hecho** (ZeroKit RigCore + RigNet, Runner, Dart; un commit).
+- **La escalera de latencia** `ProgramSrt.latencyStepsMs = [1500, 2500, 4000]` (ms, tope 4000)
+  y `ProgramSrtLatency` (RigCore): la latencia de la pasada, que solo sube. El publicador la
+  pasa a `connect` (SRTO_LATENCY se fija al conectar; nada que hacer con la conexión viva) y
+  sube al escalón siguiente al cerrarse una conexión que publicaba (a) por atasco del vigía
+  (sin vídeo 5 s, o búfer > latencia 4 s), (b) por **congestión sostenida** (nuevo: la muestra
+  congestionada `sustainedCongestionReconnectS` = 10 s seguidos y queda escalón; en el tope no
+  reconecta, no ganaría nada; `SrtError.sustainedCongestion`), o (c) por un corte normal si en
+  esa conexión `rtt_ms_max` o `send_buffer_ms_max` pasaron de la mitad de la latencia
+  (`latencyRaiseDivisor` = 2). No baja en la pasada; otro publicador (otra pasada, u otro
+  maestro) empieza en 1500.
+- **El umbral de retención es la mitad de la latencia en uso**
+  (`ProgramPublish.congestionSendBufferMs(latencyMs:)`, divisor 2: 750 / 1250 / 2000 ms), ya no
+  la constante 750: `drain()`, `requestIdr()` y la muestra lo leen de `ProgramSrtLatency`.
+- **Reconectar por atasco espera 1 s** (`ProgramPublish.stallReconnectDelayS`,
+  `ReconnectBackoff.Failure.stalled`), no los 3 s de un corte: la conexión la cerramos nosotros
+  con el servidor contestando y MediaMTX (overridePublisher) acepta al nuevo. Desde que deja de
+  salir vídeo: 5 s del vigía + 1 s + el conectar ≈ 6,5 s (antes ≈ 8,5). IDR al conectar, como ya.
+- **El IDR que no llega ya lo cubría bfaab04**, confirmado con test: tras pedir un IDR la cola
+  tira todo lo que no sea IDR, `firstUnsentVideoAtMs` corre y a los 5 s el vigía reconecta con
+  «cola esperando IDR» en el log (`testAnIdrThatNeverArrivesIsAStallAndReconnects`). No hace
+  falta otro plazo de 2 GOP.
+- `Stats` nuevas: `latency_ms` (la en uso o la de la próxima conexión) y `latency_raises`; van
+  al informe (`publish.sessions[*]`) y al latido (`publish`). Log: «conectado a host:port ·
+  latencia SRT 2,5 s» y «latencia SRT 1,5 s → 2,5 s: atasco (rtt máx N ms, búfer máx M ms)» o
+  «latencia SRT en el tope (4 s); …».
+- **Pantalla**: la fila SRT de la tarjeta Programa dice «publicando a host:port · latencia
+  1,5 s [· N reconexiones]» y «conectando a host:port · latencia 2,5 s…» (el Runner pone la
+  latencia en `srtDetail` cuando publica o conecta; el porqué del fallo, como antes, cuando
+  reconecta o falla). Sin tocar Pigeon.
+
+**Comprobado** (worktree `../wt-srt-lat`; el árbol principal y los iPhone, sin tocar)
+- `swift test --skip ModelBench`: **574 tests, 4 saltados, 0 fallos** (11 nuevos: 5 en
+  `ProgramSrtTests` —escalera, subida y tope, umbral derivado, «pide más», texto—, 6 en
+  `ProgramPublisherTests`: atasco → 1 s y 2500 con el umbral nuevo dejando pasar 900 ms de
+  búfer; corte con RTT 1200 → 2500 y sigue esperando 3 s; corte con red sana → sigue en 1500;
+  tres atascos → 1500/2500/4000/4000 con 2 subidas y otra pasada en 1500; 10 s de congestión →
+  2500 y en el tope no reconecta; IDR que nunca llega → atasco). `ProgramSendQueueTests`:
+  `.stalled` espera 1 s y vigía + espera ≤ 7 s.
+- El Runner con `swiftc -typecheck` (iOS 26) contra RigCore, RigNet y RigMedia emitidos para
+  iOS desde este árbol y Flutter y HaishinKit del DerivedData: **0 errores, 34 avisos**, ninguno
+  en lo nuevo. `tools/check_layers.sh`: limpio.
+- Dart: `flutter test --no-pub` de `capture_labels_srt_test.dart` (nuevo, 2 tests: la fila SRT
+  con latencia, reconexiones, conectando y reconectando), `capture_labels_ladder_test.dart` y
+  `widget_test.dart`: **45 tests, All tests passed**.
+
+**No probado en hardware.** Ni que MediaMTX acepte la reconexión al segundo con el publicador
+anterior aún «publishing» (cuenta con overridePublisher; a las 20:15 la reconexión a los 3 s
+funcionó), ni que con 2500-4000 ms de latencia el relé del VPS y el reproductor sigan bien
+(`stream_url.dart` fija su propia latencia de lectura; mirar si hay que subirla a la par).
+
+**Qué mirar en el próximo informe del 17** (`publish.sessions[*]` y el latido `publish`):
+`latency_ms` > 1500 y `latency_raises` ≥ 1 en un tramo tras un atasco dicen que subió; con
+2500 el tramo siguiente debe tener `send_holds` y `congestions` muy por debajo del anterior y
+`video_frames_sent` cerca de `program_frames`; `last_error` «SRT congestionado 10 s seguidos…»
+es la subida por congestión sostenida (no debe repetirse más de 2 veces por pasada: la
+escalera tiene 3 escalones); en el VPS el corte por atasco no debe pasar de ~7 s (5 + 1 +
+conectar). En la pantalla, «· latencia 2,5 s» en la fila SRT. Si con 4 s de latencia
+(`latency_ms` 4000) sigue reteniendo, el problema no es el RTT: es ancho de banda, y lo que
+toca es la escalera de bitrate.
+
+**Decisión pendiente de Alexander: enmienda a SPK-07 / ADR 0023 (y ADR 0022).** La latencia
+SRT ya no es fija de 1500 ms: empieza ahí y crece hasta 4000 cuando la red lo pide, sin bajar
+en la pasada. El retardo cristal→VPS pasa de ~1,75 s a hasta ~4,25 s en redes malas. Si se
+acepta, va al ADR 0023 (el «≤1,75 s de cristal a VPS» pasa a ser «≤1,75 s con la red sana;
+hasta ~4,25 s antes que cortarse») y al ADR 0022 §8 (la reconexión por atasco al segundo).
+Queda fuera: `tools/cancha.py` no enseña aún `latency_ms`/`latency_raises` en la línea SRT, y
+la latencia del reproductor (`stream_url.dart`) no sigue a la del publicador.
+
 ## 2026-10-15 · El atasco del SRT: la conexión viva 19 min sin sacar un fotograma, y el vigía que la reconecta · 🚧 probado con el socket falso; falta la emisión real
 
 **El caso, medido emitiendo de verdad al VPS (MediaMTX 1.21, SRT a 1500 ms) por un Wi-Fi con

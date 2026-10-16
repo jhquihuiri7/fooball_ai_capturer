@@ -117,12 +117,18 @@ final class ProgramSendQueueTests: XCTestCase {
         XCTAssertGreaterThan(ProgramPublish.stallReconnectS, ProgramPublish.queueMaxWaitMs / 1000)
         XCTAssertGreaterThan(ProgramPublish.stallReconnectS, ProgramPublish.reconnectDelayS)
         XCTAssertGreaterThan(ProgramPublish.bufferOverLatencyReconnectS, ProgramPublish.queueMaxWaitMs / 1000)
+        // La congestión sostenida tarda más que el vigía: el atasco de verdad va primero.
+        XCTAssertGreaterThan(ProgramPublish.sustainedCongestionReconnectS, ProgramPublish.stallReconnectS)
+        // El programa vuelve en ≤ 8 s desde que deja de salir vídeo: vigía, espera y ~1 s de conectar.
+        XCTAssertLessThanOrEqual(ProgramPublish.stallReconnectS + ProgramPublish.stallReconnectDelayS, 7)
+        XCTAssertLessThan(ProgramPublish.stallReconnectDelayS, ProgramPublish.reconnectDelayS)
     }
 
     func testReconnectEveryThreeSecondsAndBackOffOnlyOnRejections() {
         var b = ReconnectBackoff()
         XCTAssertEqual(b.delayS(after: .unreachable), 3)
         XCTAssertEqual(b.delayS(after: .lost), 3)
+        XCTAssertEqual(b.delayS(after: .stalled), 1, "la cerramos nosotros con el servidor contestando")
         XCTAssertEqual([b.delayS(after: .rejected), b.delayS(after: .rejected), b.delayS(after: .rejected),
                         b.delayS(after: .rejected), b.delayS(after: .rejected), b.delayS(after: .rejected)],
                        [3, 6, 12, 24, 30, 30])

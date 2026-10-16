@@ -14,9 +14,25 @@ public enum ProgramSrt {
     /// tools/program_contract.py.)
     public static let path = "programa"
 
-    /// Milisegundos de latencia SRT del programa: el margen de ARQ sobre 4G/5G. De partida;
-    /// SPK-07 lo fija con medidas. (Python: `PROGRAM_SRT_LATENCY_MS`.)
+    /// Milisegundos de latencia SRT del programa al empezar una pasada: el margen de ARQ
+    /// sobre 4G/5G (SPK-07, ADR 0023). El primer escalón de `latencyStepsMs`. (Python:
+    /// `PROGRAM_SRT_LATENCY_MS`.)
     public static let latencyMs: Int32 = 1500
+
+    /// Los escalones de latencia SRT, en ms, que el publicador sube cuando la red lo pide
+    /// (2026-10-15, medido emitiendo al VPS por un Wi-Fi con bufferbloat: RTT de 1,2-2,8 s
+    /// bajo carga contra 1500 ms de latencia, libsrt tirando por TLPKTDROP y el publicador
+    /// reteniendo). Solo se aplica al conectar (SRTO_LATENCY): se sube al reconectar por
+    /// atasco o cuando la conexión que acaba tuvo RTT o búfer de envío por encima de la mitad
+    /// de la latencia. No baja sola en la pasada; la siguiente pasada empieza en el primero.
+    /// El tope, 4000 ms, es el retardo cristal→VPS que se acepta antes que cortarse (hasta
+    /// ~4,25 s en vez de los ~1,75 s de SPK-07; enmienda pendiente de decisión).
+    public static let latencyStepsMs: [Int32] = [1500, 2500, 4000]
+
+    /// Divisor de la latencia por encima del cual el RTT o el búfer de envío de una
+    /// conexión dicen que esa latencia fue poca: la mitad. Con RTT > latencia/2 una sola
+    /// retransmisión ya no llega a tiempo.
+    public static let latencyRaiseDivisor: Int32 = 2
 
     /// Bytes por mensaje SRT: 7 paquetes TS de 188 B, la carga útil por defecto de SRT en
     /// modo live (SRTO_PAYLOADSIZE) y lo que espera MediaMTX.
@@ -41,6 +57,58 @@ public enum ProgramSrt {
 
     /// El alfabeto de usuario, clave y passphrase (ADR 0022 §2).
     static let credentialAlphabet = Set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")
+}
+
+/// La latencia SRT en uso en una pasada y sus subidas (2026-10-15). Empieza en el primer
+/// escalón (o en la que le den las pruebas) y sube por `ProgramSrt.latencyStepsMs` cuando el
+/// publicador reconecta con la red pidiéndolo; nunca baja. El umbral de retención del
+/// publicador (`congestionSendBufferMs`) sale de ella, no de una constante.
+public struct ProgramSrtLatency: Equatable, Sendable, CustomStringConvertible {
+    /// La latencia que lleva la próxima conexión (y la vigente, si está conectado), en ms.
+    public private(set) var ms: Int32
+    /// Veces que subió de escalón en la pasada.
+    public private(set) var raises = 0
+
+    public init(startMs: Int32 = ProgramSrt.latencyMs) {
+        ms = startMs
+    }
+
+    /// Milisegundos del búfer de envío de SRT por encima de los que el publicador retiene:
+    /// la mitad de la latencia en uso.
+    public var congestionSendBufferMs: Int { ProgramPublish.congestionSendBufferMs(latencyMs: ms) }
+
+    /// El escalón siguiente, si lo hay: el primero de la escalera mayor que la latencia en uso.
+    public var nextMs: Int32? { ProgramSrt.latencyStepsMs.first { $0 > ms } }
+
+    /// Queda un escalón por subir.
+    public var canRaise: Bool { nextMs != nil }
+
+    /// Sube al escalón siguiente. False en el tope: se queda como está.
+    @discardableResult
+    public mutating func raise() -> Bool {
+        guard let siguiente = nextMs else { return false }
+        ms = siguiente
+        raises += 1
+        return true
+    }
+
+    /// Si la conexión que acaba de cerrarse pidió más latencia: su RTT o su búfer de envío
+    /// máximos pasaron de la mitad de la latencia con la que iba.
+    public func sessionAsksForMore(rttMsMax: Double, sendBufferMsMax: Int) -> Bool {
+        let umbral = ms / ProgramSrt.latencyRaiseDivisor
+        return rttMsMax > Double(umbral) || sendBufferMsMax > Int(umbral)
+    }
+
+    /// «1,5 s», «2,5 s», «4 s»: para el log y la fila SRT de la pantalla.
+    public var label: String { Self.label(ms: Int(ms)) }
+
+    public static func label(ms: Int) -> String {
+        let s = Double(ms) / 1000
+        let texto = s == s.rounded() ? String(Int(s)) : String(format: "%.1f", s).replacingOccurrences(of: ".", with: ",")
+        return "\(texto) s"
+    }
+
+    public var description: String { "latencia SRT \(label)" }
 }
 
 /// Por qué no vale un streamid o una credencial. Nunca lleva el valor: puede ser la clave.

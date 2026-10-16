@@ -88,4 +88,65 @@ final class ProgramSrtTests: XCTestCase {
         // MediaMTX tarda 2 s en rechazar una clave mala: el timeout deja margen al RTT.
         XCTAssertGreaterThanOrEqual(ProgramSrt.connectTimeoutMs, 4000)
     }
+
+    // MARK: - La latencia que sube (2026-10-15)
+
+    func testLaEscaleraDeLatenciaEmpiezaEnLaDePartidaYSubeHastaCuatroSegundos() {
+        XCTAssertEqual(ProgramSrt.latencyStepsMs, [1500, 2500, 4000])
+        XCTAssertEqual(ProgramSrt.latencyStepsMs.first, ProgramSrt.latencyMs)
+        XCTAssertEqual(ProgramSrt.latencyStepsMs, ProgramSrt.latencyStepsMs.sorted(), "estrictamente creciente")
+        XCTAssertEqual(Set(ProgramSrt.latencyStepsMs).count, ProgramSrt.latencyStepsMs.count)
+        XCTAssertEqual(ProgramSrt.latencyStepsMs.last, 4000, "el tope: ~4,25 s de cristal a VPS")
+    }
+
+    func testLaLatenciaSubeEscalonAEscalonYSeQuedaEnElTope() {
+        var l = ProgramSrtLatency()
+        XCTAssertEqual(l.ms, 1500)
+        XCTAssertEqual(l.raises, 0)
+        XCTAssertEqual(l.nextMs, 2500)
+        XCTAssertTrue(l.canRaise)
+        XCTAssertTrue(l.raise())
+        XCTAssertEqual(l.ms, 2500)
+        XCTAssertTrue(l.raise())
+        XCTAssertEqual(l.ms, 4000)
+        XCTAssertFalse(l.canRaise)
+        XCTAssertFalse(l.raise(), "en el tope se queda")
+        XCTAssertEqual(l.ms, 4000)
+        XCTAssertEqual(l.raises, 2)
+        // Las pruebas con eco local conectan con 120 ms: el escalón siguiente es el primero
+        // de la escalera que la supera.
+        var corta = ProgramSrtLatency(startMs: 120)
+        XCTAssertTrue(corta.raise())
+        XCTAssertEqual(corta.ms, 1500)
+    }
+
+    func testElUmbralDeRetencionEsLaMitadDeLaLatenciaEnUso() {
+        var l = ProgramSrtLatency()
+        XCTAssertEqual(l.congestionSendBufferMs, 750, "lo que era la constante")
+        l.raise()
+        XCTAssertEqual(l.congestionSendBufferMs, 1250)
+        l.raise()
+        XCTAssertEqual(l.congestionSendBufferMs, 2000)
+        XCTAssertEqual(ProgramPublish.congestionSendBufferMs(latencyMs: 1500), 750)
+    }
+
+    func testUnaConexionPideMasLatenciaSiSuRttOSuBuferPasaronDeLaMitad() {
+        let l = ProgramSrtLatency()
+        XCTAssertFalse(l.sessionAsksForMore(rttMsMax: 750, sendBufferMsMax: 750), "justo la mitad, no")
+        XCTAssertTrue(l.sessionAsksForMore(rttMsMax: 779, sendBufferMsMax: 0), "la sesión de las 20:52")
+        XCTAssertTrue(l.sessionAsksForMore(rttMsMax: 142, sendBufferMsMax: 1520), "la de las 20:19")
+        XCTAssertFalse(l.sessionAsksForMore(rttMsMax: 142, sendBufferMsMax: 300))
+        var alta = ProgramSrtLatency()
+        alta.raise()  // 2500: la mitad es 1250
+        XCTAssertFalse(alta.sessionAsksForMore(rttMsMax: 1200, sendBufferMsMax: 1250))
+        XCTAssertTrue(alta.sessionAsksForMore(rttMsMax: 1300, sendBufferMsMax: 0))
+    }
+
+    func testElTextoDeLaLatenciaParaLaPantallaYElLog() {
+        XCTAssertEqual(ProgramSrtLatency.label(ms: 1500), "1,5 s")
+        XCTAssertEqual(ProgramSrtLatency.label(ms: 2500), "2,5 s")
+        XCTAssertEqual(ProgramSrtLatency.label(ms: 4000), "4 s")
+        XCTAssertEqual(ProgramSrtLatency.label(ms: 120), "0,1 s")
+        XCTAssertEqual("\(ProgramSrtLatency())", "latencia SRT 1,5 s")
+    }
 }
