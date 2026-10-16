@@ -307,6 +307,12 @@ const int videoNameMaxChars = 80;
 /// Bytes como mucho de un vídeo: 1 GB son 15 min a 8 Mbit/s, de sobra para un anuncio.
 const int videoMaxBytes = 1 << 30;
 
+/// Lo que una subida de vídeo deja libre como poco cuando la 4K local no va a grabar
+/// (apagada, o sin sus [phoneDiskReserveBytes] libres): la copia del programa de un
+/// partido de 2 h (~2,7 GB/h a 6 Mbit/s, 5,4 GB) más el suelo del disco de
+/// `RecordingPolicy` (2 GB), redondeado a 8 GB decimales.
+const int videoMinFreeAfterBytes = 8 * 1000 * 1000 * 1000;
+
 /// Lo que tarda en sonar un vídeo desde `video/play`, en ms: el lector nativo tiene listos
 /// los primeros fotogramas y el audio antes de que el programa los pida.
 const int videoStartLeadMs = 300;

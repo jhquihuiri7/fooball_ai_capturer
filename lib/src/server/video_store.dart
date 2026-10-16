@@ -36,13 +36,16 @@ class VideoInfo {
 
 class VideoStore {
   /// `freeBytes` dice lo que queda libre en el disco del móvil, o null si no se sabe
-  /// (entonces la reserva no se comprueba).
-  VideoStore(Directory partido, {int? Function()? freeBytes})
+  /// (entonces la reserva no se comprueba). `localRecording` dice si el operador quiere la
+  /// 4K local («Guardar vídeo»); sin saberlo, se supone que sí.
+  VideoStore(Directory partido, {int? Function()? freeBytes, bool Function()? localRecording})
     : directory = Directory('${partido.path}/$videoDirName'),
-      _freeBytes = freeBytes ?? (() => null);
+      _freeBytes = freeBytes ?? (() => null),
+      _localRecording = localRecording ?? (() => true);
 
   final Directory directory;
   final int? Function() _freeBytes;
+  final bool Function() _localRecording;
 
   /// Letras, cifras, espacios y `._()-`, sin barras ni puntos al principio, y `.mp4`.
   static final RegExp _nombre = RegExp(
@@ -89,8 +92,8 @@ class VideoStore {
   }
 
   /// Lo que se comprueba antes de leer el cuerpo de una subida de `bytes` (el
-  /// Content-Length, o -1 si no lo trae): el nombre, el tope y la reserva de grabación
-  /// (`phoneDiskReserveBytes`).
+  /// Content-Length, o -1 si no lo trae): el nombre, el tope y la reserva de lo que el
+  /// partido va a grabar.
   void checkUpload(String name, int bytes) {
     if (!validName(name)) {
       throw VideoError(
@@ -101,12 +104,27 @@ class VideoStore {
     if (bytes > videoMaxBytes) {
       throw VideoError(HttpStatus.requestEntityTooLarge, 'el vídeo pasa de ${videoMaxBytes ~/ (1 << 30)} GB');
     }
-    // La reserva de la 4K local (IOS-57): un vídeo no puede quitarle sitio al partido.
     final int? libre = _freeBytes();
-    if (libre != null && libre - (bytes < 0 ? 0 : bytes) < phoneDiskReserveBytes) {
+    if (libre == null) {
+      return;
+    }
+    final int queda = libre - (bytes < 0 ? 0 : bytes);
+    // La 4K local (IOS-57) solo se protege si va a grabar: encendida y con su reserva libre
+    // ahora. Si ya no cabe, no arranca, y el vídeo no le quita nada: entonces basta con la
+    // copia del programa (ADR 0027, enmienda del 2026-10-16).
+    final bool cuatroK = _localRecording() && libre >= phoneDiskReserveBytes;
+    if (cuatroK && queda < phoneDiskReserveBytes) {
       throw VideoError(
         HttpStatus.insufficientStorage,
-        'no hay sitio: el vídeo dejaría menos de ${phoneDiskReserveBytes ~/ 1000000000} GB para grabar el partido',
+        'no hay sitio: con el vídeo quedarían menos de ${phoneDiskReserveBytes ~/ 1000000000} GB '
+        'y la 4K local no podría grabar el partido. Apaga «Guardar vídeo» en el móvil o libera espacio',
+      );
+    }
+    if (queda < videoMinFreeAfterBytes) {
+      throw VideoError(
+        HttpStatus.insufficientStorage,
+        'no hay sitio: con el vídeo quedarían menos de ${videoMinFreeAfterBytes ~/ 1000000000} GB '
+        'para la copia del programa. Libera espacio en el móvil',
       );
     }
   }

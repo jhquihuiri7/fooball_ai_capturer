@@ -21,8 +21,7 @@ el programa y el micro. En dos commits: el servidor y el mando web (1/2) y el na
 **Hecho**
 - `VideoStore` (`Documents/partido/videos/`, como el icono no se aparta con el partido):
   `PUT /api/v1/videos/<nombre>.mp4` a disco por trozos, con la puerta, el nombre, el tope de
-  1 GB y la reserva de grabación (`phoneDiskReserveBytes` libres después, si el disco se sabe:
-  507 si no) antes del cuerpo; solo se adopta si empieza por `ftyp` y se le lee la duración
+  1 GB y la reserva de grabación (507 si no; ver la corrección de abajo) antes del cuerpo; solo se adopta si empieza por `ftyp` y se le lee la duración
   del `moov/mvhd` (delante o detrás, v0 y v1). `GET /api/v1/videos` la lista y `DELETE` borra
   (409 si suena).
 - El motor: `video/play` (`{name}`) y `video/stop`, con su `id` de reproducción. El cero va
@@ -58,6 +57,13 @@ en el eje, un vídeo mudo, el aviso del hub, un fichero que no es vídeo) y
 `AudioSubstituteTests` (el AAC lleva el tono del sustituto solo en su tramo y la 4K el micro).
 El Chrome sin cabeza ya no arranca en esta máquina: la tarjeta se revisó con la sintaxis de
 Node y la limpieza de nombres, no en pantalla.
+
+**Corrección del 2026-10-16 (probado en el iPhone por Jhonatan)**: subir cualquier vídeo daba
+«no hay sitio: el vídeo dejaría menos de 40 GB». La reserva era siempre la de la 4K local,
+y con menos de 40 GB libres la 4K ya no arranca (`RecordingPolicy`): el vídeo no le quitaba
+nada. Ahora los 40 GB solo se guardan si «Guardar vídeo» está encendido y caben hoy; si no,
+basta con dejar `videoMinFreeAfterBytes` (8 GB: la copia del programa de 2 h y el suelo
+del disco). El aviso dice cuál de las dos falta y qué hacer. Enmienda del ADR 0027.
 
 **Pendiente (Mac e iPhone)**: compilar ZeroKit y el Runner y pasar los dos tests nuevos;
 dudosos de compilar: `AVVideoComposition.videoComposition(withPropertiesOf:)` y la

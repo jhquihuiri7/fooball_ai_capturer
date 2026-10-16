@@ -137,10 +137,11 @@ class MatchEngine {
     this.boot,
     (LineupBook, String?) lineups,
     int? Function()? freeBytes,
+    bool Function()? localRecording,
   ) : lineups = lineups.$1,
       lineupsError = lineups.$2,
       graphics = GraphicsStore(_file.parent),
-      videos = VideoStore(_file.parent, freeBytes: freeBytes);
+      videos = VideoStore(_file.parent, freeBytes: freeBytes, localRecording: localRecording);
 
   /// Abre el partido guardado en `file`, o empieza uno nuevo si no hay fichero.
   /// Con el mismo `clock_domain` el cronómetro sigue en marcha; con otro vuelve
@@ -149,7 +150,8 @@ class MatchEngine {
   ///
   /// `matchId` es el partido que trae el enlace (IOS-80): si el guardado es otro, se
   /// aparta (`match-<id>.json`, con sus alineaciones) y se empieza este de cero.
-  /// `freeBytes` dice lo libre del disco, para la reserva de grabación de los vídeos.
+  /// `freeBytes` dice lo libre del disco y `localRecording` si se quiere la 4K local: la
+  /// reserva de grabación que respetan los vídeos.
   factory MatchEngine.open({
     required File file,
     required MatchTimeSource time,
@@ -158,6 +160,7 @@ class MatchEngine {
     String away = 'VISITANTE',
     Random? random,
     int? Function()? freeBytes,
+    bool Function()? localRecording,
   }) {
     final Random azar = random ?? Random.secure();
     final MatchClock reloj = MatchClock(time);
@@ -174,6 +177,7 @@ class MatchEngine {
       _hex(azar, 8),
       _loadLineups(File('${file.parent.path}/$lineupsFileName')),
       freeBytes,
+      localRecording,
     );
     if (guardado == null) {
       engine

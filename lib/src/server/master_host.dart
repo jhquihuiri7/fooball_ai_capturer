@@ -69,6 +69,7 @@ class MasterHost extends ChangeNotifier {
     this.adPacks,
     this.videoSink,
     this.freeDiskBytes,
+    this.localRecording,
   }) : wallS = wallS ?? _wallClockS,
        _time = time ?? StopwatchTimeSource(),
        _monotonic = Stopwatch()..start();
@@ -139,6 +140,10 @@ class MasterHost extends ChangeNotifier {
 
   /// Lo libre del disco del móvil, para la reserva de grabación al subir vídeos.
   final int? Function()? freeDiskBytes;
+
+  /// Si el operador quiere la 4K local («Guardar vídeo»): solo entonces los vídeos dejan
+  /// su reserva entera.
+  final bool Function()? localRecording;
   ProgramVideo? _video;
   StreamSubscription<void>? _videoChanges;
   Timer? _videoTick;
@@ -196,6 +201,7 @@ class MasterHost extends ChangeNotifier {
         time: _time,
         matchId: matchId,
         freeBytes: freeDiskBytes,
+        localRecording: localRecording,
       );
       if (matchId == null) {
         await announceMatch(engine.matchId);

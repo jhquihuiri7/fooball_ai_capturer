@@ -146,6 +146,7 @@ class _CapturePageState extends State<CapturePage> {
               // Los vídeos del mando (IOS-103): el lector nativo y el disco que queda.
               videoSink: RigVideoSink(),
               freeDiskBytes: () => _session.status?.freeDiskBytes,
+              localRecording: () => _session.saveVideo,
             );
 
   /// Lo que enseña el panel local del estado del soporte (IOS-64).

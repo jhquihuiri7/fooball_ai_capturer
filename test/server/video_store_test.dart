@@ -44,21 +44,44 @@ void main() {
     expect(VideoStore.durationMs(f), isNull, reason: 'cortado antes del moov');
   });
 
-  test('subir: tope, reserva de grabación y adoptar solo un MP4', () {
+  test('la reserva es la de lo que el partido va a grabar', () {
     int? libre;
-    final VideoStore store = VideoStore(dir, freeBytes: () => libre);
+    bool cuatroK = true;
+    final VideoStore store = VideoStore(dir, freeBytes: () => libre, localRecording: () => cuatroK);
+    Matcher sinSitio(String dice) => throwsA(
+      isA<VideoError>()
+          .having((VideoError e) => e.status, 'status', 507)
+          .having((VideoError e) => e.message, 'message', contains(dice)),
+    );
+    const int gb = 1000 * 1000 * 1000;
+    store.checkUpload('a.mp4', 900 * 1000 * 1000); // sin saber lo libre, no se comprueba
+
+    // La 4K encendida y con sitio: el vídeo no puede dejarla sin sus 40 GB.
+    libre = phoneDiskReserveBytes + gb;
+    store.checkUpload('a.mp4', gb);
+    expect(() => store.checkUpload('a.mp4', gb + 1), sinSitio('Guardar vídeo'));
+
+    // La 4K apagada: basta con la copia del programa.
+    cuatroK = false;
+    store.checkUpload('a.mp4', videoMaxBytes);
+
+    // Encendida pero sin sus 40 GB: no va a grabar, así que tampoco cuenta (el caso del
+    // 2026-10-16, un iPhone con menos de 40 GB libres que no dejaba subir nada).
+    cuatroK = true;
+    libre = 30 * gb;
+    store.checkUpload('a.mp4', videoMaxBytes);
+    libre = videoMinFreeAfterBytes + 500;
+    store.checkUpload('a.mp4', 500);
+    expect(() => store.checkUpload('a.mp4', 501), sinSitio('copia del programa'));
+  });
+
+  test('subir: tope y adoptar solo un MP4', () {
+    final VideoStore store = VideoStore(dir);
     expect(() => store.checkUpload('../x.mp4', 10), throwsA(isA<VideoError>()));
     expect(
       () => store.checkUpload('a.mp4', videoMaxBytes + 1),
       throwsA(isA<VideoError>().having((VideoError e) => e.status, 'status', 413)),
     );
-    store.checkUpload('a.mp4', 1000); // sin saber lo libre, no se comprueba la reserva
-    libre = phoneDiskReserveBytes + 500;
-    expect(
-      () => store.checkUpload('a.mp4', 1000),
-      throwsA(isA<VideoError>().having((VideoError e) => e.status, 'status', 507)),
-    );
-    store.checkUpload('a.mp4', 400);
 
     store.directory.createSync();
     store.uploadFile('a.mp4').writeAsBytesSync(fakeMp4(durationMs: 9000));
