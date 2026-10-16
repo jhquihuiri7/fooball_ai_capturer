@@ -10,6 +10,8 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:football_ai_capture/src/generated/overlay_spec.g.dart';
+import 'package:football_ai_capture/src/graphics/halftime_card_painter.dart';
 import 'package:football_ai_capture/src/graphics/lineup_card_painter.dart';
 import 'package:football_ai_capture/src/graphics/overlay_bridge.dart';
 import 'package:football_ai_capture/src/graphics/overlay_raster.dart';
@@ -46,36 +48,44 @@ class ProgramGraphics {
   ui.Image? _icon;
   int _iconRev = 0;
 
-  /// Los escudos de los equipos decodificados (ADR 0028), por lado, con la versión de la
-  /// que salió cada uno.
-  final Map<MatchTeam, (int, ui.Image)> _crests = <MatchTeam, (int, ui.Image)>{};
+  /// Los escudos decodificados (ADR 0028), por su versión: cada versión es un fichero, así
+  /// que no se decodifica dos veces. Lo que deja de usarse se suelta al acabar la pasada.
+  final Map<int, ui.Image> _crests = <int, ui.Image>{};
+  final Set<int> _crestsUsed = <int>{};
 
-  /// Los escudos de los equipos que juegan ahora, por lado (`home`, `away`): se decodifica
-  /// de nuevo solo el que cambió de versión (otro escudo, o el equipo cambió de nombre).
-  Future<Map<String, ui.Image>> _teamCrests() async {
-    final Map<String, ui.Image> escudos = <String, ui.Image>{};
-    for (final MatchTeam lado in MatchTeam.values) {
-      final TeamCrest? escudo = engine.graphics.crestFor(engine.teamName(lado));
-      final (int, ui.Image)? previo = _crests[lado];
-      if (previo != null && previo.$1 == escudo?.rev) {
-        escudos[lado.name] = previo.$2;
-        continue;
-      }
-      _crests.remove(lado)?.$2.dispose();
-      if (escudo == null) {
-        continue;
-      }
-      try {
-        final ui.Codec codec = await ui.instantiateImageCodec(await escudo.file.readAsBytes());
-        final ui.Image imagen = (await codec.getNextFrame()).image;
-        codec.dispose();
-        _crests[lado] = (escudo.rev, imagen);
-        escudos[lado.name] = imagen;
-      } on Exception {
-        // un fichero que no se decodifica: el genérico, como sin escudo
-      }
+  /// El escudo del equipo `name` decodificado, o null si va el genérico (o no se lee).
+  Future<ui.Image?> _crest(String? name) async {
+    final TeamCrest? escudo = name == null ? null : engine.graphics.crestFor(name);
+    if (escudo == null) {
+      return null;
     }
-    return escudos;
+    _crestsUsed.add(escudo.rev);
+    final ui.Image? previo = _crests[escudo.rev];
+    if (previo != null) {
+      return previo;
+    }
+    try {
+      final ui.Codec codec = await ui.instantiateImageCodec(await escudo.file.readAsBytes());
+      final ui.Image imagen = (await codec.getNextFrame()).image;
+      codec.dispose();
+      return _crests[escudo.rev] = imagen;
+    } on Exception {
+      return null; // un fichero que no se decodifica: el genérico, como sin escudo
+    }
+  }
+
+  /// Los escudos de dos equipos por lado (`home`, `away`), los que los tienen.
+  Future<Map<String, ui.Image>> _crestsOf(String? home, String? away) async => <String, ui.Image>{
+    if (await _crest(home) case final ui.Image i) 'home': i,
+    if (await _crest(away) case final ui.Image i) 'away': i,
+  };
+
+  /// Suelta los escudos que esta pasada no usó.
+  void _dropUnusedCrests() {
+    for (final int rev in _crests.keys.where((int r) => !_crestsUsed.contains(r)).toList()) {
+      _crests.remove(rev)?.dispose();
+    }
+    _crestsUsed.clear();
   }
 
   /// Decodifica el icono si cambió desde el último; sin icono, null.
@@ -136,14 +146,17 @@ class ProgramGraphics {
       do {
         _again = false;
         final ui.Image? icono = await _championship();
-        final Map<String, ui.Image> escudos = await _teamCrests();
+        final Map<String, ui.Image> escudos = await _crestsOf(engine.home, engine.away);
         final ScoreboardState estado = scoreboardState();
-        // La capa de tarjetas: el entretiempo o una alineación, nunca las dos (ADR 0027).
+        // La capa de tarjetas: una de pantalla completa o una alineación, nunca dos (ADR 0027
+        // y 0029).
         final (MatchTeam, Team)? alAire = engine.lineups.onAir;
-        if (engine.halftimeOnAir) {
-          // El entretiempo tapa la pantalla entera con un velo translúcido sobre la cancha
-          // desenfocada: el marcador se quitaría a través del velo, así que sale.
-          await bridge.publish(OverlayLayerId.lineup, await _cards.halftime(estado, icon: icono, crests: escudos));
+        final OverlayFrame? pantalla = await _fullScreenCard(estado, icono, escudos);
+        _dropUnusedCrests();
+        if (pantalla != null) {
+          // Tapa la pantalla entera con un velo translúcido sobre la cancha desenfocada: el
+          // marcador se vería a través del velo, así que sale.
+          await bridge.publish(OverlayLayerId.lineup, pantalla);
           await bridge.setBackdropBlur(true);
           await bridge.clear(OverlayLayerId.scoreboard);
           continue;
@@ -170,6 +183,44 @@ class ProgramGraphics {
       } while (_again);
     } finally {
       _busy = false;
+    }
+  }
+}
+
+extension on ProgramGraphics {
+  /// La tarjeta de pantalla completa al aire (entretiempo, final o próximo partido), o null.
+  Future<OverlayFrame?> _fullScreenCard(ScoreboardState estado, ui.Image? icono, Map<String, ui.Image> escudos) async {
+    switch (engine.fullScreenCard) {
+      case MatchEngine.cardHalftime:
+        return _cards.halftime(estado, icon: icono, crests: escudos);
+      case MatchEngine.cardFulltime:
+        return _cards.halftime(estado, icon: icono, crests: escudos, title: OverlaySpec.fulltimeTitle);
+      case MatchEngine.cardNextMatch:
+        final NextMatch? n = engine.graphics.nextMatch;
+        if (n == null) {
+          return null;
+        }
+        final ScoreboardState conSusEscudos = ScoreboardState(
+          competition: estado.competition,
+          home: n.home,
+          away: n.away,
+          homeGoals: 0,
+          awayGoals: 0,
+          clockS: 0,
+          live: false,
+          cameraMode: '',
+          iconRev: estado.iconRev,
+          homeCrestRev: engine.graphics.crestFor(n.home)?.rev,
+          awayCrestRev: engine.graphics.crestFor(n.away)?.rev,
+        );
+        return _cards.halftime(
+          conSusEscudos,
+          icon: icono,
+          crests: await _crestsOf(n.home, n.away),
+          next: NextMatchCard(home: n.home, away: n.away, when: n.when, venue: n.venue),
+        );
+      default:
+        return null;
     }
   }
 }

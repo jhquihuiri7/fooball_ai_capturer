@@ -12,6 +12,42 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-16 · IOS-105 e IOS-106 — Final del partido, próximo partido y varias franjas desde el mando · 🚧 probado en Windows; falta verlo emitido en el iPhone
+
+ADR 0029 de football-ai, pedido por Jhonatan: como el entretiempo, una tarjeta de final del
+partido y otra del próximo partido; y en la franja inferior, varias franjas guardadas para
+sacar la que toque.
+
+**Hecho**
+- El motor: una tarjeta de pantalla completa al aire de tres (`fullScreenCard`:
+  entretiempo, final, próximo partido), una a la vez y también frente a la alineación. Órdenes
+  `graphics/fulltime`, `graphics/next_match` (409 sin datos) y `match/next`; quitar una que
+  no está no tumba la que está.
+- `GraphicsStore`: el próximo partido (`NextMatch`) y las franjas guardadas (`StripPreset`,
+  hasta 12, PRINCIPAL de partida), del campeonato. Órdenes `graphics/strip_save` (añadir,
+  sustituir o renombrar con `previous_name`; editar la puesta cambia la franja),
+  `graphics/strip_delete` y `graphics/strip` con `name`. `graphics/strip_texts` sigue y deja
+  la franja sin nombre.
+- Los escudos del próximo partido: `assets/crest/next_home|next_away` (409 sin próximo
+  partido), por el nombre de cada equipo como los del ADR 0028.
+- El estado: `fulltime_on_air`, `next_match_on_air`, `next_match` (con los escudos de sus
+  equipos), `strip_presets` y `strip_preset`, como el dorado del túnel de football-ai 62e39b1.
+- Los painters: `HalftimeLayout` y `HalftimeCardPainter` con `title` (la de final) y `next`
+  (la de próximo partido: el cuándo en la caja inclinada teal y el dónde debajo).
+  `ProgramGraphics` saca la que toque con el velo y la cancha desenfocada; los escudos
+  decodificados se guardan por versión y se sueltan los que dejan de usarse.
+- El mando web: «Final del partido» y «Próximo partido» en «Al aire»; la tarjeta «Próximo
+  partido» con el formulario y los escudos; y en «Franja inferior», la lista de franjas con
+  «Sacar 15 s», «Editar» y «Borrar», y «Agregar franja».
+
+**Comprobado**: `flutter analyze` limpio; la API (una tarjeta a la vez, el próximo partido y
+sus escudos, las franjas), la de final frente a `fulltime.png` (0,46 % de píxeles
+distintos), la de próximo partido frente a `next_match.png` (0,69 %), la geometría y
+`ProgramGraphics`. Fallan en Windows los 8 dorados de imagen del Mac, como antes.
+
+**Pendiente**: en el iPhone, sacar desde el Samsung la de final y la de próximo partido, y
+guardar dos franjas y sacar cada una. Regenerar en el Mac `goldens/halftime.png`.
+
 ## 2026-10-16 · Arreglo: los goles y el reloj del mando web no respondían · ✅ en el código; falta comprobarlo en el iPhone
 
 Jhonatan lo vio en el mando que abre la URL: ni «+ Gol» ni «− 1», ni iniciar, pausar o poner

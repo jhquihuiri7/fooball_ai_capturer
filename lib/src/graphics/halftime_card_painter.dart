@@ -12,6 +12,7 @@ library;
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart' show immutable;
 import 'package:flutter/rendering.dart';
 
 import '../generated/overlay_spec.g.dart';
@@ -21,15 +22,39 @@ import 'scoreboard_painter.dart';
 
 int _h(String clave) => OverlaySpec.halftime[clave]!;
 
+/// El próximo partido para su tarjeta (ADR 0029): los equipos, cuándo y dónde.
+@immutable
+class NextMatchCard {
+  const NextMatchCard({required this.home, required this.away, required this.when, this.venue = ''});
+
+  final String home;
+  final String away;
+  final String when;
+  final String venue;
+
+  @override
+  bool operator ==(Object other) =>
+      other is NextMatchCard && other.home == home && other.away == away && other.when == when && other.venue == venue;
+
+  @override
+  int get hashCode => Object.hash(home, away, when, venue);
+}
+
 /// La geometría de la tarjeta sobre un lienzo de `width` de ancho: las mismas claves que
-/// `halftime` de boxes.json.
+/// `halftime` de boxes.json. Con `title`, la de final (`fulltime`); con `next`, la de
+/// próximo partido (`next_match`), que lleva sus equipos y el cuándo y el dónde en lugar
+/// del marcador (ADR 0029).
 class HalftimeLayout {
-  HalftimeLayout(this.width, this.state) : s = width / OverlaySpec.refWidth {
+  HalftimeLayout(this.width, this.state, {String? title, this.next})
+    : title = title ?? (next != null ? OverlaySpec.nextMatchTitle : OverlaySpec.halftimeTitle),
+      s = width / OverlaySpec.refWidth {
     _measure();
   }
 
   final int width;
   final ScoreboardState state;
+  final String title;
+  final NextMatchCard? next;
   final double s;
   final Map<String, Rect> boxes = <String, Rect>{};
   final Map<String, double> v = <String, double>{};
@@ -42,6 +67,8 @@ class HalftimeLayout {
     'comp' => GalaBrand.text('display', 600, h('comp_size'), color: color),
     'name' => GalaBrand.text('display', 700, h('name_size'), color: color),
     'score' => GalaBrand.text('display', 800, h('score_size'), color: color),
+    'when' => GalaBrand.text('display', 800, h('when_size'), color: color),
+    'venue' => GalaBrand.text('display', 600, h('venue_size'), color: color),
     _ => GalaBrand.text('display', 800, h('crest_initials_size'), color: color),
   };
 
@@ -70,11 +97,15 @@ class HalftimeLayout {
     return '$candidato…';
   }
 
-  String nombre(String lado) => (lado == 'home' ? state.home : state.away).toUpperCase();
+  String nombre(String lado) {
+    final NextMatchCard? n = next;
+    final String crudo = lado == 'home' ? (n?.home ?? state.home) : (n?.away ?? state.away);
+    return crudo.toUpperCase();
+  }
 
   void _measure() {
     final double cx = width / 2;
-    final double tituloW = textWidth(OverlaySpec.halftimeTitle, 'title');
+    final double tituloW = textWidth(title, 'title');
     double mitad = h('title_size') / 2;
     boxes['title'] = Rect.fromLTRB(cx - tituloW / 2, h('title_y') - mitad, cx + tituloW / 2, h('title_y') + mitad);
     final double compW = textWidth(state.competition.toUpperCase(), 'comp');
@@ -94,6 +125,22 @@ class HalftimeLayout {
       boxes['${clave}_name'] = Rect.fromLTRB(ccx - ancho / 2, h('name_y') - mitad, ccx + ancho / 2, h('name_y') + mitad);
     }
 
+    final NextMatchCard? n = next;
+    if (n != null) {
+      // El cuándo en la caja inclinada donde va el marcador; el dónde, debajo.
+      final double cajaW = math.max(h('when_min_w'), textWidth(n.when.toUpperCase(), 'when') + 2 * h('when_pad_x'));
+      final double alto = h('when_h');
+      final double sesgo = alto / 2 * GalaBrand.inclinacion;
+      final double x0 = cx - cajaW / 2, y0 = h('when_y') - alto / 2;
+      boxes['when'] = Rect.fromLTRB(x0 - sesgo, y0, x0 + cajaW + sesgo, y0 + alto);
+      v.addAll(<String, double>{'when_x': x0, 'when_w': cajaW, 'when_y': y0, 'when_h': alto});
+      if (n.venue.trim().isNotEmpty) {
+        final double ancho = textWidth(n.venue.toUpperCase(), 'venue');
+        mitad = h('venue_size') / 2;
+        boxes['venue'] = Rect.fromLTRB(cx - ancho / 2, h('venue_y') - mitad, cx + ancho / 2, h('venue_y') + mitad);
+      }
+      return;
+    }
     final double glW = math.max(h('goal_min_w'), textWidth('${state.homeGoals}', 'score') + 2 * h('goal_pad_x'));
     final double guionW = textWidth('-', 'score');
     final double visitaW = guionW + h('goal_dash_gap') + textWidth('${state.awayGoals}', 'score');
@@ -118,7 +165,20 @@ class HalftimeLayout {
 }
 
 class HalftimeCardPainter extends CustomPainter {
-  HalftimeCardPainter(this.state, {required this.isotipo, this.icon, this.crests = const <String, ui.Image>{}});
+  HalftimeCardPainter(
+    this.state, {
+    required this.isotipo,
+    this.icon,
+    this.crests = const <String, ui.Image>{},
+    this.title,
+    this.next,
+  });
+
+  /// El título: el del entretiempo si no se dice otro (la de final lleva el suyo).
+  final String? title;
+
+  /// El próximo partido: con él, la tarjeta es la suya (ADR 0029).
+  final NextMatchCard? next;
 
   final ScoreboardState state;
   final ui.Image isotipo;
@@ -130,7 +190,8 @@ class HalftimeCardPainter extends CustomPainter {
   final Map<String, ui.Image> crests;
 
   @override
-  bool shouldRepaint(HalftimeCardPainter old) => old.state != state || old.icon != icon || old.crests != crests;
+  bool shouldRepaint(HalftimeCardPainter old) =>
+      old.state != state || old.icon != icon || old.crests != crests || old.title != title || old.next != next;
 
   void _text(Canvas c, HalftimeLayout l, String text, String fuente, Color color, Offset at, {bool centred = true}) {
     final TextPainter tp = TextPainter(
@@ -155,7 +216,7 @@ class HalftimeCardPainter extends CustomPainter {
 
   @override
   void paint(Canvas c, Size size) {
-    final HalftimeLayout l = HalftimeLayout(size.width.round(), state);
+    final HalftimeLayout l = HalftimeLayout(size.width.round(), state, title: title, next: next);
     c.drawRect(
       Offset.zero & size,
       Paint()..color = GalaBrand.token('azul-profundo').withAlpha(OverlaySpec.halftime['veil_alpha']!),
@@ -167,7 +228,7 @@ class HalftimeCardPainter extends CustomPainter {
 
     // ---------------- título y competición ----------------
     final Rect titulo = l.boxes['title']!;
-    _text(c, l, OverlaySpec.halftimeTitle, 'title', blanco, Offset(cx, l.h('title_y')));
+    _text(c, l, l.title, 'title', blanco, Offset(cx, l.h('title_y')));
     final double rw = l.h('title_raya_w'), rh = l.h('title_raya_h'), gap = l.h('title_raya_gap');
     for (final double x in <double>[titulo.left - gap - rw, titulo.right + gap]) {
       final Rect caja = Rect.fromLTWH(x, l.h('title_y') - rh / 2, rw, rh);
@@ -198,6 +259,22 @@ class HalftimeCardPainter extends CustomPainter {
       _text(c, l, visible, 'name', blanco, Offset(l.boxes['${clave}_name']!.center.dx, l.h('name_y')));
     }
 
+    // ---------------- el próximo partido: cuándo y dónde ----------------
+    final NextMatchCard? n = next;
+    if (n != null) {
+      final double y = l.v['when_y']!, h = l.v['when_h']!;
+      c.drawPath(
+        GalaBrand.skewed(l.v['when_x']!, y, l.v['when_w']!, h),
+        GalaBrand.fill(teal, bottom: GalaBrand.token('verde-oceano'), box: Rect.fromLTRB(0, y, 1, y + h)),
+      );
+      _text(c, l, n.when.toUpperCase(), 'when', GalaBrand.token('azul-profundo'), Offset(cx, y + h / 2));
+      final Rect? lugar = l.boxes['venue'];
+      if (lugar != null) {
+        _text(c, l, n.venue.toUpperCase(), 'venue', GalaBrand.token('gris-claro'), lugar.center);
+      }
+      return;
+    }
+
     // ---------------- el marcador ----------------
     final double y = l.v['score_y']!, h = l.v['score_h']!, scy = y + h / 2;
     final Rect alto2 = Rect.fromLTRB(0, y, 1, y + h);
@@ -220,10 +297,12 @@ Future<ui.Image> paintHalftimeCard(
   int height, {
   ui.Image? icon,
   Map<String, ui.Image> crests = const <String, ui.Image>{},
+  String? title,
+  NextMatchCard? next,
 }) async {
   final ui.Image isotipo = await GalaBrand.isotipo();
   final ui.PictureRecorder recorder = ui.PictureRecorder();
-  HalftimeCardPainter(state, isotipo: isotipo, icon: icon, crests: crests)
+  HalftimeCardPainter(state, isotipo: isotipo, icon: icon, crests: crests, title: title, next: next)
       .paint(Canvas(recorder), Size(width.toDouble(), height.toDouble()));
   final ui.Picture picture = recorder.endRecording();
   return picture.toImage(width, height).whenComplete(picture.dispose);

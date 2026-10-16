@@ -111,7 +111,7 @@ class CardRaster {
   final int height;
 
   final Map<bool, (LineupCardTeam, int?, OverlayFrame)> _lineups = <bool, (LineupCardTeam, int?, OverlayFrame)>{};
-  (ScoreboardState, OverlayFrame)? _halftime;
+  ((String?, NextMatchCard?, ScoreboardState), OverlayFrame)? _fullScreen;
   OverlayFrame? _slate;
   int _generation = 0;
 
@@ -136,10 +136,15 @@ class CardRaster {
 
   /// La tarjeta de entretiempo (ADR 0027): solo se pinta de nuevo si cambia lo que enseña
   /// (los nombres, los goles, la competición o el icono). El reloj no sale en ella.
+  ///
+  /// Con `title`, la de final del partido; con `next`, la de próximo partido (ADR 0029):
+  /// las tres comparten la última pintada, porque solo hay una al aire.
   Future<OverlayFrame> halftime(
     ScoreboardState state, {
     ui.Image? icon,
     Map<String, ui.Image> crests = const <String, ui.Image>{},
+    String? title,
+    NextMatchCard? next,
   }) async {
     final ScoreboardState clave = ScoreboardState(
       competition: state.competition,
@@ -154,16 +159,18 @@ class CardRaster {
       homeCrestRev: state.homeCrestRev,
       awayCrestRev: state.awayCrestRev,
     );
-    final (ScoreboardState, OverlayFrame)? previa = _halftime;
-    if (previa != null && previa.$1 == clave) {
+    final (String?, NextMatchCard?, ScoreboardState) llave = (title, next, clave);
+    final ((String?, NextMatchCard?, ScoreboardState), OverlayFrame)? previa = _fullScreen;
+    if (previa != null && previa.$1 == llave) {
       return previa.$2;
     }
-    final Uint8List rgba =
-        await _rgbaOf(await paintHalftimeCard(clave, width, height, icon: icon, crests: crests));
+    final Uint8List rgba = await _rgbaOf(
+      await paintHalftimeCard(clave, width, height, icon: icon, crests: crests, title: title, next: next),
+    );
     _generation += 1;
     final OverlayFrame frame =
         OverlayFrame(rgba: rgba, width: width, height: height, generation: _generation);
-    _halftime = (clave, frame);
+    _fullScreen = (llave, frame);
     return frame;
   }
 

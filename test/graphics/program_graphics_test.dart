@@ -89,6 +89,21 @@ void main() {
       m.apply('graphics/halftime', <String, Object?>{'on_air': false});
       await g.refresh();
       expect(sink.calls.sublist(desde), <String>['blur off', 'set 0', 'clear 1']);
+      // ADR 0029: la de final y la de próximo partido van igual que el entretiempo.
+      desde = sink.calls.length;
+      m.apply('graphics/fulltime', <String, Object?>{'on_air': true});
+      await g.refresh();
+      expect(sink.calls.sublist(desde), <String>['set 1', 'blur on', 'clear 0']);
+      m.apply('match/next', <String, Object?>{'home': 'A', 'away': 'B', 'when': 'HOY', 'venue': ''});
+      m.apply('graphics/next_match', <String, Object?>{'on_air': true});
+      desde = sink.calls.length;
+      await g.refresh();
+      expect(sink.calls.sublist(desde), <String>['set 1'], reason: 'otra tarjeta en la misma capa');
+      m.apply('graphics/next_match', <String, Object?>{'on_air': false});
+      desde = sink.calls.length;
+      await g.refresh();
+      expect(sink.calls.sublist(desde), <String>['blur off', 'set 0', 'clear 1']);
+
       // ADR 0028: el escudo del equipo vuelve a pintar el marcador, y va con su nombre.
       m.graphics.crestUploadFile.parent.createSync(recursive: true);
       File('assets/brand/gala-sports-isotipo.png').copySync(m.graphics.crestUploadFile.path);

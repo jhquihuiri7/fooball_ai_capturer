@@ -107,6 +107,62 @@ void main() {
     });
   });
 
+  // ADR 0029: el próximo partido de los renders de referencia (NEXT_MATCH_RENDER).
+  const NextMatchCard proximo =
+      NextMatchCard(home: 'Progreso', away: 'Bellavista', when: 'Sábado 25 oct · 16:00', venue: 'Estadio Municipal');
+
+  test('el próximo partido: el cuándo centrado donde iba el marcador, y el dónde debajo', () {
+    final HalftimeLayout l = HalftimeLayout(OverlaySpec.programWidth, directo, next: proximo);
+    expect(l.title, OverlaySpec.nextMatchTitle);
+    expect(l.boxes.containsKey('home_score'), isFalse);
+    final ui.Rect cuando = l.boxes['when']!, lugar = l.boxes['venue']!;
+    expect(cuando.center.dx, closeTo(960, 1e-9));
+    expect(lugar.top, greaterThan(cuando.bottom));
+    expect(l.nombre('home'), 'PROGRESO');
+    final HalftimeLayout sinLugar = HalftimeLayout(
+      OverlaySpec.programWidth,
+      directo,
+      next: const NextMatchCard(home: 'A', away: 'B', when: 'HOY'),
+    );
+    expect(sinLugar.boxes.containsKey('venue'), isFalse);
+    expect(sinLugar.boxes['when']!.width, greaterThanOrEqualTo(OverlaySpec.halftime['when_min_w']!));
+  });
+
+  for (final (String png, String? titulo, NextMatchCard? siguiente) in <(String, String?, NextMatchCard?)>[
+    ('fulltime.png', OverlaySpec.fulltimeTitle, null),
+    ('next_match.png', null, proximo),
+  ]) {
+    testWidgets('≤3 % de píxeles distintos frente a $png (ADR 0029)', (WidgetTester tester) async {
+      await tester.runAsync(() async {
+        final ui.Codec codec = await ui.instantiateImageCodec(File('test/graphics/reference/$png').readAsBytesSync());
+        final ui.Image python = (await codec.getNextFrame()).image;
+        final ui.Image dart = await paintHalftimeCard(
+          directo,
+          OverlaySpec.programWidth,
+          OverlaySpec.programHeight,
+          title: titulo,
+          next: siguiente,
+        );
+        final Uint8List a = await _rgba(dart), b = await _rgba(python);
+        int distintos = 0;
+        for (int i = 0; i < a.length; i += 4) {
+          for (int k = 0; k < 4; k++) {
+            if ((a[i + k] - b[i + k]).abs() > 64) {
+              distintos++;
+              break;
+            }
+          }
+        }
+        final double fraccion = distintos / (a.length ~/ 4);
+        // ignore: avoid_print
+        print('$png: ${(fraccion * 100).toStringAsFixed(2)} % de píxeles distintos');
+        expect(fraccion, lessThanOrEqualTo(0.03));
+        dart.dispose();
+        python.dispose();
+      });
+    });
+  }
+
   testWidgets('dorado propio', (WidgetTester tester) async {
     final ui.Image imagen = (await tester.runAsync(
       () => paintHalftimeCard(directo, OverlaySpec.programWidth, OverlaySpec.programHeight),
