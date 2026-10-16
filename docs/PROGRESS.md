@@ -12,6 +12,41 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-15 · Noche: emisiones al VPS con el dedo en EMITIR («Una cámara»), lo que se cortaba y por qué · 🚧 el vigía y la latencia que crece, instalados en el 17 sin probar aún
+
+Alexander emitió desde el 17 en «Una cámara (sin pareja)» al VPS (167.71.31.225, QR Soporte
+del Keychain) y a YouTube, con la app que iba compilando el Mac (hasta ffe1f05 a las 21:31).
+Informes en `bench/partido-20261015-{1605,2023,2039}` y en el scratchpad de la sesión.
+
+**Lo que funcionó:** EMITIR desde la pantalla, el QR Soporte, el programa entero a 30 fps en
+el móvil siempre (copia .mov al 100 %), y en el VPS, cuando la red lo dejaba, 30 fps a
+5-6 Mbit/s con el relé a YouTube estable (15:53-16:02, 20:54-20:58, 20:52-20:58).
+
+**Lo que se cortaba, de fuera a dentro:**
+1. **La red del móvil.** Entre 18:26 y 18:52 el 17 saltó entre la Wi-Fi floja y los datos
+   móviles (la Asistencia Wi-Fi): el VPS vio otra IP pública (190.63.x.x) en un tramo, RTT
+   de 1,2 a 2,8 s, 2-43 % de los fotogramas entregados. Regla nueva en GUIA-CANCHA: datos
+   apagados y la Wi-Fi del Starlink cerca.
+2. **YouTube.** Un rato daba el directo por terminado por su cuenta (Alexander lo arregló en
+   YouTube Studio; «era algo del YouTube»). Recomendación: detención automática apagada.
+3. **El publicador se quedaba reteniendo para siempre** (la causa de «32 s de vídeo y 18 min
+   de nada» a las 20:19 y «5 min 46 s y nada» a las 20:52): el búfer de envío de libsrt pasó
+   la latencia (1 514-1 520 ms > 1 500) en un bache de Wi-Fi y nunca bajó de 750 → `drain()`
+   retenía en cada tic (80 975 `send_holds`), la cola se congestionaba y pedía un IDR cada
+   segundo, la conexión seguía viva y el VPS sin vídeo. Arreglado en bfaab04 (el vigía de
+   atasco reconecta) y ffe1f05 (la latencia SRT sube 1,5 → 2,5 → 4 s al reconectar cuando
+   la red lo pide; el umbral de retención es latencia/2; el atasco reconecta al segundo).
+4. **El relé del VPS** moría con cada corte del programa y relanzaba fallando hasta el
+   siguiente SPS («Invalid argument»): 6 200 arranques. Lo cubre NUBE-18 (en marcha en
+   football-ai): un solo directo hacia YouTube con tarjeta de espera.
+5. **iOS mató Zero al ir al fondo** (18:32, 0x8BADF00D): la vista previa rehacía la sesión
+   en el hilo principal. Arreglado en 79588aa.
+
+**Instalado en el 17 a las 21:31: ffe1f05** (vigía + latencia que crece + vista previa +
+foco de Jonathan). **La IPA 1.0.0 (4) de TestFlight es de 09f9bc4: lleva el vigía y la vista
+previa, no la latencia que crece.** Sin probar en el iPhone todavía: el próximo informe del
+17 (`publish.sessions[*].latency_ms`, `latency_raises`, `stall_reconnects`) lo dirá.
+
 ## 2026-10-15 · La latencia SRT sube cuando la red lo pide (1500 → 2500 → 4000 ms) y el atasco reconecta al segundo · 🚧 probado con el socket falso; falta la emisión real
 
 **El caso, medido emitiendo de verdad al VPS (MediaMTX 1.21 en 167.71.31.225) desde el Wi-Fi
