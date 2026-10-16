@@ -12,6 +12,91 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-15 · El atasco del SRT: la conexión viva 19 min sin sacar un fotograma, y el vigía que la reconecta · 🚧 probado con el socket falso; falta la emisión real
+
+**El caso, medido emitiendo de verdad al VPS (MediaMTX 1.21, SRT a 1500 ms) por un Wi-Fi con
+bufferbloat (RTT 130 ms en reposo, 1-2,4 s bajo carga).** Sesión de las 20:19 (`bench/partido-
+20261015-2039/…/program-split-left-1792118304.json`, publish.sessions[0]): 18,9 min
+«publishing» con la conexión viva todo el rato (`connects` 1, `reconnects` 0, el VPS cerró con
+EOF solo al PARAR), `video_frames_sent` **921 de 33 914**, `last_sent_rig_ms` a los **32 s** de
+empezar y nada más en los 1100 s restantes; `send_holds` 80 975, `congestions` 1032 e
+`idr_requests` 1033 (uno por segundo cada uno), `send_buffer_ms_max` **1520** y la red ya
+sana (`rtt_ms` 142, 0 % pérdidas). La de las 20:13 (`program-split-left-1792116945.json`): 2093
+de 4903 enviados, `rtt_ms` 2445, `congestions` 83, `send_holds` 7197, bitrate en el suelo. Las
+de 18:44-18:52: 43 de 2651, 79 de 1372, 863 de 5647.
+
+**El diagnóstico (hipótesis 1, confirmada en los síntomas).** `drain()` retiene mientras
+`sendBufferMs()` > 750, y esa lectura de libsrt es «el paquete más nuevo menos el más viejo
+sin confirmar»: si el otro lado deja de confirmar, la lectura se congela y la retención no
+acaba nunca. 1520 ms es exactamente la latencia más los 20 ms del TLPKTDROP de libsrt: el
+búfer pasó la latencia una vez (libsrt tiró 277 paquetes), MediaMTX/gosrt no volvió a mover
+el ACK, y desde entonces cada segundo la cola se congestionaba, tiraba todo, pedía un IDR, el
+IDR llegaba retenido y se tiraba al segundo siguiente. Nada cerraba la conexión: libsrt solo
+la da por rota si el otro lado deja de contestar, y contestaba. Lo que no se sabe desde aquí
+es por qué el receptor no avanzó el ACK tras el drop del emisor (¿gosrt no atiende el
+UMSG_DROPREQ?); hay que mirarlo en el log de MediaMTX de esa hora. La hipótesis 2 (el IDR no
+llega) no es la raíz: `programEncoder` es un solo objeto con el GOP a 2 s y `forceIDR`
+funciona; pero la petición de un IDR cada segundo mientras se retiene sí agravaba el atasco
+(a 1 Mbit/s, un IDR forzado por segundo es casi todo el bitrate).
+
+**Hecho (commit único, ZeroKit + Runner + cancha).**
+- **Vigía de atasco** en `ProgramPublisher.tick()` (`stalled(_:)`): si la conexión está
+  `publishing`, llegan fotogramas del codificador y en `ProgramPublish.stallReconnectS` (5 s)
+  ninguno ha entrado en SRT, se cierra y se reconecta como tras un corte (3 s, IDR al
+  conectar). También si el búfer de envío lleva `bufferOverLatencyReconnectS` (4 s, dos GOP)
+  por encima de la latencia SRT, aunque algo siga saliendo (libsrt ya tira paquetes sueltos
+  y lo que sale llega roto). Sin fotogramas llegando (segundo plano) no es un atasco. Errores
+  nuevos `SrtError.stalled` y `.sendBufferOverLatency`, que salen en `last_error` y en el
+  `srtDetail` de la pantalla.
+- **IDR pendiente mientras se retiene**: `requestIdr()` no pide el IDR si SRT está retenido
+  (llegaría retenido y la cola lo tiraría al segundo); lo deja pendiente y `drain()` lo pide en
+  cuanto el búfer baja. Un IDR forzado por retención, no uno por segundo.
+- `Stats` nuevas: `stall_reconnects` y `last_sent_age_s` (segundos desde el último fotograma
+  de vídeo que entró en SRT). **El latido** lleva ahora el publicador entero en `publish`
+  (hoy solo tenía `srt_state`, y por eso el atasco solo se vio en el informe final).
+- `tools/cancha.py`: la línea SRT dice «N por atasco» y, en el informe o el latido, «último
+  vídeo enviado hace N s · E fotogramas enviados de F»; aviso si pasa de `VIDEO_PARADO_S`
+  (10 s, el doble del vigía). De informes anteriores sale de `last_sent_rig_ms` y el reloj
+  del soporte.
+
+**Comprobado** (worktree aparte; el árbol principal y los iPhone, sin tocar)
+- `swift test --skip ModelBench`: **563 tests, 4 saltados, 0 fallos** en el árbol ya rebasado
+  sobre 79588aa (5 nuevos de aquí; 555 antes de rebasar).
+- El Runner con `swiftc -typecheck` (iOS 26, Swift 5) contra RigCore, RigMedia y RigNet
+  emitidos para iOS desde este árbol ya rebasado (`swiftc -emit-module` en el scratchpad;
+  RigMedia con un `Bundle.module` de tres líneas en vez del que genera SwiftPM) y Flutter y
+  HaishinKit del DerivedData de antes: **0 errores, 32 avisos**, ninguno en lo nuevo.
+- `tools/check_layers.sh`: limpio. `python3 tools/test_cancha.py`: 27 OK (uno nuevo,
+  `test_el_srt_dice_hace_cuanto_salio_el_ultimo_video`: el informe atascado, el curado por el
+  vigía, uno viejo sin `last_sent_age_s` y el latido).
+- Tests nuevos: `testAStalledConnectionIsReconnectedAfterFiveSecondsWithoutVideoOut` (el búfer
+  del socket falso en 900 ms para siempre: a los 3 s no, a los 5 s reconecta, IDR al volver,
+  `last_sent_age_s` vuelve a 0), `testNoVideoArrivingIsNotAStall`,
+  `testASendBufferAboveTheLatencyForTwoGopsReconnects`,
+  `testTheBufferDroppingBelowTheLatencyResetsTheCount` y
+  `testTheStallWatchdogOutlastsTheQueueAndTheRetryWait`; el de la congestión, actualizado al
+  IDR pendiente.
+
+**No probado en hardware.** Ni la reconexión contra MediaMTX con el publicador anterior aún
+«publishing» (cuenta con `overridePublisher`, como la reconexión tras corte que ya funcionó
+hoy a las 20:15: `SRT no envía (5004)` → reconectó), ni que `srt_getsndbuffer` baje de verdad
+tras reconectar.
+
+**Qué mirar en el próximo informe del 17** (`publish.sessions[*]` y el latido `publish`):
+`stall_reconnects` > 0 con `last_error` «SRT vivo pero 5 s sin sacar vídeo…» o «…por encima de
+la latencia…» confirma que el vigía pilló el atasco; `last_sent_age_s` < 10 al acabar y
+`video_frames_sent` cerca de `program_frames` dicen que el programa siguió llegando;
+`idr_requests` debería quedar cerca de `congestions` solo si no hubo retenciones largas (con
+el IDR pendiente, muy por debajo de 1/s). En el VPS, la grabación no debe parar más de
+~10 s seguidos (5 del vigía, 3 de espera, el conectar).
+
+**Pendiente (decisión, no se toca ahora).** Con RTT medido > latencia SRT (hoy 2445 ms contra
+1500), el ARQ no llega a tiempo y libsrt tira por su cuenta: o se sube la latencia a
+2500-3000 ms cuando el RTT lo pida (medirlo al conectar, o adaptarla con `rtt_ms_max`), o se
+fija por el QR Soporte según la red del campo. Va al ADR 0022 cuando se decida; SPK-07 lo
+tenía que fijar con medidas y estas son las primeras. Y mirar en el log de MediaMTX por qué
+el receptor no movió el ACK tras el drop (si es gosrt, reportarlo).
+
 ## 2026-10-15 · El 0x8BADF00D del 17 al fondo: la vista previa ya no rehace la sesión en el hilo principal (79588aa) · 🚧 sin probar en el iPhone
 
 **El fallo.** 18:32:57, el 17 emitiendo en «Una cámara (sin pareja)», Zero al fondo: iOS la

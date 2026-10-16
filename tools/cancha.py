@@ -317,6 +317,7 @@ RETROCESOS_MAX = 0.01  # vistas de dos lentes que salieron de una, sobre los fot
 COPIA_MIN = 0.99  # fotogramas en la copia .mov sobre los del programa
 MINUTO_ESTABLE = 3  # los primeros minutos son el arranque (modelos, pools)
 SUCESOS_DEL_ENLACE = 6  # los últimos sucesos del transporte que se enseñan sin enlace
+VIDEO_PARADO_S = 10.0  # el doble del vigía de atasco del publicador (ProgramPublish.stallReconnectS, 5 s)
 _TERMICA = {"nominal": 0, "fair": 1, "serious": 2, "critical": 3}
 
 
@@ -426,6 +427,26 @@ def _duracion_s(d: dict) -> float:
     return 60.0 * max(len(d.get("footprint_mb") or []) if isinstance(d.get("footprint_mb"), list) else 0, 1)
 
 
+def _ultimo_video_enviado(d: dict, tramo: dict, n: _Notas) -> None:
+    """«Último vídeo enviado hace N s» (2026-10-15): el atasco de hoy fue una conexión
+    «publishing» 19 min sin sacar un fotograma, y el estado solo no lo decía. `last_sent_age_s`
+    lo trae el publicador desde hoy; de informes anteriores sale de `last_sent_rig_ms` y el
+    reloj del soporte al acabar. Aviso, no fallo: lo grabado en el móvil sigue entero."""
+    enviados = int(tramo.get("video_frames_sent", 0))
+    hace = tramo.get("last_sent_age_s")
+    if not isinstance(hace, (int, float)) and "last_sent_rig_ms" in tramo and "bench_start_rig_ms" in d:
+        hace = (float(d["bench_start_rig_ms"]) + _duracion_s(d) * 1000 - float(tramo["last_sent_rig_ms"])) / 1000
+    if not isinstance(hace, (int, float)):
+        n.aviso(f"SRT: ningún fotograma de vídeo enviado ({tramo.get('state', '?')})")
+        return
+    texto = (f"SRT: último vídeo enviado hace {hace:.0f} s · {enviados} fotogramas enviados "
+             f"de {int(d.get('program_frames', 0))}")
+    if hace > VIDEO_PARADO_S:
+        n.aviso(texto + ": atasco, la conexión sin sacar vídeo")
+    else:
+        n.info(texto)
+
+
 def _maestro(d: dict, n: _Notas) -> None:
     frames = int(d.get("program_frames", 0))
     dur = _duracion_s(d)
@@ -474,9 +495,14 @@ def _maestro(d: dict, n: _Notas) -> None:
     if origen == "none":
         n.info("SRT: sin destino (sin QR Soporte): lo esperado sin VPS")
     elif origen:
-        tramos = pub.get("sessions") or []
+        # El informe trae los tramos; el latido (desde el 2026-10-15), el tramo vivo en `publish`.
+        tramos = pub.get("sessions") or ([pub] if "video_frames_sent" in pub else [])
         rec = sum(int(t.get("reconnects", 0)) for t in tramos)
-        n.info(f"SRT a {(pub.get('target') or {}).get('host', '?')} ({origen}): {len(tramos)} tramos, {rec} reconexiones")
+        atascos = sum(int(t.get("stall_reconnects", 0)) for t in tramos)
+        n.info(f"SRT a {(pub.get('target') or {}).get('host', '?')} ({origen}): {len(tramos)} tramos, {rec} reconexiones"
+               + (f", {atascos} por atasco" if atascos else ""))
+        if tramos:
+            _ultimo_video_enviado(d, tramos[-1], n)
     det = d.get("detect") or {}
     runs = int(det.get("runs", d.get("detect_runs", 0)) or 0)
     n.si(runs > 0, f"detector: {runs} pasadas" + (f" · {det['error']}" if det.get("error") else ""), grave=False)

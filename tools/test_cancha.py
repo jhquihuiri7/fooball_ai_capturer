@@ -197,6 +197,46 @@ class Veredicto(unittest.TestCase):
             self.assertEqual(malas, 0, texto)
             self.assertIn("sin copia .mov (RIG_SPLIT_NO_MOV)", texto)
 
+    def test_el_srt_dice_hace_cuanto_salio_el_ultimo_video(self) -> None:
+        # El atasco del 2026-10-15: la conexión viva 19 min sin sacar un fotograma (el informe
+        # final solo decía «1 tramos, 0 reconexiones»).
+        destino = {"host": "vps", "source": "keychain"}
+        atascado = {"state": "stopped", "video_frames_sent": 921, "reconnects": 0, "stall_reconnects": 0,
+                    "last_sent_age_s": 1100.2, "last_sent_rig_ms": 32_000}
+        with tempfile.TemporaryDirectory() as d:
+            _informe(os.path.join(d, "izquierdo", "bench"), f"program-split-left-{T}.json",
+                     **dict(MAESTRO, publish={"target": destino, "sessions": [atascado]}))
+            malas, texto = self._corre(d)
+            self.assertEqual(malas, 0, texto)
+            self.assertIn("SRT a vps (keychain): 1 tramos, 0 reconexiones\n", texto)
+            self.assertIn("⚠️  SRT: último vídeo enviado hace 1100 s · 921 fotogramas enviados de 18000: atasco", texto)
+        # Con el vigía: reconectó por atasco y el vídeo siguió saliendo hasta el final.
+        curado = dict(atascado, stall_reconnects=2, reconnects=2, last_sent_age_s=0.3, video_frames_sent=17_000)
+        with tempfile.TemporaryDirectory() as d:
+            _informe(os.path.join(d, "izquierdo", "bench"), f"program-split-left-{T}.json",
+                     **dict(MAESTRO, publish={"target": destino, "sessions": [curado]}))
+            malas, texto = self._corre(d)
+            self.assertEqual(malas, 0, texto)
+            self.assertIn("1 tramos, 2 reconexiones, 2 por atasco", texto)
+            self.assertIn("     SRT: último vídeo enviado hace 0 s · 17000 fotogramas enviados de 18000\n", texto)
+            self.assertNotIn("atasco, la conexión", texto)
+        # Un informe de antes de hoy: sin `last_sent_age_s`, sale del reloj del soporte.
+        viejo = {"state": "stopped", "video_frames_sent": 921, "last_sent_rig_ms": 1_000_032_000}
+        with tempfile.TemporaryDirectory() as d:
+            _informe(os.path.join(d, "izquierdo", "bench"), f"program-split-left-{T}.json",
+                     **dict(MAESTRO, elapsed_s=600.0, bench_start_rig_ms=1_000_000_000,
+                            publish={"target": destino, "sessions": [viejo]}))
+            malas, texto = self._corre(d)
+            self.assertIn("⚠️  SRT: último vídeo enviado hace 568 s", texto)
+        # El latido trae el tramo vivo en `publish`: se ve el atasco sin esperar al informe.
+        with tempfile.TemporaryDirectory() as d:
+            _informe(os.path.join(d, "izquierdo", "bench"), f"program-live-left-{T}.json",
+                     **dict(MAESTRO, finished=False, publish_source="keychain",
+                            publish=dict(atascado, state="publishing", target=destino)))
+            malas, texto = self._corre(d)
+            self.assertIn("SRT a vps (keychain): 1 tramos, 0 reconexiones", texto)
+            self.assertIn("⚠️  SRT: último vídeo enviado hace 1100 s", texto)
+
     def test_solo_el_latido_si_la_app_murio(self) -> None:
         with tempfile.TemporaryDirectory() as d:
             _informe(os.path.join(d, "izquierdo", "bench"), f"program-live-left-{T}.json",

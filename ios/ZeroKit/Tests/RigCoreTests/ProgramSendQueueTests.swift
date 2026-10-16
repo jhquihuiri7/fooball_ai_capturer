@@ -112,6 +112,13 @@ final class ProgramSendQueueTests: XCTestCase {
         XCTAssertEqual(q.oldestWaitMs(nowMs: 500), 0)
     }
 
+    func testTheStallWatchdogOutlastsTheQueueAndTheRetryWait() {
+        // Si no, reconectaría en cada retención larga, antes de que la cola tire.
+        XCTAssertGreaterThan(ProgramPublish.stallReconnectS, ProgramPublish.queueMaxWaitMs / 1000)
+        XCTAssertGreaterThan(ProgramPublish.stallReconnectS, ProgramPublish.reconnectDelayS)
+        XCTAssertGreaterThan(ProgramPublish.bufferOverLatencyReconnectS, ProgramPublish.queueMaxWaitMs / 1000)
+    }
+
     func testReconnectEveryThreeSecondsAndBackOffOnlyOnRejections() {
         var b = ReconnectBackoff()
         XCTAssertEqual(b.delayS(after: .unreachable), 3)

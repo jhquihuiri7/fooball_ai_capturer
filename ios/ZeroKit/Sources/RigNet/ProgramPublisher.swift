@@ -7,7 +7,13 @@
 // - Cola acotada (ProgramSendQueue, ~1 s): si SRT no traga, se tira hasta el siguiente IDR
 //   y se pide uno (`onIdrRequest`); nunca se encola sin fin.
 // - Con el búfer de envío de SRT por encima de `congestionSendBufferMs` no se le mete más:
-//   se retiene en la cola, que es la que decide tirar.
+//   se retiene en la cola, que es la que decide tirar. Mientras se retiene no se piden IDR:
+//   llegarían retenidos y la cola los tiraría al segundo (y pediría otro: 84 IDR forzados
+//   en 160 s a 1 Mbit/s, medido el 2026-10-15). Se dejan pendientes y se piden cuando el
+//   búfer baja.
+// - El vigía de atasco (2026-10-15): si la conexión sigue viva pero en `stallReconnectS`
+//   no ha entrado ningún fotograma de vídeo en SRT aunque el codificador los traiga, se
+//   cierra y se vuelve a conectar como tras un corte (`stallReconnects` lo cuenta).
 // - Bitrate adaptativo (AdaptiveRate) con las estadísticas de SRT una vez por segundo; el
 //   bitrate nuevo sale por `onBitrate` para el codificador.
 // - Reconexión cada 3 s (ReconnectBackoff; tras rechazos seguidos, hasta 30 s). Un
@@ -93,8 +99,15 @@ public final class ProgramPublisher {
         public var idrRequests = 0
         public var partialSends = 0
         public var sendHolds = 0
+        /// Reconexiones del vigía de atasco: la conexión seguía viva y en `stallReconnectS`
+        /// no entró vídeo en SRT.
+        public var stallReconnects = 0
         /// El rigMs del último fotograma entregado a SRT: el `anchor` del túnel (IOS-65).
         public var lastSentRigMs: UInt64?
+        /// Segundos desde que el último fotograma de vídeo entró en SRT, en cualquier
+        /// conexión; nil si aún ninguno. Lo que el informe y el latido enseñan como
+        /// «último vídeo enviado hace N s».
+        public var lastSentAgeS: Double?
     }
 
     public var onBitrate: ((Int) -> Void)?
@@ -127,6 +140,16 @@ public final class ProgramPublisher {
     private var connectedAtMs: Double?
     private var congestionsAtSample = 0
     private var partialsAtSample = 0
+    /// Cuándo (reloj monótono) entró en SRT el último fotograma de vídeo.
+    private var lastVideoSentAtMs: Double?
+    /// Cuándo llegó el primer fotograma de vídeo que aún no ha salido por esta conexión:
+    /// lo que mide el vigía de atasco. nil mientras lo que llega va saliendo.
+    private var firstUnsentVideoAtMs: Double?
+    /// Un IDR que se debió pedir mientras SRT estaba retenido: se pide al bajar el búfer.
+    private var idrPending = false
+    /// Desde cuándo (reloj monótono) la muestra ve el búfer de envío por encima de la
+    /// latencia SRT; nil cuando baja.
+    private var bufferOverLatencySinceMs: Double?
 
     /// `maximumBps` es el techo de fábrica (PROGRAM_VIDEO_BITRATE_BPS); `startBps`, el
     /// bitrate con el que arranca el codificador (por defecto, el techo).
@@ -238,6 +261,9 @@ public final class ProgramPublisher {
             // primera muestra tras reconectar bajaba el bitrate (medido en el Mac: 6 → 4,9).
             congestionsAtSample = sendQueue.counts.congestions
             partialsAtSample = stats.partialSends
+            firstUnsentVideoAtMs = nil
+            bufferOverLatencySinceMs = nil
+            idrPending = false
             setState(.publishing)
             log("conectado a \(target.host):\(target.port)")
             requestIdr()
@@ -286,6 +312,7 @@ public final class ProgramPublisher {
         lastTotals = SrtStats()
         if let desde = connectedAtMs { stats.publishingS += (timing.nowMs() - desde) / 1000 }
         connectedAtMs = nil
+        firstUnsentVideoAtMs = nil
         s.close()
         sink = nil
     }
@@ -300,14 +327,21 @@ public final class ProgramPublisher {
             }
             return
         }
+        if unidad.isVideo, firstUnsentVideoAtMs == nil { firstUnsentVideoAtMs = arrivalMs }
         if sendQueue.push(unidad, nowMs: arrivalMs) { requestIdr() }
         drain()
     }
 
+    /// Retenido: el búfer de envío de SRT por encima del tope; no se le mete más.
+    private func isHeld(_ s: ProgramSrtSink) -> Bool {
+        (s.sendBufferMs() ?? 0) > ProgramPublish.congestionSendBufferMs
+    }
+
     private func drain() {
         guard state == .publishing, let s = sink else { return }
+        if idrPending, !isHeld(s) { requestIdr() }
         while let unidad = sendQueue.peek() {
-            if let ms = s.sendBufferMs(), ms > ProgramPublish.congestionSendBufferMs {
+            if isHeld(s) {
                 stats.sendHolds += 1
                 return
             }
@@ -325,6 +359,8 @@ public final class ProgramPublisher {
                 if unidad.isVideo {
                     stats.videoFramesSent += 1
                     stats.lastSentRigMs = UInt64(max(0, unidad.rigMs))
+                    lastVideoSentAtMs = timing.nowMs()
+                    firstUnsentVideoAtMs = nil
                 } else {
                     stats.audioFramesSent += 1
                 }
@@ -346,7 +382,15 @@ public final class ProgramPublisher {
         }
     }
 
+    /// Pide un IDR al codificador. Con SRT retenido no vale la pena: llegaría retenido, la
+    /// cola lo tiraría al segundo y se pediría otro. Queda pendiente y `drain` lo pide
+    /// cuando el búfer baja.
     private func requestIdr() {
+        if let s = sink, isHeld(s) {
+            idrPending = true
+            return
+        }
+        idrPending = false
         stats.idrRequests += 1
         onIdrRequest?()
     }
@@ -376,6 +420,7 @@ public final class ProgramPublisher {
         stats.rttMs = muestra.rttMs
         stats.rttMsMax = max(stats.rttMsMax, muestra.rttMs)
         stats.sendBufferMsMax = max(stats.sendBufferMsMax, Int(muestra.sendBufferMs))
+        if stalled(muestra) { return }
         let congestionado = Int(muestra.sendBufferMs) > ProgramPublish.congestionSendBufferMs
             || sendQueue.counts.congestions > congestionsAtSample || stats.partialSends > partialsAtSample
         congestionsAtSample = sendQueue.counts.congestions
@@ -389,6 +434,37 @@ public final class ProgramPublisher {
             onBitrate?(nuevo)
         }
         drain()
+    }
+
+    /// El vigía de atasco (2026-10-15), en cada muestra. Reconecta, y devuelve true, si la
+    /// conexión está viva pero (a) llevan `stallReconnectS` llegando fotogramas sin que
+    /// ninguno entre en SRT, o (b) el búfer de envío lleva `bufferOverLatencyReconnectS`
+    /// por encima de la latencia SRT. El búfer que mira `drain` es «el más nuevo menos el
+    /// más viejo sin confirmar»: si el otro lado deja de confirmar, esa lectura se congela
+    /// y la retención no acabaría nunca (medido: 1100 s «publishing» sin un fotograma).
+    private func stalled(_ muestra: SrtStats) -> Bool {
+        let ahora = timing.nowMs()
+        let bufferMs = Int(muestra.sendBufferMs)
+        if bufferMs > Int(timing.latencyMs) {
+            if bufferOverLatencySinceMs == nil { bufferOverLatencySinceMs = ahora }
+        } else {
+            bufferOverLatencySinceMs = nil
+        }
+        let porque: SrtError
+        if let desde = firstUnsentVideoAtMs, (ahora - desde) / 1000 >= ProgramPublish.stallReconnectS {
+            porque = .stalled(stalledS: Int((ahora - desde) / 1000), sendBufferMs: bufferMs)
+        } else if let desde = bufferOverLatencySinceMs,
+                  (ahora - desde) / 1000 >= ProgramPublish.bufferOverLatencyReconnectS {
+            porque = .sendBufferOverLatency(sendBufferMs: bufferMs, latencyMs: Int(timing.latencyMs),
+                                            heldS: Int((ahora - desde) / 1000))
+        } else {
+            return false
+        }
+        stats.stallReconnects += 1
+        let cola = sendQueue.waitingForIdr ? "esperando IDR" : "\(sendQueue.count) unidades"
+        log("atasco: \(porque.description); cola \(cola)")
+        fail(porque, wasPublishing: true)
+        return true
     }
 
     // MARK: - Estado
@@ -416,7 +492,9 @@ public final class ProgramPublisher {
         s.videoDropped = c.videoDropped
         s.audioDropped = c.audioDropped
         s.congestions = c.congestions
-        if let desde = connectedAtMs { s.publishingS += (timing.nowMs() - desde) / 1000 }
+        let ahora = timing.nowMs()
+        if let desde = connectedAtMs { s.publishingS += (ahora - desde) / 1000 }
+        s.lastSentAgeS = lastVideoSentAtMs.map { (ahora - $0) / 1000 }
         return s
     }
 

@@ -30,6 +30,13 @@ public enum SrtError: Error, Equatable, CustomStringConvertible {
     case connect(Int32, String)
     case send(Int32, String)
     case notConnected
+    /// La conexión sigue viva pero en `stalledS` segundos no ha entrado ningún fotograma
+    /// de vídeo en SRT (el vigía de atasco del publicador); `sendBufferMs`, lo que su
+    /// búfer de envío tenía sin confirmar en ese momento.
+    case stalled(stalledS: Int, sendBufferMs: Int)
+    /// El búfer de envío lleva `heldS` segundos por encima de la latencia SRT: libsrt tira
+    /// paquetes sueltos y no baja; se reconecta en vez de retener.
+    case sendBufferOverLatency(sendBufferMs: Int, latencyMs: Int, heldS: Int)
 
     /// La passphrase no cuadra con la del otro lado (libsrt en escucha).
     public static let rejectBadSecret = Int32(truncatingIfNeeded: SRT_REJ_BADSECRET.rawValue)
@@ -49,6 +56,9 @@ public enum SrtError: Error, Equatable, CustomStringConvertible {
         case .connect(let code, let msg): return "SRT no conecta (\(code)): \(msg)"
         case .send(let code, let msg): return "SRT no envía (\(code)): \(msg)"
         case .notConnected: return "SRT sin conectar"
+        case .stalled(let s, let ms): return "SRT vivo pero \(s) s sin sacar vídeo (búfer de envío \(ms) ms)"
+        case .sendBufferOverLatency(let ms, let lat, let s):
+            return "SRT con el búfer de envío (\(ms) ms) por encima de la latencia (\(lat) ms) durante \(s) s"
         }
     }
 }

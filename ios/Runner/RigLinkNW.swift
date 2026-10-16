@@ -2335,15 +2335,18 @@ final class SplitBench {
 
     private func publishReport() -> [String: Any] {
         guard config.publish else { return ["requested": false] }
-        let enc = JSONEncoder()
-        enc.keyEncodingStrategy = .convertToSnakeCase
-        let tramos = publishSessions.compactMap { s in
-            (try? enc.encode(s)).flatMap { try? JSONSerialization.jsonObject(with: $0) }
-        }
         // Los fotogramas que VideoToolbox no entregó: con detalle de más para el bitrate y
         // el QP en su tope, el modo de baja latencia los tira (visto en el Mac con ruido).
-        return ["requested": true, "target": publishTarget, "sessions": tramos,
+        return ["requested": true, "target": publishTarget, "sessions": publishSessions.map(Self.publishStats),
                 "program_encode_failures": programEncoder?.encodeFailures ?? 0]
+    }
+
+    /// Las estadísticas del publicador como las escriben el informe y el latido: las claves
+    /// en snake_case (`video_frames_sent`, `last_sent_age_s`, `stall_reconnects`…).
+    private static func publishStats(_ s: ProgramPublisher.Stats) -> [String: Any] {
+        let enc = JSONEncoder()
+        enc.keyEncodingStrategy = .convertToSnakeCase
+        return (try? enc.encode(s)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
     }
 
     // MARK: - IOS-06: la escalera actuando
@@ -2881,6 +2884,14 @@ final class SplitBench {
             "disk_free_gb": Double(CaptureEngine.freeDiskBytes()) / Self.bytesPerGb,
             "publish_source": publishTarget["source"] as? String ?? "",
             "srt_state": srt?.state ?? "",
+            // 2026-10-15: el publicador entero en el latido (lo que salió, hace cuánto el
+            // último fotograma, retenciones, reconexiones por atasco): el atasco de hoy
+            // solo se vio en el informe final, 19 min después.
+            "publish": srt.map { s -> [String: Any] in
+                var d = Self.publishStats(s)
+                d["target"] = publishTarget
+                return d
+            } ?? [:],
             "mov_segments": movSegments.count,
             "mov_failures": movFailures,
             "mov_video_frames": movFramesClosed.video + (recorder?.videoFrames ?? 0),

@@ -35,6 +35,22 @@ public enum ProgramPublish {
     /// Segundos entre un fallo y el siguiente intento de conectar (ADR 0022 §8).
     public static let reconnectDelayS = 3.0
 
+    /// Segundos que puede seguir «publishing» una conexión viva a la que llegan fotogramas
+    /// del codificador sin que ninguno entre en SRT, antes de cerrarla y volver a conectar:
+    /// el vigía de atasco (2026-10-15). libsrt no da por rota una conexión cuyo otro lado
+    /// contesta, aunque su búfer de envío no baje nunca; medido en el 17, 9 min
+    /// «publishing» sin un fotograma en el VPS. Tiene que superar la espera de la cola
+    /// (1 s) y el RTT que aún aguanta la latencia SRT (1500 ms), para no reconectar en
+    /// cada retención de un Wi-Fi con bufferbloat.
+    public static let stallReconnectS = 5.0
+
+    /// Segundos seguidos con el búfer de envío de SRT por encima de la latencia SRT antes de
+    /// reconectar en vez de retener: dos GOP del programa (VideoConstants.programGopS, 2 s).
+    /// Por encima de la latencia libsrt ya tira paquetes sueltos por su cuenta (TLPKTDROP) y
+    /// lo que sale llega roto; y un búfer que no baja en dos GOP con la conexión viva es el
+    /// atasco del 2026-10-15 (se quedó en 1520 ms, la latencia más los 20 ms de libsrt).
+    public static let bufferOverLatencyReconnectS = 4.0
+
     /// Segundos de espera, como mucho, tras rechazos seguidos (clave o passphrase malas):
     /// reintentar cada 3 s no lo arregla y cada intento le cuesta 2 s a MediaMTX.
     public static let rejectedMaxDelayS = 30.0

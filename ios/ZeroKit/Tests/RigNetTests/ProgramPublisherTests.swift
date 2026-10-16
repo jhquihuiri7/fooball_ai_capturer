@@ -179,20 +179,130 @@ final class ProgramPublisherTests: XCTestCase {
             reloj.advance(1000.0 / 30)
             p.video(avcc: au(false), isKeyframe: false, rigMs: Double(i) * 33)
         }
-        wait("a 1 s de espera, se tira y se pide IDR") { e.count("idr") == 2 }
+        wait("a 1 s de espera, se tira") { p.snapshot.congestions == 1 }
         var s = p.snapshot
         XCTAssertEqual(s.videoFramesSent, 1)
         XCTAssertEqual(s.videoDropped, 32)  // el primero esperaba 1033 ms al llegar el 32.º
-        XCTAssertEqual(s.congestions, 1)
         XCTAssertGreaterThan(s.sendHolds, 0)
-        // El búfer se vacía; los P siguen fuera hasta el IDR que se pidió.
+        // Con SRT retenido el IDR no se pide (llegaría retenido y se tiraría al segundo):
+        // queda pendiente hasta que el búfer baje.
+        XCTAssertEqual(e.count("idr"), 1, "el de conectar; el de la congestión, pendiente")
         sink.bufferMs = 10
         p.video(avcc: au(false), isKeyframe: false, rigMs: 1100)
+        wait("baja el búfer: ahora sí se pide el IDR") { e.count("idr") == 2 }
         p.video(avcc: au(true), isKeyframe: true, rigMs: 1133)
         wait("vuelve con el IDR") { p.snapshot.videoFramesSent == 2 }
         s = p.snapshot
         XCTAssertEqual(s.videoDropped, 33)
+        XCTAssertEqual(s.idrRequests, 2)
+        XCTAssertEqual(s.stallReconnects, 0)
         XCTAssertEqual(e.count("idr"), 2, "no se pide otro mientras se espera")
+    }
+
+    /// El atasco del 2026-10-15: la conexión sigue viva pero el búfer de envío de SRT no
+    /// baja nunca (el otro lado dejó de confirmar), así que se retiene para siempre. A los
+    /// 5 s sin sacar vídeo, el vigía cierra y reconecta; el informe dice desde cuándo.
+    func testAStalledConnectionIsReconnectedAfterFiveSecondsWithoutVideoOut() {
+        let primero = FakeSink(), segundo = FakeSink()
+        let reloj = ManualClock()
+        let (p, e) = publisher([primero, segundo], clock: reloj, statsEveryS: 3600)
+        p.start()
+        wait("conecta") { p.snapshot.state == "publishing" }
+        p.video(avcc: au(true), isKeyframe: true, rigMs: 0)
+        wait("sale el IDR") { p.snapshot.videoFramesSent == 1 }
+        primero.bufferMs = 900  // y ahí se queda: ninguna confirmación lo baja
+        var rig = 0.0
+        for _ in 1...90 {  // 3 s de fotogramas
+            reloj.advance(1000.0 / 30)
+            rig += 1000.0 / 30
+            p.video(avcc: au(false), isKeyframe: false, rigMs: rig)
+        }
+        p.sampleNow()
+        var s = p.snapshot
+        XCTAssertEqual(s.stallReconnects, 0, "a los 3 s aún no es un atasco")
+        XCTAssertEqual(s.state, "publishing")
+        XCTAssertEqual(s.videoFramesSent, 1)
+        XCTAssertEqual(s.lastSentAgeS ?? 0, 3.0, accuracy: 0.05)
+        for _ in 1...62 {  // pasa de 5 s desde el primer P que no salió (2,07 s más)
+            reloj.advance(1000.0 / 30)
+            rig += 1000.0 / 30
+            p.video(avcc: au(false), isKeyframe: false, rigMs: rig)
+        }
+        p.sampleNow()
+        s = p.snapshot
+        XCTAssertEqual(s.stallReconnects, 1)
+        XCTAssertEqual(s.lastError, "SRT vivo pero 5 s sin sacar vídeo (búfer de envío 900 ms)")
+        XCTAssertTrue(e.all.contains { $0.hasPrefix("log atasco: SRT vivo pero 5 s sin sacar vídeo") }, "\(e.all)")
+        XCTAssertFalse(primero.isConnected, "se cerró la conexión atascada")
+        wait("reconecta") { p.snapshot.reconnects == 1 && p.snapshot.state == "publishing" }
+        XCTAssertEqual(segundo.connects, 1)
+        XCTAssertEqual(e.count("idr"), 2, "un IDR al reconectar")
+        p.video(avcc: au(true), isKeyframe: true, rigMs: rig + 33)
+        wait("vuelve a salir vídeo") { p.snapshot.videoFramesSent == 2 }
+        XCTAssertEqual(p.snapshot.lastSentAgeS ?? 1, 0, accuracy: 0.05)
+    }
+
+    func testNoVideoArrivingIsNotAStall() {
+        let sink = FakeSink()
+        let reloj = ManualClock()
+        let (p, _) = publisher([sink], clock: reloj, statsEveryS: 3600)
+        p.start()
+        wait("conecta") { p.snapshot.state == "publishing" }
+        p.video(avcc: au(true), isKeyframe: true, rigMs: 0)
+        wait("sale el IDR") { p.snapshot.videoFramesSent == 1 }
+        // El codificador se calla (segundo plano): nada que sacar, nada que reconectar.
+        sink.bufferMs = 900
+        reloj.advance(20_000)
+        p.sampleNow()
+        XCTAssertEqual(p.snapshot.stallReconnects, 0)
+        XCTAssertEqual(p.snapshot.state, "publishing")
+        XCTAssertNil(p.snapshot.lastError)
+    }
+
+    /// El búfer de envío por encima de la latencia SRT (libsrt ya tira paquetes sueltos):
+    /// dos GOP así y se reconecta, aunque algún fotograma siga saliendo.
+    func testASendBufferAboveTheLatencyForTwoGopsReconnects() {
+        let primero = FakeSink(), segundo = FakeSink()
+        let reloj = ManualClock()
+        let (p, _) = publisher([primero, segundo], clock: reloj, statsEveryS: 3600)
+        p.start()
+        wait("conecta") { p.snapshot.state == "publishing" }
+        p.video(avcc: au(true), isKeyframe: true, rigMs: 0)
+        wait("sale el IDR") { p.snapshot.videoFramesSent == 1 }
+        primero.bufferMs = 1520  // la latencia (1500) más los 20 ms de libsrt
+        for i in 0..<4 {
+            p.sampleNow()
+            XCTAssertEqual(p.snapshot.stallReconnects, 0, "a los \(i) s todavía no")
+            reloj.advance(1000)
+            // El búfer baja un instante por debajo del tope entre muestras: sale algo.
+            primero.bufferMs = 700
+            p.video(avcc: au(false), isKeyframe: false, rigMs: Double(i + 1) * 1000)
+            wait("sale") { p.snapshot.videoFramesSent == i + 2 }
+            primero.bufferMs = 1520
+        }
+        p.sampleNow()
+        let s = p.snapshot
+        XCTAssertEqual(s.stallReconnects, 1)
+        XCTAssertEqual(s.lastError, "SRT con el búfer de envío (1520 ms) por encima de la latencia (1500 ms) durante 4 s")
+        wait("reconecta") { p.snapshot.reconnects == 1 && p.snapshot.state == "publishing" }
+        XCTAssertEqual(segundo.connects, 1)
+    }
+
+    func testTheBufferDroppingBelowTheLatencyResetsTheCount() {
+        let sink = FakeSink()
+        let reloj = ManualClock()
+        let (p, _) = publisher([sink], clock: reloj, statsEveryS: 3600)
+        p.start()
+        wait("conecta") { p.snapshot.state == "publishing" }
+        for _ in 0..<3 {
+            sink.bufferMs = 1600
+            p.sampleNow()
+            reloj.advance(3000)
+            sink.bufferMs = 1400
+            p.sampleNow()
+        }
+        XCTAssertEqual(p.snapshot.stallReconnects, 0)
+        XCTAssertEqual(p.snapshot.state, "publishing")
     }
 
     func testTheSecondSampleBacksOffTheBitrateWhenSrtIsCongested() {
