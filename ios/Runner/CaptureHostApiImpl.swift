@@ -528,6 +528,12 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
         engine.makePreviewLayer()
     }
 
+    /// La app termina: la 4K se cierra si llega a tiempo (`LifecycleConstants`). Devuelve si
+    /// llegó.
+    func closeRecordingForTermination() -> Bool {
+        engine.closeRecordingForTermination()
+    }
+
     func stop() throws {
         engine.stop()
     }
@@ -611,9 +617,9 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
         }
     }
 
-    /// El motivo del corte en palabras, para la pantalla. Los códigos son de
-    /// `AVCaptureSession.InterruptionReason`.
-    private static func interruptionReason(_ notification: Notification) -> String {
+    /// El motivo del corte en palabras, para la pantalla y para los `app_events` del latido
+    /// de la pasada. Los códigos son de `AVCaptureSession.InterruptionReason`.
+    static func interruptionReason(_ notification: Notification) -> String {
         guard let raw = notification.userInfo?[AVCaptureSessionInterruptionReasonKey] as? Int,
               let reason = AVCaptureSession.InterruptionReason(rawValue: raw)
         else {

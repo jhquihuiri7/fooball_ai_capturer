@@ -44,6 +44,16 @@ import UIKit
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
+  /// 2026-10-15: iOS da 5 s para terminar y mata la app si no (FRONTBOARD 0x8BADF00D, el 17
+  /// al fondo). Aquí solo se cierra la 4K, con el plazo de `LifecycleConstants
+  /// .terminationFlushS`; la sesión de captura, la vista previa y el enlace se quedan como
+  /// están: desmontarlos no salva nada y esperar por ellos es lo que mata.
+  override func applicationWillTerminate(_ application: UIApplication) {
+    let cerrada = captureApi?.closeRecordingForTermination() ?? true
+    NSLog("[app] termina; la 4K %@", cerrada ? "cerrada" : "no cerró a tiempo (fragmentos de 10 s)")
+    super.applicationWillTerminate(application)
+  }
+
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     let api = CaptureHostApiImpl(binaryMessenger: engineBridge.applicationRegistrar.messenger())

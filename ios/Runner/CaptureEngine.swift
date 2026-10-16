@@ -207,10 +207,88 @@ final class CaptureEngine: NSObject {
         UltraWideCamera.discover() != nil
     }
 
-    /// Una capa de vista previa sobre esta misma sesión. La compone el GPU: no cuesta
-    /// CPU ni toca la salida de vídeo que va al archivo y al stream.
+    // MARK: - Vista previa
+
+    // 2026-10-15: una sola capa de vista previa para toda la vida de la sesión, y la sesión
+    // se le pone en la cola de captura cuando la app está delante y la cámara no está
+    // interrumpida (PreviewAttachGate). Antes cada montaje de la vista de plataforma creaba
+    // una `AVCaptureVideoPreviewLayer(session:)` en el hilo principal: AVFoundation quita
+    // la anterior de la sesión y rehace el grafo de captura ahí mismo
+    // (`_removeAllPreviewLayers` → `commitConfiguration` → `_buildAndRunGraph`), y con la
+    // cámara interrumpida por el fondo esa espera no vuelve. El 17 murió así, emitiendo en
+    // «Una cámara» con Zero al fondo: FRONTBOARD 0x8BADF00D, «Failed to terminate
+    // gracefully after 5.0s» (Runner-2026-10-15-183257.ips).
+
+    /// La capa, creada una vez en el hilo principal y nunca reasignada: la cola de captura
+    /// la lee después de que exista.
+    private var previewLayer: AVCaptureVideoPreviewLayer?
+    /// Cuándo se le pone la sesión. Solo en la cola de captura.
+    private var previewGate = PreviewAttachGate()
+    private var previewObservers: [NSObjectProtocol] = []
+
+    /// La capa de vista previa, la misma siempre. Se llama en el hilo principal (la fábrica
+    /// de la vista de plataforma) y vuelve en el acto: la sesión se le pone en la cola de
+    /// captura, cuando se pueda, y entonces se avisa con `.capturePreviewAttached`.
     func makePreviewLayer() -> AVCaptureVideoPreviewLayer {
-        AVCaptureVideoPreviewLayer(session: session)
+        if let previewLayer { return previewLayer }
+        let layer = AVCaptureVideoPreviewLayer()
+        previewLayer = layer
+        let alFondo = UIApplication.shared.applicationState == .background
+        observeAppForPreview()
+        queue.async { [self] in
+            previewGate = PreviewAttachGate(appInBackground: alFondo)
+            // El estado real de la sesión antes de pedir: una interrupción anterior a la
+            // primera vista no se pierde. Sin petición aún, no decide nada.
+            _ = previewGate.session(interrupted: session.isInterrupted)
+            previewAct(on: previewGate.request())
+        }
+        return layer
+    }
+
+    /// Lo que dijo la puerta, en la cola de captura.
+    private func previewAct(on decision: PreviewAttachGate.Decision) {
+        guard let previewLayer else { return }
+        switch decision {
+        case .attach:
+            previewLayer.session = session
+            NSLog("[preview] la vista previa toma la sesión")
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .capturePreviewAttached, object: previewLayer)
+            }
+        case .wait(let motivo):
+            NSLog("[preview] la vista previa espera: %@", motivo)
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(
+                    name: .capturePreviewDeferred, object: previewLayer, userInfo: ["reason": motivo]
+                )
+            }
+        case .nothing:
+            break
+        }
+    }
+
+    /// El fondo y la vuelta, para la puerta. Una vez, en el hilo principal.
+    private func observeAppForPreview() {
+        guard previewObservers.isEmpty else { return }
+        let sucesos: [(Notification.Name, Bool)] = [
+            (UIApplication.didEnterBackgroundNotification, true),
+            (UIApplication.willEnterForegroundNotification, false),
+        ]
+        for (nombre, alFondo) in sucesos {
+            previewObservers.append(NotificationCenter.default.addObserver(forName: nombre, object: nil, queue: nil) {
+                [weak self] _ in
+                self?.queue.async { [weak self] in
+                    guard let self else { return }
+                    previewAct(on: previewGate.app(inBackground: alFondo))
+                }
+            })
+        }
+    }
+
+    /// La cámara se interrumpió o volvió: la puerta mira el estado real de la sesión. En la
+    /// cola de captura.
+    private func previewSessionChanged() {
+        previewAct(on: previewGate.session(interrupted: session.isInterrupted))
     }
 
     func configure(_ settings: CaptureSettings) async throws -> AppliedCameraSettings {
@@ -1004,12 +1082,14 @@ final class CaptureEngine: NSObject {
     func interruptionBegan() {
         queue.async { [weak self] in
             self?.closeWriter()
+            self?.previewSessionChanged()
         }
     }
 
     /// Volvió la cámara. Si se estaba grabando, se sigue en un segmento nuevo sin que
     /// nadie pulse nada: en la cancha nadie está mirando el móvil.
     func interruptionEnded() {
+        queue.async { [weak self] in self?.previewSessionChanged() }
         guard recordingWanted else { return }
         let numero = recordingSegment + 1
         do {
@@ -1053,16 +1133,25 @@ final class CaptureEngine: NSObject {
     /// Solo se termina un archivo que empezó. `markAsFinished` sobre un escritor que
     /// nunca recibió un frame no devuelve error: tira la app entera, y es exactamente
     /// lo que pasa si PARAR llega antes que el primer frame.
-    private func closeWriter() {
-        guard let writer else { return }
+    ///
+    /// `completion` avisa cuando el fichero quedó cerrado (o no había nada que cerrar); solo
+    /// lo usa el cierre al terminar la app, que espera con plazo.
+    private func closeWriter(completion: (() -> Void)? = nil) {
+        guard let writer else {
+            completion?()
+            return
+        }
         if writer.status == .writing {
             if writerStarted {
                 writerInput?.markAsFinished()
                 audioWriterInput?.markAsFinished()
-                writer.finishWriting {}
+                writer.finishWriting { completion?() }
             } else {
                 writer.cancelWriting()
+                completion?()
             }
+        } else {
+            completion?()
         }
         self.writer = nil
         writerInput = nil
@@ -1125,6 +1214,17 @@ final class CaptureEngine: NSObject {
     func releaseCamera() {
         queue.async { [weak self] in
             self?.session.stopRunning()
+        }
+    }
+
+    /// La app termina (`applicationWillTerminate`): cierra la 4K y espera como mucho
+    /// `LifecycleConstants.terminationFlushS`. No para la sesión ni toca la vista previa:
+    /// iOS se lleva el proceso igual, y lo único que importa es no estar bloqueando el hilo
+    /// principal cuando lo haga (2026-10-15). Devuelve si el fichero quedó cerrado a tiempo.
+    func closeRecordingForTermination() -> Bool {
+        BoundedWait.run(on: queue, timeoutS: LifecycleConstants.terminationFlushS) { [self] done in
+            recordingWanted = false
+            closeWriter(completion: done)
         }
     }
 

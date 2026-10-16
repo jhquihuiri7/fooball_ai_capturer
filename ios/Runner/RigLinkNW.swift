@@ -10,6 +10,7 @@
 // IOS-97 lo provisione en el Keychain; con `devicectl … launch --environment-variables`
 // se inyecta en banco. Sin secreto no hay enlace: se falla claro en vez de inventar uno.
 
+import AVFoundation
 import CoreMedia
 import CoreML
 import Foundation
@@ -1405,6 +1406,23 @@ final class SplitBench {
             appObservers.append(NotificationCenter.default.addObserver(forName: nombre, object: nil, queue: nil) {
                 [weak self] _ in
                 self?.queue.async { self?.noteAppEvent(texto) }
+            })
+        }
+        // 2026-10-15: la cámara interrumpida (el fondo la para) y de vuelta, y la vista previa
+        // que espera o toma la sesión: lo que faltaba para leer el 0x8BADF00D del 17.
+        let conMotivo: [(Notification.Name, (Notification) -> String)] = [
+            (AVCaptureSession.wasInterruptedNotification,
+             { "cámara interrumpida: \(CaptureHostApiImpl.interruptionReason($0))" }),
+            (AVCaptureSession.interruptionEndedNotification, { _ in "cámara de vuelta" }),
+            (.capturePreviewDeferred,
+             { "vista previa espera: \($0.userInfo?["reason"] as? String ?? "?")" }),
+            (.capturePreviewAttached, { _ in "vista previa con sesión" }),
+        ]
+        for (nombre, texto) in conMotivo {
+            appObservers.append(NotificationCenter.default.addObserver(forName: nombre, object: nil, queue: nil) {
+                [weak self] aviso in
+                let linea = texto(aviso)
+                self?.queue.async { self?.noteAppEvent(linea) }
             })
         }
     }
