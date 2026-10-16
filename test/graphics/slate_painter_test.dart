@@ -10,12 +10,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:football_ai_capture/src/generated/overlay_spec.g.dart';
 import 'package:football_ai_capture/src/graphics/overlay_raster.dart';
 import 'package:football_ai_capture/src/graphics/slate_painter.dart';
-import 'package:football_ai_capture/src/theme/zero_type.dart';
 
 void main() {
   setUpAll(() async {
-    final FontLoader loader = FontLoader(ZeroType.display);
-    final Uint8List bytes = File('assets/fonts/Archivo-Bold.ttf').readAsBytesSync();
+    final FontLoader loader = FontLoader('Barlow Condensed');
+    final Uint8List bytes = File('assets/fonts/BarlowCondensed-ExtraBold.ttf').readAsBytesSync();
     loader.addFont(Future<ByteData>.value(ByteData.sublistView(bytes)));
     await loader.load();
   });
@@ -41,9 +40,9 @@ void main() {
       for (int i = 0; i < a.length; i += 4) {
         if ((a[i] - b[i]).abs() > 24 || (a[i + 1] - b[i + 1]).abs() > 24) distintos++;
       }
-      // Fuera del texto, el mismo casi negro; el texto cambia de tipografía.
+      // Fuera del texto, el mismo azul profundo de la marca.
       expect(distintos / (a.length ~/ 4), lessThanOrEqualTo(0.03));
-      expect(a.sublist(0, 4), <int>[0x12, 0x12, 0x12, 255]);
+      expect(a.sublist(0, 4), <int>[0x07, 0x11, 0x1F, 255]);
       dart.dispose();
       python.dispose();
     });

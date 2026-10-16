@@ -1,14 +1,15 @@
-/// El marcador en Dart (IOS-45): dorados de imagen de 4 estados, la geometría de la
-/// maqueta de Python y un raster por cambio de contenido.
+/// El gráfico en Dart (IOS-45, con la marca Gala Sports de IOS-100): dorados de
+/// imagen de 4 estados, la geometría de la referencia de Python y un raster por cambio
+/// de contenido.
 library;
 
 import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:football_ai_capture/src/generated/overlay_spec.g.dart';
+import 'package:football_ai_capture/src/graphics/gala_brand.dart';
 import 'package:football_ai_capture/src/graphics/overlay_raster.dart';
 import 'package:football_ai_capture/src/graphics/scoreboard_painter.dart';
-import 'package:football_ai_capture/src/theme/zero_type.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -46,10 +47,15 @@ const ScoreboardState finalLargo = ScoreboardState(
 );
 
 /// flutter test no carga las fuentes del pubspec: sin esto todo saldría en Ahem.
-Future<void> _loadZeroFonts() async {
+/// Son las de la marca Gala Sports (IOS-100), las mismas que pinta Python.
+Future<void> _loadBrandFonts() async {
   final Map<String, List<String>> familias = <String, List<String>>{
-    ZeroType.display: <String>['Archivo-Bold.ttf'],
-    ZeroType.sans: <String>['IBMPlexSans-Regular.ttf'],
+    'Barlow Condensed': <String>[
+      'BarlowCondensed-SemiBold.ttf',
+      'BarlowCondensed-Bold.ttf',
+      'BarlowCondensed-ExtraBold.ttf',
+    ],
+    'Inter': <String>['Inter-Variable.ttf'],
   };
   for (final MapEntry<String, List<String>> f in familias.entries) {
     final FontLoader loader = FontLoader(f.key);
@@ -62,7 +68,7 @@ Future<void> _loadZeroFonts() async {
 }
 
 void main() {
-  setUpAll(_loadZeroFonts);
+  setUpAll(_loadBrandFonts);
 
   group('dorados de imagen', () {
     final Map<String, (ScoreboardState, bool)> estados = <String, (ScoreboardState, bool)>{
@@ -85,48 +91,71 @@ void main() {
     }
   });
 
-  group('la geometría de la maqueta (boxes.json de REF-32)', () {
+  group('la geometría de la referencia (boxes.json de REF-56/57)', () {
     ScoreboardLayout medir(ScoreboardState s, {bool slots = true}) => ScoreboardLayout.measure(
         OverlaySpec.programWidth, OverlaySpec.programHeight, s, sponsorSlots: slots);
 
     test('lo que no depende del texto cae donde en Python', () {
       final ScoreboardLayout l = medir(directo);
-      // Archivo es más ancha que la Arial Narrow de la maqueta: el marcador puede
-      // estirarse (la maqueta lo hace con nombres largos), pero nunca encoger, y lo
-      // demás va anclado a él.
+      // Las cifras son las de tests/golden/v1/overlay/boxes.json de football-ai.
       final ui.Rect bug = l.boxes['bug']!;
-      expect(bug.left, 48);
-      expect(bug.top, 44);
-      expect(bug.bottom, 132);
-      expect(bug.width, greaterThanOrEqualTo(704));
-      expect(l.boxes['crest'], const ui.Rect.fromLTRB(48, 44, 134, 132));
-      expect(l.boxes['clock'], ui.Rect.fromLTRB(bug.right - 150, 74, bug.right, 132));
-      expect(l.boxes['competition'], ui.Rect.fromLTRB(134, 44, bug.right, 74));
-      expect(l.boxes['strip'], const ui.Rect.fromLTRB(0, 972, 1920, 1080));
-      expect(l.boxes['live']!.top, 148);
-      expect(l.boxes['live']!.bottom, 178);
-      expect(l.boxes['camera']!.top, 44);
-      expect(l.boxes['camera']!.bottom, 82);
+      expect(bug.left, closeTo(48, 1e-9)); // el pico de la punta, cortada a -30°
+      expect(bug.top, 106);
+      expect(bug.bottom, 182);
+      expect(l.boxes['home_crest']!.left, closeTo(107.94, 0.01));
+      expect(l.boxes['home_crest']!.top, closeTo(94, 1e-9));
+      expect(l.boxes['away_crest']!.bottom, closeTo(194, 1e-9));
+      expect(l.boxes['live']!.left, closeTo(125.94, 0.01));
+      for (final String clave in <String>['live', 'competition', 'clock', 'camera']) {
+        expect(l.boxes[clave]!.top, 44, reason: clave);
+        expect(l.boxes[clave]!.bottom, 88, reason: clave);
+      }
       expect(l.boxes['camera']!.right, 1872);
+      expect(l.boxes['strip'], const ui.Rect.fromLTRB(0, 972, 1920, 1080));
+      expect(l.boxes['logo'], const ui.Rect.fromLTRB(48, 1002, 103, 1050));
+      expect(l.boxes['sellable'], const ui.Rect.fromLTRB(408, 972, 1572, 1080));
       expect(l.boxes['ai']!.right, 1872);
       expect(l.boxes['claim']!.left, 48);
     });
 
-    test('los nombres largos estiran el marcador hacia la derecha', () {
+    test('el reloj no cambia de ancho con los dígitos', () {
+      ui.Rect reloj(int segundos) => medir(ScoreboardState(
+            competition: directo.competition,
+            home: directo.home,
+            away: directo.away,
+            homeGoals: 0,
+            awayGoals: 0,
+            clockS: segundos,
+            live: true,
+            cameraMode: 'AUTO',
+          )).boxes['clock']!;
+      expect(<double>{for (final int t in <int>[0, 671, 4044, 5640]) reloj(t).width}, hasLength(1));
+    });
+
+    test('los nombres largos estiran la barra sin mover su arranque', () {
       final ScoreboardLayout corto = medir(directo);
       final ScoreboardLayout largo = medir(finalLargo);
       expect(largo.boxes['bug']!.width, greaterThan(corto.boxes['bug']!.width));
       expect(largo.boxes['bug']!.left, corto.boxes['bug']!.left);
-      // El reloj sigue pegado al borde derecho del marcador.
-      expect(largo.boxes['clock']!.right, largo.boxes['bug']!.right);
+      // El reloj va al final de la fila de estado, que crece con la barra.
+      expect(largo.boxes['clock']!.right, greaterThan(corto.boxes['clock']!.right));
     });
 
-    test('sin directo no hay EN VIVO, y sin ranuras el hueco vendible sigue', () {
-      expect(medir(inicio).boxes.containsKey('live'), isFalse);
+    test('sin directo la competición ocupa el sitio de EN VIVO', () {
+      final ScoreboardLayout sin = medir(inicio);
+      expect(sin.boxes.containsKey('live'), isFalse);
+      expect(sin.boxes['competition']!.left, medir(directo).boxes['live']!.left);
       final ScoreboardLayout anuncios = medir(directo, slots: false);
       expect(anuncios.boxes.keys.where((String k) => k.startsWith('slot_')), isEmpty);
       expect(anuncios.boxes['sellable'], medir(directo).boxes['sellable']);
       expect(anuncios.boxes['sellable']!.left, greaterThan(anuncios.boxes['claim']!.right));
+    });
+
+    test('las siglas de los escudos', () {
+      expect(GalaBrand.crestInitials('BELLAVISTA'), 'BEL');
+      expect(GalaBrand.crestInitials('U. CATÓLICA'), 'UC');
+      expect(GalaBrand.crestInitials('Independiente del Valle'), 'IDV');
+      expect(GalaBrand.crestInitials('LDU'), 'LDU');
     });
   });
 
@@ -165,7 +194,7 @@ void main() {
         int alfa(int x, int y) => frame.rgba[(y * frame.width + x) * 4 + 3];
         expect(alfa(960, 540), 0, reason: 'el centro del campo se ve');
         expect(alfa(960, 1050), greaterThan(200), reason: 'la franja es casi opaca');
-        expect(alfa(60, 60), greaterThan(200), reason: 'el marcador');
+        expect(alfa(300, 120), greaterThan(200), reason: 'la barra del marcador');
       });
     });
   });

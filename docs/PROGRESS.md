@@ -12,6 +12,41 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-15 · IOS-100 — el gráfico con la marca Gala Sports en Dart · 🚧 hecho y probado en Flutter; falta verlo emitido en el iPhone
+
+El propietario pidió que lo que sale en pantalla siga su sistema de diseño Gala Sports
+(ADR 0026 de football-ai). La referencia se hizo allí en REF-56, REF-57 y REF-58
+(e5a31b6, 04dc57b, f1ddb40 y 08630ef); esto la porta a la app.
+
+**Hecho**
+- `lib/src/graphics/gala_brand.dart`, el port de `tools/brand.py`: tokens por nombre, las
+  dos familias (Inter con el eje `wght` explícito), el corte a -30°, el escudo genérico con
+  sus siglas, la sombra-grafismo y el isotipo (decodificado una vez).
+- `scoreboard_painter.dart`: el `Scoreboard` arriba a la izquierda (fila de estado con EN
+  VIVO, competición y reloj tabular; barra inclinada con escudos y goles teal/blanco), el
+  chip de cámara y la franja con el isotipo y la raya. `paintScoreboard` carga el isotipo.
+- `lineup_card_painter.dart` (oscura, dorsales inclinados, escudo) y `slate_painter.dart`
+  (azul profundo, Barlow Condensed 800).
+- Barlow Condensed 600/700/800 e Inter variable en `assets/fonts/` (los TTF de la
+  referencia) y el isotipo en `assets/brand/`; anotados en DEPENDENCIES.
+- El OverlaySpec nuevo (Dart y Swift) y los renders de referencia, copiados a mano de
+  football-ai 08630ef: `export_golden --sync` no corre en Windows. Solo esos ficheros; el
+  resto del `--sync` sigue siendo del Mac. En Swift solo se lee `stripHeight`, que no cambia.
+- Tests: la geometría contra las cifras de Python, el reloj de ancho fijo, las siglas; los
+  goldens de imagen regenerados; `test/zero_fonts.dart` carga también las fuentes de la marca.
+
+**Comprobado (Windows)**
+- `flutter analyze`: sin avisos. `flutter test`: 452 pasan, 1 falla: «se pinta en ≤50 ms»
+  de la alineación (51 ms), que ya fallaba en esta máquina antes del cambio.
+- La alineación de Dart difiere un 2,17 % de píxeles de la de Python (el umbral es 3 %).
+  Marcador, franja y alineación comparados a ojo con los renders de Python: iguales salvo
+  el ancho de los nombres (±2 px).
+
+**Pendiente**
+- **Los goldens de imagen se regeneraron en Windows**; en el Mac el texto rasteriza
+  distinto y fallarán hasta `flutter test --update-goldens test/graphics` allí.
+- Compilar en el Mac y verlo emitido en el iPhone (Alexander).
+
 ## 2026-10-15 · Noche: emisiones al VPS con el dedo en EMITIR («Una cámara»), lo que se cortaba y por qué · 🚧 el vigía y la latencia que crece, instalados en el 17 sin probar aún
 
 Alexander emitió desde el 17 en «Una cámara (sin pareja)» al VPS (167.71.31.225, QR Soporte

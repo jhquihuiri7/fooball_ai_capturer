@@ -1,6 +1,6 @@
-/// La tarjeta de alineación en Dart (IOS-46): dorados propios, ≤3 % de píxeles
-/// distintos frente al PNG de Python del mismo equipo, render ≤50 ms y raster bajo
-/// demanda.
+/// La tarjeta de alineación en Dart (IOS-46, con la marca de IOS-100): dorados
+/// propios, ≤3 % de píxeles distintos frente al PNG de Python del mismo equipo, render
+/// ≤50 ms y raster bajo demanda.
 library;
 
 import 'dart:io';
@@ -11,7 +11,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:football_ai_capture/src/generated/overlay_spec.g.dart';
 import 'package:football_ai_capture/src/graphics/lineup_card_painter.dart';
 import 'package:football_ai_capture/src/graphics/overlay_raster.dart';
-import 'package:football_ai_capture/src/theme/zero_type.dart';
 
 /// LINEUP_RENDER_TEAM de tools/export_overlay_spec.py: el equipo de lineup_home.png.
 const LineupCardTeam bellavista = LineupCardTeam(
@@ -58,10 +57,13 @@ const LineupCardTeam progreso = LineupCardTeam(
   ],
 );
 
-Future<void> _loadZeroFonts() async {
-  final FontLoader loader = FontLoader(ZeroType.display);
-  final Uint8List bytes = File('assets/fonts/Archivo-Bold.ttf').readAsBytesSync();
-  loader.addFont(Future<ByteData>.value(ByteData.sublistView(bytes)));
+/// Barlow Condensed, la de la referencia de Python: la comparación mide el port.
+Future<void> _loadBrandFonts() async {
+  final FontLoader loader = FontLoader('Barlow Condensed');
+  for (final String peso in <String>['SemiBold', 'Bold', 'ExtraBold']) {
+    final Uint8List bytes = File('assets/fonts/BarlowCondensed-$peso.ttf').readAsBytesSync();
+    loader.addFont(Future<ByteData>.value(ByteData.sublistView(bytes)));
+  }
   await loader.load();
 }
 
@@ -87,7 +89,7 @@ Future<Uint8List> _straightRgba(ui.Image imagen) async {
 }
 
 void main() {
-  setUpAll(_loadZeroFonts);
+  setUpAll(_loadBrandFonts);
 
   test('slotPositions coloca como la referencia', () {
     // Valores de tools/lineup_card.py slot_positions.
@@ -130,7 +132,7 @@ void main() {
     imagen.dispose();
   });
 
-  // La referencia de Python se pinta con Archivo, la misma negrita que la app
+  // La referencia de Python se pinta con Barlow Condensed, los mismos TTF que la app
   // (tools/fonts de football-ai): la comparación mide el port, no la fuente. Lo que
   // queda son bordes de glifo que FreeType y Skia suavizan distinto; «distinto» es
   // una diferencia de más de 64 niveles en algún canal, la que se ve.

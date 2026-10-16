@@ -28,4 +28,23 @@ Future<void> loadZeroFonts() async {
     }
     await loader.load();
   }
+  // Las del gráfico del programa, la marca Gala Sports (IOS-100): sin ellas el marcador
+  // sale en la fuente de pruebas, donde todas las cifras son el mismo cuadrado y un gol
+  // no cambia ni un píxel.
+  const Map<String, List<String>> marca = <String, List<String>>{
+    'Barlow Condensed': <String>[
+      'BarlowCondensed-SemiBold.ttf',
+      'BarlowCondensed-Bold.ttf',
+      'BarlowCondensed-ExtraBold.ttf',
+    ],
+    'Inter': <String>['Inter-Variable.ttf'],
+  };
+  for (final MapEntry<String, List<String>> family in marca.entries) {
+    final FontLoader loader = FontLoader(family.key);
+    for (final String fichero in family.value) {
+      final File file = File('assets/fonts/$fichero');
+      loader.addFont(Future<ByteData>.value(ByteData.sublistView(file.readAsBytesSync())));
+    }
+    await loader.load();
+  }
 }

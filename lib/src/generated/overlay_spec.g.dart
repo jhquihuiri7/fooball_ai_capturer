@@ -1,6 +1,7 @@
 // Generado por tools/export_overlay_spec.py. NO EDITAR A MANO.
 //
-// Fuente de verdad: tools/overlay_preview.py (medidas y paleta del gráfico),
+// Fuente de verdad: tools/brand.py (la marca Gala Sports, ADR 0026),
+// tools/overlay_preview.py (medidas y papeles de la paleta),
 // tools/lineup_card.py (la alineación), tools/ad_strip.py (los fundidos) y
 // tools/program_contract.py (formato del programa). Para regenerarlo:
 //
@@ -21,43 +22,136 @@ abstract final class OverlaySpec {
 
   /// Paleta en ARGB de 32 bits, lista para Color(valor).
   static const Map<String, int> colorsArgb = {
-    'bar': 0xF0060A0B, // Fondo de la franja. Lo pinta el panel: el anuncio va encima, con alfa.
-    'edge': 0x1AFFFFFF, // Filete de 1 px que separa la franja del césped.
-    'home': 0xFFF26A24, // Color del equipo local. Un anuncio no debe usarlo: se lee como marcador.
-    'away': 0xFF16B3A6, // Color del equipo visitante. Misma razón para no usarlo.
-    'live': 0xFFE11D26, // Rojo del indicador EN DIRECTO. Reservado; ningún anuncio lo usa.
-    'leaf': 0xFF7CC242, // Verde institucional del claim de la franja.
+    'bar': 0xF007111F, // Fondo de la franja. Lo pinta el panel: el anuncio va encima, con alfa.
+    'edge': 0xFF00E5C4, // Filete teal que separa la franja del césped.
+    'home': 0xFF00E5C4, // Equipo local (teal). Un anuncio no lo usa de acento: se lee como marcador.
+    'away': 0xFFFFFFFF, // Equipo visitante (blanco). Como acento tampoco; como texto, sí.
+    'live': 0xFFE3141F, // Rojo de EN VIVO. Reservado; ningún anuncio lo usa.
     'white': 0xFFFFFFFF, // Texto principal sobre la franja.
-    'dim': 0xFF9AA8A6, // Texto secundario sobre la franja.
-    'chrome': 0xE6090E0F, // Fondo del marcador (el bug).
-    'chrome_soft': 0xD1090E0F, // Fondo del indicador de cámara.
+    'dim': 0xFF94A3B8, // Texto secundario sobre la franja.
+    'chrome': 0xFF101D2D, // Fondo del marcador (el bug).
+    'chrome_soft': 0xE007111F, // Chips sobre el vídeo: cámara, reloj y competición.
+  };
+
+  /// Los tokens de la marca por su nombre, en ARGB (tools/brand.py).
+  static const Map<String, int> brandArgb = {
+    'teal-electrico': 0xFF00E5C4,
+    'verde-oceano': 0xFF00A892,
+    'azul-deportivo': 0xFF0066FF,
+    'azul-profundo': 0xFF07111F,
+    'azul-marino': 0xFF101D2D,
+    'gris-claro': 0xFFF8FAFC,
+    'gris-oceanico': 0xFF94A3B8,
+    'amarillo-energia': 0xFFFFD43B,
+    'rojo-vivo': 0xFFE3141F,
+    'blanco': 0xFFFFFFFF,
+    'gris-tinte': 0xFFD3DFEA,
   };
 
   /// Tamaños de letra, px sobre 1920.
   static const Map<String, int> fontSizes = {
-    'team': 34,
-    'score': 38,
+    'team': 36,
+    'score': 56,
     'clock': 32,
-    'comp': 17,
-    'live': 17,
-    'cam': 18,
-    'slot': 18,
-    'sub': 16,
-    'claim': 23,
-    'ai': 17,
+    'comp': 22,
+    'live': 24,
+    'cam': 22,
+    'crest': 26,
+    'slot': 22,
+    'sub': 15,
+    'claim': 30,
+    'ai': 16,
+  };
+
+  /// Las familias: «display» es Barlow Condensed y «sans», Inter.
+  static const Map<String, String> fontFamilies = {
+    'display': 'Barlow Condensed',
+    'sans': 'Inter',
+  };
+
+  /// La familia de cada texto.
+  static const Map<String, String> fontFaces = {
+    'team': 'display',
+    'score': 'display',
+    'clock': 'display',
+    'comp': 'display',
+    'live': 'sans',
+    'cam': 'display',
+    'crest': 'display',
+    'slot': 'display',
+    'sub': 'sans',
+    'claim': 'display',
+    'ai': 'sans',
+  };
+
+  /// El peso de cada texto.
+  static const Map<String, int> fontWeights = {
+    'team': 700,
+    'score': 800,
+    'clock': 700,
+    'comp': 600,
+    'live': 800,
+    'cam': 700,
+    'crest': 800,
+    'slot': 700,
+    'sub': 500,
+    'claim': 700,
+    'ai': 500,
+  };
+
+  /// La franja (overlay_preview.py).
+  static const Map<String, int> strip = {
+    'edge_h': 2,
+    'reserved_left': 360,
+    'reserved_right': 300,
+    'logo_h': 48,
+    'logo_gap': 16,
+    'logo_src_w': 97,
+    'logo_src_h': 84,
+    'claim_line_h': 32,
+    'divider_pad': 26,
+    'slot_gap': 40,
+    'slot_icon_r': 14,
+    'raya_w': 6,
+    'raya_h': 28,
+    'raya_gap': 14,
   };
 
   /// El marcador (overlay_preview.py).
   static const Map<String, int> scoreboard = {
-    'bug_w': 704,
-    'bug_h': 88,
-    'bug_chamfer': 26,
-    'crest_w': 86,
-    'live_y': 148,
-    'live_h': 30,
-    'cam_y': 44,
-    'cam_h': 38,
     'margin': 48,
+    'top_y': 44,
+    'status_h': 44,
+    'status_pad_x': 56,
+    'status_gap': 16,
+    'status_to_bar': 18,
+    'bar_h': 76,
+    'tip_w': 18,
+    'tip_overlap': 8,
+    'body_pad_x': 28,
+    'body_edge_h': 3,
+    'row_gap': 22,
+    'crest_w': 84,
+    'crest_h': 100,
+    'goals_margin': 6,
+    'goal_min_w': 72,
+    'goal_pad_x': 12,
+    'goal_dash_gap': 14,
+    'live_pad_l': 14,
+    'live_pad_r': 16,
+    'live_dot': 12,
+    'live_gap': 10,
+    'chip_pad_x': 16,
+    'chip_gap': 10,
+    'clock_ring': 2,
+    'cam_icon_r': 9,
+    'cam_icon_line': 2,
+    'radius': 6,
+    'skew_deg': 30,
+    'shadow_dy': 4,
+    'shadow_blur': 16,
+    'shadow_alpha_pct': 40,
+    'bar_shadow_alpha_pct': 45,
   };
 
   /// La alineación (lineup_card.py).
@@ -70,7 +164,6 @@ abstract final class OverlaySpec {
     'row_h': 42,
     'row_step': 50,
     'row_text_size': 26,
-    'shadow_dy': 4,
     'subs_y': 718,
     'subs_title_size': 34,
     'subs_size': 25,
@@ -81,6 +174,9 @@ abstract final class OverlaySpec {
     'header_w': 720,
     'header_text_size': 44,
     'crest_r': 60,
+    'crest_initials_size': 30,
+    'header_edge_h': 3,
+    'row_radius': 8,
   };
 
   /// Los anuncios: cadencia y fundidos (ad_strip.py).
@@ -143,20 +239,18 @@ abstract final class OverlaySpec {
     'role_w': 250.0,
     'role_gap': 6.0,
     'role_text_size': 18.0,
-    'bg_top_k': 0.78,
-    'bg_bottom_k': 0.55,
-    'ink_k': 0.32,
-    'slab_k': 0.5,
-    'stripe_lighten': 0.12,
-    'shirt_lighten': 0.22,
-    'shadow_k': 0.42,
+    'shirt_stripe_k': 0.75,
   };
 
   /// Colores fijos de la alineación, en ARGB.
   static const Map<String, int> lineupColorsArgb = {
-    'shirt': 0xFF1E3A8A,
-    'keeper_shirt': 0xFFF5C542,
-    'crest_fill': 0xFF090E0F,
+    'background': 0xFF07111F,
+    'row_fill': 0xFF101D2D,
+    'pitch_dark': 0xFF101D2D,
+    'pitch_light': 0xFF1C2A3C,
+    'slab': 0xFF0066FF,
+    'chalk': 0xFF00E5C4,
+    'keeper_shirt': 0xFF0066FF,
   };
 
   /// Textos fijos de la alineación.
@@ -186,11 +280,67 @@ abstract final class OverlaySpec {
   /// Alturas de las rayas de la camiseta, en fracción de su alto.
   static const List<double> lineupShirtStripes = [0.34, 0.5, 0.66, 0.82];
 
+  /// Textos fijos del marcador.
+  static const Map<String, String> scoreboardTexts = {
+    'live': 'EN VIVO',
+    'camera': 'CÁMARA IA',
+  };
+
+  /// El escudo genérico: su caja, el filo y la altura de las siglas (brand.py).
+  static const Map<String, double> crest = {
+    'box_w': 48.0,
+    'box_h': 56.0,
+    'stroke': 2.5,
+    'initials_y': 31.0,
+  };
+
+  /// Silueta del escudo en su caja de 48×56, ya con las curvas en tramos.
+  static const List<(double, double)> crestShape = [
+    (24.0, 2.5),
+    (43.5, 8.5),
+    (43.5, 26.0),
+    (43.4008, 28.4764),
+    (43.1092, 30.8439),
+    (42.6345, 33.104),
+    (41.9859, 35.2578),
+    (41.1727, 37.3068),
+    (40.2041, 39.2521),
+    (39.0893, 41.0953),
+    (37.8375, 42.8375),
+    (36.458, 44.4801),
+    (34.96, 46.0244),
+    (33.3527, 47.4718),
+    (31.6453, 48.8234),
+    (29.8471, 50.0808),
+    (27.9674, 51.2451),
+    (26.0153, 52.3177),
+    (24.0, 53.3),
+    (21.9847, 52.3177),
+    (20.0326, 51.2451),
+    (18.1529, 50.0808),
+    (16.3547, 48.8234),
+    (14.6473, 47.4718),
+    (13.04, 46.0244),
+    (11.542, 44.4801),
+    (10.1625, 42.8375),
+    (8.9107, 41.0953),
+    (7.7959, 39.2521),
+    (6.8273, 37.3068),
+    (6.0141, 35.2578),
+    (5.3655, 33.104),
+    (4.8908, 30.8439),
+    (4.5992, 28.4764),
+    (4.5, 26.0),
+    (4.5, 8.5),
+  ];
+
   /// La tarjeta SIN SEÑAL (live_panel.py, §21.6).
   static const String slateText = 'SIN SEÑAL';
   /// Alto del texto, como fracción del alto del frame.
   static const double slateTextHeight = 0.08;
-  static const int slateBackgroundArgb = 0xFF121212;
-  static const int slateForegroundArgb = 0xFFE6ECEC;
+  static const int slateBackgroundArgb = 0xFF07111F;
+  static const int slateForegroundArgb = 0xFFF8FAFC;
+  /// Peso de Barlow Condensed en la tarjeta.
+  static const int slateFontWeight = 800;
 
 }

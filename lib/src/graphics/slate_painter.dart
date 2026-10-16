@@ -1,5 +1,6 @@
-/// La tarjeta SIN SEÑAL (IOS-46), portada de no_signal_card en tools/live_panel.py
-/// (§21.6): fondo casi negro y el texto centrado. Sale al aire mientras no llega la
+/// La tarjeta SIN SEÑAL (IOS-46, con la marca de IOS-100), portada de no_signal_card
+/// en tools/live_panel.py (§21.6): fondo azul profundo y el texto centrado en Barlow
+/// Condensed. Sale al aire mientras no llega la
 /// cámara, con el marcador compuesto encima, así que el cronómetro sigue en pantalla.
 library;
 
@@ -9,7 +10,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/rendering.dart';
 
 import '../generated/overlay_spec.g.dart';
-import '../theme/zero_type.dart';
+import 'gala_brand.dart';
 
 class SlatePainter extends CustomPainter {
   const SlatePainter();
@@ -22,12 +23,8 @@ class SlatePainter extends CustomPainter {
     final TextPainter tp = TextPainter(
       text: TextSpan(
         text: OverlaySpec.slateText,
-        style: TextStyle(
-          fontFamily: ZeroType.display,
-          fontWeight: FontWeight.w700,
-          fontSize: tamano,
-          color: const Color(OverlaySpec.slateForegroundArgb),
-        ),
+        style: GalaBrand.text('display', OverlaySpec.slateFontWeight, tamano,
+            color: const Color(OverlaySpec.slateForegroundArgb)),
       ),
       textDirection: TextDirection.ltr,
     )..layout();

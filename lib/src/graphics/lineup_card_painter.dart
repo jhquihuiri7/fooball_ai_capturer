@@ -1,10 +1,12 @@
-/// La tarjeta de alineación en Dart (IOS-46), portada de build_lineup_card y
-/// slot_positions de tools/lineup_card.py del repo football-ai.
+/// La tarjeta de alineación en Dart (IOS-46, con la marca Gala Sports de IOS-100),
+/// portada de build_lineup_card y slot_positions de tools/lineup_card.py del repo
+/// football-ai.
 ///
 /// Lista numerada a la izquierda, campo en perspectiva con las camisetas a la
-/// derecha y el DT abajo, en el color del equipo. Opaca de arriba abajo salvo la
+/// derecha y el DT abajo: oscura como todo grafismo, con el color del equipo en los
+/// dorsales, las camisetas y los filetes (ADR 0026). Opaca de arriba abajo salvo la
 /// franja de anuncios, que queda transparente: tapa el marcador, no el anuncio.
-/// Todas las medidas salen de OverlaySpec (REF-32 e IOS-46).
+/// Todas las medidas salen de OverlaySpec (REF-32, IOS-46 y REF-58).
 library;
 
 import 'dart:math' as math;
@@ -14,9 +16,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 
 import '../generated/overlay_spec.g.dart';
-import '../theme/zero_type.dart';
+import 'gala_brand.dart';
 import 'py_round.dart';
-import 'scoreboard_painter.dart';
 
 /// Un jugador tal como sale en la tarjeta.
 @immutable
@@ -90,18 +91,15 @@ List<(double, double)> slotPositions(List<int> lines) {
 Color _shade(Color c, double k) => Color.fromARGB(
     255, pyRound(_r(c) * k), pyRound(_gr(c) * k), pyRound(_b(c) * k));
 
-/// El color llevado hacia el blanco en una fracción k.
-Color _lighten(Color c, double k) => Color.fromARGB(255, pyRound(_r(c) + (255 - _r(c)) * k),
-    pyRound(_gr(c) + (255 - _gr(c)) * k), pyRound(_b(c) + (255 - _b(c)) * k));
-
 int _r(Color c) => (c.r * 255).round();
 int _gr(Color c) => (c.g * 255).round();
 int _b(Color c) => (c.b * 255).round();
 
-const Color _white = Color(0xFFFFFFFF);
+Color _fijo(String clave) => Color(OverlaySpec.lineupColorsArgb[clave]!);
 
-/// Formas SIN antialiasing, como ImageDraw de la referencia: con él, cada borde de
-/// píldora, camiseta y raya sale distinto del PNG de Python sin que el ojo lo vea.
+/// Formas SIN antialiasing donde la referencia pinta con ImageDraw (píldoras,
+/// camisetas, rayas); las piezas de la marca (filas, dorsales, cabecera, escudo) van
+/// suavizadas, como sus primitivas de tools/brand.py.
 Paint _paint() => Paint()..isAntiAlias = false;
 
 /// El color de la tarjeta de cada lado: el de su barra en el marcador.
@@ -127,8 +125,6 @@ class _Card {
   _Card(this.c, this.width, this.height, this.team, this.colour)
       : s = width / OverlaySpec.refWidth {
     alto = height - px(OverlaySpec.stripHeight.toDouble());
-    ink = _shade(colour, _g('ink_k'));
-    sombra = _shade(colour, _g('shadow_k'));
   }
 
   final Canvas c;
@@ -138,17 +134,14 @@ class _Card {
   final Color colour;
   final double s;
   late final int alto;
-  late final Color ink;
-  late final Color sombra;
+  final Color tinta = GalaBrand.token('azul-profundo');
+  final Color blanco = GalaBrand.token('blanco');
 
   int px(double v) => pyRound(v * s);
 
-  TextStyle _font(int size, Color color) => TextStyle(
-        fontFamily: ZeroType.display,
-        fontWeight: FontWeight.w700,
-        fontSize: size.toDouble(),
-        color: color,
-      );
+  /// Barlow Condensed al peso dado: 800 los titulares y dorsales, 700 los nombres.
+  TextStyle _font(int size, Color color, {int peso = 700}) =>
+      GalaBrand.text('display', peso, size.toDouble(), color: color);
 
   double _textWidth(String text, TextStyle style) {
     final TextPainter tp =
@@ -202,15 +195,19 @@ class _Card {
   void _pill(Rect r, Color fill) => c.drawRRect(
       RRect.fromRectAndRadius(r, Radius.circular(r.height / 2)), _paint()..color = fill);
 
-  void _numberedPill(double x, double y, double w, double h, int number, String text, int size) {
-    final double dy = px(_l('shadow_dy').toDouble()).toDouble();
-    _pill(Rect.fromLTRB(x, y + dy, x + w, y + h + dy), sombra);
-    _pill(Rect.fromLTRB(x, y, x + w, y + h), _white);
-    c.drawOval(Rect.fromLTRB(x, y, x + h, y + h), _paint()..color = ink);
-    _text('$number', _font(size, _white), Offset(x + h / 2, y + h / 2));
-    final TextStyle estilo = _font(size, ink);
-    _text(_fit(text.toUpperCase(), estilo, w - h - px(16)), estilo,
-        Offset(x + h + (w - h) / 2, y + h / 2));
+  /// Fila azul marino con el dorsal en una caja inclinada del color del equipo.
+  void _row(double x, double y, double w, double h, int number, String text, int size) {
+    c.drawRRect(
+        RRect.fromRectAndRadius(Rect.fromLTRB(x, y, x + w, y + h),
+            Radius.circular(px(_l('row_radius').toDouble()).toDouble())),
+        Paint()..color = _fijo('row_fill'));
+    final double sesgo = h / 2 * GalaBrand.inclinacion;
+    c.drawPath(GalaBrand.skewed(x + sesgo, y, h, h), Paint()..color = colour);
+    _text('$number', _font(size, tinta, peso: 800), Offset(x + sesgo + h / 2, y + h / 2));
+    final double nombreX = x + h + 2 * sesgo;
+    final TextStyle estilo = _font(size, blanco);
+    _text(_fit(text.toUpperCase(), estilo, x + w - nombreX - px(16)), estilo,
+        Offset((nombreX + x + w) / 2, y + h / 2));
   }
 
   void paint() {
@@ -222,29 +219,20 @@ class _Card {
     if (team.coach.isNotEmpty) _coach();
   }
 
-  /// Degradado vertical del color del equipo, fila a fila como np.linspace().round().
+  /// El fondo de la marca, opaco: tapa el marcador.
   void _background() {
-    final Color top = _shade(colour, _g('bg_top_k'));
-    final Color bottom = _shade(colour, _g('bg_bottom_k'));
-    final int filas = math.max(1, alto);
-    final Paint p = _paint();
-    for (int y = 0; y < alto; y++) {
-      final double f = filas == 1 ? 0 : y / (filas - 1);
-      int canal(int a, int b) => pyRound(a + (b - a) * f);
-      p.color = Color.fromARGB(255, canal(_r(top), _r(bottom)), canal(_gr(top), _gr(bottom)),
-          canal(_b(top), _b(bottom)));
-      c.drawRect(Rect.fromLTWH(0, y.toDouble(), width.toDouble(), 1), p);
-    }
+    c.drawRect(Rect.fromLTWH(0, 0, width.toDouble(), alto.toDouble()),
+        _paint()..color = _fijo('background'));
   }
 
   void _list() {
     final double mx = px(_l('margin_x').toDouble()).toDouble();
-    _text(OverlaySpec.lineupTexts['title']!, _font(px(_l('title_size').toDouble()), _white),
+    _text(OverlaySpec.lineupTexts['title']!, _font(px(_l('title_size').toDouble()), blanco, peso: 800),
         Offset(mx, px(_l('title_y').toDouble()).toDouble()),
         centred: false);
     for (int i = 0; i < team.starters.length; i++) {
       final LineupEntry j = team.starters[i];
-      _numberedPill(
+      _row(
         mx,
         px(_l('list_y') + i * _l('row_step').toDouble()).toDouble(),
         px(_l('list_w').toDouble()).toDouble(),
@@ -257,10 +245,10 @@ class _Card {
     if (team.substitutes.isEmpty) return;
     final int y = px(_l('subs_y').toDouble());
     final int tituloSize = px(_l('subs_title_size').toDouble());
-    _text(OverlaySpec.lineupTexts['subs_title']!, _font(tituloSize, _white),
+    _text(OverlaySpec.lineupTexts['subs_title']!, _font(tituloSize, GalaBrand.token('teal-electrico')),
         Offset(mx, y.toDouble()),
         centred: false);
-    final TextStyle estilo = _font(px(_l('subs_size').toDouble()), _white);
+    final TextStyle estilo = _font(px(_l('subs_size').toDouble()), GalaBrand.token('gris-claro'), peso: 600);
     final int lineH = px(_l('subs_line_h').toDouble());
     final int caben = math.max(0, (alto - px(_l('bottom_pad').toDouble()) - y - tituloSize) ~/ lineH);
     List<String> renglones = _wrap(
@@ -300,15 +288,17 @@ class _Card {
   void _pitch() {
     final Offset baseIzq = _project(0, 1), baseDer = _project(1, 1);
     final double slab = _bottom + px(_g('slab_h'));
+    // El canto: arriba el azul del filete del marcador, y se funde con el fondo.
     c.drawPath(
       Path()
         ..addPolygon(<Offset>[baseIzq, baseDer, Offset(baseDer.dx, slab), Offset(baseIzq.dx, slab)],
             true),
-      _paint()..color = _shade(colour, _g('slab_k')),
+      GalaBrand.fill(_fijo('slab'),
+          bottom: _fijo('background'), box: Rect.fromLTRB(baseIzq.dx, _bottom, baseDer.dx, slab)),
     );
     final int franjas = _g('pitch_stripes').toInt();
     for (int k = 0; k < franjas; k++) {
-      final Color tono = k.isOdd ? _lighten(colour, _g('stripe_lighten')) : colour;
+      final Color tono = k.isOdd ? _fijo('pitch_light') : _fijo('pitch_dark');
       c.drawPath(_quad(0, 1, k / franjas, (k + 1) / franjas), _paint()..color = tono);
     }
 
@@ -317,9 +307,10 @@ class _Card {
     // dos rayas se cruzan no se oscurece el doble.
     c.save();
     c.clipPath(_quad(0, 1, 0, 1));
-    c.saveLayer(null, _paint()..color = Color.fromARGB(_g('line_alpha').toInt(), 255, 255, 255));
+    final Color chalk = _fijo('chalk');
+    c.saveLayer(null, _paint()..color = chalk.withAlpha(_g('line_alpha').toInt()));
     final Paint tiza = _paint()
-      ..color = _white
+      ..color = chalk.withAlpha(255)
       ..style = PaintingStyle.stroke
       ..strokeJoin = StrokeJoin.round
       ..strokeWidth = math.max(1, px(_g('line_w'))).toDouble();
@@ -352,8 +343,7 @@ class _Card {
     final List<(double, double)> huecos = slotPositions(team.lines);
     final int n = math.min(huecos.length, team.starters.length);
     final int labelSize = px(_g('label_text_size'));
-    final Color shirt = Color(OverlaySpec.lineupColorsArgb['shirt']!);
-    final Color keeper = Color(OverlaySpec.lineupColorsArgb['keeper_shirt']!);
+    final Color keeper = _fijo('keeper_shirt');
     for (int i = 0; i < n; i++) {
       final (double u, double t) = huecos[i];
       final LineupEntry jugador = team.starters[i];
@@ -362,7 +352,7 @@ class _Card {
       final double w = px(_g('shirt_w')) * escala;
       final double h = w / _g('shirt_aspect');
       final double y0 = p.dy - h / 2;
-      final Color tela = i == 0 ? keeper : shirt;
+      final Color tela = i == 0 ? keeper : colour;
       c.drawPath(
         Path()
           ..addPolygon(<Offset>[
@@ -372,7 +362,7 @@ class _Card {
         _paint()..color = tela,
       );
       final Paint raya = _paint()
-        ..color = _lighten(tela, _g('shirt_lighten'))
+        ..color = _shade(tela, _g('shirt_stripe_k'))
         ..strokeWidth = math.max(1, pyRound(h * 0.04)).toDouble();
       final double cuerpo = _g('shirt_body');
       for (final double sy in OverlaySpec.lineupShirtStripes) {
@@ -381,10 +371,10 @@ class _Card {
       }
       final double lw = px(_g('label_w')) * escala, lh = px(_g('label_h')) * escala;
       final double ly = y0 + h + px(_g('label_gap')) * escala;
-      _pill(Rect.fromLTRB(p.dx - lw / 2, ly, p.dx + lw / 2, ly + lh), _white);
-      c.drawOval(Rect.fromLTRB(p.dx - lw / 2, ly, p.dx - lw / 2 + lh, ly + lh), _paint()..color = ink);
-      _text('${jugador.number}', _font(labelSize, _white), Offset(p.dx - lw / 2 + lh / 2, ly + lh / 2));
-      final TextStyle estilo = _font(labelSize, ink);
+      _pill(Rect.fromLTRB(p.dx - lw / 2, ly, p.dx + lw / 2, ly + lh), tinta);
+      c.drawOval(Rect.fromLTRB(p.dx - lw / 2, ly, p.dx - lw / 2 + lh, ly + lh), _paint()..color = colour);
+      _text('${jugador.number}', _font(labelSize, tinta), Offset(p.dx - lw / 2 + lh / 2, ly + lh / 2));
+      final TextStyle estilo = _font(labelSize, blanco);
       _text(_fit(jugador.name.toUpperCase(), estilo, lw - lh - px(12)), estilo,
           Offset(p.dx + lh / 2, ly + lh / 2));
     }
@@ -395,33 +385,41 @@ class _Card {
     final double hx0 = px(_g('pitch_cx')) - hw / 2;
     final double hy0 = px(_l('header_y').toDouble()).toDouble();
     final double hh = px(_l('header_h').toDouble()).toDouble();
-    final double dy = px(_l('shadow_dy').toDouble()).toDouble();
-    _pill(Rect.fromLTRB(hx0, hy0 + dy, hx0 + hw, hy0 + hh + dy), sombra);
-    _pill(Rect.fromLTRB(hx0, hy0, hx0 + hw, hy0 + hh), _white);
+    c.drawPath(
+        GalaBrand.skewed(hx0, hy0, hw, hh),
+        GalaBrand.fill(_fijo('row_fill'),
+            bottom: _fijo('background'), box: Rect.fromLTWH(hx0, hy0, hw, hh)));
+    final double filete = px(_l('header_edge_h').toDouble()).toDouble();
+    c.drawPath(GalaBrand.skewed(hx0, hy0 + hh - filete, hw, filete, centerY: hy0 + hh / 2),
+        Paint()..color = colour);
     final double cr = px(_l('crest_r').toDouble()).toDouble();
     final double ccx = hx0 + cr * 0.6, ccy = hy0 + hh / 2;
-    final TextStyle estilo = _font(px(_l('header_text_size').toDouble()), ink);
-    _text(_fit(team.name, estilo, hw - cr * 2 - px(24)), estilo, Offset(hx0 + hw / 2 + cr / 2, ccy));
-    c.drawCircle(Offset(ccx, ccy), cr, _paint()..color = _white);
-    c.drawCircle(Offset(ccx, ccy), cr * 0.84, _paint()..color = ink);
-    c.drawCircle(
-        Offset(ccx, ccy), cr * 0.74, _paint()..color = Color(OverlaySpec.lineupColorsArgb['crest_fill']!));
-    paintTurtle(c, ccx, ccy + cr * 0.08, cr * 0.42);
+    final TextStyle estilo = _font(px(_l('header_text_size').toDouble()), blanco, peso: 800);
+    _text(_fit(team.name.toUpperCase(), estilo, hw - cr * 2 - px(24)), estilo,
+        Offset(hx0 + hw / 2 + cr / 2, ccy));
+    final double altoEscudo = cr * 2 * OverlaySpec.crest['box_h']! / OverlaySpec.crest['box_w']!;
+    final Rect escudo =
+        Rect.fromLTRB(ccx - cr, ccy - altoEscudo / 2, ccx + cr, ccy + altoEscudo / 2);
+    GalaBrand.paintCrest(c, escudo, colour);
+    _text(GalaBrand.crestInitials(team.name),
+        _font(px(_l('crest_initials_size').toDouble()), colour, peso: 800),
+        GalaBrand.crestInitialsCenter(escudo));
   }
 
   void _coach() {
     final double cw = px(_g('coach_w')).toDouble(), ch = px(_g('coach_h')).toDouble();
     final double cx = px(_g('pitch_cx')).toDouble();
     final double x0 = cx - cw / 2, y0 = px(_g('coach_y')).toDouble();
-    final double dy = px(_l('shadow_dy').toDouble()).toDouble();
-    _pill(Rect.fromLTRB(x0, y0 + dy, x0 + cw, y0 + ch + dy), sombra);
-    _pill(Rect.fromLTRB(x0, y0, x0 + cw, y0 + ch), _white);
-    final TextStyle estilo = _font(px(_g('coach_text_size')), ink);
+    c.drawRRect(
+        RRect.fromRectAndRadius(Rect.fromLTRB(x0, y0, x0 + cw, y0 + ch),
+            Radius.circular(px(_l('row_radius').toDouble()).toDouble())),
+        Paint()..color = _fijo('row_fill'));
+    final TextStyle estilo = _font(px(_g('coach_text_size')), blanco);
     _text(_fit(team.coach.toUpperCase(), estilo, cw - ch), estilo, Offset(cx, y0 + ch / 2));
     final double ry0 = y0 + ch + px(_g('role_gap'));
     final double rw = px(_g('role_w')).toDouble(), rh = px(_g('role_h')).toDouble();
-    _pill(Rect.fromLTRB(cx - rw / 2, ry0, cx + rw / 2, ry0 + rh), ink);
-    _text(OverlaySpec.lineupTexts['role']!, _font(px(_g('role_text_size')), _white),
+    _pill(Rect.fromLTRB(cx - rw / 2, ry0, cx + rw / 2, ry0 + rh), colour);
+    _text(OverlaySpec.lineupTexts['role']!, _font(px(_g('role_text_size')), tinta),
         Offset(cx, ry0 + rh / 2));
   }
 }

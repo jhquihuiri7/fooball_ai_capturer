@@ -1,6 +1,7 @@
 // Generado por tools/export_overlay_spec.py. NO EDITAR A MANO.
 //
-// Fuente de verdad: tools/overlay_preview.py (medidas y paleta del gráfico),
+// Fuente de verdad: tools/brand.py (la marca Gala Sports, ADR 0026),
+// tools/overlay_preview.py (medidas y papeles de la paleta),
 // tools/lineup_card.py (la alineación), tools/ad_strip.py (los fundidos) y
 // tools/program_contract.py (formato del programa). Para regenerarlo:
 //
@@ -23,59 +24,134 @@ public enum OverlaySpec {
 
     /// Paleta, como [r, g, b, a] de 0 a 255.
     public static let colors: [String: [Int]] = [
-        "bar": [6, 10, 11, 240],  // Fondo de la franja. Lo pinta el panel: el anuncio va encima, con alfa.
-        "edge": [255, 255, 255, 26],  // Filete de 1 px que separa la franja del césped.
-        "home": [242, 106, 36, 255],  // Color del equipo local. Un anuncio no debe usarlo: se lee como marcador.
-        "away": [22, 179, 166, 255],  // Color del equipo visitante. Misma razón para no usarlo.
-        "live": [225, 29, 38, 255],  // Rojo del indicador EN DIRECTO. Reservado; ningún anuncio lo usa.
-        "leaf": [124, 194, 66, 255],  // Verde institucional del claim de la franja.
+        "bar": [7, 17, 31, 240],  // Fondo de la franja. Lo pinta el panel: el anuncio va encima, con alfa.
+        "edge": [0, 229, 196, 255],  // Filete teal que separa la franja del césped.
+        "home": [0, 229, 196, 255],  // Equipo local (teal). Un anuncio no lo usa de acento: se lee como marcador.
+        "away": [255, 255, 255, 255],  // Equipo visitante (blanco). Como acento tampoco; como texto, sí.
+        "live": [227, 20, 31, 255],  // Rojo de EN VIVO. Reservado; ningún anuncio lo usa.
         "white": [255, 255, 255, 255],  // Texto principal sobre la franja.
-        "dim": [154, 168, 166, 255],  // Texto secundario sobre la franja.
-        "chrome": [9, 14, 15, 230],  // Fondo del marcador (el bug).
-        "chrome_soft": [9, 14, 15, 209],  // Fondo del indicador de cámara.
+        "dim": [148, 163, 184, 255],  // Texto secundario sobre la franja.
+        "chrome": [16, 29, 45, 255],  // Fondo del marcador (el bug).
+        "chrome_soft": [7, 17, 31, 224],  // Chips sobre el vídeo: cámara, reloj y competición.
+    ]
+
+    /// Los tokens de la marca por su nombre, como [r, g, b] (tools/brand.py).
+    public static let brand: [String: [Int]] = [
+        "teal-electrico": [0, 229, 196],
+        "verde-oceano": [0, 168, 146],
+        "azul-deportivo": [0, 102, 255],
+        "azul-profundo": [7, 17, 31],
+        "azul-marino": [16, 29, 45],
+        "gris-claro": [248, 250, 252],
+        "gris-oceanico": [148, 163, 184],
+        "amarillo-energia": [255, 212, 59],
+        "rojo-vivo": [227, 20, 31],
+        "blanco": [255, 255, 255],
+        "gris-tinte": [211, 223, 234],
     ]
 
     /// Tamaños de letra, px sobre 1920.
     public static let fontSizes: [String: Int] = [
-        "team": 34,
-        "score": 38,
+        "team": 36,
+        "score": 56,
         "clock": 32,
-        "comp": 17,
-        "live": 17,
-        "cam": 18,
-        "slot": 18,
-        "sub": 16,
-        "claim": 23,
-        "ai": 17,
+        "comp": 22,
+        "live": 24,
+        "cam": 22,
+        "crest": 26,
+        "slot": 22,
+        "sub": 15,
+        "claim": 30,
+        "ai": 16,
     ]
 
-    /// Candidatas de fuente, en orden. La app usa su familia nativa.
-    public static let fontCandidates: [String] = [
-        "C:/Windows/Fonts/ARIALNB.TTF",
-        "C:/Windows/Fonts/arialbd.ttf",
-        "/System/Library/Fonts/Supplemental/Arial Narrow Bold.ttf",
-        "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    /// Las familias: «display» es Barlow Condensed y «sans», Inter.
+    public static let fontFamilies: [String: String] = [
+        "display": "Barlow Condensed",
+        "sans": "Inter",
     ]
-    public static let fontRegular: [String] = [
-        "C:/Windows/Fonts/ARIALN.TTF",
-        "C:/Windows/Fonts/arial.ttf",
-        "/System/Library/Fonts/Supplemental/Arial Narrow.ttf",
-        "/System/Library/Fonts/Supplemental/Arial.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    /// La familia de cada texto.
+    public static let fontFaces: [String: String] = [
+        "team": "display",
+        "score": "display",
+        "clock": "display",
+        "comp": "display",
+        "live": "sans",
+        "cam": "display",
+        "crest": "display",
+        "slot": "display",
+        "sub": "sans",
+        "claim": "display",
+        "ai": "sans",
+    ]
+    /// El peso de cada texto.
+    public static let fontWeights: [String: Int] = [
+        "team": 700,
+        "score": 800,
+        "clock": 700,
+        "comp": 600,
+        "live": 800,
+        "cam": 700,
+        "crest": 800,
+        "slot": 700,
+        "sub": 500,
+        "claim": 700,
+        "ai": 500,
+    ]
+
+    /// La franja (overlay_preview.py).
+    public static let strip: [String: Int] = [
+        "edge_h": 2,
+        "reserved_left": 360,
+        "reserved_right": 300,
+        "logo_h": 48,
+        "logo_gap": 16,
+        "logo_src_w": 97,
+        "logo_src_h": 84,
+        "claim_line_h": 32,
+        "divider_pad": 26,
+        "slot_gap": 40,
+        "slot_icon_r": 14,
+        "raya_w": 6,
+        "raya_h": 28,
+        "raya_gap": 14,
     ]
 
     /// El marcador (overlay_preview.py).
     public static let scoreboard: [String: Int] = [
-        "bug_w": 704,
-        "bug_h": 88,
-        "bug_chamfer": 26,
-        "crest_w": 86,
-        "live_y": 148,
-        "live_h": 30,
-        "cam_y": 44,
-        "cam_h": 38,
         "margin": 48,
+        "top_y": 44,
+        "status_h": 44,
+        "status_pad_x": 56,
+        "status_gap": 16,
+        "status_to_bar": 18,
+        "bar_h": 76,
+        "tip_w": 18,
+        "tip_overlap": 8,
+        "body_pad_x": 28,
+        "body_edge_h": 3,
+        "row_gap": 22,
+        "crest_w": 84,
+        "crest_h": 100,
+        "goals_margin": 6,
+        "goal_min_w": 72,
+        "goal_pad_x": 12,
+        "goal_dash_gap": 14,
+        "live_pad_l": 14,
+        "live_pad_r": 16,
+        "live_dot": 12,
+        "live_gap": 10,
+        "chip_pad_x": 16,
+        "chip_gap": 10,
+        "clock_ring": 2,
+        "cam_icon_r": 9,
+        "cam_icon_line": 2,
+        "radius": 6,
+        "skew_deg": 30,
+        "shadow_dy": 4,
+        "shadow_blur": 16,
+        "shadow_alpha_pct": 40,
+        "bar_shadow_alpha_pct": 45,
     ]
 
     /// La alineación (lineup_card.py).
@@ -88,7 +164,6 @@ public enum OverlaySpec {
         "row_h": 42,
         "row_step": 50,
         "row_text_size": 26,
-        "shadow_dy": 4,
         "subs_y": 718,
         "subs_title_size": 34,
         "subs_size": 25,
@@ -99,6 +174,9 @@ public enum OverlaySpec {
         "header_w": 720,
         "header_text_size": 44,
         "crest_r": 60,
+        "crest_initials_size": 30,
+        "header_edge_h": 3,
+        "row_radius": 8,
     ]
 
     /// Los anuncios: cadencia y fundidos (ad_strip.py).

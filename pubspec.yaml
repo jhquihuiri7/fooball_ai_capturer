@@ -112,6 +112,22 @@ flutter:
           weight: 600
         - asset: assets/fonts/IBMPlexMono-Bold.ttf
           weight: 700
+    # Barlow Condensed — los grafismos del programa (marcador, franja, alineación y SIN
+    # SEÑAL) con la marca Gala Sports (ADR 0026, IOS-100). Son los mismos TTF que pinta
+    # la referencia de Python (football-ai/tools/fonts), para que las cajas casen.
+    - family: Barlow Condensed
+      fonts:
+        - asset: assets/fonts/BarlowCondensed-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/BarlowCondensed-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/BarlowCondensed-ExtraBold.ttf
+          weight: 800
+    # Inter variable — los subtítulos del programa (EN VIVO, la marca de la franja). El
+    # peso va por el eje `wght` (GalaBrand.text), no por fichero.
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Variable.ttf
 
 # El icono es solo la marca: dos anillos solapados al 72 % del lienzo sobre #12181A.
 # Ni esquinas redondeadas ni sombras propias — iOS y Android aplican su máscara.
