@@ -1,8 +1,9 @@
 /// Lo que el operador cambia del gráfico desde el mando y es del campeonato, no de un
-/// partido (ADR 0027): los textos de la franja y el icono del campeonato.
+/// partido (ADR 0027): los textos de la franja y el icono del campeonato; y los escudos de
+/// los equipos, por su nombre (ADR 0028).
 ///
-/// Vive en la carpeta del partido, en `grafico.json` y `campeonato.img`, pero no se aparta
-/// con el partido viejo: el partido siguiente del mismo campeonato los conserva.
+/// Vive en la carpeta del partido, en `grafico.json`, `campeonato.img` y `escudos/`, pero no
+/// se aparta con el partido viejo: el partido siguiente del mismo campeonato los conserva.
 library;
 
 import 'dart:convert';
@@ -87,6 +88,17 @@ class StripTexts {
   int get hashCode => Object.hash(Object.hashAll(claim), Object.hashAll(slots));
 }
 
+/// El escudo de un equipo (ADR 0028): su fichero, PNG o JPEG, y su versión, que cambia con
+/// cada subida para que el gráfico y el mando sepan que hay que volver a leerlo.
+@immutable
+class TeamCrest {
+  const TeamCrest({required this.mime, required this.file, required this.rev});
+
+  final String mime;
+  final File file;
+  final int rev;
+}
+
 class GraphicsStore {
   /// Lee lo guardado en `directory`; un fichero roto no impide arrancar: se empieza con
   /// los textos de partida y sin icono.
@@ -99,13 +111,63 @@ class GraphicsStore {
           strip = StripTexts.fromJson(json['strip']);
           final Object? tipo = json['icon_mime'];
           iconMime = tipo is String && iconFile.existsSync() ? tipo : null;
+          final Object? escudos = json['crests'];
+          if (escudos is Map<String, Object?>) {
+            for (final MapEntry<String, Object?> e in escudos.entries) {
+              final Object? mime = e.value;
+              if (mime is String && _crestFile(e.key).existsSync()) {
+                _crests[e.key] = TeamCrest(mime: mime, file: _crestFile(e.key), rev: ++_crestSeq);
+              }
+            }
+          }
         }
       } on Object {
         strip = StripTexts.defaults();
         iconMime = null;
+        _crests.clear();
       }
     }
     iconRev = iconMime == null ? 0 : 1;
+  }
+
+  /// Los escudos por la clave de su equipo (`crestKey`), y la última versión dada.
+  final Map<String, TeamCrest> _crests = <String, TeamCrest>{};
+  int _crestSeq = 0;
+
+  /// La clave de un equipo: su nombre en mayúsculas y sin espacios de sobra. «Bellavista »
+  /// y «BELLAVISTA» son el mismo; «Bellavista FC», otro.
+  static String crestKey(String teamName) =>
+      teamName.trim().split(RegExp(r'\s+')).where((String p) => p.isNotEmpty).join(' ').toUpperCase();
+
+  /// El fichero del escudo de una clave: sus bytes UTF-8 en hexadecimal, que valen de nombre
+  /// en cualquier sistema de ficheros aunque el equipo lleve tildes o eñes.
+  File _crestFile(String key) => File(
+    '${directory.path}/$teamCrestDirName/'
+    '${utf8.encode(key).map((int b) => b.toRadixString(16).padLeft(2, '0')).join()}.img',
+  );
+
+  /// El escudo del equipo que se llama `teamName`, o null si va el genérico.
+  TeamCrest? crestFor(String teamName) => _crests[crestKey(teamName)];
+
+  /// Dónde se escribe un escudo mientras llega: se renombra al acabar bien.
+  File get crestUploadFile => File('${directory.path}/$teamCrestDirName/escudo.subida');
+
+  /// Adopta el escudo recién subido a [crestUploadFile] como el del equipo `teamName`.
+  void adoptCrest(String teamName, String mime) {
+    final String clave = crestKey(teamName);
+    final File destino = _crestFile(clave);
+    crestUploadFile.renameSync(destino.path);
+    _crests[clave] = TeamCrest(mime: mime, file: destino, rev: ++_crestSeq);
+    _save();
+  }
+
+  /// Quita el escudo del equipo `teamName`: vuelve el genérico.
+  void deleteCrest(String teamName) {
+    final TeamCrest? previo = _crests.remove(crestKey(teamName));
+    if (previo != null && previo.file.existsSync()) {
+      previo.file.deleteSync();
+    }
+    _save();
   }
 
   final Directory directory;
@@ -163,7 +225,11 @@ class GraphicsStore {
   void _save() {
     directory.createSync(recursive: true);
     final File tmp = File('${_file.path}.tmp');
-    tmp.writeAsStringSync(jsonEncode(<String, Object?>{'strip': strip.toJson(), 'icon_mime': iconMime}));
+    tmp.writeAsStringSync(jsonEncode(<String, Object?>{
+      'strip': strip.toJson(),
+      'icon_mime': iconMime,
+      'crests': <String, String>{for (final MapEntry<String, TeamCrest> e in _crests.entries) e.key: e.value.mime},
+    }));
     tmp.renameSync(_file.path);
   }
 }

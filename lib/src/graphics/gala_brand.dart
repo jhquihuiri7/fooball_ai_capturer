@@ -115,6 +115,24 @@ abstract final class GalaBrand {
     );
   }
 
+  /// El escudo de un equipo en `box` (ADR 0028): el suyo, entero, sin deformar y centrado,
+  /// si lo hay; si no, el genérico de [paintCrest]. Devuelve si fue el genérico: solo ese
+  /// lleva las siglas encima, que pone quien llama (`brand.team_crest` de football-ai).
+  static bool paintTeamCrest(Canvas c, Rect box, Color edge, ui.Image? logo) {
+    if (logo == null) {
+      paintCrest(c, box, edge);
+      return true;
+    }
+    final double e = math.min(box.width / logo.width, box.height / logo.height);
+    c.drawImageRect(
+      logo,
+      Rect.fromLTWH(0, 0, logo.width.toDouble(), logo.height.toDouble()),
+      Rect.fromCenter(center: box.center, width: logo.width * e, height: logo.height * e),
+      Paint()..filterQuality = FilterQuality.high,
+    );
+    return false;
+  }
+
   /// Dónde van centradas las siglas del escudo dentro de `box`.
   static Offset crestInitialsCenter(Rect box) {
     final double e = _escudoEscala(box);

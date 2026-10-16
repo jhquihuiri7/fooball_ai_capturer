@@ -9,6 +9,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:football_ai_capture/src/generated/overlay_spec.g.dart';
+import 'package:football_ai_capture/src/graphics/gala_brand.dart';
 import 'package:football_ai_capture/src/graphics/halftime_card_painter.dart';
 import 'package:football_ai_capture/src/graphics/scoreboard_painter.dart';
 
@@ -72,6 +73,37 @@ void main() {
         expect(alfa(x, y), velo, reason: '($x, $y)');
       }
       img.dispose();
+    });
+  });
+
+  testWidgets('con escudos: ≤3 % de píxeles distintos de halftime_escudos.png (ADR 0028)', (WidgetTester tester) async {
+    await tester.runAsync(() async {
+      final ui.Image iso = await GalaBrand.isotipo();
+      final ui.Codec codec =
+          await ui.instantiateImageCodec(File('test/graphics/reference/halftime_escudos.png').readAsBytesSync());
+      final ui.Image python = (await codec.getNextFrame()).image;
+      final ui.Image dart = await paintHalftimeCard(
+        directo,
+        OverlaySpec.programWidth,
+        OverlaySpec.programHeight,
+        crests: <String, ui.Image>{'home': iso, 'away': iso},
+      );
+      final Uint8List a = await _rgba(dart), b = await _rgba(python);
+      int distintos = 0;
+      for (int i = 0; i < a.length; i += 4) {
+        for (int k = 0; k < 4; k++) {
+          if ((a[i + k] - b[i + k]).abs() > 64) {
+            distintos++;
+            break;
+          }
+        }
+      }
+      final double fraccion = distintos / (a.length ~/ 4);
+      // ignore: avoid_print
+      print('entretiempo con escudos: ${(fraccion * 100).toStringAsFixed(2)} % de píxeles distintos');
+      expect(fraccion, lessThanOrEqualTo(0.03));
+      dart.dispose();
+      python.dispose();
     });
   });
 

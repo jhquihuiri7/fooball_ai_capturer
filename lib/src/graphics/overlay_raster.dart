@@ -56,13 +56,26 @@ class OverlayRaster {
   /// volver a pintar.
   /// `championship` es el icono del campeonato ya decodificado; el estado lleva su
   /// versión (`iconRev`), que es lo que decide si hay que volver a pintar.
-  Future<OverlayFrame> render(ScoreboardState state, {bool sponsorSlots = true, ui.Image? championship}) async {
+  /// `crests`, igual, los escudos de los equipos (ADR 0028), con su versión en el estado.
+  Future<OverlayFrame> render(
+    ScoreboardState state, {
+    bool sponsorSlots = true,
+    ui.Image? championship,
+    Map<String, ui.Image> crests = const <String, ui.Image>{},
+  }) async {
     final OverlayFrame? previa = _last;
     if (previa != null && state == _lastState && sponsorSlots == _lastSlots) {
       return previa;
     }
     final Uint8List rgba = await _rgbaOf(
-      await paintScoreboard(state, width, height, sponsorSlots: sponsorSlots, championship: championship),
+      await paintScoreboard(
+        state,
+        width,
+        height,
+        sponsorSlots: sponsorSlots,
+        championship: championship,
+        crests: crests,
+      ),
     );
     _generation += 1;
     _lastState = state;
@@ -97,31 +110,37 @@ class CardRaster {
   final int width;
   final int height;
 
-  final Map<bool, (LineupCardTeam, OverlayFrame)> _lineups = <bool, (LineupCardTeam, OverlayFrame)>{};
+  final Map<bool, (LineupCardTeam, int?, OverlayFrame)> _lineups = <bool, (LineupCardTeam, int?, OverlayFrame)>{};
   (ScoreboardState, OverlayFrame)? _halftime;
   OverlayFrame? _slate;
   int _generation = 0;
 
   int get rasterCount => _generation;
 
-  /// La alineación del local (`home`) o del visitante, en el color de su barra.
-  Future<OverlayFrame> lineup(LineupCardTeam team, {required bool home}) async {
-    final (LineupCardTeam, OverlayFrame)? previa = _lineups[home];
-    if (previa != null && previa.$1 == team) {
-      return previa.$2;
+  /// La alineación del local (`home`) o del visitante, en el color de su barra. `crest` es
+  /// el escudo del equipo y `crestRev` su versión, que decide si hay que volver a pintar
+  /// (ADR 0028).
+  Future<OverlayFrame> lineup(LineupCardTeam team, {required bool home, ui.Image? crest, int? crestRev}) async {
+    final (LineupCardTeam, int?, OverlayFrame)? previa = _lineups[home];
+    if (previa != null && previa.$1 == team && previa.$2 == crestRev) {
+      return previa.$3;
     }
     final Uint8List rgba =
-        await _rgbaOf(await paintLineupCard(team, lineupColour(home), width, height));
+        await _rgbaOf(await paintLineupCard(team, lineupColour(home), width, height, crest: crest));
     _generation += 1;
     final OverlayFrame frame =
         OverlayFrame(rgba: rgba, width: width, height: height, generation: _generation);
-    _lineups[home] = (team, frame);
+    _lineups[home] = (team, crestRev, frame);
     return frame;
   }
 
   /// La tarjeta de entretiempo (ADR 0027): solo se pinta de nuevo si cambia lo que enseña
   /// (los nombres, los goles, la competición o el icono). El reloj no sale en ella.
-  Future<OverlayFrame> halftime(ScoreboardState state, {ui.Image? icon}) async {
+  Future<OverlayFrame> halftime(
+    ScoreboardState state, {
+    ui.Image? icon,
+    Map<String, ui.Image> crests = const <String, ui.Image>{},
+  }) async {
     final ScoreboardState clave = ScoreboardState(
       competition: state.competition,
       home: state.home,
@@ -132,12 +151,15 @@ class CardRaster {
       live: false,
       cameraMode: '',
       iconRev: state.iconRev,
+      homeCrestRev: state.homeCrestRev,
+      awayCrestRev: state.awayCrestRev,
     );
     final (ScoreboardState, OverlayFrame)? previa = _halftime;
     if (previa != null && previa.$1 == clave) {
       return previa.$2;
     }
-    final Uint8List rgba = await _rgbaOf(await paintHalftimeCard(clave, width, height, icon: icon));
+    final Uint8List rgba =
+        await _rgbaOf(await paintHalftimeCard(clave, width, height, icon: icon, crests: crests));
     _generation += 1;
     final OverlayFrame frame =
         OverlayFrame(rgba: rgba, width: width, height: height, generation: _generation);

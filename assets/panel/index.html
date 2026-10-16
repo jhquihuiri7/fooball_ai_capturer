@@ -173,6 +173,16 @@
   .campos label.btn { display: inline-flex; font: 700 17px/1.1 var(--display); letter-spacing: .04em; color: var(--claro); }
   .subir input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 
+  /* ---------------- escudos de los equipos (ADR 0028) ---------------- */
+  .escudos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--linea); }
+  .escudo { display: grid; gap: 6px; min-width: 0; }
+  .escudo .lado { font: 600 11px/1.2 var(--sans); letter-spacing: .1em; text-transform: uppercase; color: var(--oceanico); }
+  .escudo .nombre { font: 700 16px/1.15 var(--display); letter-spacing: .03em; overflow-wrap: anywhere; }
+  .escudo .icono-vista { height: 96px; }
+  .escudo .icono-vista img { max-height: 84px; }
+  .escudo .btn { min-height: 44px; }
+  .nota { margin: 10px 0 0; color: var(--oceanico); font-size: 12px; line-height: 1.4; }
+
   /* ---------------- vídeos (ADR 0027) ---------------- */
   .sonando { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 10px; margin-bottom: 10px; padding: 10px 12px; border-radius: 10px; background: var(--tinte); box-shadow: inset 0 0 0 1px var(--teal); }
   .sonando[hidden] { display: none; }
@@ -263,6 +273,23 @@
         <label>Visitante<input type="text" id="in-visitante" maxlength="24" autocomplete="off" required></label>
         <button class="btn primario" type="submit">Guardar nombres</button>
       </form>
+      <div class="escudos">
+        <div class="escudo">
+          <span class="lado">Escudo local</span>
+          <span class="nombre" id="escudo-home-nombre">Local</span>
+          <div class="icono-vista" id="escudo-home">sin escudo</div>
+          <label class="btn subir">Cargar escudo<input type="file" data-escudo="home" accept="image/png,image/jpeg"></label>
+          <button class="btn quitar" type="button" data-propio data-quitar-escudo="home" disabled>Quitar</button>
+        </div>
+        <div class="escudo">
+          <span class="lado">Escudo visitante</span>
+          <span class="nombre" id="escudo-away-nombre">Visitante</span>
+          <div class="icono-vista" id="escudo-away">sin escudo</div>
+          <label class="btn subir">Cargar escudo<input type="file" data-escudo="away" accept="image/png,image/jpeg"></label>
+          <button class="btn quitar" type="button" data-propio data-quitar-escudo="away" disabled>Quitar</button>
+        </div>
+      </div>
+      <p class="nota">El escudo va con el nombre del equipo y vuelve cada vez que juegue: guarda el nombre antes de subirlo. Mejor PNG con fondo transparente, hasta 4 MB.</p>
     </section>
 
     <section class="card" aria-labelledby="t-icono">
@@ -428,6 +455,11 @@ function pinta(p) {
     f.querySelectorAll('[name=sub]').forEach((el, i) => rellena(el, p.strip_texts.slots[i][1]));
   }
   if (p.championship_icon !== iconoVisto) { iconoVisto = p.championship_icon; pintaIcono(); }
+  for (const lado of ['home', 'away']) {
+    $('escudo-' + lado + '-nombre').textContent = p[lado].name;
+    const version = p[lado].crest ?? null;
+    if (version !== escudosVistos[lado]) { escudosVistos[lado] = version; pintaEscudo(lado); }
+  }
   $('video-sonando').hidden = !p.video;
   if (p.video) { $('video-nombre').textContent = p.video.name.replace(/\.mp4$/i, ''); videoHasta = performance.now() + p.video.remaining_ms; }
   document.querySelectorAll('#videos li[data-nombre]').forEach(li => li.classList.toggle('suena', !!p.video && li.dataset.nombre === p.video.name));
@@ -445,6 +477,21 @@ const limpia = form => form.querySelectorAll('input').forEach(el => delete el.da
 let franjaHasta = 0;
 let videoHasta = 0;
 let iconoVisto;
+const escudosVistos = { home: undefined, away: undefined };
+// El escudo del equipo que juega de `lado` (ADR 0028): va con su nombre.
+async function pintaEscudo(lado) {
+  const vista = $('escudo-' + lado);
+  document.querySelector('[data-quitar-escudo="' + lado + '"]').disabled = escudosVistos[lado] == null;
+  if (escudosVistos[lado] == null) { vista.textContent = 'sin escudo'; return; }
+  try {
+    const r = await fetch('/api/v1/assets/crest/' + lado, { headers: cab });
+    if (!r.ok) return;
+    const img = document.createElement('img');
+    img.alt = 'Escudo ' + (lado === 'home' ? 'local' : 'visitante');
+    img.src = URL.createObjectURL(await r.blob());
+    vista.replaceChildren(img);
+  } catch {}
+}
 async function pintaIcono() {
   const vista = $('icono-vista');
   $('quitar-icono').disabled = iconoVisto == null;
@@ -484,6 +531,28 @@ $('in-icono').addEventListener('change', async e => {
   } catch { aviso('Sin conexión con el maestro: el icono no se subió.'); }
   finally { boton.classList.remove('ocupado'); }
 });
+document.querySelectorAll('[data-escudo]').forEach(input => input.addEventListener('change', async e => {
+  const lado = e.target.dataset.escudo;
+  const archivo = e.target.files[0]; e.target.value = '';
+  if (!archivo) return;
+  if (archivo.size > 4 * 1024 * 1024) { aviso('El escudo pasa de 4 MB.'); return; }
+  const boton = e.target.closest('.btn'); boton.classList.add('ocupado');
+  try {
+    const r = await fetch('/api/v1/assets/crest/' + lado, { method: 'PUT', headers: { ...cab, 'Content-Type': archivo.type || 'application/octet-stream' }, body: archivo });
+    const j = await r.json().catch(() => ({}));
+    if (r.ok) { pinta(j); aviso(''); } else aviso(j.detail || ('error ' + r.status));
+  } catch { aviso('Sin conexión con el maestro: el escudo no se subió.'); }
+  finally { boton.classList.remove('ocupado'); }
+}));
+document.querySelectorAll('[data-quitar-escudo]').forEach(b => b.addEventListener('click', async () => {
+  const lado = b.dataset.quitarEscudo;
+  if (!confirm('¿Quitar el escudo de ' + (partido ? partido[lado].name : lado) + '?')) return;
+  try {
+    const r = await fetch('/api/v1/assets/crest/' + lado, { method: 'DELETE', headers: cab });
+    const j = await r.json().catch(() => ({}));
+    if (r.ok) pinta(j); else aviso(j.detail || ('error ' + r.status));
+  } catch { aviso('Sin conexión con el maestro.'); }
+}));
 $('quitar-icono').addEventListener('click', async e => {
   if (!confirm(e.currentTarget.dataset.confirma)) return;
   try {

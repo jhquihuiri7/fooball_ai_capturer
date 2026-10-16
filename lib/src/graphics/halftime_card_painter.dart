@@ -118,7 +118,7 @@ class HalftimeLayout {
 }
 
 class HalftimeCardPainter extends CustomPainter {
-  HalftimeCardPainter(this.state, {required this.isotipo, this.icon});
+  HalftimeCardPainter(this.state, {required this.isotipo, this.icon, this.crests = const <String, ui.Image>{}});
 
   final ScoreboardState state;
   final ui.Image isotipo;
@@ -126,8 +126,11 @@ class HalftimeCardPainter extends CustomPainter {
   /// El icono del campeonato; sin él, el isotipo.
   final ui.Image? icon;
 
+  /// Los escudos de los equipos que los tienen, por lado (ADR 0028).
+  final Map<String, ui.Image> crests;
+
   @override
-  bool shouldRepaint(HalftimeCardPainter old) => old.state != state || old.icon != icon;
+  bool shouldRepaint(HalftimeCardPainter old) => old.state != state || old.icon != icon || old.crests != crests;
 
   void _text(Canvas c, HalftimeLayout l, String text, String fuente, Color color, Offset at, {bool centred = true}) {
     final TextPainter tp = TextPainter(
@@ -188,8 +191,9 @@ class HalftimeCardPainter extends CustomPainter {
     // ---------------- los equipos ----------------
     for (final (String clave, Color color) in <(String, Color)>[('home', teal), ('away', visita)]) {
       final Rect escudo = l.boxes['${clave}_crest']!;
-      GalaBrand.paintCrest(c, escudo, color);
-      _text(c, l, GalaBrand.crestInitials(l.nombre(clave)), 'crest', color, GalaBrand.crestInitialsCenter(escudo));
+      if (GalaBrand.paintTeamCrest(c, escudo, color, crests[clave])) {
+        _text(c, l, GalaBrand.crestInitials(l.nombre(clave)), 'crest', color, GalaBrand.crestInitialsCenter(escudo));
+      }
       final String visible = l.fit(l.nombre(clave), 'name', l.h('name_max_w'));
       _text(c, l, visible, 'name', blanco, Offset(l.boxes['${clave}_name']!.center.dx, l.h('name_y')));
     }
@@ -210,10 +214,16 @@ class HalftimeCardPainter extends CustomPainter {
 }
 
 /// La tarjeta como ui.Image del tamaño del programa.
-Future<ui.Image> paintHalftimeCard(ScoreboardState state, int width, int height, {ui.Image? icon}) async {
+Future<ui.Image> paintHalftimeCard(
+  ScoreboardState state,
+  int width,
+  int height, {
+  ui.Image? icon,
+  Map<String, ui.Image> crests = const <String, ui.Image>{},
+}) async {
   final ui.Image isotipo = await GalaBrand.isotipo();
   final ui.PictureRecorder recorder = ui.PictureRecorder();
-  HalftimeCardPainter(state, isotipo: isotipo, icon: icon)
+  HalftimeCardPainter(state, isotipo: isotipo, icon: icon, crests: crests)
       .paint(Canvas(recorder), Size(width.toDouble(), height.toDouble()));
   final ui.Picture picture = recorder.endRecording();
   return picture.toImage(width, height).whenComplete(picture.dispose);

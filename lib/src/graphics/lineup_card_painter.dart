@@ -106,23 +106,26 @@ Paint _paint() => Paint()..isAntiAlias = false;
 Color lineupColour(bool home) => Color(OverlaySpec.colorsArgb[home ? 'home' : 'away']!);
 
 class LineupCardPainter extends CustomPainter {
-  LineupCardPainter(this.team, this.colour);
+  LineupCardPainter(this.team, this.colour, {this.crest});
+
+  /// El escudo del equipo, si lo tiene: sustituye al genérico (ADR 0028).
+  final ui.Image? crest;
 
   final LineupCardTeam team;
   final Color colour;
 
   @override
-  bool shouldRepaint(LineupCardPainter old) => old.team != team || old.colour != colour;
+  bool shouldRepaint(LineupCardPainter old) => old.team != team || old.colour != colour || old.crest != crest;
 
   @override
   void paint(Canvas canvas, Size size) {
-    _Card(canvas, size.width.round(), size.height.round(), team, colour).paint();
+    _Card(canvas, size.width.round(), size.height.round(), team, colour, crest).paint();
   }
 }
 
 /// Una pasada de pintado: las medidas de un tamaño de salida y el lienzo.
 class _Card {
-  _Card(this.c, this.width, this.height, this.team, this.colour)
+  _Card(this.c, this.width, this.height, this.team, this.colour, this.crest)
       : s = width / OverlaySpec.refWidth {
     alto = height - px(OverlaySpec.stripHeight.toDouble());
   }
@@ -132,6 +135,7 @@ class _Card {
   final int height;
   final LineupCardTeam team;
   final Color colour;
+  final ui.Image? crest;
   final double s;
   late final int alto;
   final Color tinta = GalaBrand.token('azul-profundo');
@@ -400,10 +404,11 @@ class _Card {
     final double altoEscudo = cr * 2 * OverlaySpec.crest['box_h']! / OverlaySpec.crest['box_w']!;
     final Rect escudo =
         Rect.fromLTRB(ccx - cr, ccy - altoEscudo / 2, ccx + cr, ccy + altoEscudo / 2);
-    GalaBrand.paintCrest(c, escudo, colour);
-    _text(GalaBrand.crestInitials(team.name),
-        _font(px(_l('crest_initials_size').toDouble()), colour, peso: 800),
-        GalaBrand.crestInitialsCenter(escudo));
+    if (GalaBrand.paintTeamCrest(c, escudo, colour, crest)) {
+      _text(GalaBrand.crestInitials(team.name),
+          _font(px(_l('crest_initials_size').toDouble()), colour, peso: 800),
+          GalaBrand.crestInitialsCenter(escudo));
+    }
   }
 
   void _coach() {
@@ -425,9 +430,9 @@ class _Card {
 }
 
 /// La tarjeta como ui.Image del tamaño del programa.
-Future<ui.Image> paintLineupCard(LineupCardTeam team, Color colour, int width, int height) {
+Future<ui.Image> paintLineupCard(LineupCardTeam team, Color colour, int width, int height, {ui.Image? crest}) {
   final ui.PictureRecorder recorder = ui.PictureRecorder();
-  LineupCardPainter(team, colour)
+  LineupCardPainter(team, colour, crest: crest)
       .paint(Canvas(recorder), Size(width.toDouble(), height.toDouble()));
   final ui.Picture picture = recorder.endRecording();
   return picture.toImage(width, height).whenComplete(picture.dispose);

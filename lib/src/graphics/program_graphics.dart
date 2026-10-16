@@ -15,6 +15,7 @@ import 'package:football_ai_capture/src/graphics/overlay_bridge.dart';
 import 'package:football_ai_capture/src/graphics/overlay_raster.dart';
 import 'package:football_ai_capture/src/graphics/scoreboard_painter.dart';
 import 'package:football_ai_capture/src/match_state.dart';
+import 'package:football_ai_capture/src/server/graphics_store.dart';
 import 'package:football_ai_capture/src/server/lineups.dart';
 import 'package:football_ai_capture/src/server/match_engine.dart';
 
@@ -44,6 +45,38 @@ class ProgramGraphics {
   /// El icono del campeonato decodificado y la versión de la que salió (ADR 0027).
   ui.Image? _icon;
   int _iconRev = 0;
+
+  /// Los escudos de los equipos decodificados (ADR 0028), por lado, con la versión de la
+  /// que salió cada uno.
+  final Map<MatchTeam, (int, ui.Image)> _crests = <MatchTeam, (int, ui.Image)>{};
+
+  /// Los escudos de los equipos que juegan ahora, por lado (`home`, `away`): se decodifica
+  /// de nuevo solo el que cambió de versión (otro escudo, o el equipo cambió de nombre).
+  Future<Map<String, ui.Image>> _teamCrests() async {
+    final Map<String, ui.Image> escudos = <String, ui.Image>{};
+    for (final MatchTeam lado in MatchTeam.values) {
+      final TeamCrest? escudo = engine.graphics.crestFor(engine.teamName(lado));
+      final (int, ui.Image)? previo = _crests[lado];
+      if (previo != null && previo.$1 == escudo?.rev) {
+        escudos[lado.name] = previo.$2;
+        continue;
+      }
+      _crests.remove(lado)?.$2.dispose();
+      if (escudo == null) {
+        continue;
+      }
+      try {
+        final ui.Codec codec = await ui.instantiateImageCodec(await escudo.file.readAsBytes());
+        final ui.Image imagen = (await codec.getNextFrame()).image;
+        codec.dispose();
+        _crests[lado] = (escudo.rev, imagen);
+        escudos[lado.name] = imagen;
+      } on Exception {
+        // un fichero que no se decodifica: el genérico, como sin escudo
+      }
+    }
+    return escudos;
+  }
 
   /// Decodifica el icono si cambió desde el último; sin icono, null.
   Future<ui.Image?> _championship() async {
@@ -81,6 +114,8 @@ class ProgramGraphics {
     stripClaim: engine.graphics.strip.claim,
     stripSlots: engine.graphics.strip.slots,
     iconRev: engine.graphics.hasIcon ? engine.graphics.iconRev : null,
+    homeCrestRev: engine.graphics.crestFor(engine.home)?.rev,
+    awayCrestRev: engine.graphics.crestFor(engine.away)?.rev,
   );
 
   /// Pone el gráfico al día. Si se llama mientras pinta, repite una vez al acabar: nunca
@@ -101,26 +136,35 @@ class ProgramGraphics {
       do {
         _again = false;
         final ui.Image? icono = await _championship();
+        final Map<String, ui.Image> escudos = await _teamCrests();
         final ScoreboardState estado = scoreboardState();
         // La capa de tarjetas: el entretiempo o una alineación, nunca las dos (ADR 0027).
         final (MatchTeam, Team)? alAire = engine.lineups.onAir;
         if (engine.halftimeOnAir) {
           // El entretiempo tapa la pantalla entera con un velo translúcido sobre la cancha
           // desenfocada: el marcador se quitaría a través del velo, así que sale.
-          await bridge.publish(OverlayLayerId.lineup, await _cards.halftime(estado, icon: icono));
+          await bridge.publish(OverlayLayerId.lineup, await _cards.halftime(estado, icon: icono, crests: escudos));
           await bridge.setBackdropBlur(true);
           await bridge.clear(OverlayLayerId.scoreboard);
           continue;
         }
         await bridge.setBackdropBlur(false);
-        await bridge.publish(OverlayLayerId.scoreboard, await _scoreboard.render(estado, championship: icono));
+        await bridge.publish(
+          OverlayLayerId.scoreboard,
+          await _scoreboard.render(estado, championship: icono, crests: escudos),
+        );
         if (alAire == null) {
           await bridge.clear(OverlayLayerId.lineup);
         } else {
           // El nombre es el del marcador: si el operador lo cambió desde el mando, también aquí.
           final String nombre = alAire.$1 == MatchTeam.home ? engine.home : engine.away;
-          final OverlayFrame tarjeta =
-              await _cards.lineup(cardTeam(alAire.$2, name: nombre), home: alAire.$1 == MatchTeam.home);
+          final bool local = alAire.$1 == MatchTeam.home;
+          final OverlayFrame tarjeta = await _cards.lineup(
+            cardTeam(alAire.$2, name: nombre),
+            home: local,
+            crest: escudos[alAire.$1.name],
+            crestRev: local ? estado.homeCrestRev : estado.awayCrestRev,
+          );
           await bridge.publish(OverlayLayerId.lineup, tarjeta);
         }
       } while (_again);

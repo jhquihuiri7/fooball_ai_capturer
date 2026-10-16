@@ -523,6 +523,22 @@ class MatchEngine {
     _changed();
   }
 
+  /// El nombre del equipo que juega de `side`.
+  String teamName(MatchTeam side) => side == MatchTeam.home ? home : away;
+
+  /// Adopta el escudo recién subido a `graphics.crestUploadFile` como el del equipo que
+  /// juega de `side` ahora (ADR 0028): va con su nombre, no con el lado.
+  void adoptTeamCrest(MatchTeam side, String mime) {
+    graphics.adoptCrest(teamName(side), mime);
+    _changed();
+  }
+
+  /// Quita el escudo del equipo que juega de `side`.
+  void deleteTeamCrest(MatchTeam side) {
+    graphics.deleteCrest(teamName(side));
+    _changed();
+  }
+
   /// Guarda la alineación de un equipo desde el editor (`/api/lineup` del panel). Su
   /// nombre pasa también al marcador. [LineupError] si no se acepta.
   Team saveLineup(MatchTeam side, String name, String formation, String roster, {String coach = ''}) {
@@ -613,6 +629,7 @@ class MatchEngine {
         'goals': goles,
         'formation': alineacion?.formation,
         'players': alineacion?.players ?? 0,
+        'crest': graphics.crestFor(nombre)?.rev,
       };
     }
     return <String, Object?>{

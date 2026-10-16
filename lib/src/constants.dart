@@ -291,6 +291,17 @@ const String championshipIconFileName = 'campeonato.img';
 /// Donde vive el icono bajo `/api/v1/`: `PUT` lo sube, `GET` lo da y `DELETE` lo quita.
 const String championshipAssetRoute = 'assets/championship';
 
+/// Los escudos de los equipos (ADR 0028): bajo `/api/v1/`, `assets/crest/home` y
+/// `assets/crest/away`; `PUT` sube el del equipo que juega de ese lado, `GET` lo da y
+/// `DELETE` lo quita.
+const String teamCrestAssetRoute = 'assets/crest';
+
+/// La carpeta de los escudos, junto al partido: como el icono, del campeonato.
+const String teamCrestDirName = 'escudos';
+
+/// Bytes como mucho de un escudo: los del icono del campeonato.
+const int teamCrestMaxBytes = championshipIconMaxBytes;
+
 /// Los vídeos que se pasan en el programa (ADR 0027, decisión 4): bajo `/api/v1/`, `GET`
 /// los lista y `PUT` y `DELETE` en `videos/<nombre>.mp4` suben y borran uno.
 const String videosRoute = 'videos';

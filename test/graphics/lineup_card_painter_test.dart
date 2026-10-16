@@ -157,6 +157,30 @@ void main() {
     });
   });
 
+  testWidgets('con escudo, la cabecera lo lleva en lugar del genérico (ADR 0028)', (WidgetTester tester) async {
+    await tester.runAsync(() async {
+      final ui.Codec codec = await ui.instantiateImageCodec(
+        File('assets/brand/gala-sports-isotipo.png').readAsBytesSync(),
+      );
+      final ui.Image escudo = (await codec.getNextFrame()).image;
+      Future<Uint8List> pinta(ui.Image? crest) async {
+        final ui.Image img = await paintLineupCard(bellavista, lineupColour(true), 960, 540, crest: crest);
+        final Uint8List rgba = (await img.toByteData(format: ui.ImageByteFormat.rawStraightRgba))!.buffer.asUint8List();
+        img.dispose();
+        return rgba;
+      }
+      final Uint8List sin = await pinta(null), con = await pinta(escudo);
+      int distintos = 0;
+      for (int i = 0; i < sin.length; i += 4) {
+        if (sin[i] != con[i] || sin[i + 1] != con[i + 1] || sin[i + 2] != con[i + 2]) distintos++;
+      }
+      // Solo cambia la caja del escudo de la cabecera: algo, pero poco.
+      expect(distintos, greaterThan(200));
+      expect(distintos / (sin.length ~/ 4), lessThan(0.02));
+      escudo.dispose();
+    });
+  });
+
   testWidgets('se pinta en ≤50 ms', (WidgetTester tester) async {
     await tester.runAsync(() async {
       // Una pasada en frío para cargar fuentes y sombreadores; se mide la segunda.

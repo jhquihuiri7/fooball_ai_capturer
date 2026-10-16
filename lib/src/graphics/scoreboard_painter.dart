@@ -38,6 +38,8 @@ class ScoreboardState {
     this.stripClaim = OverlaySpec.stripClaimDefault,
     this.stripSlots = OverlaySpec.stripSlotsDefault,
     this.iconRev,
+    this.homeCrestRev,
+    this.awayCrestRev,
   });
 
   final String competition;
@@ -60,6 +62,11 @@ class ScoreboardState {
   /// rasterizar de nuevo aunque lo demás sea igual.
   final int? iconRev;
 
+  /// La versión del escudo de cada equipo (ADR 0028), o null con el genérico: como
+  /// `iconRev`, cambiarla obliga a rasterizar de nuevo.
+  final int? homeCrestRev;
+  final int? awayCrestRev;
+
   String get clockText =>
       '${(clockS ~/ 60).toString().padLeft(2, '0')}:${(clockS % 60).toString().padLeft(2, '0')}';
 
@@ -77,11 +84,14 @@ class ScoreboardState {
       other.stripVisible == stripVisible &&
       listEquals(other.stripClaim, stripClaim) &&
       listEquals(other.stripSlots, stripSlots) &&
-      other.iconRev == iconRev;
+      other.iconRev == iconRev &&
+      other.homeCrestRev == homeCrestRev &&
+      other.awayCrestRev == awayCrestRev;
 
   @override
   int get hashCode => Object.hash(competition, home, away, homeGoals, awayGoals, clockS, live, cameraMode,
-      stripVisible, Object.hashAll(stripClaim), Object.hashAll(stripSlots), iconRev);
+      stripVisible, Object.hashAll(stripClaim), Object.hashAll(stripSlots), iconRev, homeCrestRev,
+      awayCrestRev);
 }
 
 // Textos fijos y colores de la maqueta que REF-32 no exporta porque solo los usa el
@@ -328,7 +338,17 @@ class ScoreboardLayout {
 
 /// Pinta la capa RGBA del gráfico entera, con fondo transparente.
 class ScoreboardPainter extends CustomPainter {
-  ScoreboardPainter(this.state, {required this.isotipo, this.championship, this.sponsorSlots = true});
+  ScoreboardPainter(
+    this.state, {
+    required this.isotipo,
+    this.championship,
+    this.crests = const <String, ui.Image>{},
+    this.sponsorSlots = true,
+  });
+
+  /// Los escudos de los equipos que los tienen, por lado (`home`, `away`), ya decodificados:
+  /// sustituyen al genérico (ADR 0028).
+  final Map<String, ui.Image> crests;
 
   final ScoreboardState state;
 
@@ -364,7 +384,8 @@ class ScoreboardPainter extends CustomPainter {
       old.state != state ||
       old.sponsorSlots != sponsorSlots ||
       old.isotipo != isotipo ||
-      old.championship != championship;
+      old.championship != championship ||
+      old.crests != crests;
 
   static Paint _fill(Color c) => Paint()..color = c;
 
@@ -472,12 +493,16 @@ class ScoreboardPainter extends CustomPainter {
     final Path cuerpo = GalaBrand.skewed(cuerpoX, yb, cuerpoW, bh);
     final Path puntaDer = GalaBrand.skewed(x0 + l.v('bar_w') - punta, yb, punta, bh);
     final Rect escudoL = l.boxes['home_crest']!, escudoV = l.boxes['away_crest']!;
+    // La sombra sigue lo que se pinta: un escudo de verdad no tiene la silueta del genérico.
     final Path silueta = Path()
       ..addPath(puntaIzq, Offset.zero)
       ..addPath(cuerpo, Offset.zero)
-      ..addPath(puntaDer, Offset.zero)
-      ..addPath(GalaBrand.crestPath(escudoL), Offset.zero)
-      ..addPath(GalaBrand.crestPath(escudoV), Offset.zero);
+      ..addPath(puntaDer, Offset.zero);
+    for (final (String lado, Rect caja) in <(String, Rect)>[('home', escudoL), ('away', escudoV)]) {
+      if (crests[lado] == null) {
+        silueta.addPath(GalaBrand.crestPath(caja), Offset.zero);
+      }
+    }
     GalaBrand.shadow(c, silueta, _sb('bar_shadow_alpha_pct') / 100, l.s);
 
     c.drawPath(puntaIzq, GalaBrand.fill(teal, bottom: azul, box: alto));
@@ -489,14 +514,17 @@ class ScoreboardPainter extends CustomPainter {
     c.drawPath(GalaBrand.skewed(l.v('gl_x'), yb, l.v('gl_w'), bh),
         GalaBrand.fill(_palette('home'), bottom: GalaBrand.token('verde-oceano'), box: alto));
     c.drawPath(GalaBrand.skewed(l.v('gv_x'), yb, l.v('gv_w'), bh), _fill(_palette('away')));
-    GalaBrand.paintCrest(c, escudoL, _palette('home'));
-    GalaBrand.paintCrest(c, escudoV, _palette('away'));
+    final bool genericoL = GalaBrand.paintTeamCrest(c, escudoL, _palette('home'), crests['home']);
+    final bool genericoV = GalaBrand.paintTeamCrest(c, escudoV, _palette('away'), crests['away']);
     c.drawPath(puntaDer, GalaBrand.fill(teal, bottom: azul, box: alto));
 
-    for (final (Rect caja, String nombre, String color) in <(Rect, String, String)>[
-      (escudoL, l.home, 'home'),
-      (escudoV, l.away, 'away'),
+    for (final (Rect caja, String nombre, String color, bool generico) in <(Rect, String, String, bool)>[
+      (escudoL, l.home, 'home', genericoL),
+      (escudoV, l.away, 'away', genericoV),
     ]) {
+      if (!generico) {
+        continue; // un escudo de verdad no lleva siglas encima
+      }
       _text(c, l, GalaBrand.crestInitials(nombre), 'crest', _palette(color),
           GalaBrand.crestInitialsCenter(caja),
           centred: true);
@@ -617,11 +645,11 @@ class ScoreboardPainter extends CustomPainter {
 
 /// Atajo para quien solo quiere la imagen: pinta `state` en un ui.Image.
 Future<ui.Image> paintScoreboard(ScoreboardState state, int width, int height,
-    {bool sponsorSlots = true, ui.Image? championship}) async {
+    {bool sponsorSlots = true, ui.Image? championship, Map<String, ui.Image> crests = const <String, ui.Image>{}}) async {
   final ui.Image isotipo = await GalaBrand.isotipo();
   final ui.PictureRecorder recorder = ui.PictureRecorder();
   final Canvas canvas = Canvas(recorder);
-  ScoreboardPainter(state, isotipo: isotipo, championship: championship, sponsorSlots: sponsorSlots)
+  ScoreboardPainter(state, isotipo: isotipo, championship: championship, crests: crests, sponsorSlots: sponsorSlots)
       .paint(canvas, Size(width.toDouble(), height.toDouble()));
   final ui.Picture picture = recorder.endRecording();
   return picture.toImage(width, height).whenComplete(picture.dispose);

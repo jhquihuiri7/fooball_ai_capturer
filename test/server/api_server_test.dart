@@ -666,6 +666,62 @@ void main() {
     });
   });
 
+  group('los escudos de los equipos (ADR 0028)', () {
+    // Un PNG de verdad para el olfato: la firma y un trozo cualquiera detrás.
+    final List<int> png = <int>[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, ...List<int>.filled(120, 3)];
+
+    Future<int> subir(String lado, List<int> bytes, {String? bearer}) async {
+      final HttpClientRequest r = await http.openUrl(
+        'PUT',
+        Uri.parse('http://127.0.0.1:${server.port}/api/v1/$teamCrestAssetRoute/$lado'),
+      );
+      if (bearer != null) {
+        r.headers.set(HttpHeaders.authorizationHeader, 'Bearer $bearer');
+      }
+      r.headers.contentType = ContentType.parse('image/png');
+      r.contentLength = bytes.length;
+      r.add(bytes);
+      final HttpClientResponse res = await r.close();
+      await res.drain<void>();
+      return res.statusCode;
+    }
+
+    Object? escudo(Map<String, Object?> partido, String lado) => (partido[lado]! as Map<String, Object?>)['crest'];
+
+    test('subirlo, verlo y quitarlo, y que vaya con el nombre del equipo', () async {
+      await pedir('POST', 'match/teams', bearer: token(), body: <String, Object?>{'home': 'Bellavista', 'away': 'Progreso'});
+      expect(await subir('home', png), 401, reason: 'sin token no se lee ni un byte');
+      expect(await subir('home', png, bearer: token()), 200);
+      expect(await subir('away', utf8.encode('<svg/>'), bearer: token()), 415);
+      expect(await subir('away', List<int>.filled(teamCrestMaxBytes + 1, 0), bearer: token()), 413);
+      expect(await subir('centro', png, bearer: token()), 405, reason: 'solo home y away');
+
+      Map<String, Object?> partido = engine.toJson();
+      final Object? version = escudo(partido, 'home');
+      expect(version, isA<int>());
+      expect(escudo(partido, 'away'), isNull);
+      final HttpClientRequest r =
+          await http.getUrl(Uri.parse('http://127.0.0.1:${server.port}/api/v1/$teamCrestAssetRoute/home'));
+      r.headers.set(HttpHeaders.authorizationHeader, 'Bearer ${token()}');
+      final HttpClientResponse res = await r.close();
+      expect((res.statusCode, res.headers.contentType?.mimeType), (200, 'image/png'));
+      expect(await res.fold<List<int>>(<int>[], (List<int> a, List<int> b) => a..addAll(b)), png);
+      expect((await pedir('GET', '$teamCrestAssetRoute/away', bearer: token())).$1, 404);
+
+      // Va con el equipo: si Bellavista juega de visitante, su escudo va con él…
+      await pedir('POST', 'match/teams', bearer: token(), body: <String, Object?>{'home': 'Progreso', 'away': ' bellavista '});
+      partido = engine.toJson();
+      expect((escudo(partido, 'home'), escudo(partido, 'away')), (null, version));
+      // …y sobrevive al partido, como el icono del campeonato.
+      final MatchEngine otro = MatchEngine.open(file: File('${dir.path}/match.json'), time: reloj, matchId: 'm_otro');
+      expect(otro.graphics.crestFor('BELLAVISTA'), isNotNull);
+
+      final (int quitado, Map<String, Object?> sin) = await pedir('DELETE', '$teamCrestAssetRoute/away', bearer: token());
+      expect((quitado, escudo(sin, 'away')), (200, null));
+      expect(engine.graphics.crestUploadFile.existsSync(), isFalse);
+    });
+  });
+
   group('los vídeos del mando (ADR 0027)', () {
     Future<(int, Map<String, Object?>)> subir(String nombre, List<int> bytes, {String? bearer}) async {
       final HttpClientRequest r = await http.openUrl(

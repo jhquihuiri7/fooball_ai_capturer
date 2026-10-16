@@ -214,6 +214,45 @@ void main() {
     });
   });
 
+  group('los escudos de los equipos (ADR 0028)', () {
+    testWidgets('sustituyen al genérico: ≤3 % de píxeles distintos de directo_escudos.png', (WidgetTester t) async {
+      await t.runAsync(() async {
+        // El render de Python lleva el isotipo de escudo en los dos lados y la franja fuera.
+        final ui.Image iso = await GalaBrand.isotipo();
+        final ScoreboardState estado = ScoreboardState(
+          competition: directo.competition,
+          home: directo.home,
+          away: directo.away,
+          homeGoals: directo.homeGoals,
+          awayGoals: directo.awayGoals,
+          clockS: directo.clockS,
+          live: true,
+          cameraMode: 'AUTO',
+          stripVisible: false,
+          homeCrestRev: 1,
+          awayCrestRev: 1,
+        );
+        final OverlayFrame f = await OverlayRaster().render(estado, crests: <String, ui.Image>{'home': iso, 'away': iso});
+        final double fraccion = await _distintosDePython(f.rgba, 'directo_escudos.png');
+        // ignore: avoid_print
+        print('marcador con escudos: ${(fraccion * 100).toStringAsFixed(2)} % de píxeles distintos');
+        expect(fraccion, lessThanOrEqualTo(0.03));
+      });
+    });
+
+    test('la versión del escudo cuenta en el estado: otro escudo, otro raster', () {
+      const ScoreboardState a = ScoreboardState(
+        competition: 'L', home: 'A', away: 'B', homeGoals: 0, awayGoals: 0, clockS: 0, live: false,
+        cameraMode: 'AUTO', homeCrestRev: 1,
+      );
+      const ScoreboardState b = ScoreboardState(
+        competition: 'L', home: 'A', away: 'B', homeGoals: 0, awayGoals: 0, clockS: 0, live: false,
+        cameraMode: 'AUTO', homeCrestRev: 2,
+      );
+      expect(a == b, isFalse);
+    });
+  });
+
   group('el raster', () {
     testWidgets('solo rasteriza cuando cambia el contenido', (WidgetTester tester) async {
       await tester.runAsync(() async {
@@ -253,4 +292,22 @@ void main() {
       });
     });
   });
+}
+
+/// Fracción de píxeles con algún canal a más de 64 del PNG de Python de `reference/`.
+Future<double> _distintosDePython(Uint8List dart, String png) async {
+  final ui.Codec codec = await ui.instantiateImageCodec(File('test/graphics/reference/$png').readAsBytesSync());
+  final ui.Image python = (await codec.getNextFrame()).image;
+  final Uint8List b = (await python.toByteData(format: ui.ImageByteFormat.rawStraightRgba))!.buffer.asUint8List();
+  python.dispose();
+  int distintos = 0;
+  for (int i = 0; i < dart.length; i += 4) {
+    for (int k = 0; k < 4; k++) {
+      if ((dart[i + k] - b[i + k]).abs() > 64) {
+        distintos++;
+        break;
+      }
+    }
+  }
+  return distintos / (dart.length ~/ 4);
 }

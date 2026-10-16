@@ -89,6 +89,17 @@ void main() {
       m.apply('graphics/halftime', <String, Object?>{'on_air': false});
       await g.refresh();
       expect(sink.calls.sublist(desde), <String>['blur off', 'set 0', 'clear 1']);
+      // ADR 0028: el escudo del equipo vuelve a pintar el marcador, y va con su nombre.
+      m.graphics.crestUploadFile.parent.createSync(recursive: true);
+      File('assets/brand/gala-sports-isotipo.png').copySync(m.graphics.crestUploadFile.path);
+      m.adoptTeamCrest(MatchTeam.home, 'image/png');
+      desde = sink.calls.length;
+      await g.refresh();
+      expect(sink.calls.sublist(desde), <String>['set 0']);
+      expect(g.scoreboardState().homeCrestRev, isNotNull);
+      m.apply('match/teams', <String, Object?>{'home': 'OTRO'});
+      await g.refresh();
+      expect(g.scoreboardState().homeCrestRev, isNull, reason: 'OTRO no tiene escudo');
       // La franja va oculta y sale con la orden, hasta que se le acaba el tiempo.
       expect(g.scoreboardState().stripVisible, isFalse);
       m.apply('graphics/strip', <String, Object?>{'show_s': 15});

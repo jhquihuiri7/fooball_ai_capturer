@@ -12,6 +12,39 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-16 · IOS-104 — Los escudos de los equipos desde el mando · 🚧 probado en Windows; falta verlo emitido en el iPhone
+
+ADR 0028 de football-ai, pedido por Jhonatan: subir desde el mando el escudo de cada equipo,
+como el icono del campeonato. El escudo va con el nombre del equipo (en una liga los mismos
+equipos vuelven cada fecha) y sustituye al genérico con siglas, entero y sin deformar en su
+caja, en el marcador, el entretiempo y la alineación.
+
+**Hecho**
+- `GraphicsStore`: los escudos por la clave del equipo (el nombre en mayúsculas y sin
+  espacios de sobra) en `escudos/`, con el fichero nombrado por los bytes UTF-8 de la clave en
+  hexadecimal; del campeonato, como el icono. `TeamCrest` lleva su versión.
+- La API: `PUT`, `GET` y `DELETE /api/v1/assets/crest/home|away`, para el equipo que juega
+  de ese lado. La subida del icono se generaliza (`_putImage`): la puerta, el tope de 4 MB, a
+  disco por trozos y solo PNG o JPEG. Cada equipo del estado lleva `crest` (su versión o
+  null), como el dorado del túnel de football-ai 4ec503b.
+- Los painters: `GalaBrand.paintTeamCrest` y los escudos en el marcador (la sombra sigue lo
+  que se pinta: sin la silueta del genérico), el entretiempo y la alineación, sin siglas
+  cuando son de verdad. `ProgramGraphics` decodifica de nuevo solo el escudo que cambió de
+  versión; las cachés del marcador, el entretiempo y la alineación cuentan con ella.
+- El mando web: en «Equipos», el escudo de cada equipo con su nombre, Cargar escudo y Quitar,
+  y la nota de que va con el nombre.
+
+**Comprobado**: `flutter analyze` limpio; la API (401, 415, 413, verlo, que siga al nombre al
+cambiar de lado, que sobreviva al partido, quitarlo), el marcador con escudos frente a
+`directo_escudos.png` (0,63 % de píxeles distintos), el entretiempo frente a
+`halftime_escudos.png` (0,29 %), la alineación y `ProgramGraphics`. Fallan en Windows los 8
+dorados de imagen del Mac (1a07741), como antes, y a ratos «se pinta en ≤50 ms» con la suite
+entera.
+
+**Pendiente**: en el iPhone, subir los escudos desde el Samsung y verlos en el marcador, el
+entretiempo y la alineación emitidos. Regenerar en el Mac los dorados de `test/graphics` que
+cambien (ninguno lleva escudo de verdad).
+
 ## 2026-10-16 · Entretiempo a pantalla completa, con la cancha desenfocada detrás (IOS-102, enmienda del ADR 0027) · 🚧 Dart probado en Windows; el Swift, sin compilar
 
 Jhonatan lo vio en el iPhone: la tarjeta de entretiempo dejaba libre el hueco de la franja y
