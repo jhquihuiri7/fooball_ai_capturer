@@ -52,10 +52,9 @@ abstract final class OverlaySpec {
   static const Map<String, int> fontSizes = {
     'team': 36,
     'score': 56,
-    'clock': 32,
+    'clock': 40,
     'comp': 22,
     'live': 24,
-    'cam': 22,
     'crest': 26,
     'slot': 22,
     'sub': 15,
@@ -76,7 +75,6 @@ abstract final class OverlaySpec {
     'clock': 'display',
     'comp': 'display',
     'live': 'sans',
-    'cam': 'display',
     'crest': 'display',
     'slot': 'display',
     'sub': 'sans',
@@ -91,7 +89,6 @@ abstract final class OverlaySpec {
     'clock': 700,
     'comp': 600,
     'live': 800,
-    'cam': 700,
     'crest': 800,
     'slot': 700,
     'sub': 500,
@@ -188,7 +185,6 @@ abstract final class OverlaySpec {
     'top_y': 44,
     'status_h': 44,
     'status_pad_x': 56,
-    'status_gap': 16,
     'status_to_bar': 18,
     'bar_h': 76,
     'tip_w': 18,
@@ -207,18 +203,18 @@ abstract final class OverlaySpec {
     'live_dot': 12,
     'live_gap': 10,
     'chip_pad_x': 16,
-    'chip_gap': 10,
-    'clock_ring': 2,
-    'cam_icon_r': 9,
-    'cam_icon_line': 2,
+    'clock_gap': 12,
+    'clock_pad_x': 22,
+    'live_below': 18,
+    'corner_logo_h': 64,
+    'corner_pad': 12,
+    'corner_gap': 24,
     'radius': 6,
     'skew_deg': 30,
     'shadow_dy': 4,
     'shadow_blur': 16,
     'shadow_alpha_pct': 40,
     'bar_shadow_alpha_pct': 45,
-    'status_icon': 30,
-    'status_icon_gap': 10,
   };
 
   /// La alineación (lineup_card.py).
@@ -350,7 +346,6 @@ abstract final class OverlaySpec {
   /// Textos fijos del marcador.
   static const Map<String, String> scoreboardTexts = {
     'live': 'EN VIVO',
-    'camera': 'CÁMARA IA',
   };
 
   /// El escudo genérico: su caja, el filo y la altura de las siglas (brand.py).

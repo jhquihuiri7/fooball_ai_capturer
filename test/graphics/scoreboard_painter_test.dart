@@ -105,12 +105,22 @@ void main() {
       expect(l.boxes['home_crest']!.left, closeTo(107.94, 0.01));
       expect(l.boxes['home_crest']!.top, closeTo(94, 1e-9));
       expect(l.boxes['away_crest']!.bottom, closeTo(194, 1e-9));
-      expect(l.boxes['live']!.left, closeTo(125.94, 0.01));
-      for (final String clave in <String>['live', 'competition', 'clock', 'camera']) {
-        expect(l.boxes[clave]!.top, 44, reason: clave);
-        expect(l.boxes[clave]!.bottom, 88, reason: clave);
-      }
-      expect(l.boxes['camera']!.right, 1872);
+      // Enmienda del ADR 0026 del 2026-10-16: la competición encima, el reloj al lado, EN
+      // VIVO debajo, la esquina con el logo de la casa, y sin chip de cámara.
+      expect(l.boxes['competition']!.left, closeTo(125.94, 0.01));
+      expect((l.boxes['competition']!.top, l.boxes['competition']!.bottom), (44, 88));
+      // El reloj va tras la barra, que mide con el texto: se mira contra ella, no contra Python.
+      expect(
+        l.boxes['clock']!.left,
+        closeTo(bug.right + OverlaySpec.scoreboard['clock_gap']! - 76 * GalaBrand.inclinacion, 1e-9),
+      );
+      expect((l.boxes['clock']!.top, l.boxes['clock']!.bottom), (106, 182));
+      final ui.Rect vivo = l.boxes['live']!;
+      expect(vivo.left, closeTo(125.94, 0.01));
+      expect((vivo.top, vivo.bottom), (200, 244));
+      expect(l.boxes['corner'], const ui.Rect.fromLTRB(1774, 44, 1872, 132));
+      expect(l.boxes['broadcaster'], const ui.Rect.fromLTRB(1786, 56, 1860, 120));
+      expect(l.boxes.containsKey('camera'), isFalse);
       expect(l.boxes['strip'], const ui.Rect.fromLTRB(0, 972, 1920, 1080));
       expect(l.boxes['logo'], const ui.Rect.fromLTRB(48, 1002, 103, 1050));
       expect(l.boxes['sellable'], const ui.Rect.fromLTRB(408, 972, 1572, 1080));
@@ -176,19 +186,15 @@ void main() {
     ScoreboardLayout medir(ScoreboardState s) =>
         ScoreboardLayout.measure(OverlaySpec.programWidth, OverlaySpec.programHeight, s);
 
-    test('el icono va en el chip de la competición, donde en Python, sin mover la barra', () {
+    test('el icono de la copa va en la esquina, junto al logo de la casa, donde en Python', () {
       final ScoreboardLayout sin = medir(con());
       final ScoreboardLayout l = medir(con(icono: 1, franja: false));
-      // `directo_icono` de boxes.json: el chip de la competición arranca en 276,94.
-      final ui.Rect icono = l.boxes['championship']!;
-      expect(icono.left, closeTo(292.94, 0.01));
-      expect((icono.top, icono.bottom), (51.0, 81.0));
-      expect(icono.width, OverlaySpec.scoreboard['status_icon']);
+      // `directo_icono` de boxes.json (enmienda del ADR 0026 del 2026-10-16).
+      expect(l.boxes['championship'], const ui.Rect.fromLTRB(1698, 56, 1762, 120));
+      expect(l.boxes['corner'], const ui.Rect.fromLTRB(1686, 44, 1872, 132));
+      expect(sin.boxes.containsKey('championship'), isFalse);
       expect(l.boxes['bug'], sin.boxes['bug']);
-      expect(
-        l.boxes['competition']!.width,
-        closeTo(sin.boxes['competition']!.width + 30 + 10, 1e-9),
-      );
+      expect(l.boxes['competition'], sin.boxes['competition']);
     });
 
     test('sin franja no se mide ni se pinta nada abajo', () {

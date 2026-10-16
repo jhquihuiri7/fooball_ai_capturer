@@ -12,6 +12,26 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-16 · IOS-108 — El marcador reordenado · 🚧 probado en Windows; falta verlo emitido en el iPhone
+
+Enmienda del ADR 0026 de football-ai (REF-63, 2a46f56), pedida por Jhonatan: el logo de la
+casa y el de la copa arriba a la derecha, el reloj al lado de la barra, EN VIVO debajo y fuera
+el chip de cámara.
+
+**Hecho**
+- `scoreboard_painter.dart`: encima de la barra, solo la competición; el reloj en una caja
+  como el cuerpo de la barra, a su derecha y a su altura, con la sombra de la barra; EN VIVO,
+  un chip rojo bajo la barra; sin chip de cámara. Arriba a la derecha, el chip de la esquina
+  con el isotipo de Gala Sports y, a su izquierda, el icono de la copa si lo hay (deja de ir
+  en el chip de la competición), con un filete en medio.
+- OverlaySpec, los renders de referencia del marcador y los tests de la geometría.
+
+**Comprobado**: `flutter analyze` limpio; la geometría contra `boxes.json` (el reloj, contra
+la barra, que mide con el texto) y el marcador con escudos frente a `directo_escudos.png`
+(0,63 %). Fallan en Windows los 8 dorados de imagen, que ya eran del Mac y además cambian.
+
+**Pendiente**: regenerar en el Mac los dorados de `test/graphics`; verlo emitido.
+
 ## 2026-10-16 · IOS-107 — La jornada y las entrevistas desde el mando · 🚧 probado en Windows; falta verlo emitido en el iPhone
 
 ADR 0030 de football-ai, pedido por Jhonatan: todos los partidos de la jornada (con sus

@@ -207,20 +207,13 @@ class ScoreboardLayout {
     final double tipIn = sb('tip_w') - sb('tip_overlap');
     final double barW = bodyW + 2 * tipIn;
 
-    final double liveW = state.live
-        ? sb('live_pad_l') +
-            sb('live_dot') +
-            sb('live_gap') +
-            sb('live_pad_r') +
-            textWidth(OverlaySpec.scoreboardTexts['live']!, 'live')
-        : 0;
-    final bool conIcono = state.iconRev != null;
-    final double compW = textWidth(competition, 'comp') +
-        2 * sb('chip_pad_x') +
-        (conIcono ? sb('status_icon') + sb('status_icon_gap') : 0);
-    final double clockW = tabularWidth(state.clockText, 'clock') + 2 * sb('chip_pad_x');
-    final double estadoW = 2 * sb('status_pad_x') + liveW + compW + sb('status_gap') + clockW;
-    final double ancho = math.max(barW, estadoW);
+    final double liveW = sb('live_pad_l') +
+        sb('live_dot') +
+        sb('live_gap') +
+        sb('live_pad_r') +
+        textWidth(OverlaySpec.scoreboardTexts['live']!, 'live');
+    final double compW = textWidth(competition, 'comp') + 2 * sb('chip_pad_x');
+    final double clockW = tabularWidth(state.clockText, 'clock') + 2 * sb('clock_pad_x');
 
     // La barra se corta a -30°: abajo sobresale `sesgo` a la izquierda, y ese pico es el
     // que toca el margen.
@@ -231,15 +224,30 @@ class ScoreboardLayout {
     final double yBarra = yEstado + eh + sb('status_to_bar');
     final double cy = yBarra + bh / 2;
 
+    // Encima de la barra, la competición; el reloj, a su derecha; EN VIVO, debajo
+    // (enmienda del ADR 0026 del 2026-10-16).
     final double ex = x0 + sb('status_pad_x');
-    if (state.live) boxes['live'] = Rect.fromLTRB(ex, yEstado, ex + liveW, yEstado + eh);
-    boxes['competition'] = Rect.fromLTRB(ex + liveW, yEstado, ex + liveW + compW, yEstado + eh);
-    if (conIcono) {
-      final double ix = ex + liveW + sb('chip_pad_x'), lado = sb('status_icon');
-      boxes['championship'] = Rect.fromLTWH(ix, yEstado + (eh - lado) / 2, lado, lado);
+    boxes['competition'] = Rect.fromLTRB(ex, yEstado, ex + compW, yEstado + eh);
+    final double relojX = x0 + barW + sb('clock_gap');
+    boxes['clock'] = Rect.fromLTRB(relojX - sesgo, yBarra, relojX + clockW + sesgo, yBarra + bh);
+    if (state.live) {
+      final double yVivo = yBarra + bh + sb('live_below');
+      boxes['live'] = Rect.fromLTRB(ex, yVivo, ex + liveW, yVivo + eh);
     }
-    final double relojX = x0 + ancho - sb('status_pad_x') - clockW;
-    boxes['clock'] = Rect.fromLTRB(relojX, yEstado, relojX + clockW, yEstado + eh);
+
+    // La esquina de arriba a la derecha: el icono de la copa y el logo de la casa.
+    final double pad = sb('corner_pad');
+    final int alto = px(_sb('corner_logo_h').toDouble());
+    final int casaW = math.max(1, pyRound(_st('logo_src_w') * alto / _st('logo_src_h')));
+    final double derecha = width - sb('margin') - pad;
+    boxes['broadcaster'] = Rect.fromLTRB(derecha - casaW, yEstado + pad, derecha, yEstado + pad + alto);
+    double izquierda = derecha - casaW;
+    if (state.iconRev != null) {
+      final double copaX1 = izquierda - sb('corner_gap');
+      boxes['championship'] = Rect.fromLTRB(copaX1 - alto, yEstado + pad, copaX1, yEstado + pad + alto);
+      izquierda = copaX1 - alto;
+    }
+    boxes['corner'] = Rect.fromLTRB(izquierda - pad, yEstado, width - sb('margin'), yEstado + alto + 2 * pad);
 
     final double rx = x0 + tipIn + sb('body_pad_x');
     final double homeX = rx + crestW + gap;
@@ -273,18 +281,9 @@ class ScoreboardLayout {
       'guion_w': guionW,
       'home_x': homeX,
       'away_x': awayX,
+      'clock_x': relojX,
+      'clock_w': clockW,
     });
-
-    // ---------------- chip de cámara ----------------
-    final double camLabelW = textWidth(OverlaySpec.scoreboardTexts['camera']!, 'cam');
-    final double camW = 2 * sb('chip_pad_x') +
-        2 * sb('cam_icon_r') +
-        2 * sb('chip_gap') +
-        camLabelW +
-        textWidth(cameraMode, 'cam');
-    final double camX = width - sb('margin') - camW;
-    boxes['camera'] = Rect.fromLTRB(camX, yEstado, camX + camW, yEstado + eh);
-    _v['cam_label_w'] = camLabelW;
 
     // ---------------- barra de patrocinio ----------------
     if (!state.stripVisible) {
@@ -373,7 +372,7 @@ class ScoreboardPainter extends CustomPainter {
     );
     _paintStatus(canvas, l);
     _paintBar(canvas, l);
-    _paintCamera(canvas, l);
+    _paintCorner(canvas, l);
     if (state.stripVisible) {
       _paintStrip(canvas, l);
     }
@@ -420,64 +419,59 @@ class ScoreboardPainter extends CustomPainter {
     );
   }
 
-  // ---------------- la fila de estado ----------------
+  // ---------------- la competición, EN VIVO y el chip de la esquina ----------------
   void _paintStatus(Canvas c, ScoreboardLayout l) {
     final double radio = l.sb('radius');
     final double alfa = _sb('shadow_alpha_pct') / 100;
     final Color velo = _palette('chrome_soft');
-    final Rect comp = l.boxes['competition']!, reloj = l.boxes['clock']!;
-    // EN VIVO y la competición forman una sola pieza: solo redondea por fuera.
-    final RRect compR = _rrect(comp, radio, left: !state.live);
-    final RRect relojR = _rrect(reloj, radio);
-    final RRect? liveR = state.live ? _rrect(l.boxes['live']!, radio, right: false) : null;
+    final Rect comp = l.boxes['competition']!;
+    final RRect compR = _rrect(comp, radio);
+    final RRect esquinaR = _rrect(l.boxes['corner']!, radio);
+    final RRect? liveR = state.live ? _rrect(l.boxes['live']!, radio) : null;
 
     // La sombra va bajo la silueta de cada pieza, a la opacidad de su relleno, como el
     // alfa de la capa que desenfoca la referencia.
-    final Path veladas = Path()
-      ..addRRect(compR)
-      ..addRRect(relojR)
-      ..addRRect(_rrect(l.boxes['camera']!, radio));
-    GalaBrand.shadow(c, veladas, alfa * velo.a, l.s);
+    GalaBrand.shadow(c, Path()..addRRect(compR)..addRRect(esquinaR), alfa * velo.a, l.s);
     if (liveR != null) GalaBrand.shadow(c, Path()..addRRect(liveR), alfa, l.s);
 
-    if (liveR != null) c.drawRRect(liveR, _fill(_palette('live')));
     c.drawRRect(compR, _fill(velo));
-    c.drawRRect(relojR, _fill(velo));
-    c.drawDRRect(relojR, relojR.deflate(l.sb('clock_ring')), _fill(_palette('dim')));
+    c.drawRRect(esquinaR, _fill(velo));
+    if (liveR != null) c.drawRRect(liveR, _fill(_palette('live')));
 
-    final double ecy = l.v('cy_estado');
-    final double pad = l.sb('chip_pad_x');
+    _text(c, l, l.competition, 'comp', GalaBrand.token('gris-claro'),
+        Offset(comp.left + l.sb('chip_pad_x'), l.v('cy_estado')));
     if (state.live) {
+      final Rect vivo = l.boxes['live']!;
       final double punto = l.sb('live_dot');
-      final double px0 = l.boxes['live']!.left + l.sb('live_pad_l');
-      c.drawCircle(Offset(px0 + punto / 2, ecy), punto / 2, _fill(_palette('white')));
+      final double px0 = vivo.left + l.sb('live_pad_l');
+      c.drawCircle(Offset(px0 + punto / 2, vivo.center.dy), punto / 2, _fill(_palette('white')));
       _text(c, l, OverlaySpec.scoreboardTexts['live']!, 'live', _palette('white'),
-          Offset(px0 + punto + l.sb('live_gap'), ecy));
+          Offset(px0 + punto + l.sb('live_gap'), vivo.center.dy));
     }
-    double compX = comp.left + pad;
-    final Rect? caja = l.boxes['championship'];
-    final ui.Image? icono = championship;
-    if (caja != null && icono != null) {
-      final double escala = math.min(caja.width / icono.width, caja.height / icono.height);
+  }
+
+  // ---------------- la esquina: la copa y el logo de la casa ----------------
+  void _paintCorner(Canvas c, ScoreboardLayout l) {
+    void imagen(ui.Image img, Rect caja) {
+      final double escala = math.min(caja.width / img.width, caja.height / img.height);
       c.drawImageRect(
-        icono,
-        Rect.fromLTWH(0, 0, icono.width.toDouble(), icono.height.toDouble()),
-        Rect.fromCenter(center: caja.center, width: icono.width * escala, height: icono.height * escala),
+        img,
+        Rect.fromLTWH(0, 0, img.width.toDouble(), img.height.toDouble()),
+        Rect.fromCenter(center: caja.center, width: img.width * escala, height: img.height * escala),
         Paint()..filterQuality = FilterQuality.high,
       );
     }
-    if (caja != null) {
-      compX = caja.right + l.sb('status_icon_gap');
-    }
-    _text(c, l, l.competition, 'comp', GalaBrand.token('gris-claro'), Offset(compX, ecy));
 
-    // El reloj con cifras tabulares: cada dígito centrado en su celda.
-    final double celda = l.digitCell('clock');
-    double x = reloj.left + pad;
-    for (final String ch in state.clockText.split('')) {
-      final double a = _digito.hasMatch(ch) ? celda : l.textWidth(ch, 'clock');
-      _text(c, l, ch, 'clock', _palette('white'), Offset(x + a / 2, ecy), centred: true);
-      x += a;
+    final Rect casa = l.boxes['broadcaster']!;
+    imagen(isotipo, casa);
+    final Rect? copa = l.boxes['championship'];
+    final ui.Image? icono = championship;
+    if (copa != null && icono != null) {
+      imagen(icono, copa);
+    }
+    if (copa != null) {
+      final double x = (copa.right + casa.left) / 2;
+      _line(c, Offset(x, copa.top), Offset(x, copa.bottom), GalaBrand.token('gris-oceanico').withValues(alpha: _lineaAlfa), math.max(1, l.s));
     }
   }
 
@@ -497,7 +491,8 @@ class ScoreboardPainter extends CustomPainter {
     final Path silueta = Path()
       ..addPath(puntaIzq, Offset.zero)
       ..addPath(cuerpo, Offset.zero)
-      ..addPath(puntaDer, Offset.zero);
+      ..addPath(puntaDer, Offset.zero)
+      ..addPath(GalaBrand.skewed(l.v('clock_x'), yb, l.v('clock_w'), bh), Offset.zero);
     for (final (String lado, Rect caja) in <(String, Rect)>[('home', escudoL), ('away', escudoV)]) {
       if (crests[lado] == null) {
         silueta.addPath(GalaBrand.crestPath(caja), Offset.zero);
@@ -517,6 +512,19 @@ class ScoreboardPainter extends CustomPainter {
     final bool genericoL = GalaBrand.paintTeamCrest(c, escudoL, _palette('home'), crests['home']);
     final bool genericoV = GalaBrand.paintTeamCrest(c, escudoV, _palette('away'), crests['away']);
     c.drawPath(puntaDer, GalaBrand.fill(teal, bottom: azul, box: alto));
+    // El reloj: una caja como el cuerpo de la barra, a su derecha y a su altura, con cifras
+    // tabulares (cada dígito centrado en su celda).
+    final double relojX = l.v('clock_x'), relojW = l.v('clock_w');
+    c.drawPath(GalaBrand.skewed(relojX, yb, relojW, bh),
+        GalaBrand.fill(_palette('chrome'), bottom: GalaBrand.token('azul-profundo'), box: alto));
+    c.drawPath(GalaBrand.skewed(relojX, yb + bh - filete, relojW, filete, centerY: cy), _fill(azul));
+    final double celda = l.digitCell('clock');
+    double x = relojX + l.sb('clock_pad_x');
+    for (final String ch in state.clockText.split('')) {
+      final double a = _digito.hasMatch(ch) ? celda : l.textWidth(ch, 'clock');
+      _text(c, l, ch, 'clock', _palette('white'), Offset(x + a / 2, cy), centred: true);
+      x += a;
+    }
 
     for (final (Rect caja, String nombre, String color, bool generico) in <(Rect, String, String, bool)>[
       (escudoL, l.home, 'home', genericoL),
@@ -538,27 +546,6 @@ class ScoreboardPainter extends CustomPainter {
     _text(c, l, '-', 'score', tinta, Offset(vx, cy));
     vx += l.v('guion_w') + l.sb('goal_dash_gap');
     _text(c, l, '${state.awayGoals}', 'score', tinta, Offset(vx, cy));
-  }
-
-  // ---------------- el chip de cámara ----------------
-  void _paintCamera(Canvas c, ScoreboardLayout l) {
-    final Rect caja = l.boxes['camera']!;
-    final double ecy = l.v('cy_estado');
-    c.drawRRect(_rrect(caja, l.sb('radius')), _fill(_palette('chrome_soft')));
-    final double k = l.sb('cam_icon_r');
-    final double iconX = caja.left + l.sb('chip_pad_x') + k;
-    final double trazo = math.max(1, l.sb('cam_icon_line'));
-    final Color teal = _palette('home');
-    for (final (int sx, int sy) in const <(int, int)>[(-1, -1), (1, -1), (-1, 1), (1, 1)]) {
-      final Offset esquina = Offset(iconX + sx * k, ecy + sy * k);
-      _line(c, esquina, Offset(iconX + sx * k * 0.35, ecy + sy * k), teal, trazo);
-      _line(c, esquina, Offset(iconX + sx * k, ecy + sy * k * 0.35), teal, trazo);
-    }
-    c.drawCircle(Offset(iconX, ecy), l.px(3).toDouble(), _stroke(teal, trazo));
-    double tx = iconX + k + l.sb('chip_gap');
-    _text(c, l, OverlaySpec.scoreboardTexts['camera']!, 'cam', _palette('dim'), Offset(tx, ecy));
-    tx += l.v('cam_label_w') + l.sb('chip_gap');
-    _text(c, l, l.cameraMode, 'cam', _palette('white'), Offset(tx, ecy));
   }
 
   // ---------------- la franja ----------------
