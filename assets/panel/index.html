@@ -2,91 +2,336 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Zero · panel del soporte</title>
-<!-- El panel local del maestro (IOS-64): sin framework, servido por la API del mando.
-     El token viene en el fragmento de la URL del QR Mando (#mando=…), que el
-     navegador nunca manda al servidor; las llamadas lo llevan en Authorization. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#07111f">
+<meta name="color-scheme" content="dark">
+<title>Mando · Gala Sports</title>
+<!-- El panel local del maestro (IOS-64), con la marca Gala Sports (ADR 0026 del repo
+     football-ai): sin framework, servido por la API del mando. El token viene en el
+     fragmento de la URL del QR Mando (#mando=…), que el navegador nunca manda al
+     servidor; las llamadas lo llevan en Authorization.
+     Pensado primero para el móvil del operador: botones de 56 px o más, una columna, y
+     dos columnas desde 900 px. Las fuentes vienen de Google Fonts si hay red; si no (la
+     cancha sin internet), caen a las condensadas del sistema y la página aguanta igual. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700;800&display=swap">
 <style>
-  :root { --bg: #12181a; --card: #1b2326; --ink: #fafaf7; --dim: #8e979c; --acc: #00b8a9; --bad: #e5484d; }
-  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.4 -apple-system, system-ui, sans-serif; }
-  main { max-width: 1100px; margin: 0 auto; padding: 16px; display: grid; gap: 14px; }
-  .card { background: var(--card); border-radius: 14px; padding: 14px; }
-  h1 { font-size: 18px; margin: 0 0 4px; } h2 { font-size: 13px; color: var(--dim); margin: 0 0 8px; text-transform: uppercase; letter-spacing: .06em; }
-  .marcador { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 22px; font-weight: 700; }
-  .reloj { font-variant-numeric: tabular-nums; margin-left: auto; }
-  button { background: #26323a; color: var(--ink); border: 1px solid #33424b; border-radius: 10px; padding: 8px 12px; font: inherit; font-size: 14px; cursor: pointer; }
-  button:active { background: var(--acc); }
-  .fila { display: flex; gap: 8px; flex-wrap: wrap; }
-  .thumbs { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
-  .thumbs figure { margin: 0; } .thumbs img { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 8px; display: block; }
-  figcaption { color: var(--dim); font-size: 12px; margin-top: 4px; }
-  pre { margin: 0; white-space: pre-wrap; color: var(--dim); font-size: 12px; }
-  #aviso { color: var(--bad); }
+  :root {
+    /* Paleta Ocean Electric (tools/brand.py de football-ai). */
+    --teal: #00e5c4; --verde: #00a892; --azul: #0066ff;
+    --profundo: #07111f; --marino: #101d2d; --tinte: #1c2a3c;
+    --claro: #f8fafc; --oceanico: #94a3b8; --rojo: #e3141f; --amarillo: #ffd43b;
+    --linea: rgba(148, 163, 184, .28);
+    --display: "Barlow Condensed", "Roboto Condensed", "Arial Narrow", sans-serif-condensed, sans-serif;
+    --sans: Inter, "Segoe UI", Roboto, system-ui, -apple-system, sans-serif;
+    --sesgo: -30deg;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; min-height: 100vh; background: var(--profundo); color: var(--claro);
+    font: 15px/1.4 var(--sans);
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  button { font: inherit; color: inherit; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+
+  /* ---------------- cabecera ---------------- */
+  header {
+    position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 10px;
+    padding: 10px 16px; background: rgba(7, 17, 31, .94); border-bottom: 1px solid var(--linea);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  }
+  .marca { display: flex; align-items: center; gap: 10px; font: 800 18px/1 var(--display); letter-spacing: .04em; text-transform: uppercase; }
+  .franjas { display: flex; gap: 3px; }
+  .franjas i { width: 7px; height: 20px; transform: skewX(var(--sesgo)); background: linear-gradient(180deg, var(--teal), var(--verde)); }
+  .franjas i:nth-child(2) { background: var(--azul); }
+  .franjas i:nth-child(3) { background: linear-gradient(0deg, #d3dfea, transparent); }
+  .conexion { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--oceanico); }
+  .punto { width: 9px; height: 9px; border-radius: 50%; background: var(--oceanico); }
+  .conexion.ok .punto { background: var(--teal); box-shadow: 0 0 0 3px rgba(0, 229, 196, .2); }
+  .conexion.mal .punto { background: var(--rojo); }
+  .vivo {
+    display: none; align-items: center; gap: 6px; height: 26px; padding: 0 10px 0 8px; border-radius: 6px;
+    background: var(--rojo); color: #fff; font: 800 12px/1 var(--sans); letter-spacing: .04em;
+  }
+  .vivo::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #fff; }
+  .vivo.on { display: inline-flex; }
+
+  main { width: 100%; max-width: 1100px; margin: 0 auto; padding: 14px 16px 120px; display: grid; gap: 14px; }
+  @media (min-width: 900px) {
+    main { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+    .ancho { grid-column: 1 / -1; }
+  }
+  .col { display: grid; gap: 14px; }
+
+  /* ---------------- marcador ---------------- */
+  .marcador {
+    position: relative; overflow: hidden; padding: 16px 16px 14px; border-radius: 12px;
+    background: linear-gradient(180deg, var(--marino), var(--profundo));
+    box-shadow: inset 0 -3px 0 var(--azul), 0 4px 16px rgba(0, 0, 0, .4);
+  }
+  .equipos { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 10px; }
+  /* Los nombres se parten entre palabras, nunca dentro de una: con el cuerpo que baja con
+     el ancho, «BELLAVISTA» cabe entero en un móvil de 360 px. */
+  .equipo { min-width: 0; font: 700 clamp(15px, 4.4vw, 28px)/1.05 var(--display); text-transform: uppercase; letter-spacing: .01em; overflow-wrap: normal; word-break: normal; }
+  .equipo.local { text-align: right; }
+  .goles { display: flex; align-items: stretch; height: clamp(54px, 15vw, 72px); }
+  .gol {
+    display: flex; align-items: center; justify-content: center; min-width: clamp(46px, 13vw, 64px); padding: 0 10px;
+    font: 800 clamp(38px, 11vw, 56px)/1 var(--display); font-variant-numeric: tabular-nums; color: var(--profundo);
+    transform: skewX(var(--sesgo));
+  }
+  .gol > span { transform: skewX(30deg); }
+  .gol.local { background: linear-gradient(180deg, var(--teal), var(--verde)); }
+  .gol.visita { background: #fff; }
+  .reloj-fila { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 14px; }
+  .reloj {
+    padding: 4px 14px; border-radius: 6px; background: rgba(7, 17, 31, .88); box-shadow: inset 0 0 0 2px var(--oceanico);
+    font: 700 clamp(30px, 9vw, 40px)/1.1 var(--display); font-variant-numeric: tabular-nums; letter-spacing: .02em;
+  }
+  .estado-reloj { font: 700 11px/1 var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--oceanico); }
+  .estado-reloj.corre { color: var(--teal); }
+
+  /* ---------------- tarjetas ---------------- */
+  .card { padding: 14px; border-radius: 12px; background: var(--marino); box-shadow: 0 1px 2px #00000080, 0 8px 24px #00000059; }
+  .card h2 {
+    display: flex; align-items: center; gap: 8px; margin: 0 0 12px;
+    font: 600 11px/16px var(--sans); letter-spacing: .14em; text-transform: uppercase; color: var(--oceanico);
+  }
+  .card h2::before { content: ""; width: 4px; height: 14px; transform: skewX(var(--sesgo)); background: var(--teal); }
+
+  /* ---------------- botones ---------------- */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 56px; padding: 0 14px;
+    border: 0; border-radius: 12px; cursor: pointer; user-select: none; -webkit-user-select: none;
+    font: 700 17px/1.1 var(--display); letter-spacing: .04em; text-transform: uppercase;
+    background: var(--tinte); color: var(--claro); box-shadow: inset 0 0 0 1px var(--linea);
+    transition: filter .12s, transform .06s, opacity .12s;
+  }
+  .btn:hover { filter: brightness(1.06); }
+  .btn:active { transform: translateY(1px); }
+  .btn:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--profundo), 0 0 0 4px var(--teal); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn.ocupado { opacity: .7; pointer-events: none; }
+  .btn.hecho { box-shadow: inset 0 0 0 2px var(--teal); }
+  .btn svg { width: 20px; height: 20px; flex: none; }
+  .primario { background: var(--teal); color: var(--profundo); box-shadow: 0 6px 18px #00e5c459; }
+  .acento { background: var(--azul); color: #fff; box-shadow: 0 6px 18px #0066ff59; }
+  .blanco { background: #fff; color: var(--profundo); }
+  .grande { min-height: 72px; font-size: 22px; }
+
+  .goles-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .lado { display: grid; gap: 8px; min-width: 0; }
+  .lado .nombre { font: 700 13px/1.2 var(--display); letter-spacing: .06em; text-transform: uppercase; color: var(--oceanico); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .quitar { min-height: 44px; font-size: 15px; background: transparent; }
+
+  .reloj-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .reloj-grid .toggle { grid-column: 1 / -1; }
+
+  .alin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .alin { flex-direction: column; gap: 4px; min-height: 64px; }
+  .alin small { font: 600 11px/1 var(--sans); letter-spacing: .06em; color: var(--oceanico); text-transform: uppercase; }
+  .alin[aria-pressed="true"] { background: var(--amarillo); color: var(--profundo); box-shadow: none; }
+  .alin[aria-pressed="true"] small { color: var(--profundo); }
+
+  /* ---------------- cámaras y soporte ---------------- */
+  details > summary { list-style: none; cursor: pointer; }
+  details > summary::-webkit-details-marker { display: none; }
+  details > summary h2 { margin: 0; }
+  details > summary h2::after { content: "▾"; margin-left: auto; font-size: 14px; transition: transform .15s; }
+  details:not([open]) > summary h2::after { transform: rotate(-90deg); }
+  details[open] > summary { margin-bottom: 12px; }
+  .thumbs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .thumbs figure { margin: 0; min-width: 0; }
+  .thumbs figure.programa { grid-column: 1 / -1; }
+  .thumbs img { width: 100%; aspect-ratio: 16 / 9; display: block; border-radius: 8px; background: #000; object-fit: cover; }
+  figcaption { margin-top: 4px; font: 600 11px/1 var(--sans); letter-spacing: .1em; text-transform: uppercase; color: var(--oceanico); }
+  .datos { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin: 0; }
+  .datos div { padding: 10px; border-radius: 8px; background: var(--tinte); min-width: 0; }
+  .datos dt { font: 600 10px/1.2 var(--sans); letter-spacing: .1em; text-transform: uppercase; color: var(--oceanico); }
+  .datos dd { margin: 4px 0 0; font: 700 18px/1.1 var(--display); letter-spacing: .02em; overflow-wrap: anywhere; }
+  .datos .malo dd { color: #ff9a9c; }
+
+  /* ---------------- avisos ---------------- */
+  #aviso {
+    position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 10; transform: translateX(-50%);
+    width: min(520px, calc(100% - 32px)); padding: 12px 14px; border-radius: 12px;
+    background: #2a1218; box-shadow: inset 0 0 0 1px rgba(227, 20, 31, .6), 0 8px 24px #00000080;
+    color: #ffd6d8; font-weight: 600; display: none;
+  }
+  #aviso.on { display: block; }
+  .sin-token { padding: 24px 16px; text-align: center; color: var(--oceanico); }
+  .sin-token strong { display: block; margin-bottom: 6px; font: 700 22px/1.2 var(--display); text-transform: uppercase; color: var(--claro); }
 </style>
 </head>
 <body>
+<header>
+  <div class="marca"><span class="franjas" aria-hidden="true"><i></i><i></i><i></i></span>Mando</div>
+  <span class="vivo" id="vivo">EN VIVO</span>
+  <div class="conexion" id="conexion" role="status"><span class="punto" aria-hidden="true"></span><span id="conexion-texto">conectando…</span></div>
+</header>
+
 <main>
-  <section class="card">
-    <h1>Zero · panel del soporte</h1>
-    <div id="aviso"></div>
-    <div class="marcador">
-      <span id="local">LOCAL</span> <span id="goles">0 - 0</span> <span id="visitante">VISITANTE</span>
+  <section class="marcador ancho" aria-label="Marcador">
+    <div class="equipos">
+      <div class="equipo local" id="local">Local</div>
+      <div class="goles" aria-live="polite">
+        <div class="gol local"><span id="goles-local">0</span></div>
+        <div class="gol visita"><span id="goles-visita">0</span></div>
+      </div>
+      <div class="equipo" id="visitante">Visitante</div>
+    </div>
+    <div class="reloj-fila">
       <span class="reloj" id="reloj">00:00</span>
+      <span class="estado-reloj" id="estado-reloj">parado</span>
     </div>
   </section>
-  <section class="card">
-    <h2>Partido</h2>
-    <div class="fila">
-      <button data-gol="home,1">+1 local</button><button data-gol="home,-1">−1 local</button>
-      <button data-gol="away,1">+1 visitante</button><button data-gol="away,-1">−1 visitante</button>
-      <button data-reloj="start">▶ reloj</button><button data-reloj="pause">❚❚ reloj</button>
-      <button data-reloj="reset">↺ reloj</button>
-      <button data-nudge="60">+1 min</button><button data-nudge="-60">−1 min</button>
-      <button data-alin="home">alineación local</button><button data-alin="away">alineación visitante</button>
-      <button data-orden="clips/mark">marcar jugada</button>
-    </div>
-  </section>
-  <section class="card">
-    <h2>Cámaras y programa (1 fps)</h2>
+
+  <div class="col">
+    <section class="card" aria-labelledby="t-goles">
+      <h2 id="t-goles">Goles</h2>
+      <div class="goles-grid">
+        <div class="lado">
+          <div class="nombre" id="nombre-local">Local</div>
+          <button class="btn primario grande" data-gol="home,1" aria-label="Gol del local">+ Gol</button>
+          <button class="btn quitar" data-gol="home,-1" aria-label="Quitar un gol al local">− 1</button>
+        </div>
+        <div class="lado">
+          <div class="nombre" id="nombre-visitante">Visitante</div>
+          <button class="btn blanco grande" data-gol="away,1" aria-label="Gol del visitante">+ Gol</button>
+          <button class="btn quitar" data-gol="away,-1" aria-label="Quitar un gol al visitante">− 1</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="t-reloj">
+      <h2 id="t-reloj">Reloj</h2>
+      <div class="reloj-grid">
+        <button class="btn acento grande toggle" id="toggle" data-reloj="start">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path id="icono-toggle" fill="currentColor" d="M8 5.2v13.6a.8.8 0 0 0 1.23.67l10.4-6.8a.8.8 0 0 0 0-1.34L9.23 4.53A.8.8 0 0 0 8 5.2z"/></svg>
+          <span id="texto-toggle">Iniciar</span>
+        </button>
+        <button class="btn" data-nudge="-60" aria-label="Restar un minuto">−1 min</button>
+        <button class="btn" data-nudge="60" aria-label="Sumar un minuto">+1 min</button>
+        <button class="btn" data-reloj="reset" data-confirma="¿Poner el reloj a 00:00?">↺ Cero</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="col">
+    <section class="card" aria-labelledby="t-alin">
+      <h2 id="t-alin">Alineaciones al aire</h2>
+      <div class="alin-grid">
+        <button class="btn alin" data-alin="home" aria-pressed="false"><span id="alin-local">Local</span><small id="alin-local-estado">mostrar</small></button>
+        <button class="btn alin" data-alin="away" aria-pressed="false"><span id="alin-visitante">Visitante</span><small id="alin-visitante-estado">mostrar</small></button>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="t-jugada">
+      <h2 id="t-jugada">Repetición</h2>
+      <button class="btn acento grande" style="width:100%" data-orden="clips/mark">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/></g><circle cx="12" cy="12" r="1.8" fill="currentColor"/></svg>
+        <span>Marcar jugada</span>
+      </button>
+    </section>
+  </div>
+
+  <details class="card ancho" open>
+    <summary><h2>Cámaras y programa · 1 fps</h2></summary>
     <div class="thumbs">
-      <figure><img id="t-left" alt=""><figcaption>izquierda</figcaption></figure>
-      <figure><img id="t-right" alt=""><figcaption>derecha</figcaption></figure>
-      <figure><img id="t-program" alt=""><figcaption>programa</figcaption></figure>
+      <figure class="programa"><img id="t-program" alt="Programa"><figcaption>Programa</figcaption></figure>
+      <figure><img id="t-left" alt="Cámara izquierda"><figcaption>Izquierda</figcaption></figure>
+      <figure><img id="t-right" alt="Cámara derecha"><figcaption>Derecha</figcaption></figure>
     </div>
-  </section>
-  <section class="card"><h2>Soporte</h2><pre id="estado">—</pre></section>
+  </details>
+
+  <details class="card ancho">
+    <summary><h2>Soporte</h2></summary>
+    <dl class="datos" id="estado"><div><dt>Estado</dt><dd>—</dd></div></dl>
+  </details>
 </main>
+
+<div id="aviso" role="alert"></div>
+
 <script>
 const token = new URLSearchParams(location.hash.slice(1)).get('mando') || '';
 const cab = { 'Authorization': 'Bearer ' + token, 'X-Zero-Device': encodeURIComponent('panel web') };
-let partido = null;
 const $ = id => document.getElementById(id);
-const aviso = t => { $('aviso').textContent = t || ''; };
-if (!token) aviso('Abre esta página desde el QR Mando: falta el token.');
+let partido = null;
+let recibido = 0; // performance.now() del último estado: el reloj avanza solo mientras corre
 
-function pinta(p) {
-  partido = p;
-  $('local').textContent = p.home.name; $('visitante').textContent = p.away.name;
-  $('goles').textContent = p.home.goals + ' - ' + p.away.goals;
-  const s = Math.floor(p.clock_ms / 1000);
-  $('reloj').textContent = String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+let avisoHasta = 0;
+function aviso(t) {
+  const el = $('aviso');
+  el.textContent = t || '';
+  el.classList.toggle('on', !!t);
+  if (t) { avisoHasta = Date.now() + 5000; setTimeout(() => { if (Date.now() >= avisoHasta) el.classList.remove('on'); }, 5100); }
+}
+function conexion(ok, texto) {
+  $('conexion').className = 'conexion ' + (ok ? 'ok' : 'mal');
+  $('conexion-texto').textContent = texto;
 }
 
-async function orden(ruta, cuerpo) {
-  const r = await fetch('/api/v1/' + ruta, { method: 'POST', headers: { ...cab, 'Content-Type': 'application/json',
-    'Idempotency-Key': crypto.randomUUID ? crypto.randomUUID() : String(Math.random()) }, body: JSON.stringify(cuerpo) });
-  const j = await r.json().catch(() => ({}));
-  if (r.ok) { pinta(j); aviso(''); } else { aviso(j.detail || ('error ' + r.status)); if (j.state) pinta(j.state); }
+const mmss = ms => { const s = Math.max(0, Math.floor(ms / 1000)); return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); };
+function tic() {
+  if (!partido) return;
+  const ms = partido.clock_ms + (partido.clock_running ? performance.now() - recibido : 0);
+  $('reloj').textContent = mmss(ms);
+}
+
+const PLAY = 'M8 5.2v13.6a.8.8 0 0 0 1.23.67l10.4-6.8a.8.8 0 0 0 0-1.34L9.23 4.53A.8.8 0 0 0 8 5.2z';
+const PAUSA = 'M7 5h3.5v14H7zM13.5 5H17v14h-3.5z';
+
+function pinta(p) {
+  if (!p || !p.home) return;
+  partido = p; recibido = performance.now();
+  $('local').textContent = p.home.name; $('visitante').textContent = p.away.name;
+  $('nombre-local').textContent = p.home.name; $('nombre-visitante').textContent = p.away.name;
+  $('alin-local').textContent = p.home.name; $('alin-visitante').textContent = p.away.name;
+  $('goles-local').textContent = p.home.goals; $('goles-visita').textContent = p.away.goals;
+  $('vivo').classList.toggle('on', !!p.streaming);
+  const corre = !!p.clock_running;
+  $('estado-reloj').textContent = corre ? 'en marcha' : 'parado';
+  $('estado-reloj').classList.toggle('corre', corre);
+  $('toggle').dataset.reloj = corre ? 'pause' : 'start';
+  $('texto-toggle').textContent = corre ? 'Pausar' : (p.clock_ms > 0 ? 'Reanudar' : 'Iniciar');
+  $('icono-toggle').setAttribute('d', corre ? PAUSA : PLAY);
+  for (const lado of ['home', 'away']) {
+    const b = document.querySelector('[data-alin="' + lado + '"]');
+    const alAire = p.lineup_on_air === lado;
+    const hay = (p[lado].players || 0) > 0;
+    b.setAttribute('aria-pressed', alAire ? 'true' : 'false');
+    b.disabled = !hay && !alAire;
+    $((lado === 'home' ? 'alin-local' : 'alin-visitante') + '-estado').textContent = alAire ? 'al aire · quitar' : (hay ? 'mostrar' : 'sin alineación');
+  }
+  if (p.save_error) aviso('El maestro no pudo guardar el partido: ' + p.save_error);
+  tic();
+}
+
+async function orden(ruta, cuerpo, boton) {
+  if (boton) boton.classList.add('ocupado');
+  try {
+    const r = await fetch('/api/v1/' + ruta, { method: 'POST', headers: { ...cab, 'Content-Type': 'application/json',
+      'Idempotency-Key': crypto.randomUUID ? crypto.randomUUID() : String(Math.random()) }, body: JSON.stringify(cuerpo) });
+    const j = await r.json().catch(() => ({}));
+    if (r.ok) {
+      pinta(j); aviso('');
+      if (boton) { boton.classList.add('hecho'); setTimeout(() => boton.classList.remove('hecho'), 700); }
+    } else { aviso(j.detail || ('error ' + r.status)); if (j.state) pinta(j.state); }
+  } catch { aviso('Sin conexión con el maestro: la orden no llegó.'); }
+  finally { if (boton) boton.classList.remove('ocupado'); }
 }
 
 document.addEventListener('click', e => {
-  const b = e.target.closest('button'); if (!b || !partido) return;
-  if (b.dataset.gol) { const [team, d] = b.dataset.gol.split(','); orden('match/goal', { team, delta: +d, expect: partido[team].goals }); }
-  if (b.dataset.reloj) orden('match/clock', { action: b.dataset.reloj });
-  if (b.dataset.nudge) orden('match/clock', { action: 'nudge', seconds: +b.dataset.nudge });
-  if (b.dataset.alin) orden('match/lineup', { team: b.dataset.alin, on_air: partido.lineup_on_air !== b.dataset.alin });
-  if (b.dataset.orden) orden(b.dataset.orden, {});
+  const b = e.target.closest('button'); if (!b || !partido || b.disabled) return;
+  if (b.dataset.confirma && !confirm(b.dataset.confirma)) return;
+  if (navigator.vibrate) navigator.vibrate(12);
+  if (b.dataset.gol) { const [team, d] = b.dataset.gol.split(','); orden('match/goal', { team, delta: +d, expect: partido[team].goals }, b); }
+  if (b.dataset.reloj) orden('match/clock', { action: b.dataset.reloj }, b);
+  if (b.dataset.nudge) orden('match/clock', { action: 'nudge', seconds: +b.dataset.nudge }, b);
+  if (b.dataset.alin) orden('match/lineup', { team: b.dataset.alin, on_air: partido.lineup_on_air !== b.dataset.alin }, b);
+  if (b.dataset.orden) orden(b.dataset.orden, {}, b);
 });
 
 async function espera() {
@@ -94,13 +339,43 @@ async function espera() {
     try {
       const since = partido ? '?since=' + partido.boot + ':' + partido.rev : '';
       const r = await fetch('/api/v1/match' + since, { headers: cab });
-      if (r.ok) pinta(await r.json()); else { aviso((await r.json().catch(() => ({}))).detail || ('error ' + r.status)); await new Promise(f => setTimeout(f, 2000)); }
-    } catch { aviso('sin conexión con el maestro'); await new Promise(f => setTimeout(f, 2000)); }
+      if (r.ok) { pinta(await r.json()); conexion(true, 'conectado'); }
+      else {
+        const j = await r.json().catch(() => ({}));
+        conexion(false, r.status === 401 || r.status === 410 ? 'QR caducado' : 'error ' + r.status);
+        aviso(j.detail || ('error ' + r.status));
+        await new Promise(f => setTimeout(f, 2000));
+      }
+    } catch {
+      conexion(false, 'sin conexión');
+      await new Promise(f => setTimeout(f, 2000));
+    }
   }
 }
 
 const urls = {};
+const NOMBRES = { role: 'Rol', link: 'Enlace', peer: 'Pareja', term: 'Turno', fps: 'FPS', thermal: 'Temperatura',
+  pressure: 'Presión', ladder: 'Escalera', battery: 'Batería', dropped_frames: 'Frames perdidos', stream: 'Emisión',
+  rec_clock_wait_frames: 'Espera del reloj', rec_clock_jump_segments: 'Saltos del reloj' };
+const MALOS = { thermal: ['serious', 'critical'], link: ['down', 'disconnected', 'lost'], stream: ['failed', 'error'] };
+function valor(k, v) {
+  if (v === null || v === undefined || v === '') return '—';
+  if (k === 'battery' && typeof v === 'number') return v < 0 ? '—' : Math.round(v <= 1 ? v * 100 : v) + ' %';
+  if (k === 'fps' && typeof v === 'number') return v.toFixed(1);
+  if (k === 'ladder' && typeof v === 'number') return 'L' + v;
+  return String(v);
+}
+function pintaEstado(s) {
+  $('estado').replaceChildren(...Object.entries(s).map(([k, v]) => {
+    const d = document.createElement('div');
+    if ((MALOS[k] || []).includes(v)) d.className = 'malo';
+    const dt = document.createElement('dt'); dt.textContent = NOMBRES[k] || k;
+    const dd = document.createElement('dd'); dd.textContent = valor(k, v);
+    d.append(dt, dd); return d;
+  }));
+}
 async function miniaturas() {
+  if (document.hidden) return; // en segundo plano no se gastan datos ni batería
   for (const n of ['left', 'right', 'program']) {
     try {
       const r = await fetch('/api/v1/rig/thumb/' + n, { headers: cab });
@@ -109,10 +384,16 @@ async function miniaturas() {
       $('t-' + n).src = u; if (urls[n]) URL.revokeObjectURL(urls[n]); urls[n] = u;
     } catch {}
   }
-  try { const r = await fetch('/api/v1/rig/status', { headers: cab }); if (r.ok) $('estado').textContent = JSON.stringify(await r.json(), null, 2); } catch {}
+  try { const r = await fetch('/api/v1/rig/status', { headers: cab }); if (r.ok) pintaEstado(await r.json()); } catch {}
 }
 
-if (token) { espera(); miniaturas(); setInterval(miniaturas, 1000); }
+if (token) {
+  espera(); miniaturas(); setInterval(miniaturas, 1000); setInterval(tic, 250);
+} else {
+  conexion(false, 'sin token');
+  document.querySelector('main').innerHTML =
+    '<div class="sin-token ancho"><strong>Falta el QR Mando</strong>Abre esta página escaneando el QR «Mando» del móvil que emite.</div>';
+}
 </script>
 </body>
 </html>

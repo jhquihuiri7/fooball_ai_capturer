@@ -12,6 +12,31 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-15 · El mando web del maestro, rediseñado para el móvil (IOS-64) · 🚧 probado con un maestro simulado; falta en la cancha
+
+El propietario usa un Samsung de operador: la app Zero no corre en Android (todo lo nativo
+—cámara, QR, Keychain— es solo de iOS, y el APK de release no lleva permiso de internet),
+pero el QR Mando es un enlace y la cámara del Samsung lo abre en Chrome. La página que sirve
+el maestro (`assets/panel/index.html`) era una lista de botones sin forma; pidió que se
+viera mejor y fuera cómoda en el móvil.
+
+**Hecho**
+- La página con la marca Gala Sports en oscuro (ADR 0026 de football-ai) y primero para
+  el móvil: marcador arriba con los goles inclinados (local teal, visitante blanco) y el
+  reloj; «+ GOL» de 72 px por equipo y «−1» aparte; el reloj con un solo botón que es
+  Iniciar/Pausar/Reanudar según su estado, ±1 min y «Cero» con confirmación; las
+  alineaciones como interruptores que dicen si están al aire (y se apagan sin alineación);
+  «Marcar jugada»; miniaturas plegables con el programa grande; el estado del soporte en
+  fichas legibles en vez de JSON; EN VIVO y el estado de la conexión en la cabecera; los
+  errores en un aviso abajo. Dos columnas desde 900 px.
+- El reloj avanza solo mientras corre (antes se quedaba quieto hasta el siguiente cambio
+  del partido), y las miniaturas no se piden con la página en segundo plano.
+- La API no cambia: mismas rutas, el token del fragmento, la espera larga y la clave de
+  idempotencia. Fuentes de Google Fonts si hay red; si no, las condensadas del sistema.
+
+**Comprobado**: `api_server_test` en verde; capturas en Chrome sin cabeza a 360, 390 y
+1200 px contra un maestro simulado. Sin probar contra el iPhone de verdad.
+
 ## 2026-10-15 · IOS-100 — el gráfico con la marca Gala Sports en Dart · 🚧 hecho y probado en Flutter; falta verlo emitido en el iPhone
 
 El propietario pidió que lo que sale en pantalla siga su sistema de diseño Gala Sports
