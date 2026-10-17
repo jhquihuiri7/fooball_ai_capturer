@@ -12,6 +12,41 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-16 · BUG ABIERTO: el programa sale sin sonido a tramos y solo lo arregla matar Zero · 🐞 sin diagnosticar, no olvidar
+
+Visto en directo (17 en «Una cámara», 1.0.0 (8) o posterior, emitiendo al VPS → YouTube y
+Facebook), medido en el VPS sin tocar el iPhone (grabaciones de
+`/opt/football-vps/recordings/programa`, `volumedetect` por segmento de 60 s):
+- Sonido bien hasta las 22:12 (hora local); **silencio digital exacto (−91 dB, todo ceros)**
+  de 22:13 a 22:21, sonido de 22:21 a 22:25, silencio de 22:25 a 22:29, sonido de 22:29 a
+  22:31 y silencio desde las 22:31.
+- La pista AAC llega siempre (48 kHz, estéreo): **es la app la que mete ceros** en lugar
+  del micrófono. El relé copia el audio tal cual (`-c copy`), no es el VPS.
+- **PARAR y EMITIR no lo arregla** (siguió en silencio). **Matar Zero y volver a abrirla sí**
+  (22:35, sonido de vuelta: media −19 dB, máx −5 dB).
+- Algunas transiciones coinciden con una reconexión SRT (22:31) o con un segmento corto de la
+  grabación (22:12:24, 22:21:50): un cambio en el flujo; otras (22:25) no.
+
+**Hipótesis, por orden** (sin datos del iPhone todavía):
+1. Una interrupción de `AVAudioSession` (llamada, otra app con micrófono, Siri, cambio de
+   ruta a un auricular Bluetooth) tras la que la captura de audio no se reanuda, y el
+   respaldo de silencio de `AudioCapture` (los `silence_samples`/`silence_ticks` del informe
+   de audio) se queda puesto hasta que el proceso muere; PARAR/EMITIR no rehace la sesión de
+   audio.
+2. El sustituto de audio del vídeo del mando (IOS-103, `AudioSubstitute`/`ProgramVideoHub`,
+   escrito en Windows y probado solo en tests) que se queda activo sin vídeo, o con un vídeo
+   sin pista de audio («sin pista de audio suena a silencio y no al micro»).
+3. La reanudación tras el fondo de 79588aa/4fb5bf4 (VideoToolbox y vista previa) sin
+   equivalente para el audio.
+
+**Siguiente paso:** leer del 17 (solo lectura) los `audio-*.json`, el informe
+`program-split-left-*.json` (`app_events`, `audio`, `vt_session_resets`) y el latido de esa
+emisión; mirar en el código qué hace `AudioCapture` ante
+`AVAudioSession.interruptionNotification` y `routeChangeNotification`, y si EMITIR rehace la
+sesión de audio. Arreglo esperado: reanudar el micrófono al acabar la interrupción (y al
+cambiar de ruta) sin matar la app, y que la fila de audio de la pantalla avise en rojo de
+«audio en silencio N s».
+
 ## 2026-10-16 · IOS-109 — La franja con una imagen, un título y un subtítulo · 🚧 probado en Windows; falta verlo emitido en el iPhone
 
 Enmienda del ADR 0027 de football-ai (REF-64, c984f9c), pedida por Jhonatan: una franja
