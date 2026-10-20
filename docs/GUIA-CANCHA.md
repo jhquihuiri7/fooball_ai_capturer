@@ -19,6 +19,27 @@ La Mac va para calibrar, para el plan B y para recoger al final.
 | 90-120 min al sol | ❌ el calor solo se midió a la sombra; la escalera baja la IA a 5 Hz en `serious` |
 | **«Una cámara (sin pareja)»**: emitir con un solo móvil, sin enlazar (2026-10-15) | ❌ sin probar en el iPhone: hecho en código y con pruebas. Pruébalo antes con `tools/emitir_auto.sh <secreto> 300 --link single` (un solo iPhone por cable) |
 
+## Lo primero al abrir Zero: el tipo de evento (2026-10-19)
+
+La app ya no abre en la pantalla de lado: pregunta **«¿Qué vas a transmitir?»**.
+
+- **Fútbol**: la pantalla de siempre (lado, enlace, VPS…). Todo lo de esta guía.
+- **Espectáculo** (festivales, presentaciones): un solo móvil. Elige la calidad, escanea el QR
+  Soporte y «Abrir cámara». Desde el mando web (QR «Mando»), la tarjeta **Rótulos**: guarda
+  cada número con su título y su subtítulo («Presentación artística: Los Ángeles del Cielo» /
+  «Cantado por …») y sácalo 10 s o «Fijo». EN VIVO sale solo arriba a la izquierda.
+- **Vóleibol**: un solo móvil y la cámara tal cual, sin gráficos por ahora.
+
+**Una noche con varios partidos** (fútbol): antes del primero, carga en el mando web la
+tarjeta **Jornada** con todos los partidos y sus escudos. Al empezar cada uno, «Partido de la
+jornada» → **Empezar** (pone los nombres, los escudos y el reloj a cero, sin escribir nada).
+Al acabar, **Finalizar partido**: el marcador queda guardado. Al final de la noche, en Al aire,
+**Resultados**. El gol sale solo en pantalla con cada «+ Gol»; si fue un error, «− 1» lo quita.
+Para una premiación, en Al aire, **Ocultar marcador y reloj**.
+
+**Anuncios de la franja**: la franja pasó de 108 a 132 px. Los paquetes de anuncios hechos
+antes no cargan: hay que volver a rendrizarlos con Remotion y subirlos al VPS.
+
 ## La víspera, en casa
 
 1. En la Mac, en la rama `migracion/dos-moviles`:

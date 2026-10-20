@@ -81,15 +81,59 @@ Future<void> closeCapture(WidgetTester tester, CaptureSession session) async {
   session.dispose();
 }
 
+/// La app abre en el tipo de evento (ADR 0031): el fútbol lleva a la pantalla de lado.
+Future<void> abrirFutbol(WidgetTester tester, FakeCaptureApi api) async {
+  await tester.pumpWidget(CaptureApp(api: api));
+  await tester.pump();
+  await tester.tap(find.text('FÚTBOL'));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   setUpAll(loadZeroFonts);
 
   group('lado del soporte', () {
+    testWidgets('lo primero es el tipo de evento, y el fútbol lleva al lado (ADR 0031)', (WidgetTester tester) async {
+      usePhone(tester);
+      await tester.pumpWidget(CaptureApp(api: FakeCaptureApi()));
+      await tester.pump();
+
+      expect(find.text('¿Qué vas a transmitir?'), findsOneWidget);
+      expect(find.text('FÚTBOL'), findsOneWidget);
+      expect(find.text('ESPECTÁCULO'), findsOneWidget);
+      expect(find.text('VÓLEIBOL'), findsOneWidget);
+      expect(find.text('IZQUIERDA'), findsNothing);
+
+      await tester.tap(find.text('FÚTBOL'));
+      await tester.pumpAndSettle();
+      expect(find.text('IZQUIERDA'), findsOneWidget);
+      expect(find.text('Solo mando, sin cámara'), findsOneWidget);
+    });
+
+    testWidgets('el espectáculo y el vóley van con una cámara: sin lado ni pareja', (WidgetTester tester) async {
+      usePhone(tester);
+      for (final String evento in <String>['ESPECTÁCULO', 'VÓLEIBOL']) {
+        await tester.pumpWidget(CaptureApp(api: FakeCaptureApi()));
+        await tester.pump();
+        await tester.tap(find.text(evento));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Una cámara'), findsOneWidget, reason: evento);
+        expect(find.text(evento), findsOneWidget, reason: 'la esquina dice el evento');
+        expect(find.text('1080p'), findsOneWidget);
+        expect(find.text('720p'), findsOneWidget);
+        expect(find.text('Abrir cámara'), findsOneWidget);
+        for (final String fuera in <String>['IZQUIERDA', 'Este móvil dirige', 'Emparejar sin cable', 'Solo mando, sin cámara']) {
+          expect(find.text(fuera), findsNothing, reason: '$evento: $fuera');
+        }
+        await tester.pumpWidget(const SizedBox());
+      }
+    });
+
     testWidgets('lo primero que se pide es el lado', (WidgetTester tester) async {
       usePhone(tester);
       final FakeCaptureApi api = FakeCaptureApi()..serverHost = '10.10.18.100';
-      await tester.pumpWidget(CaptureApp(api: api));
-      await tester.pump();
+      await abrirFutbol(tester, api);
 
       expect(find.text('IZQUIERDA'), findsOneWidget);
       expect(find.text('DERECHA'), findsOneWidget);
@@ -99,8 +143,7 @@ void main() {
       // Viene del ADR 0012: el izquierdo es el maestro y puede arrancar solo, el
       // derecho espera reloj. Quien monta el soporte no lee el ADR en la banda.
       usePhone(tester);
-      await tester.pumpWidget(CaptureApp(api: FakeCaptureApi()));
-      await tester.pump();
+      await abrirFutbol(tester, FakeCaptureApi());
 
       expect(find.text('MAESTRO'), findsOneWidget);
       expect(find.text('SIGUE AL RELOJ'), findsOneWidget);
@@ -111,8 +154,7 @@ void main() {
     ) async {
       usePhone(tester);
       final FakeCaptureApi api = FakeCaptureApi()..serverHost = '10.10.18.100';
-      await tester.pumpWidget(CaptureApp(api: api));
-      await tester.pump();
+      await abrirFutbol(tester, api);
 
       expect(tester.widget<TextField>(find.byType(TextField)).controller!.text, '10.10.18.100');
       expect(find.textContaining('guardado en el móvil'), findsOneWidget);
@@ -127,8 +169,7 @@ void main() {
     ) async {
       usePhone(tester);
       final FakeCaptureApi api = FakeCaptureApi()..discoverable = 'macbook.local';
-      await tester.pumpWidget(CaptureApp(api: api));
-      await tester.pump();
+      await abrirFutbol(tester, api);
 
       expect(tester.widget<TextField>(find.byType(TextField)).controller!.text, 'macbook.local');
       expect(api.serverHost, 'macbook.local');
@@ -143,8 +184,7 @@ void main() {
       final FakeCaptureApi api = FakeCaptureApi()
         ..serverHost = 'pod.football.ai'
         ..discoverable = 'macbook.local';
-      await tester.pumpWidget(CaptureApp(api: api));
-      await tester.pump();
+      await abrirFutbol(tester, api);
 
       expect(tester.widget<TextField>(find.byType(TextField)).controller!.text, 'pod.football.ai');
     });
@@ -154,8 +194,7 @@ void main() {
     ) async {
       usePhone(tester);
       final FakeCaptureApi api = FakeCaptureApi()..serverHost = '10.10.18.100';
-      await tester.pumpWidget(CaptureApp(api: api));
-      await tester.pump();
+      await abrirFutbol(tester, api);
 
       await tester.tap(find.text('RTMP'));
       await tester.pump();
@@ -172,8 +211,7 @@ void main() {
       final FakeCaptureApi api = FakeCaptureApi()
         ..serverHost = '10.10.18.100'
         ..scannable = 'rtmp://rig:clave@47.47.180.47:10248';
-      await tester.pumpWidget(CaptureApp(api: api));
-      await tester.pump();
+      await abrirFutbol(tester, api);
 
       await tester.tap(find.text('Escanear QR'));
       await tester.pump();
@@ -191,8 +229,7 @@ void main() {
     testWidgets('cancelar el escaneo deja el servidor como estaba', (WidgetTester tester) async {
       usePhone(tester);
       final FakeCaptureApi api = FakeCaptureApi()..serverHost = '10.10.18.100';
-      await tester.pumpWidget(CaptureApp(api: api));
-      await tester.pump();
+      await abrirFutbol(tester, api);
 
       await tester.tap(find.text('Escanear QR'));
       await tester.pump();
@@ -203,8 +240,7 @@ void main() {
 
     testWidgets('el botón de abrir nombra el lado elegido', (WidgetTester tester) async {
       usePhone(tester);
-      await tester.pumpWidget(CaptureApp(api: FakeCaptureApi()));
-      await tester.pump();
+      await abrirFutbol(tester, FakeCaptureApi());
 
       expect(find.text('Abrir cámara izquierda'), findsOneWidget);
 
@@ -220,8 +256,7 @@ void main() {
       // Encenderlo en un partido de verdad es volver con dos vídeos que no parean, y
       // eso no puede parecerse a cualquier otro ajuste.
       usePhone(tester);
-      await tester.pumpWidget(CaptureApp(api: FakeCaptureApi()));
-      await tester.pump();
+      await abrirFutbol(tester, FakeCaptureApi());
 
       // El fondo se pinta con `Ink` para que el realce del toque quede encima.
       Color? cardColor() {

@@ -57,13 +57,15 @@ class OverlayRaster {
   /// volver a pintar.
   /// `championship` es el icono del campeonato ya decodificado; el estado lleva su
   /// versión (`iconRev`), que es lo que decide si hay que volver a pintar.
-  /// `crests`, igual, los escudos de los equipos (ADR 0028), con su versión en el estado.
+  /// `crests`, igual, los escudos de los equipos (ADR 0028), con su versión en el estado; y
+  /// `goalCrest`, el del equipo que marcó, con la suya en el gol (ADR 0032).
   Future<OverlayFrame> render(
     ScoreboardState state, {
     bool sponsorSlots = true,
     ui.Image? championship,
     Map<String, ui.Image> crests = const <String, ui.Image>{},
     ui.Image? stripImage,
+    ui.Image? goalCrest,
   }) async {
     final OverlayFrame? previa = _last;
     if (previa != null && state == _lastState && sponsorSlots == _lastSlots) {
@@ -78,6 +80,7 @@ class OverlayRaster {
         championship: championship,
         crests: crests,
         stripImage: stripImage,
+        goalCrest: goalCrest,
       ),
     );
     _generation += 1;
@@ -189,19 +192,22 @@ class CardRaster {
   }
 
   /// La jornada (ADR 0030): se pinta de nuevo si cambian los partidos, la competición o la
-  /// versión de algún escudo (`crestRevs`, en el orden de los equipos).
+  /// versión de algún escudo (`crestRevs`, en el orden de los equipos). Con `results`, la de
+  /// los resultados de la fecha (ADR 0032).
   Future<OverlayFrame> fixtures(
     String competition,
     List<FixtureCard> partidos, {
     Map<String, ui.Image> crests = const <String, ui.Image>{},
     List<int?> crestRevs = const <int?>[],
+    bool results = false,
   }) async {
-    final Object llave = (competition, Object.hashAll(partidos), partidos.length, Object.hashAll(crestRevs));
+    final Object llave = (competition, Object.hashAll(partidos), partidos.length, Object.hashAll(crestRevs), results);
     final (Object, OverlayFrame)? previa = _fullScreen;
     if (previa != null && previa.$1 == llave) {
       return previa.$2;
     }
-    final Uint8List rgba = await _rgbaOf(await paintFixturesCard(competition, partidos, width, height, crests: crests));
+    final Uint8List rgba =
+        await _rgbaOf(await paintFixturesCard(competition, partidos, width, height, crests: crests, results: results));
     _generation += 1;
     final OverlayFrame frame =
         OverlayFrame(rgba: rgba, width: width, height: height, generation: _generation);

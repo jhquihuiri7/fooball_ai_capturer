@@ -7,6 +7,9 @@
 /// Las dos pantallas se montan en un [IndexedStack] y no se destruyen al cambiar de
 /// pestaña: reconstruir la vista previa reabriría la sesión de captura, que es
 /// exactamente el segundo y medio de vídeo que no se puede perder.
+///
+/// Fuera del fútbol (ADR 0031) no hay marcador que llevar: la pantalla es solo Captura, y
+/// los rótulos, las franjas y los vídeos se llevan desde el mando web.
 library;
 
 import 'package:flutter/material.dart';
@@ -14,6 +17,7 @@ import 'package:flutter/material.dart';
 import 'package:football_ai_capture/src/auto_emitir.dart';
 import 'package:football_ai_capture/src/capture_page.dart';
 import 'package:football_ai_capture/src/capture_session.dart';
+import 'package:football_ai_capture/src/event_kind.dart';
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
 import 'package:football_ai_capture/src/generated/rig_api.g.dart';
 import 'package:football_ai_capture/src/mando_page.dart' show MatchBanner;
@@ -38,11 +42,15 @@ class ZeroShell extends StatefulWidget {
     this.linkMode = LinkMode.multipeer,
     this.resolution = ProgramResolution.p1080,
     this.autoEmitir,
+    this.eventKind = EventKind.football,
     super.key,
   });
 
   /// EMITIR sin tocar la pantalla (ver `CapturePage.autoEmitir`).
   final AutoEmitirConfig? autoEmitir;
+
+  /// Lo que se transmite (ADR 0031). Sin fútbol no hay pestaña Partido.
+  final EventKind eventKind;
 
   /// El enlace elegido en la pantalla de lado (IOS-58).
   final LinkMode linkMode;
@@ -148,23 +156,28 @@ class _ZeroShellState extends State<ZeroShell> {
 
   @override
   Widget build(BuildContext context) {
+    final Widget captura = CapturePage(
+      role: widget.role,
+      session: widget.session,
+      standalone: widget.standalone,
+      serverHost: widget.serverHost,
+      linkOnly: widget.linkOnly,
+      autoRecordSeconds: widget.autoRecordSeconds,
+      prefersMaster: widget.prefersMaster,
+      onMasterHost: _onMasterHost,
+      linkMode: widget.linkMode,
+      resolution: widget.resolution,
+      autoEmitir: widget.autoEmitir,
+      eventKind: widget.eventKind,
+    );
+    if (!widget.eventKind.isFootball) {
+      return Scaffold(body: captura);
+    }
     return Scaffold(
       body: IndexedStack(
         index: _index,
         children: <Widget>[
-          CapturePage(
-            role: widget.role,
-            session: widget.session,
-            standalone: widget.standalone,
-            serverHost: widget.serverHost,
-            linkOnly: widget.linkOnly,
-            autoRecordSeconds: widget.autoRecordSeconds,
-            prefersMaster: widget.prefersMaster,
-            onMasterHost: _onMasterHost,
-            linkMode: widget.linkMode,
-            resolution: widget.resolution,
-            autoEmitir: widget.autoEmitir,
-          ),
+          captura,
           _matchPage(),
         ],
       ),

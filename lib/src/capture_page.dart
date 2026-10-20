@@ -28,6 +28,7 @@ import 'package:football_ai_capture/src/capture_labels.dart';
 import 'package:football_ai_capture/src/auto_emitir.dart';
 import 'package:football_ai_capture/src/capture_session.dart';
 import 'package:football_ai_capture/src/constants.dart';
+import 'package:football_ai_capture/src/event_kind.dart';
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
 import 'package:football_ai_capture/src/generated/rig_api.g.dart';
 import 'package:football_ai_capture/src/graphics/rig_overlay_sink.dart';
@@ -64,10 +65,14 @@ class CapturePage extends StatefulWidget {
     this.linkMode = LinkMode.multipeer,
     this.resolution = ProgramResolution.p1080,
     this.autoEmitir,
+    this.eventKind = EventKind.football,
     super.key,
   });
 
   final CameraRole role;
+
+  /// Lo que se transmite (ADR 0031): decide el gráfico y el mando del maestro.
+  final EventKind eventKind;
 
   /// La resolución con «Una cámara» (ver `CaptureSession.resolution`).
   final ProgramResolution resolution;
@@ -147,6 +152,7 @@ class _CapturePageState extends State<CapturePage> {
               videoSink: RigVideoSink(),
               freeDiskBytes: () => _session.status?.freeDiskBytes,
               localRecording: () => _session.saveVideo,
+              eventKind: widget.eventKind,
             );
 
   /// Lo que enseña el panel local del estado del soporte (IOS-64).

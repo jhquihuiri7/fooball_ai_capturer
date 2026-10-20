@@ -19,6 +19,7 @@ import 'package:flutter/rendering.dart';
 
 import '../generated/overlay_spec.g.dart';
 import 'gala_brand.dart';
+import 'goal_banner_painter.dart';
 import 'py_round.dart';
 
 /// Lo que el marcador enseña. Valor puro: dos estados iguales pintan lo mismo, y
@@ -41,7 +42,22 @@ class ScoreboardState {
     this.iconRev,
     this.homeCrestRev,
     this.awayCrestRev,
+    this.scoreboard = true,
+    this.lowerThirdTitle,
+    this.lowerThirdSubtitle = '',
+    this.goal,
   });
+
+  /// La barra, la competición y el reloj (ADR 0032). Sin ellos, EN VIVO sube arriba a la
+  /// izquierda: es también el gráfico del espectáculo (ADR 0031).
+  final bool scoreboard;
+
+  /// El título del rótulo al aire (ADR 0031), o null sin rótulo; y su subtítulo.
+  final String? lowerThirdTitle;
+  final String lowerThirdSubtitle;
+
+  /// El gol que se celebra y el punto de su animación (ADR 0032), o null.
+  final GoalBanner? goal;
 
   final String competition;
   final String home;
@@ -92,11 +108,16 @@ class ScoreboardState {
       other.stripImageRev == stripImageRev &&
       other.iconRev == iconRev &&
       other.homeCrestRev == homeCrestRev &&
-      other.awayCrestRev == awayCrestRev;
+      other.awayCrestRev == awayCrestRev &&
+      other.scoreboard == scoreboard &&
+      other.lowerThirdTitle == lowerThirdTitle &&
+      other.lowerThirdSubtitle == lowerThirdSubtitle &&
+      other.goal == goal;
 
   @override
   int get hashCode => Object.hash(competition, home, away, homeGoals, awayGoals, clockS, live, cameraMode,
-      stripVisible, stripTitle, stripSubtitle, stripImageRev, iconRev, homeCrestRev, awayCrestRev);
+      stripVisible, stripTitle, stripSubtitle, stripImageRev, iconRev, homeCrestRev, awayCrestRev,
+      scoreboard, lowerThirdTitle, lowerThirdSubtitle, goal);
 }
 
 /// Opacidad del separador del hueco vendible: el `linea` del sistema sobre oscuro.
@@ -197,7 +218,100 @@ class ScoreboardLayout {
           OverlaySpec.fontWeights[e.key]!, px(e.value.toDouble()).toDouble());
     }
 
-    // ---------------- marcador: el `Scoreboard` del sistema ----------------
+    // La esquina de arriba a la derecha: el icono de la copa y el logo de la casa. Sale
+    // siempre, con marcador o sin él.
+    final double yEstado = sb('top_y'), eh = sb('status_h');
+    final double pad = sb('corner_pad');
+    final int alto = px(_sb('corner_logo_h').toDouble());
+    final int casaW = math.max(1, pyRound(_st('logo_src_w') * alto / _st('logo_src_h')));
+    final double derecha = width - sb('margin') - pad;
+    boxes['broadcaster'] = Rect.fromLTRB(derecha - casaW, yEstado + pad, derecha, yEstado + pad + alto);
+    double izquierda = derecha - casaW;
+    if (state.iconRev != null) {
+      final double copaX1 = izquierda - sb('corner_gap');
+      boxes['championship'] = Rect.fromLTRB(copaX1 - alto, yEstado + pad, copaX1, yEstado + pad + alto);
+      izquierda = copaX1 - alto;
+    }
+    boxes['corner'] = Rect.fromLTRB(izquierda - pad, yEstado, width - sb('margin'), yEstado + alto + 2 * pad);
+
+    final double liveW = sb('live_pad_l') +
+        sb('live_dot') +
+        sb('live_gap') +
+        sb('live_pad_r') +
+        textWidth(OverlaySpec.scoreboardTexts['live']!, 'live');
+    if (state.scoreboard) {
+      _measureScoreboard(liveW);
+    } else if (state.live) {
+      // Sin marcador (el espectáculo, o el marcador apagado), EN VIVO sube arriba a la
+      // izquierda, centrado con la esquina (ADR 0031 y 0032).
+      final double cy = boxes['corner']!.center.dy;
+      final double x = px(OverlaySpec.margin.toDouble()).toDouble();
+      boxes['live'] = Rect.fromLTRB(x, cy - eh / 2, x + liveW, cy + eh / 2);
+    }
+    if (state.lowerThirdTitle != null) {
+      _measureLowerThird();
+    }
+    if (state.stripVisible) {
+      _measureStrip();
+    }
+  }
+
+  /// Una medida del rótulo de OverlaySpec, ya escalada.
+  double lt(String clave) => px(OverlaySpec.lowerThird[clave]!.toDouble()).toDouble();
+
+  /// El título y el subtítulo del rótulo como caben (recortados con puntos si no).
+  String ltTitle = '';
+  String ltSubtitle = '';
+
+  /// El rótulo (ADR 0031), como `_measure_lower_third`: las dos barras comparten el corte de
+  /// -30° alrededor del centro del bloque, así que su filo izquierdo es una sola línea.
+  void _measureLowerThird() {
+    final bool haySub = state.lowerThirdSubtitle.trim().isNotEmpty;
+    final double th = lt('title_h'), sh = haySub ? lt('sub_h') : 0;
+    final double abajo = (height - px(OverlaySpec.stripHeight.toDouble()) - px(OverlaySpec.lowerThird['gap']!.toDouble()))
+        .toDouble();
+    final double arriba = abajo - th - sh;
+    final double centro = (arriba + abajo) / 2;
+    final double x0 = px(OverlaySpec.margin.toDouble()) + (abajo - arriba) / 2 * GalaBrand.inclinacion;
+    final double cuerpoX = x0 + sb('tip_w') - sb('tip_overlap');
+    final double pad = lt('pad_x');
+    final double hueco = lt('max_w') - 2 * pad;
+    ltTitle = fitWidth(state.lowerThirdTitle!.toUpperCase(), 'lt_title', hueco);
+    double ancho = textWidth(ltTitle, 'lt_title');
+    if (haySub) {
+      ltSubtitle = fitWidth(state.lowerThirdSubtitle, 'lt_subtitle', hueco);
+      ancho = math.max(ancho, textWidth(ltSubtitle, 'lt_subtitle'));
+    }
+    final double cuerpoW = math.min(lt('max_w'), math.max(lt('min_w'), ancho + 2 * pad));
+    boxes['lt_tip'] = GalaBrand.skewed(x0, arriba, sb('tip_w'), th, centerY: centro).getBounds();
+    boxes['lt_title_bar'] = GalaBrand.skewed(cuerpoX, arriba, cuerpoW, th, centerY: centro).getBounds();
+    double borde(double y) => cuerpoX + (centro - y) * GalaBrand.inclinacion;
+    final double ty = arriba + th / 2;
+    double mitad = px(OverlaySpec.fontSizes['lt_title']!.toDouble()) / 2;
+    final double tx = borde(ty) + pad;
+    boxes['lt_title'] = Rect.fromLTRB(tx, ty - mitad, tx + textWidth(ltTitle, 'lt_title'), ty + mitad);
+    _v.addAll(<String, double>{
+      'lt_top': arriba,
+      'lt_bottom': abajo,
+      'lt_center': centro,
+      'lt_x0': x0,
+      'lt_body_x': cuerpoX,
+      'lt_body_w': cuerpoW,
+      'lt_title_x': tx,
+      'lt_title_y': ty,
+    });
+    if (haySub) {
+      boxes['lt_sub_bar'] = GalaBrand.skewed(cuerpoX, arriba + th, cuerpoW, sh, centerY: centro).getBounds();
+      final double sy = arriba + th + sh / 2;
+      mitad = px(OverlaySpec.fontSizes['lt_subtitle']!.toDouble()) / 2;
+      final double sx = borde(sy) + pad;
+      boxes['lt_subtitle'] = Rect.fromLTRB(sx, sy - mitad, sx + textWidth(ltSubtitle, 'lt_subtitle'), sy + mitad);
+      _v.addAll(<String, double>{'lt_sub_x': sx, 'lt_sub_y': sy});
+    }
+  }
+
+  /// El marcador: el `Scoreboard` del sistema.
+  void _measureScoreboard(double liveW) {
     final double homeW = textWidth(home, 'team'), awayW = textWidth(away, 'team');
     final double glW = math.max(
         sb('goal_min_w'), textWidth('${state.homeGoals}', 'score') + 2 * sb('goal_pad_x'));
@@ -212,11 +326,6 @@ class ScoreboardLayout {
     final double tipIn = sb('tip_w') - sb('tip_overlap');
     final double barW = bodyW + 2 * tipIn;
 
-    final double liveW = sb('live_pad_l') +
-        sb('live_dot') +
-        sb('live_gap') +
-        sb('live_pad_r') +
-        textWidth(OverlaySpec.scoreboardTexts['live']!, 'live');
     final double compW = textWidth(competition, 'comp') + 2 * sb('chip_pad_x');
     final double clockW = tabularWidth(state.clockText, 'clock') + 2 * sb('clock_pad_x');
 
@@ -239,20 +348,6 @@ class ScoreboardLayout {
       final double yVivo = yBarra + bh + sb('live_below');
       boxes['live'] = Rect.fromLTRB(ex, yVivo, ex + liveW, yVivo + eh);
     }
-
-    // La esquina de arriba a la derecha: el icono de la copa y el logo de la casa.
-    final double pad = sb('corner_pad');
-    final int alto = px(_sb('corner_logo_h').toDouble());
-    final int casaW = math.max(1, pyRound(_st('logo_src_w') * alto / _st('logo_src_h')));
-    final double derecha = width - sb('margin') - pad;
-    boxes['broadcaster'] = Rect.fromLTRB(derecha - casaW, yEstado + pad, derecha, yEstado + pad + alto);
-    double izquierda = derecha - casaW;
-    if (state.iconRev != null) {
-      final double copaX1 = izquierda - sb('corner_gap');
-      boxes['championship'] = Rect.fromLTRB(copaX1 - alto, yEstado + pad, copaX1, yEstado + pad + alto);
-      izquierda = copaX1 - alto;
-    }
-    boxes['corner'] = Rect.fromLTRB(izquierda - pad, yEstado, width - sb('margin'), yEstado + alto + 2 * pad);
 
     final double rx = x0 + tipIn + sb('body_pad_x');
     final double homeX = rx + crestW + gap;
@@ -289,11 +384,10 @@ class ScoreboardLayout {
       'clock_x': relojX,
       'clock_w': clockW,
     });
+  }
 
-    // ---------------- barra de patrocinio ----------------
-    if (!state.stripVisible) {
-      return;
-    }
+  /// La barra de patrocinio: la franja de abajo con su imagen, su título y su subtítulo.
+  void _measureStrip() {
     final double sh = px(OverlaySpec.stripHeight.toDouble()).toDouble();
     final double sy0 = height - sh, scy = sy0 + sh / 2;
     boxes['strip'] = Rect.fromLTRB(0, sy0, width.toDouble(), height.toDouble());
@@ -358,10 +452,14 @@ class ScoreboardPainter extends CustomPainter {
     this.crests = const <String, ui.Image>{},
     this.sponsorSlots = true,
     this.stripImage,
+    this.goalCrest,
   });
 
   /// La imagen de la franja, ya decodificada; va si el estado dice que hay (`stripImageRev`).
   final ui.Image? stripImage;
+
+  /// El escudo del equipo que marcó, ya decodificado, si lo tiene (ADR 0032).
+  final ui.Image? goalCrest;
 
   /// Los escudos de los equipos que los tienen, por lado (`home`, `away`), ya decodificados:
   /// sustituyen al genérico (ADR 0028).
@@ -392,10 +490,19 @@ class ScoreboardPainter extends CustomPainter {
           : null,
     );
     _paintStatus(canvas, l);
-    _paintBar(canvas, l);
+    if (state.scoreboard) {
+      _paintBar(canvas, l);
+    }
     _paintCorner(canvas, l);
+    if (state.lowerThirdTitle != null) {
+      _paintLowerThird(canvas, l);
+    }
     if (state.stripVisible) {
       _paintStrip(canvas, l);
+    }
+    final GoalBanner? gol = state.goal;
+    if (gol != null) {
+      paintGoalBanner(canvas, l.width, gol, crest: goalCrest);
     }
   }
 
@@ -406,7 +513,8 @@ class ScoreboardPainter extends CustomPainter {
       old.isotipo != isotipo ||
       old.championship != championship ||
       old.crests != crests ||
-      old.stripImage != stripImage;
+      old.stripImage != stripImage ||
+      old.goalCrest != goalCrest;
 
   static Paint _fill(Color c) => Paint()..color = c;
 
@@ -446,22 +554,26 @@ class ScoreboardPainter extends CustomPainter {
     final double radio = l.sb('radius');
     final double alfa = _sb('shadow_alpha_pct') / 100;
     final Color velo = _palette('chrome_soft');
-    final Rect comp = l.boxes['competition']!;
-    final RRect compR = _rrect(comp, radio);
+    final Rect? comp = state.scoreboard ? l.boxes['competition'] : null;
+    final RRect? compR = comp == null ? null : _rrect(comp, radio);
     final RRect esquinaR = _rrect(l.boxes['corner']!, radio);
     final RRect? liveR = state.live ? _rrect(l.boxes['live']!, radio) : null;
 
     // La sombra va bajo la silueta de cada pieza, a la opacidad de su relleno, como el
     // alfa de la capa que desenfoca la referencia.
-    GalaBrand.shadow(c, Path()..addRRect(compR)..addRRect(esquinaR), alfa * velo.a, l.s);
+    final Path fichas = Path()..addRRect(esquinaR);
+    if (compR != null) fichas.addRRect(compR);
+    GalaBrand.shadow(c, fichas, alfa * velo.a, l.s);
     if (liveR != null) GalaBrand.shadow(c, Path()..addRRect(liveR), alfa, l.s);
 
-    c.drawRRect(compR, _fill(velo));
+    if (compR != null) c.drawRRect(compR, _fill(velo));
     c.drawRRect(esquinaR, _fill(velo));
     if (liveR != null) c.drawRRect(liveR, _fill(_palette('live')));
 
-    _text(c, l, l.competition, 'comp', GalaBrand.token('gris-claro'),
-        Offset(comp.left + l.sb('chip_pad_x'), l.v('cy_estado')));
+    if (comp != null) {
+      _text(c, l, l.competition, 'comp', GalaBrand.token('gris-claro'),
+          Offset(comp.left + l.sb('chip_pad_x'), l.v('cy_estado')));
+    }
     if (state.live) {
       final Rect vivo = l.boxes['live']!;
       final double punto = l.sb('live_dot');
@@ -570,6 +682,37 @@ class ScoreboardPainter extends CustomPainter {
     _text(c, l, '${state.awayGoals}', 'score', tinta, Offset(vx, cy));
   }
 
+  // ---------------- el rótulo del espectáculo (ADR 0031) ----------------
+  void _paintLowerThird(Canvas c, ScoreboardLayout l) {
+    final double arriba = l.v('lt_top'), centro = l.v('lt_center'), th = l.lt('title_h');
+    final double cuerpoX = l.v('lt_body_x'), cuerpoW = l.v('lt_body_w');
+    final Color teal = GalaBrand.token('teal-electrico'), azul = GalaBrand.token('azul-deportivo');
+    final Rect alto = Rect.fromLTRB(0, arriba, 1, arriba + th); // los degradados van a lo alto
+    final Path punta = GalaBrand.skewed(l.v('lt_x0'), arriba, l.sb('tip_w'), th, centerY: centro);
+    final Path titulo = GalaBrand.skewed(cuerpoX, arriba, cuerpoW, th, centerY: centro);
+    final bool haySub = l.boxes.containsKey('lt_sub_bar');
+    final Path? sub = haySub
+        ? GalaBrand.skewed(cuerpoX, arriba + th, cuerpoW, l.v('lt_bottom') - arriba - th, centerY: centro)
+        : null;
+    final Path silueta = Path()
+      ..addPath(punta, Offset.zero)
+      ..addPath(titulo, Offset.zero);
+    if (sub != null) silueta.addPath(sub, Offset.zero);
+    GalaBrand.shadow(c, silueta, _sb('bar_shadow_alpha_pct') / 100, l.s);
+
+    c.drawPath(punta, GalaBrand.fill(teal, bottom: azul, box: alto));
+    c.drawPath(titulo, GalaBrand.fill(_palette('chrome'), bottom: GalaBrand.token('azul-profundo'), box: alto));
+    final double filete = l.sb('body_edge_h');
+    c.drawPath(GalaBrand.skewed(cuerpoX, arriba + th - filete, cuerpoW, filete, centerY: centro), _fill(azul));
+    if (sub != null) c.drawPath(sub, _fill(_palette('white')));
+
+    _text(c, l, l.ltTitle, 'lt_title', _palette('white'), Offset(l.v('lt_title_x'), l.v('lt_title_y')));
+    if (haySub) {
+      _text(c, l, l.ltSubtitle, 'lt_subtitle', GalaBrand.token('azul-profundo'),
+          Offset(l.v('lt_sub_x'), l.v('lt_sub_y')));
+    }
+  }
+
   // ---------------- la franja ----------------
   void _paintStrip(Canvas c, ScoreboardLayout l) {
     final double sy0 = l.v('strip_y');
@@ -608,6 +751,7 @@ Future<ui.Image> paintScoreboard(
   ui.Image? championship,
   Map<String, ui.Image> crests = const <String, ui.Image>{},
   ui.Image? stripImage,
+  ui.Image? goalCrest,
 }) async {
   final ui.Image isotipo = await GalaBrand.isotipo();
   final ui.PictureRecorder recorder = ui.PictureRecorder();
@@ -619,6 +763,7 @@ Future<ui.Image> paintScoreboard(
     crests: crests,
     sponsorSlots: sponsorSlots,
     stripImage: stripImage,
+    goalCrest: goalCrest,
   ).paint(canvas, Size(width.toDouble(), height.toDouble()));
   final ui.Picture picture = recorder.endRecording();
   return picture.toImage(width, height).whenComplete(picture.dispose);

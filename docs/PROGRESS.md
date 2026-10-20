@@ -12,6 +12,57 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-19 · IOS-110 a IOS-113 — El tipo de evento, el espectáculo y la noche de partidos · 🚧 probado en Windows; falta verlo en el iPhone
+
+ADR 0031 y 0032 de football-ai (REF-65 y REF-66, e102763 y 5bc4622), pedidos por Jhonatan
+tras la primera transmisión. Lo pidió sin preguntas: las decisiones que tomé están en los dos
+ADR.
+
+**Hecho**
+- **IOS-110, el tipo de evento.** La app abre en «¿Qué vas a transmitir?» (`EventPage`):
+  Fútbol, Espectáculo y Vóleibol. Fútbol lleva a la pantalla de lado de siempre (con un «‹»
+  para volver); los otros dos, a la misma `RolePage` en su variante de una cámara: solo la
+  calidad (1080p o 720p) y el VPS, y abre «Una cámara (sin pareja)», que dirige siempre. El
+  tipo (`EventKind`) viaja de `ZeroShell` a `CapturePage`, `MasterHost` y `MatchEngine`; sin
+  fútbol no hay pestaña Partido.
+- **IOS-111, el espectáculo.** El estado lleva `event_kind`. Los rótulos guardados
+  (`graphics/caption_save`, `caption_delete`, `caption` con `show_s` o `hold`, y
+  `caption_all`), en `grafico.json`. El gráfico del espectáculo: sin marcador, con EN VIVO
+  arriba a la izquierda, la esquina de la casa con el icono del evento, la franja y el
+  rótulo (`ScoreboardState.scoreboard`, `lowerThirdTitle`/`Subtitle`); sin tarjetas ni
+  alineaciones. El vóley no pinta nada ni pone anuncios. El mando web enseña las tarjetas de
+  cada tipo (`data-tipos`) con la nueva de Rótulos, y el mando nativo remite al web fuera del
+  fútbol.
+- **IOS-112, el gol, el marcador a demanda, la franja alta y las tandas.** Cada `+1` saca
+  ¡GOL! (`goal_banner_painter.dart`, portado de `goal_card.py`): entra en 0,45 s, se queda y
+  sale en 0,35 s; el maestro pinta a 20 fps solo mientras se mueve (`ProgramGraphics.animating`).
+  Un `−1` del mismo equipo lo quita. `graphics/scoreboard` quita la barra, la competición y el
+  reloj (EN VIVO sube arriba). La franja mide 132 px (OverlaySpec). `graphics/strip_all` y
+  `video/play_all`: la franja que está fuera sale del tiempo (sin hueco entre dos) y
+  `MatchEngine.tick`, cada segundo, avisa a los mandos y pasa el vídeo que acabó sin aviso.
+- **IOS-113, la noche de partidos.** `match/fixture_start` pone un partido de la jornada en el
+  marcador (nombres, escudos por nombre, goles si ya se jugó, reloj a cero); `match/finish`
+  guarda el marcador en la jornada y para el reloj; `graphics/results` es la tarjeta
+  RESULTADOS. `current_fixture` y los goles de cada partido van en `grafico.json`, y volver a
+  guardar la jornada los conserva. Las alineaciones van por equipo
+  (`alineaciones-equipos.json`). El mando web: «Partido de la jornada» con Empezar, Reabrir y
+  Finalizar, «Marcador y reloj» y «Resultados» en Al aire, «Pasar todas» y «Pasar todos», el
+  próximo partido desde la jornada, y los avisos de gol, marcador oculto y partido en juego.
+- OverlaySpec, los renders de referencia y el dorado del túnel sincronizados desde
+  football-ai (5bc4622). `MetalBench` usa el alto de la franja de OverlaySpec.
+
+**Comprobado**: `flutter analyze` limpio. Tests nuevos del motor (`event_night_test.dart`),
+de la API, del gráfico (el gol a fps, el espectáculo, el vóley y la tanda) y de las
+pantallas. Los painters contra Python: ¡GOL! 0,19 %, el espectáculo con su rótulo 0,83 % y
+los resultados 1,14 % de píxeles distintos. El mando web, servido por la API de verdad y
+fotografiado con Edge en los tres tipos. Fallan en Windows los 8 dorados de imagen de siempre
+y, a ratos, «se pinta en ≤50 ms».
+
+**Pendiente**: regenerar en el Mac los dorados de `test/graphics` (cambian con la franja de
+132 px); volver a rendrizar con Remotion y subir al VPS los anuncios de la franja (los de 108
+px ya no cargan); en el iPhone, un espectáculo con un rótulo y una noche con dos partidos de
+la jornada, un gol y los resultados.
+
 ## 2026-10-16 · BUG ABIERTO: el programa sale sin sonido a tramos y solo lo arregla matar Zero · 🐞 sin diagnosticar, no olvidar
 
 Visto en directo (17 en «Una cámara», 1.0.0 (8) o posterior, emitiendo al VPS → YouTube y

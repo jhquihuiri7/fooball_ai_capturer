@@ -3,15 +3,22 @@
 ///
 /// Se llama con cada cambio del partido y una vez por segundo (el reloj). OverlayRaster
 /// solo vuelve a pintar si cambió lo que se enseña, y el puente solo cruza Pigeon con
-/// una generación nueva: con el reloj en marcha, un raster y una subida por segundo.
+/// una generación nueva: con el reloj en marcha, un raster y una subida por segundo. Mientras
+/// el gol entra o sale ([ProgramGraphics.animating], ADR 0032), el maestro lo llama a
+/// `anim_fps`.
+///
+/// Lo que se pinta depende del tipo de evento (ADR 0031): el fútbol con todo; el espectáculo
+/// sin marcador ni tarjetas, con EN VIVO, el rótulo y la franja; el vóley, nada por ahora.
 library;
 
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:football_ai_capture/src/event_kind.dart';
 import 'package:football_ai_capture/src/generated/overlay_spec.g.dart';
 import 'package:football_ai_capture/src/graphics/fixtures_card_painter.dart';
+import 'package:football_ai_capture/src/graphics/goal_banner_painter.dart';
 import 'package:football_ai_capture/src/graphics/halftime_card_painter.dart';
 import 'package:football_ai_capture/src/graphics/lineup_card_painter.dart';
 import 'package:football_ai_capture/src/graphics/overlay_bridge.dart';
@@ -94,9 +101,10 @@ class ProgramGraphics {
   ui.Image? _stripImage;
   int? _stripImageRev;
 
-  /// Decodifica la imagen de la franja si cambió; sin imagen, null.
+  /// Decodifica la imagen de la franja puesta (la de la tanda, si hay una) si cambió; sin
+  /// imagen, null.
   Future<ui.Image?> _stripImageNow() async {
-    final StripImage? img = engine.graphics.activeStripImage;
+    final StripImage? img = engine.stripImage;
     if (img?.rev == _stripImageRev) {
       return _stripImage;
     }
@@ -139,23 +147,64 @@ class ProgramGraphics {
     return _icon;
   }
 
-  ScoreboardState scoreboardState() => ScoreboardState(
-    competition: competition,
-    home: engine.home,
-    away: engine.away,
-    homeGoals: engine.homeGoals,
-    awayGoals: engine.awayGoals,
-    clockS: engine.clock.elapsedMs ~/ Duration.millisecondsPerSecond,
-    live: engine.streaming,
-    cameraMode: programCameraModeAuto,
-    stripVisible: engine.stripVisible,
-    stripTitle: engine.graphics.strip.title,
-    stripSubtitle: engine.graphics.strip.subtitle,
-    stripImageRev: engine.graphics.activeStripImage?.rev,
-    iconRev: engine.graphics.hasIcon ? engine.graphics.iconRev : null,
-    homeCrestRev: engine.graphics.crestFor(engine.home)?.rev,
-    awayCrestRev: engine.graphics.crestFor(engine.away)?.rev,
-  );
+  ScoreboardState scoreboardState() {
+    final bool futbol = engine.eventKind.isFootball;
+    final CaptionPreset? rotulo = engine.captionOnAir;
+    final StripTexts franja = engine.stripTexts;
+    return ScoreboardState(
+      competition: competition,
+      home: engine.home,
+      away: engine.away,
+      homeGoals: engine.homeGoals,
+      awayGoals: engine.awayGoals,
+      clockS: engine.clock.elapsedMs ~/ Duration.millisecondsPerSecond,
+      live: engine.streaming,
+      cameraMode: programCameraModeAuto,
+      stripVisible: engine.stripVisible,
+      stripTitle: franja.title,
+      stripSubtitle: franja.subtitle,
+      stripImageRev: engine.stripImage?.rev,
+      iconRev: engine.graphics.hasIcon ? engine.graphics.iconRev : null,
+      homeCrestRev: engine.graphics.crestFor(engine.home)?.rev,
+      awayCrestRev: engine.graphics.crestFor(engine.away)?.rev,
+      // El marcador solo en el fútbol, y si el operador no lo quitó (ADR 0031 y 0032).
+      scoreboard: futbol && engine.scoreboardOnAir,
+      lowerThirdTitle: rotulo?.title,
+      lowerThirdSubtitle: rotulo?.subtitle ?? '',
+      goal: futbol ? _goalBanner() : null,
+    );
+  }
+
+  /// El gol que se celebra en el punto de su animación, o null (ADR 0032).
+  GoalBanner? _goalBanner() {
+    final ({MatchTeam team, int elapsedMs})? g = engine.goal;
+    final (double, double, double)? punto = g == null ? null : goalFrame(g.elapsedMs);
+    if (g == null || punto == null) {
+      return null;
+    }
+    final bool local = g.team == MatchTeam.home;
+    final String nombre = local ? engine.home : engine.away;
+    return GoalBanner(
+      home: local,
+      name: nombre,
+      homeGoals: engine.homeGoals,
+      awayGoals: engine.awayGoals,
+      crestRev: engine.graphics.crestFor(nombre)?.rev,
+      reveal: punto.$1,
+      textScale: punto.$2,
+      fade: punto.$3,
+    );
+  }
+
+  /// Si el último raster llevaba el gol: al irse, hace falta uno más que lo quite.
+  bool _goalShown = false;
+
+  /// Si el gol está entrando o saliendo, o acaba de irse: entonces el maestro pinta a
+  /// `OverlaySpec.goal['anim_fps']`; quieto, basta el segundo del reloj.
+  bool get animating {
+    final ({MatchTeam team, int elapsedMs})? g = engine.goal;
+    return g == null ? _goalShown : goalMoving(g.elapsedMs);
+  }
 
   /// Pone el gráfico al día. Si se llama mientras pinta, repite una vez al acabar: nunca
   /// hay dos rasters a la vez ni se pierde el último cambio.
@@ -174,26 +223,45 @@ class ProgramGraphics {
       }
       do {
         _again = false;
+        if (engine.eventKind == EventKind.volleyball) {
+          // El vóley, por ahora, sin gráfico: sale la cámara tal cual (ADR 0031).
+          _goalShown = false;
+          await bridge.setBackdropBlur(false);
+          await bridge.clear(OverlayLayerId.lineup);
+          await bridge.clear(OverlayLayerId.scoreboard);
+          continue;
+        }
+        final bool futbol = engine.eventKind.isFootball;
         final ui.Image? icono = await _championship();
         final Map<String, ui.Image> escudos = await _crestsOf(engine.home, engine.away);
         final ScoreboardState estado = scoreboardState();
         // La capa de tarjetas: una de pantalla completa o una alineación, nunca dos (ADR 0027
-        // y 0029).
-        final (MatchTeam, Team)? alAire = engine.lineups.onAir;
-        final OverlayFrame? pantalla = await _fullScreenCard(estado, icono, escudos);
+        // y 0029). Solo en el fútbol.
+        final (MatchTeam, Team)? alAire = futbol ? engine.lineups.onAir : null;
+        final OverlayFrame? pantalla = futbol ? await _fullScreenCard(estado, icono, escudos) : null;
+        final GoalBanner? gol = pantalla == null ? estado.goal : null;
+        final ui.Image? escudoGol = gol == null ? null : await _crest(gol.name);
         _dropUnusedCrests();
         if (pantalla != null) {
           // Tapa la pantalla entera con un velo translúcido sobre la cancha desenfocada: el
           // marcador se vería a través del velo, así que sale.
+          _goalShown = false;
           await bridge.publish(OverlayLayerId.lineup, pantalla);
           await bridge.setBackdropBlur(true);
           await bridge.clear(OverlayLayerId.scoreboard);
           continue;
         }
+        _goalShown = gol != null;
         await bridge.setBackdropBlur(false);
         await bridge.publish(
           OverlayLayerId.scoreboard,
-          await _scoreboard.render(estado, championship: icono, crests: escudos, stripImage: await _stripImageNow()),
+          await _scoreboard.render(
+            estado,
+            championship: icono,
+            crests: escudos,
+            stripImage: await _stripImageNow(),
+            goalCrest: escudoGol,
+          ),
         );
         if (alAire == null) {
           await bridge.clear(OverlayLayerId.lineup);
@@ -251,8 +319,10 @@ extension on ProgramGraphics {
       case MatchEngine.cardInterview:
         final Interview e = engine.graphics.interview;
         return _cards.halftime(estado, icon: icono, interview: InterviewCard(name: e.name, role: e.role));
-      case MatchEngine.cardFixtures:
+      case MatchEngine.cardFixtures || MatchEngine.cardResults:
+        final bool resultados = engine.fullScreenCard == MatchEngine.cardResults;
         final List<Fixture> jornada = engine.graphics.fixtures;
+        final int? enJuego = engine.graphics.currentFixture;
         final Map<String, ui.Image> escudos = <String, ui.Image>{};
         final List<int?> versiones = <int?>[];
         for (final Fixture f in jornada) {
@@ -266,10 +336,20 @@ extension on ProgramGraphics {
         return _cards.fixtures(
           estado.competition,
           <FixtureCard>[
-            for (final Fixture f in jornada) FixtureCard(home: f.home, away: f.away, time: f.time, subtitle: f.subtitle),
+            for (int i = 0; i < jornada.length; i++)
+              FixtureCard(
+                home: jornada[i].home,
+                away: jornada[i].away,
+                time: jornada[i].time,
+                subtitle: jornada[i].subtitle,
+                // El que se juega lleva el marcador de ahora (ADR 0032).
+                homeGoals: i == enJuego ? engine.homeGoals : jornada[i].homeGoals,
+                awayGoals: i == enJuego ? engine.awayGoals : jornada[i].awayGoals,
+              ),
           ],
           crests: escudos,
           crestRevs: versiones,
+          results: resultados,
         );
       default:
         return null;

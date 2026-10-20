@@ -6,6 +6,9 @@
 /// cada uno: el izquierdo es el maestro del reloj y puede arrancar solo, y el derecho
 /// espera a tener reloj común (ADR 0012, decisión 2). Eso hasta hoy solo estaba en el
 /// ADR, y quien monta el soporte no lee el ADR en la banda.
+///
+/// Es la pantalla del fútbol. El espectáculo y el vóleibol (ADR 0031) van con una cámara:
+/// con ellos la misma pantalla solo pide la calidad y el VPS, y el móvil dirige siempre.
 library;
 
 import 'dart:async';
@@ -16,6 +19,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:football_ai_capture/src/constants.dart';
+import 'package:football_ai_capture/src/event_kind.dart';
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
 import 'package:football_ai_capture/src/generated/rig_api.g.dart';
 import 'package:football_ai_capture/src/mando_page.dart';
@@ -34,7 +38,10 @@ import 'package:football_ai_capture/src/zero_shell.dart';
 enum _ServerOrigin { none, saved, bonjour, typed, scanned }
 
 class RolePage extends StatefulWidget {
-  const RolePage({this.api, this.mandoControl, this.clockS, super.key});
+  const RolePage({this.api, this.mandoControl, this.clockS, this.eventKind = EventKind.football, super.key});
+
+  /// Lo que se va a transmitir (ADR 0031): el fútbol enseña todo; los demás, una cámara.
+  final EventKind eventKind;
 
   /// Inyectable para los tests.
   final CaptureHostApi? api;
@@ -89,10 +96,15 @@ class _RolePageState extends State<RolePage> {
   VpsPairing? _vps;
   String? _vpsProblem;
 
+  bool get _football => widget.eventKind.isFootball;
+
   @override
   void initState() {
     super.initState();
-    unawaited(_loadServer());
+    // El servidor del pod (y su búsqueda por Bonjour) es de los dos móviles del fútbol.
+    if (_football) {
+      unawaited(_loadServer());
+    }
     unawaited(_loadPreference());
     unawaited(_loadVps());
   }
@@ -323,16 +335,24 @@ class _RolePageState extends State<RolePage> {
   void _open() {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) =>
-            ZeroShell(
-              role: _role,
-              standalone: _standalone,
-              serverHost: _server.text.trim(),
-              // «Una cámara» dirige siempre, aunque «Este móvil dirige» esté apagado.
-              prefersMaster: _directs || _linkMode == LinkMode.single,
-              linkMode: _linkMode,
-              resolution: _resolution,
-            ),
+        builder: (_) => _football
+            ? ZeroShell(
+                role: _role,
+                standalone: _standalone,
+                serverHost: _server.text.trim(),
+                // «Una cámara» dirige siempre, aunque «Este móvil dirige» esté apagado.
+                prefersMaster: _directs || _linkMode == LinkMode.single,
+                linkMode: _linkMode,
+                resolution: _resolution,
+              )
+            // El espectáculo y el vóley (ADR 0031): «Una cámara (sin pareja)», que dirige.
+            : ZeroShell(
+                role: CameraRole.left,
+                prefersMaster: true,
+                linkMode: LinkMode.single,
+                resolution: _resolution,
+                eventKind: widget.eventKind,
+              ),
       ),
     );
   }
@@ -421,6 +441,9 @@ class _RolePageState extends State<RolePage> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_football) {
+      return _buildOneCamera(context);
+    }
     return Scaffold(
       // Los 34 px de abajo del diseño son el indicador de inicio del iPhone, no un
       // margen aparte: `minimum` deja el mayor de los dos en vez de sumarlos, y en un
@@ -436,12 +459,7 @@ class _RolePageState extends State<RolePage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
-                    const Padding(
-                      padding: EdgeInsets.fromLTRB(0, 14, 0, 26),
-                      child: Row(
-                        children: <Widget>[ZeroLockup(diameter: 22), Spacer(), _Kicker('CAPTURA')],
-                      ),
-                    ),
+                    const _TopBar(kicker: 'FÚTBOL · CAPTURA'),
                     Text(
                       '¿Qué mitad cubre este móvil?',
                       style: ZeroType.archivo(
@@ -594,6 +612,173 @@ class _RolePageState extends State<RolePage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+extension on _RolePageState {
+  /// La pantalla del espectáculo y del vóleibol (ADR 0031): una cámara, sin lado ni pareja.
+  /// Solo la calidad y el VPS, que es a donde sale el programa.
+  Widget _buildOneCamera(BuildContext context) {
+    final String nota = widget.eventKind == EventKind.show
+        ? 'Este móvil emite solo, con EN VIVO. Los rótulos, las franjas y los vídeos se sacan '
+              'desde el mando web: el QR «Mando» de la pantalla de captura.'
+        : 'Este móvil emite solo, con la cámara tal cual. Los gráficos del vóley llegan más '
+              'adelante.';
+    return Scaffold(
+      body: SafeArea(
+        minimum: const EdgeInsets.only(bottom: 34),
+        child: CustomScrollView(
+          slivers: <Widget>[
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: ZeroMetrics.gutter),
+              sliver: SliverFillRemaining(
+                hasScrollBody: false,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    _TopBar(kicker: widget.eventKind.label.toUpperCase()),
+                    Text(
+                      'Una cámara',
+                      style: ZeroType.archivo(
+                        size: 30,
+                        weight: FontWeight.w600,
+                        color: ZeroColors.ink,
+                        letterSpacing: -1.05,
+                        height: 1.08,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      nota,
+                      style: ZeroType.plex(
+                        size: 14,
+                        weight: FontWeight.w400,
+                        color: ZeroColors.inkTertiary,
+                        height: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+                    _ResolutionCard(
+                      resolution: _resolution,
+                      onResolution: (ProgramResolution r) => unawaited(_setResolution(r)),
+                    ),
+                    const SizedBox(height: ZeroMetrics.innerGap),
+                    _VpsCard(
+                      pairing: _vps,
+                      nowS: _nowS(),
+                      problem: _vpsProblem,
+                      onScan: () => unawaited(_scanVps()),
+                      onUnpair: () => unawaited(_unpairVps()),
+                    ),
+                    const Spacer(),
+                    const SizedBox(height: 20),
+                    ZeroButton.primary(
+                      label: 'Abrir cámara',
+                      height: ZeroMetrics.primaryHeight,
+                      textStyle: ZeroType.plex(
+                        size: 17,
+                        weight: FontWeight.w600,
+                        color: ZeroColors.onAccent,
+                        height: 1.0,
+                      ),
+                      onPressed: _open,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// La cabecera: la marca, la etiqueta de la esquina y, si se llegó desde la pantalla del
+/// evento, el «‹» para volver a ella.
+class _TopBar extends StatelessWidget {
+  const _TopBar({required this.kicker});
+
+  final String kicker;
+
+  @override
+  Widget build(BuildContext context) {
+    final NavigatorState? nav = Navigator.maybeOf(context);
+    final bool atras = nav != null && nav.canPop();
+    return Padding(
+      padding: EdgeInsets.fromLTRB(0, atras ? 2 : 14, 0, atras ? 14 : 26),
+      child: Row(
+        children: <Widget>[
+          if (atras) ...<Widget>[
+            Semantics(
+              button: true,
+              label: 'Cambiar de evento',
+              child: ZeroTappable(
+                onTap: () => nav.maybePop(),
+                borderRadius: BorderRadius.circular(ZeroMetrics.fieldRadius),
+                child: SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: Center(
+                    child: Text(
+                      '‹',
+                      style: ZeroType.archivo(size: 30, weight: FontWeight.w500, color: ZeroColors.ink, height: 1.0),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+          ],
+          const ZeroLockup(diameter: 22),
+          const Spacer(),
+          _Kicker(kicker),
+        ],
+      ),
+    );
+  }
+}
+
+/// La calidad de la emisión con una cámara (IOS-99): lo único que se elige, además del VPS.
+class _ResolutionCard extends StatelessWidget {
+  const _ResolutionCard({required this.resolution, required this.onResolution});
+
+  final ProgramResolution resolution;
+  final ValueChanged<ProgramResolution> onResolution;
+
+  @override
+  Widget build(BuildContext context) {
+    // Lo que pide de subida cada resolución: PRIMER-DESPLIEGUE.md de football-ai, §4b y §5.
+    final String nota = switch (resolution) {
+      ProgramResolution.p1080 => '1080p, hasta 6 Mbit/s: ~12 de subida.',
+      ProgramResolution.p720 => '720p, hasta 3 Mbit/s: ~6 de subida. Para una conexión justa.',
+    };
+    return ZeroCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          const ZeroSectionHeader('Calidad'),
+          Row(
+            children: <Widget>[
+              for (final (ProgramResolution r, String label) in _LinkCard._resolutions) ...<Widget>[
+                if (r != _LinkCard._resolutions.first.$1) const SizedBox(width: 8),
+                ZeroPill(label: label, selected: resolution == r, onTap: () => onResolution(r)),
+              ],
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            nota,
+            style: ZeroType.data(
+              size: 11,
+              weight: FontWeight.w400,
+              color: ZeroColors.inkTertiary,
+              height: 1.5,
+            ),
+          ),
+        ],
       ),
     );
   }

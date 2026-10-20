@@ -1,5 +1,8 @@
 /// App de captura del soporte de dos iPhone (ADR 0012 del repo `football-ai`).
 ///
+/// Lo primero es qué se transmite (ADR 0031): fútbol, espectáculo o vóleibol. Con el fútbol
+/// viene la pantalla de lado de siempre; con los otros dos, una sola cámara.
+///
 /// La app tiene dos lugares y no uno. **Captura** es el móvil que está en el soporte:
 /// elegir el lado, comprobar que la cámara arrancó bien y darle a grabar. **Partido**
 /// es quien lleva el marcador y las posiciones. Están separados a propósito: cuando las
@@ -16,13 +19,14 @@ import 'package:flutter/services.dart';
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
 import 'package:football_ai_capture/src/auto_emitir.dart';
 import 'package:football_ai_capture/src/bench_page.dart';
-import 'package:football_ai_capture/src/role_page.dart';
+import 'package:football_ai_capture/src/event_page.dart';
 import 'package:football_ai_capture/src/theme/zero_theme.dart';
 import 'package:football_ai_capture/src/zero_shell.dart';
 
 // Se reexportan para que las pantallas se importen desde un solo sitio, aquí o en un
 // test, sin tener que saber en qué fichero de `src/` vive cada una.
 export 'package:football_ai_capture/src/capture_page.dart' show CapturePage;
+export 'package:football_ai_capture/src/event_page.dart' show EventPage;
 export 'package:football_ai_capture/src/match_page.dart' show MatchPage;
 export 'package:football_ai_capture/src/match_state.dart';
 export 'package:football_ai_capture/src/role_page.dart' show RolePage;
@@ -92,7 +96,7 @@ class CaptureApp extends StatelessWidget {
       home: _bench.isNotEmpty
           ? BenchPage(name: _bench, paramsJson: _benchParams)
           : _autoRole.isEmpty
-          ? RolePage(api: api)
+          ? EventPage(api: api)
           : _autoEmitir
           ? autoEmitirShell(
               role: _autoRole,

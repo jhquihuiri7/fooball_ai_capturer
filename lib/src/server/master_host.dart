@@ -15,6 +15,8 @@ import 'package:flutter/foundation.dart';
 import 'package:football_ai_capture/src/ads/ad_director.dart';
 import 'package:football_ai_capture/src/ads/ad_pack_downloader.dart';
 import 'package:football_ai_capture/src/constants.dart';
+import 'package:football_ai_capture/src/event_kind.dart';
+import 'package:football_ai_capture/src/generated/overlay_spec.g.dart';
 import 'package:football_ai_capture/src/graphics/overlay_bridge.dart';
 import 'package:football_ai_capture/src/graphics/program_graphics.dart';
 import 'package:football_ai_capture/src/panel_pairing.dart';
@@ -70,12 +72,16 @@ class MasterHost extends ChangeNotifier {
     this.videoSink,
     this.freeDiskBytes,
     this.localRecording,
+    this.eventKind = EventKind.football,
   }) : wallS = wallS ?? _wallClockS,
        _time = time ?? StopwatchTimeSource(),
        _monotonic = Stopwatch()..start();
 
   /// La carpeta del partido (Documents en el iPhone).
   final Directory directory;
+
+  /// Lo que se transmite (ADR 0031): lo eligió quien abrió la cámara.
+  final EventKind eventKind;
 
   /// El secreto del mando de un partido, ya derivado en nativo; vacío sin secreto.
   final Future<String> Function(String matchId) controlSecret;
@@ -164,6 +170,13 @@ class MasterHost extends ChangeNotifier {
   StreamSubscription<void>? _changes;
   Timer? _clockTick;
 
+  /// Los fotogramas del gol mientras entra y sale (ADR 0032).
+  Timer? _animTick;
+
+  /// Lo que cambia solo con el tiempo en el partido (las tandas, el gol, un vídeo que acabó
+  /// sin aviso): [MatchEngine.tick] una vez por segundo.
+  Timer? _engineTick;
+
   MatchEngine? _engine;
   MasterApiServer? _server;
   List<int>? _secret;
@@ -202,6 +215,7 @@ class MasterHost extends ChangeNotifier {
         matchId: matchId,
         freeBytes: freeDiskBytes,
         localRecording: localRecording,
+        eventKind: eventKind,
       );
       if (matchId == null) {
         await announceMatch(engine.matchId);
@@ -222,6 +236,7 @@ class MasterHost extends ChangeNotifier {
       _server = await MasterApiServer.start(api, port: port);
       _engine = engine;
       _api = api;
+      _engineTick = Timer.periodic(const Duration(seconds: 1), (_) => engine.tick());
       _startGraphics(engine);
       _startVideo(engine);
       _startReplica(engine);
@@ -262,6 +277,16 @@ class MasterHost extends ChangeNotifier {
     _graphics = g;
     _changes = engine.changes.listen((_) => unawaited(g.refresh()));
     _clockTick = Timer.periodic(const Duration(seconds: 1), (_) => unawaited(g.refresh()));
+    // Mientras el gol entra o sale, a `anim_fps`; el resto del tiempo el temporizador solo
+    // mira un booleano.
+    _animTick = Timer.periodic(
+      Duration(milliseconds: Duration.millisecondsPerSecond ~/ OverlaySpec.goal['anim_fps']!),
+      (_) {
+        if (g.animating) {
+          unawaited(g.refresh());
+        }
+      },
+    );
     unawaited(g.refresh());
   }
 
@@ -288,10 +313,11 @@ class MasterHost extends ChangeNotifier {
     await v?.close();
   }
 
-  /// La franja: el paquete vigente, cada uno nuevo y los eventos del partido.
+  /// La franja: el paquete vigente, cada uno nuevo y los eventos del partido. En el vóley,
+  /// por ahora, nada (ADR 0031).
   Future<void> _startAds(MatchEngine engine) async {
     final AdSink? sink = adSink;
-    if (sink == null) {
+    if (sink == null || eventKind == EventKind.volleyball) {
       return;
     }
     final AdDirector director = AdDirector(sink);
@@ -365,6 +391,10 @@ class MasterHost extends ChangeNotifier {
     _changes = null;
     _clockTick?.cancel();
     _clockTick = null;
+    _animTick?.cancel();
+    _animTick = null;
+    _engineTick?.cancel();
+    _engineTick = null;
     _graphics = null;
   }
 

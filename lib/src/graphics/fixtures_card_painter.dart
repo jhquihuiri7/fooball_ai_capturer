@@ -6,6 +6,10 @@
 /// fila por partido: la banda azul profundo inclinada con el escudo y el nombre de cada
 /// equipo, la hora en la caja teal del centro y el subtítulo encima, si lo hay. Las medidas
 /// salen de OverlaySpec.fixtures; las del título, de OverlaySpec.halftime.
+///
+/// Con `results`, la de los resultados de la fecha (IOS-113, ADR 0032): el título RESULTADOS,
+/// el marcador de cada partido jugado en la caja teal y la hora de los que faltan en una azul
+/// deportivo.
 library;
 
 import 'dart:math' as math;
@@ -24,12 +28,27 @@ int _h(String clave) => OverlaySpec.halftime[clave]!;
 /// Un partido de la jornada para la tarjeta.
 @immutable
 class FixtureCard {
-  const FixtureCard({required this.home, required this.away, required this.time, this.subtitle = ''});
+  const FixtureCard({
+    required this.home,
+    required this.away,
+    required this.time,
+    this.subtitle = '',
+    this.homeGoals,
+    this.awayGoals,
+  });
 
   final String home;
   final String away;
   final String time;
   final String subtitle;
+
+  /// El marcador (ADR 0032): del partido jugado, o del que se juega; null si falta.
+  final int? homeGoals;
+  final int? awayGoals;
+
+  bool get played => homeGoals != null && awayGoals != null;
+
+  String get scoreText => '$homeGoals - $awayGoals';
 
   @override
   bool operator ==(Object other) =>
@@ -37,10 +56,12 @@ class FixtureCard {
       other.home == home &&
       other.away == away &&
       other.time == time &&
-      other.subtitle == subtitle;
+      other.subtitle == subtitle &&
+      other.homeGoals == homeGoals &&
+      other.awayGoals == awayGoals;
 
   @override
-  int get hashCode => Object.hash(home, away, time, subtitle);
+  int get hashCode => Object.hash(home, away, time, subtitle, homeGoals, awayGoals);
 }
 
 /// La clave del escudo de un equipo (`GraphicsStore.crestKey`, `crest_key` de Python).
@@ -49,7 +70,7 @@ String fixtureCrestKey(String name) =>
 
 /// La geometría de la tarjeta: las mismas claves que `fixtures` de boxes.json.
 class FixturesLayout {
-  FixturesLayout(this.width, this.competition, List<FixtureCard> fixtures)
+  FixturesLayout(this.width, this.competition, List<FixtureCard> fixtures, {this.results = false})
     : fixtures = fixtures.take(OverlaySpec.fixtures['max']!).toList(),
       s = width / OverlaySpec.refWidth {
     _measure();
@@ -57,6 +78,11 @@ class FixturesLayout {
 
   final int width;
   final String competition;
+
+  /// La de los resultados de la fecha (ADR 0032).
+  final bool results;
+
+  String get title => results ? OverlaySpec.resultsTitle : OverlaySpec.fixturesTitle;
   final List<FixtureCard> fixtures;
   final double s;
   final Map<String, Rect> boxes = <String, Rect>{};
@@ -100,7 +126,7 @@ class FixturesLayout {
 
   void _measure() {
     final double cx = width / 2;
-    final double tituloW = textWidth(OverlaySpec.fixturesTitle, 'title');
+    final double tituloW = textWidth(title, 'title');
     double mitad = h('title_size') / 2;
     boxes['title'] = Rect.fromLTRB(cx - tituloW / 2, h('title_y') - mitad, cx + tituloW / 2, h('title_y') + mitad);
     final double compW = textWidth(competition.toUpperCase(), 'comp');
@@ -144,17 +170,23 @@ class FixturesLayout {
 }
 
 class FixturesCardPainter extends CustomPainter {
-  FixturesCardPainter(this.competition, this.fixtures, {this.crests = const <String, ui.Image>{}});
+  FixturesCardPainter(this.competition, this.fixtures, {this.crests = const <String, ui.Image>{}, this.results = false});
 
   final String competition;
   final List<FixtureCard> fixtures;
+
+  /// La de los resultados de la fecha (ADR 0032).
+  final bool results;
 
   /// Los escudos de los equipos que los tienen, por [fixtureCrestKey] (ADR 0028).
   final Map<String, ui.Image> crests;
 
   @override
   bool shouldRepaint(FixturesCardPainter old) =>
-      old.competition != competition || !listEquals(old.fixtures, fixtures) || old.crests != crests;
+      old.competition != competition ||
+      !listEquals(old.fixtures, fixtures) ||
+      old.crests != crests ||
+      old.results != results;
 
   void _text(Canvas c, FixturesLayout l, String text, String fuente, Color color, Offset centro) {
     final TextPainter tp = TextPainter(
@@ -167,7 +199,7 @@ class FixturesCardPainter extends CustomPainter {
 
   @override
   void paint(Canvas c, Size size) {
-    final FixturesLayout l = FixturesLayout(size.width.round(), competition, fixtures);
+    final FixturesLayout l = FixturesLayout(size.width.round(), competition, fixtures, results: results);
     c.drawRect(
       Offset.zero & size,
       Paint()..color = GalaBrand.token('azul-profundo').withAlpha(OverlaySpec.halftime['veil_alpha']!),
@@ -179,7 +211,7 @@ class FixturesCardPainter extends CustomPainter {
 
     // ---------------- título y competición ----------------
     final Rect titulo = l.boxes['title']!;
-    _text(c, l, OverlaySpec.fixturesTitle, 'title', blanco, Offset(cx, l.h('title_y')));
+    _text(c, l, l.title, 'title', blanco, Offset(cx, l.h('title_y')));
     final double rw = l.h('title_raya_w'), rh = l.h('title_raya_h'), gap = l.h('title_raya_gap');
     for (final double x in <double>[titulo.left - gap - rw, titulo.right + gap]) {
       final Rect caja = Rect.fromLTWH(x, l.h('title_y') - rh / 2, rw, rh);
@@ -198,11 +230,24 @@ class FixturesCardPainter extends CustomPainter {
       c.drawPath(GalaBrand.skewed(b.left, b.top, b.width, b.height), Paint()..color = banda);
       final Rect t = l.boxes['${i}_time']!;
       final double sesgo = t.height / 2 * GalaBrand.inclinacion;
+      // En los resultados, el marcador de los jugados va en la caja teal y la hora de los que
+      // faltan, en una azul deportivo.
+      final bool pendiente = results && !partido.played;
+      final Path caja = GalaBrand.skewed(t.left + sesgo, t.top, t.width - 2 * sesgo, t.height);
       c.drawPath(
-        GalaBrand.skewed(t.left + sesgo, t.top, t.width - 2 * sesgo, t.height),
-        GalaBrand.fill(teal, bottom: GalaBrand.token('verde-oceano'), box: Rect.fromLTRB(0, t.top, 1, t.bottom)),
+        caja,
+        pendiente
+            ? (Paint()..color = GalaBrand.token('azul-deportivo'))
+            : GalaBrand.fill(teal, bottom: GalaBrand.token('verde-oceano'), box: Rect.fromLTRB(0, t.top, 1, t.bottom)),
       );
-      _text(c, l, partido.time.toUpperCase(), 'time', GalaBrand.token('azul-profundo'), Offset(cx, t.center.dy));
+      _text(
+        c,
+        l,
+        results && partido.played ? partido.scoreText : partido.time.toUpperCase(),
+        'time',
+        pendiente ? GalaBrand.token('blanco') : GalaBrand.token('azul-profundo'),
+        Offset(cx, t.center.dy),
+      );
       final Rect? sub = l.boxes['${i}_subtitle'];
       if (sub != null) {
         _text(c, l, partido.subtitle.toUpperCase(), 'subtitle', GalaBrand.token('teal-electrico'), Offset(cx, sub.center.dy));
@@ -227,9 +272,10 @@ Future<ui.Image> paintFixturesCard(
   int width,
   int height, {
   Map<String, ui.Image> crests = const <String, ui.Image>{},
+  bool results = false,
 }) {
   final ui.PictureRecorder recorder = ui.PictureRecorder();
-  FixturesCardPainter(competition, fixtures, crests: crests)
+  FixturesCardPainter(competition, fixtures, crests: crests, results: results)
       .paint(Canvas(recorder), Size(width.toDouble(), height.toDouble()));
   final ui.Picture picture = recorder.endRecording();
   return picture.toImage(width, height).whenComplete(picture.dispose);

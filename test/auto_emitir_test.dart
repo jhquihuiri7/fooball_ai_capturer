@@ -331,9 +331,15 @@ void main() {
           LinkMode.aware);
     });
 
-    testWidgets('sin los defines, la app abre la pantalla de lado de siempre', (WidgetTester tester) async {
+    testWidgets('sin los defines, la app abre el tipo de evento y el fútbol, la pantalla de lado', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(CaptureApp(api: FakeCaptureApi()));
       await tester.pump();
+      expect(find.byType(EventPage), findsOneWidget);
+      expect(find.byType(RolePage), findsNothing);
+      await tester.tap(find.text('FÚTBOL'));
+      await tester.pumpAndSettle();
       expect(find.byType(RolePage), findsOneWidget);
       expect(find.byType(CapturePage), findsNothing);
     });

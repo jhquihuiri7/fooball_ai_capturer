@@ -59,11 +59,20 @@ pantalla ilegible. La marca son dos anillos que se solapan un 30 %, dibujados co
 12 px en la barra inferior que a 22 px en la cabecera.
 
 ```
-RolePage  (elegir lado)  →  ZeroShell
-                              ├── Captura   el móvil del soporte
-                              └── Partido   marcador, cronómetro y posiciones
-          (solo mando)   →  MandoPage   Partido sobre el marcador del panel, sin cámara
+EventPage  (¿qué se transmite?)
+  ├── Fútbol       →  RolePage (elegir lado)  →  ZeroShell
+  │                                               ├── Captura   el móvil del soporte
+  │                                               └── Partido   marcador, cronómetro y posiciones
+  │                   (solo mando)            →  MandoPage   Partido sobre el marcador del panel
+  └── Espectáculo  →  RolePage (una cámara: calidad y VPS)  →  ZeroShell: solo Captura
+      Vóleibol
 ```
+
+**El tipo de evento** (ADR 0031 de football-ai) es lo primero que se elige. El fútbol es todo
+lo de abajo. El espectáculo (festivales, presentaciones) va con un solo móvil, «Una cámara (sin
+pareja)», y su gráfico es EN VIVO, la esquina de la casa, las franjas, los vídeos y los rótulos
+de noticiero, que se llevan desde el mando web. El vóleibol, por ahora, con una cámara y sin
+gráfico.
 
 **El mando** (ADR 0017 del repo `football-ai`) es un tercer móvil que no va en el
 soporte: escanea el QR «Mando» del panel, lo guarda en el Keychain y lleva el marcador

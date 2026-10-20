@@ -7,6 +7,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:football_ai_capture/src/event_kind.dart';
 import 'package:football_ai_capture/src/graphics/overlay_bridge.dart';
 import 'package:football_ai_capture/src/graphics/program_graphics.dart';
 import 'package:football_ai_capture/src/match_state.dart';
@@ -58,12 +59,17 @@ void main() {
       await g.refresh();
       expect(sink.calls, <String>['set 2', 'set 0'], reason: 'SIN SEÑAL una vez; sin cambios no se repite');
 
-      m.apply('match/goal', <String, Object?>{'team': 'home', 'delta': 1, 'expect': 0});
+      // El marcador a mano (un gol trae su animación, que se mira aparte).
+      m.apply('match/score', <String, Object?>{
+        'home': 1,
+        'away': 0,
+        'expect': <String, Object?>{'home': 0, 'away': 0},
+      });
       await g.refresh();
       m.apply('match/clock', <String, Object?>{'action': 'start'});
       reloj.ms = 400;
       await g.refresh();
-      expect(sink.calls.where((String c) => c == 'set 0').length, 2, reason: 'el gol sí; 0,4 s de reloj no');
+      expect(sink.calls.where((String c) => c == 'set 0').length, 2, reason: 'el marcador sí; 0,4 s de reloj no');
       reloj.ms = 1000;
       await g.refresh();
       expect(sink.calls.where((String c) => c == 'set 0').length, 3, reason: 'el segundo sí');
@@ -136,6 +142,108 @@ void main() {
       expect(g.scoreboardState().stripVisible, isTrue);
       reloj.ms += 16000;
       expect(g.scoreboardState().stripVisible, isFalse);
+      dir.deleteSync(recursive: true);
+    });
+  });
+
+  testWidgets('el gol sale solo, se pinta a fps mientras entra y sale, y se va (ADR 0032)', (WidgetTester t) async {
+    await t.runAsync(() async {
+      final Directory dir = Directory.systemTemp.createTempSync('ios112');
+      final _Reloj reloj = _Reloj();
+      final MatchEngine m = MatchEngine.open(
+        file: File('${dir.path}/match.json'), time: reloj, home: 'BELLAVISTA', away: 'PROGRESO', random: Random(4),
+      );
+      final _Sink sink = _Sink();
+      final ProgramGraphics g = ProgramGraphics(engine: m, bridge: OverlayBridge(sink));
+      await g.refresh();
+      expect(g.animating, isFalse);
+      int sets() => sink.calls.where((String c) => c == 'set 0').length;
+
+      m.apply('match/goal', <String, Object?>{'team': 'home', 'delta': 1, 'expect': 0});
+      expect(g.scoreboardState().goal, isNotNull);
+      expect(g.scoreboardState().goal!.home, isTrue);
+      expect(g.animating, isTrue, reason: 'entrando');
+      await g.refresh();
+      final int alEntrar = sets();
+      reloj.ms = 200;
+      await g.refresh();
+      expect(sets(), alEntrar + 1, reason: 'cada fotograma de la entrada es otro raster');
+      reloj.ms = 1000;
+      expect(g.animating, isFalse, reason: 'quieto');
+      await g.refresh();
+      final int quieto = sets();
+      reloj.ms = 2000;
+      await g.refresh();
+      expect(sets(), quieto, reason: 'quieto y sin reloj, no se vuelve a pintar');
+      expect(g.scoreboardState().goal!.reveal, 1);
+      reloj.ms = 4800;
+      expect(g.animating, isTrue, reason: 'saliendo');
+      await g.refresh();
+      reloj.ms = 5200;
+      expect(g.scoreboardState().goal, isNull);
+      expect(g.animating, isTrue, reason: 'hace falta un raster que lo quite');
+      await g.refresh();
+      expect(g.animating, isFalse);
+
+      // Un −1 del mismo equipo mientras está fuera lo quita: era un error.
+      m.apply('match/goal', <String, Object?>{'team': 'away', 'delta': 1, 'expect': 0});
+      expect(g.scoreboardState().goal!.home, isFalse);
+      m.apply('match/goal', <String, Object?>{'team': 'away', 'delta': -1, 'expect': 1});
+      expect(g.scoreboardState().goal, isNull);
+
+      // El marcador a demanda: fuera, la barra y el reloj; EN VIVO arriba.
+      m.apply('graphics/scoreboard', <String, Object?>{'on_air': false});
+      expect(g.scoreboardState().scoreboard, isFalse);
+      m.apply('graphics/scoreboard', <String, Object?>{'on_air': true});
+      expect(g.scoreboardState().scoreboard, isTrue);
+
+      // La tanda de franjas: la que está fuera cambia con el tiempo, sin hueco entre dos.
+      m.apply('graphics/strip_save', <String, Object?>{'name': 'B', 'title': 'SEGUNDA'});
+      m.apply('graphics/strip_all', <String, Object?>{'show_s': 10});
+      expect(g.scoreboardState().stripTitle, m.graphics.stripPresets.first.texts.title);
+      reloj.ms += 10000;
+      expect(g.scoreboardState().stripVisible, isTrue);
+      expect(g.scoreboardState().stripTitle, 'SEGUNDA');
+      reloj.ms += 10000;
+      expect(g.scoreboardState().stripVisible, isFalse, reason: 'al acabar la tanda, se oculta');
+      dir.deleteSync(recursive: true);
+    });
+  });
+
+  testWidgets('el espectáculo va sin marcador ni tarjetas, con su rótulo; el vóley, sin nada (ADR 0031)', (
+    WidgetTester t,
+  ) async {
+    await t.runAsync(() async {
+      final Directory dir = Directory.systemTemp.createTempSync('ios111');
+      final _Reloj reloj = _Reloj();
+      final MatchEngine m = MatchEngine.open(
+        file: File('${dir.path}/match.json'), time: reloj, random: Random(4), eventKind: EventKind.show,
+      );
+      final _Sink sink = _Sink();
+      final ProgramGraphics g = ProgramGraphics(engine: m, bridge: OverlayBridge(sink));
+      expect(g.scoreboardState().scoreboard, isFalse);
+      m.apply('match/goal', <String, Object?>{'team': 'home', 'delta': 1, 'expect': 0});
+      expect(g.scoreboardState().goal, isNull, reason: 'sin gol animado fuera del fútbol');
+      m.apply('graphics/caption_save', <String, Object?>{
+        'name': 'Ángeles',
+        'title': 'Presentación artística: Los Ángeles del Cielo',
+        'subtitle': 'Cantado por Jonathan Quiwi',
+      });
+      m.apply('graphics/caption', <String, Object?>{'name': 'ángeles', 'show_s': 10});
+      expect(g.scoreboardState().lowerThirdTitle, 'Presentación artística: Los Ángeles del Cielo');
+      expect(g.scoreboardState().lowerThirdSubtitle, 'Cantado por Jonathan Quiwi');
+      m.apply('graphics/halftime', <String, Object?>{'on_air': true});
+      await g.refresh();
+      expect(sink.calls, <String>['set 2', 'set 0'], reason: 'ni tarjeta ni desenfoque: el marcador con su rótulo');
+      reloj.ms = 11000;
+      expect(g.scoreboardState().lowerThirdTitle, isNull, reason: 'los 10 s pasaron');
+
+      final MatchEngine voley = MatchEngine.open(
+        file: File('${dir.path}/voley.json'), time: reloj, random: Random(5), eventKind: EventKind.volleyball,
+      );
+      final _Sink otro = _Sink();
+      await ProgramGraphics(engine: voley, bridge: OverlayBridge(otro)).refresh();
+      expect(otro.calls, <String>['set 2'], reason: 'solo SIN SEÑAL, que sale cuando no hay cámara');
       dir.deleteSync(recursive: true);
     });
   });
