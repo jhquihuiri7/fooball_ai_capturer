@@ -37,8 +37,9 @@ Al acabar, **Finalizar partido**: el marcador queda guardado. Al final de la noc
 **Resultados**. El gol sale solo en pantalla con cada «+ Gol»; si fue un error, «− 1» lo quita.
 Para una premiación, en Al aire, **Ocultar marcador y reloj**.
 
-**Anuncios de la franja**: la franja pasó de 108 a 132 px. Los paquetes de anuncios hechos
-antes no cargan: hay que volver a rendrizarlos con Remotion y subirlos al VPS.
+**Anuncios de la franja**: la franja pasó de 108 a 132 px y una app solo carga anuncios de su
+alto. Los de 132 ya están rendrizados (en football-ai, `remotion/out/franja-132/`); se publican en
+el VPS cuando el iPhone tenga la build nueva, no antes.
 
 ## La víspera, en casa
 
