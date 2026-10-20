@@ -63,9 +63,10 @@ y, a ratos, «se pinta en ≤50 ms».
    dorados de `test/graphics` (cambian con la franja de 132 px) y sacar la build de TestFlight.
 2. En el iPhone: un espectáculo con un rótulo, y una noche con dos partidos de la jornada, un
    gol, Finalizar y Resultados.
-3. Solo con esa build ya en el iPhone: desplegar el VPS y publicar los anuncios de 132 px, ya
-   rendrizados y validados en football-ai (`remotion/out/franja-132/`, 933b620). Antes no: la
-   1.0.0+8 solo carga anuncios de 108 y se quedaría sin franja de anuncios.
+3. Solo con esa build ya en el iPhone: publicar los anuncios de 132 px, ya rendrizados y
+   validados en football-ai (`remotion/out/franja-132/`, 933b620). Antes no: la 1.0.0+8 solo
+   carga anuncios de 108 y se quedaría sin franja de anuncios. El VPS ya está desplegado con
+   ese código (2026-10-19) y sigue sirviendo el paquete vigente.
 
 ## 2026-10-16 · BUG ABIERTO: el programa sale sin sonido a tramos y solo lo arregla matar Zero · 🐞 sin diagnosticar, no olvidar
 
