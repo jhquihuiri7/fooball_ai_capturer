@@ -22,9 +22,11 @@ PanelMatch panelMatch({
   bool streaming = false,
   bool canStream = true,
   List<String> scopes = const <String>['match'],
+  String? eventKind,
 }) {
   return PanelMatch.fromJson(<String, Object?>{
     'match_id': 'm_prueba',
+    'event_kind': ?eventKind,
     'boot': 'b1',
     'rev': rev,
     'home': <String, Object?>{

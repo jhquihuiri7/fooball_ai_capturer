@@ -907,6 +907,8 @@ void main() {
         'away': 'San Cristóbal',
         'time': '14:00',
         'subtitle': '',
+        'home_goals': null,
+        'away_goals': null,
         'home_crest': null,
         'away_crest': null,
       });
@@ -964,6 +966,63 @@ void main() {
       final (_, Map<String, Object?> otra) =
           await pedir('POST', 'graphics/halftime', bearer: token(), body: <String, Object?>{'on_air': true});
       expect((otra['interview_on_air'], otra['halftime_on_air']), (false, true), reason: 'una a la vez');
+    });
+  });
+
+  group('la noche de partidos y los rótulos (ADR 0031 y 0032)', () {
+    test('el QR Mando lleva el partido de la jornada, lo finaliza y saca los resultados', () async {
+      await pedir('POST', 'match/fixtures', bearer: token(), body: <String, Object?>{
+        'matches': <Map<String, Object?>>[
+          <String, Object?>{'home': 'Bellavista', 'away': 'Progreso', 'time': '16:00'},
+        ],
+      });
+      final (int empieza, Map<String, Object?> enJuego) =
+          await pedir('POST', 'match/fixture_start', bearer: token(), body: <String, Object?>{'index': 0});
+      expect(empieza, 200);
+      expect(enJuego['current_fixture'], 0);
+      expect((enJuego['home']! as Map<String, Object?>)['name'], 'Bellavista');
+      await pedir('POST', 'match/goal', bearer: token(), body: <String, Object?>{'team': 'home', 'delta': 1, 'expect': 0});
+      final (_, Map<String, Object?> conGol) = await pedir('GET', 'match', bearer: token());
+      expect((conGol['goal']! as Map<String, Object?>)['team'], 'home');
+      final (int fin, Map<String, Object?> terminado) =
+          await pedir('POST', 'match/finish', bearer: token(), body: <String, Object?>{});
+      expect(fin, 200);
+      expect(((terminado['fixtures']! as List<Object?>).first! as Map<String, Object?>)['home_goals'], 1);
+      expect((await pedir('POST', 'match/finish', bearer: token(), body: <String, Object?>{})).$1, 409);
+      final (_, Map<String, Object?> resultados) =
+          await pedir('POST', 'graphics/results', bearer: token(), body: <String, Object?>{'on_air': true});
+      expect(resultados['results_on_air'], isTrue);
+      final (_, Map<String, Object?> sinMarcador) =
+          await pedir('POST', 'graphics/scoreboard', bearer: token(), body: <String, Object?>{'on_air': false});
+      expect(sinMarcador['scoreboard_on_air'], isFalse);
+    });
+
+    test('las tandas y los rótulos se piden por la API', () async {
+      final (int todas, Map<String, Object?> tanda) =
+          await pedir('POST', 'graphics/strip_all', bearer: token(), body: <String, Object?>{'show_s': 15});
+      expect(todas, 200);
+      expect(tanda['strip_queue'], isEmpty, reason: 'solo hay una, la de partida');
+      expect((await pedir('POST', 'video/play_all', bearer: token(), body: <String, Object?>{})).$1, 409);
+      expect(
+        (await pedir('POST', 'graphics/caption_save', bearer: token(), body: <String, Object?>{
+          'name': 'Ángeles',
+          'title': 'Presentación artística',
+          'subtitle': 'Cantado por Jonathan Quiwi',
+        })).$1,
+        200,
+      );
+      final (_, Map<String, Object?> rotulo) = await pedir(
+        'POST',
+        'graphics/caption',
+        bearer: token(),
+        body: <String, Object?>{'name': 'Ángeles', 'hold': true},
+      );
+      expect((rotulo['caption'], rotulo['caption_remaining_ms']), ('Ángeles', captionHoldRemainingMs));
+      expect((await pedir('POST', 'graphics/caption_all', bearer: token(), body: <String, Object?>{})).$1, 200);
+      expect(
+        (await pedir('POST', 'graphics/caption_delete', bearer: token(), body: <String, Object?>{'name': 'Ángeles'})).$1,
+        200,
+      );
     });
   });
 

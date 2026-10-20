@@ -39,14 +39,14 @@ enum MetalBench {
 
         let compose = try ComposeProgramKernel(context: contexto)
         guard let grafico = UploadTexture(device: contexto.device, width: 1920, height: 1080),
-              let premul = UploadTexture(device: contexto.device, width: 1920, height: 108),
-              let inversa = UploadTexture(device: contexto.device, width: 1920, height: 108)
+              let premul = UploadTexture(device: contexto.device, width: 1920, height: OverlaySpec.stripHeight),
+              let inversa = UploadTexture(device: contexto.device, width: 1920, height: OverlaySpec.stripHeight)
         else {
             throw ReprojectKernelError.texture("no se pudieron crear las texturas del gráfico")
         }
         grafico.upload(rgba: [UInt8](repeating: 128, count: 1920 * 1080 * 4), generation: 0)
-        premul.upload(rgba: [UInt8](repeating: 40, count: 1920 * 108 * 4), generation: 0)
-        inversa.upload(rgba: [UInt8](repeating: 200, count: 1920 * 108 * 4), generation: 0)
+        premul.upload(rgba: [UInt8](repeating: 40, count: 1920 * OverlaySpec.stripHeight * 4), generation: 0)
+        inversa.upload(rgba: [UInt8](repeating: 200, count: 1920 * OverlaySpec.stripHeight * 4), generation: 0)
         let anuncio = ComposeProgramKernel.Strip(premul: premul.texture, inverse: inversa.texture)
 
         let banda = try BandGeometry.fromDictionary([

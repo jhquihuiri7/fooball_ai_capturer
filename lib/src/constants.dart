@@ -312,6 +312,16 @@ const int stripPresetNameMaxChars = 24;
 /// La franja guardada con la que se empieza, con los textos que hubiera.
 const String stripPresetDefaultName = 'PRINCIPAL';
 
+/// Rótulos guardados como mucho (ADR 0031): los mismos que franjas.
+const int captionPresetsMax = stripPresetsMax;
+
+/// Segundos que sale un rótulo con «Sacar» si la orden no dice otros: lo que dura un rótulo
+/// de noticiero. Hasta [stripShowMaxS], o fijo con `hold`.
+const int captionShowDefaultS = 10;
+
+/// Lo que se muestra como `caption_remaining_ms` de un rótulo fijo: no se va solo.
+const int captionHoldRemainingMs = -1;
+
 /// Los escudos de los equipos (ADR 0028): bajo `/api/v1/`, `assets/crest/home` y
 /// `assets/crest/away`; `PUT` sube el del equipo que juega de ese lado, `GET` lo da y
 /// `DELETE` lo quita.
@@ -380,6 +390,10 @@ const String matchDirectoryName = 'partido';
 
 /// Las alineaciones del partido, junto al fichero del partido (`--lineups` del panel).
 const String lineupsFileName = 'lineups.json';
+
+/// Las alineaciones de los equipos que no juegan ahora, por la clave de su nombre (ADR 0032):
+/// se apartan al empezar otro partido de la jornada y vuelven cuando el equipo juega.
+const String lineupsArchiveFileName = 'alineaciones-equipos.json';
 
 /// Ámbito del token que deja tocar el partido (`SCOPE_MATCH`).
 const String panelScopeMatch = 'match';

@@ -9,10 +9,13 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
 import 'package:football_ai_capture/src/constants.dart';
+import 'package:football_ai_capture/src/event_kind.dart';
+import 'package:football_ai_capture/src/generated/overlay_spec.g.dart';
 import 'package:football_ai_capture/src/match_state.dart';
 import 'package:football_ai_capture/src/server/graphics_store.dart';
 import 'package:football_ai_capture/src/server/lineups.dart';
@@ -138,6 +141,7 @@ class MatchEngine {
     (LineupBook, String?) lineups,
     int? Function()? freeBytes,
     bool Function()? localRecording,
+    this.eventKind,
   ) : lineups = lineups.$1,
       lineupsError = lineups.$2,
       graphics = GraphicsStore(_file.parent),
@@ -151,7 +155,8 @@ class MatchEngine {
   /// `matchId` es el partido que trae el enlace (IOS-80): si el guardado es otro, se
   /// aparta (`match-<id>.json`, con sus alineaciones) y se empieza este de cero.
   /// `freeBytes` dice lo libre del disco y `localRecording` si se quiere la 4K local: la
-  /// reserva de grabación que respetan los vídeos.
+  /// reserva de grabación que respetan los vídeos. `eventKind` es lo que se transmite (ADR
+  /// 0031): lo elige quien abre la cámara, no se guarda con el partido.
   factory MatchEngine.open({
     required File file,
     required MatchTimeSource time,
@@ -161,6 +166,7 @@ class MatchEngine {
     Random? random,
     int? Function()? freeBytes,
     bool Function()? localRecording,
+    EventKind eventKind = EventKind.football,
   }) {
     final Random azar = random ?? Random.secure();
     final MatchClock reloj = MatchClock(time);
@@ -178,6 +184,7 @@ class MatchEngine {
       _loadLineups(File('${file.parent.path}/$lineupsFileName')),
       freeBytes,
       localRecording,
+      eventKind,
     );
     if (guardado == null) {
       engine
@@ -205,6 +212,42 @@ class MatchEngine {
   final MatchClock clock;
   final String matchId;
 
+  /// Lo que transmite este maestro (ADR 0031): el fútbol con todo, el espectáculo con EN VIVO,
+  /// rótulos, franjas y vídeos, y el vóley sin gráfico por ahora.
+  final EventKind eventKind;
+
+  /// Si salen el marcador, la competición y el reloj (ADR 0032): el operador los quita, por
+  /// ejemplo, en una premiación. No se guarda: tras reiniciar vuelven.
+  bool scoreboardOnAir = true;
+
+  /// El gol que se celebra (ADR 0032): de quién y cuándo empezó, en el tiempo monótono.
+  ({MatchTeam team, int startedMs})? _celebration;
+
+  /// El gol animado al aire y lo que lleva, o null: sale solo con cada `+1` y dura
+  /// `OverlaySpec.goal['show_ms']`.
+  ({MatchTeam team, int elapsedMs})? get goal {
+    final ({MatchTeam team, int startedMs})? g = _celebration;
+    if (g == null) {
+      return null;
+    }
+    final int lleva = _time.nowMs() - g.startedMs;
+    return lleva >= 0 && lleva < OverlaySpec.goal['show_ms']! ? (team: g.team, elapsedMs: lleva) : null;
+  }
+
+  /// La tanda de franjas en marcha (`graphics/strip_all`), o null.
+  _Sequence? _stripSeq;
+
+  /// El rótulo que se sacó solo (su nombre y hasta cuándo; null, fijo) y la tanda de rótulos
+  /// (`graphics/caption_all`): uno u otra, nunca los dos (ADR 0031).
+  ({String name, int? untilMs})? _caption;
+  _Sequence? _captionSeq;
+
+  /// Los vídeos que faltan de la tanda (`video/play_all`), en orden (ADR 0032).
+  List<String> _videoQueue = const <String>[];
+
+  /// Lo último que vio [tick] de lo que cambia solo con el tiempo (al empezar, nada).
+  Object? _tickSeen = (null, null, null, null, null);
+
   /// Las dos alineaciones y cuál está al aire (IOS-61).
   final LineupBook lineups;
 
@@ -221,6 +264,7 @@ class MatchEngine {
   static const String cardNextMatch = 'next_match';
   static const String cardFixtures = 'fixtures';
   static const String cardInterview = 'interview';
+  static const String cardResults = 'results';
 
   /// La tarjeta de pantalla completa al aire: [cardHalftime], [cardFulltime] o
   /// [cardNextMatch], o null. Comparte capa con la alineación: sacar una quita la otra.
@@ -231,6 +275,7 @@ class MatchEngine {
   bool get nextMatchOnAir => fullScreenCard == cardNextMatch;
   bool get fixturesOnAir => fullScreenCard == cardFixtures;
   bool get interviewOnAir => fullScreenCard == cardInterview;
+  bool get resultsOnAir => fullScreenCard == cardResults;
 
   /// Hasta cuándo sale la franja, en el tiempo monótono de [MatchTimeSource]; null, oculta.
   int? stripUntilMs;
@@ -238,11 +283,76 @@ class MatchEngine {
   /// Si la franja está fuera ahora (ADR 0027: oculta salvo cuando el operador la saca).
   bool get stripVisible => stripRemainingMs > 0;
 
-  /// Lo que le queda fuera a la franja, en ms (0 si está oculta).
+  /// Lo que le queda fuera a la franja, en ms (0 si está oculta). En una tanda, lo que le
+  /// queda a la que está fuera (ADR 0032).
   int get stripRemainingMs {
+    final int ahora = _time.nowMs();
+    final _Sequence? tanda = _stripSeq;
+    if (tanda != null && tanda.currentAt(ahora) != null) {
+      return tanda.remainingAt(ahora);
+    }
     final int? hasta = stripUntilMs;
-    return hasta == null ? 0 : max(0, hasta - _time.nowMs());
+    return hasta == null ? 0 : max(0, hasta - ahora);
   }
+
+  /// La franja guardada que está puesta: la de la tanda si hay una en marcha, si no la que
+  /// eligió el operador (null si sus textos se editaron a mano).
+  String? get stripPresetName => _stripSeq?.currentAt(_time.nowMs()) ?? graphics.stripPreset;
+
+  /// Lo que dice la franja puesta.
+  StripTexts get stripTexts {
+    final String? enTanda = _stripSeq?.currentAt(_time.nowMs());
+    if (enTanda != null) {
+      for (final StripPreset p in graphics.stripPresets) {
+        if (p.name.toUpperCase() == enTanda.toUpperCase()) {
+          return p.texts;
+        }
+      }
+    }
+    return graphics.strip;
+  }
+
+  /// La imagen de la franja puesta, o null.
+  StripImage? get stripImage {
+    final String? nombre = stripPresetName;
+    return nombre == null ? null : graphics.stripImageFor(nombre);
+  }
+
+  /// Las franjas que faltan de la tanda, en orden.
+  List<String> get stripQueue => _stripSeq?.queueAt(_time.nowMs()) ?? const <String>[];
+
+  /// El rótulo al aire (ADR 0031): el de la tanda, o el que se sacó solo mientras dure.
+  CaptionPreset? get captionOnAir {
+    final int ahora = _time.nowMs();
+    final String? nombre = _captionSeq?.currentAt(ahora) ??
+        switch (_caption) {
+          null => null,
+          (name: final String n, untilMs: final int? hasta) when hasta == null || hasta > ahora => n,
+          _ => null,
+        };
+    return nombre == null ? null : graphics.caption(nombre);
+  }
+
+  /// Lo que le queda al rótulo al aire, en ms: 0 sin rótulo y [captionHoldRemainingMs] si
+  /// está fijo.
+  int get captionRemainingMs {
+    final int ahora = _time.nowMs();
+    final _Sequence? tanda = _captionSeq;
+    if (tanda != null && tanda.currentAt(ahora) != null) {
+      return tanda.remainingAt(ahora);
+    }
+    if (captionOnAir == null) {
+      return 0;
+    }
+    final int? hasta = _caption?.untilMs;
+    return hasta == null ? captionHoldRemainingMs : max(0, hasta - ahora);
+  }
+
+  /// Los rótulos que faltan de la tanda, en orden.
+  List<String> get captionQueue => _captionSeq?.queueAt(_time.nowMs()) ?? const <String>[];
+
+  /// Los vídeos que faltan de la tanda.
+  List<String> get videoQueue => List<String>.unmodifiable(_videoQueue);
 
   /// Los vídeos que se suben desde el mando (ADR 0027): como el icono, sobreviven al partido.
   final VideoStore videos;
@@ -268,13 +378,39 @@ class MatchEngine {
     return v == null ? 0 : max(0, min(v.durationMs, v.startedMs + v.durationMs - _time.nowMs()));
   }
 
-  /// El programa avisa de que el vídeo `id` acabó (o no pudo empezar): vuelve el programa.
+  /// El programa avisa de que el vídeo `id` acabó (o no pudo empezar): suena el siguiente de
+  /// la tanda, si la hay, o vuelve el programa.
   void videoFinished(int id) {
     if (_video?.id != id) {
       return;
     }
     _video = null;
+    _playNextQueued();
     _changed();
+  }
+
+  /// Pasa `info` desde ya, con una `id` nueva.
+  void _playVideo(VideoInfo info) {
+    _videoIds += 1;
+    _video = VideoPlay(
+      id: _videoIds,
+      name: info.name,
+      startedMs: _time.nowMs() + videoStartLeadMs,
+      durationMs: info.durationMs,
+    );
+  }
+
+  /// El siguiente vídeo de la tanda que siga existiendo (uno borrado se salta).
+  void _playNextQueued() {
+    while (_videoQueue.isNotEmpty) {
+      final String nombre = _videoQueue.first;
+      _videoQueue = _videoQueue.sublist(1);
+      final VideoInfo? info = videos.find(nombre);
+      if (info != null) {
+        _playVideo(info);
+        return;
+      }
+    }
   }
 
   /// Identificador de este arranque: cambia en cada uno.
@@ -331,14 +467,59 @@ class MatchEngine {
             'graphics/fulltime' ||
             'graphics/next_match' ||
             'graphics/fixtures' ||
-            'graphics/interview':
+            'graphics/interview' ||
+            'graphics/results':
           _fullScreenCard(name.substring('graphics/'.length), body);
+        case 'graphics/scoreboard':
+          scoreboardOnAir = _onAir(body);
         case 'match/fixtures':
           try {
             graphics.setFixtures(Fixture.listFromJson(body));
           } on GraphicsError catch (error) {
             throw OrderError(error.status, error.message);
           }
+        case 'match/fixture_start':
+          _startFixture(body);
+        case 'match/finish':
+          _finishFixture();
+        case 'graphics/strip_all':
+          final int cada = _showSeconds(body, stripShowDefaultS);
+          final List<String> nombres = <String>[for (final StripPreset p in graphics.stripPresets) p.name];
+          if (nombres.isEmpty) {
+            throw OrderError(409, 'no hay franjas guardadas que pasar');
+          }
+          stripUntilMs = null;
+          _stripSeq = _Sequence(nombres, _time.nowMs(), cada * Duration.millisecondsPerSecond);
+        case 'graphics/caption_save':
+          final Object? anterior = body['previous_name'];
+          final String? viejo = anterior is String ? anterior : null;
+          try {
+            final CaptionPreset rotulo = CaptionPreset.fromJson(body);
+            final String? antes = viejo == null ? null : graphics.caption(viejo)?.name;
+            graphics.saveCaption(rotulo, previousName: viejo);
+            if (antes != null && antes != rotulo.name) {
+              _renameCaption(antes, rotulo.name);
+            }
+          } on GraphicsError catch (error) {
+            throw OrderError(error.status, error.message);
+          }
+        case 'graphics/caption_delete':
+          final Object? nombre = body['name'];
+          final String? borrado = nombre is String ? graphics.caption(nombre)?.name : null;
+          if (borrado == null || !graphics.deleteCaption(borrado)) {
+            throw OrderError(404, 'no hay ningún rótulo que se llame $nombre');
+          }
+          _dropCaption(borrado);
+        case 'graphics/caption':
+          _showCaption(body);
+        case 'graphics/caption_all':
+          final int cada = _showSeconds(body, captionShowDefaultS);
+          final List<String> nombres = <String>[for (final CaptionPreset c in graphics.captions) c.name];
+          if (nombres.isEmpty) {
+            throw OrderError(409, 'no hay rótulos guardados que pasar');
+          }
+          _caption = null;
+          _captionSeq = _Sequence(nombres, _time.nowMs(), cada * Duration.millisecondsPerSecond);
         case 'match/interview':
           try {
             graphics.setInterview(Interview.fromJson(body));
@@ -354,7 +535,11 @@ class MatchEngine {
         case 'graphics/strip_save':
           final Object? anterior = body['previous_name'];
           try {
-            graphics.savePreset(StripPreset.fromJson(body), previousName: anterior is String ? anterior : null);
+            final StripPreset franja = StripPreset.fromJson(body);
+            graphics.savePreset(franja, previousName: anterior is String ? anterior : null);
+            if (anterior is String) {
+              _stripSeq = _stripSeq?.renamed(anterior, franja.name);
+            }
           } on GraphicsError catch (error) {
             throw OrderError(error.status, error.message);
           }
@@ -363,6 +548,7 @@ class MatchEngine {
           if (nombre is! String || !graphics.deletePreset(nombre)) {
             throw OrderError(404, 'no hay ninguna franja que se llame $nombre');
           }
+          _stripSeq = _stripSeq?.without(nombre, _time.nowMs());
         case 'graphics/strip':
           final Object segundos = body['show_s'] ?? stripShowDefaultS;
           if (segundos is! int || segundos < 0 || segundos > stripShowMaxS) {
@@ -373,6 +559,8 @@ class MatchEngine {
           if (franja != null && (franja is! String || !graphics.selectPreset(franja))) {
             throw OrderError(404, 'no hay ninguna franja que se llame $franja');
           }
+          // Sacar u ocultar una franja corta la tanda (ADR 0032).
+          _stripSeq = null;
           stripUntilMs = segundos == 0 ? null : _time.nowMs() + segundos * Duration.millisecondsPerSecond;
         case 'graphics/strip_texts':
           try {
@@ -386,15 +574,19 @@ class MatchEngine {
           if (info == null) {
             throw OrderError(404, 'no hay ningún vídeo que se llame $nombre');
           }
-          _videoIds += 1;
-          _video = VideoPlay(
-            id: _videoIds,
-            name: info.name,
-            startedMs: _time.nowMs() + videoStartLeadMs,
-            durationMs: info.durationMs,
-          );
+          _videoQueue = const <String>[];
+          _playVideo(info);
+        case 'video/play_all':
+          // Todos, en el orden de la lista, uno detrás de otro (ADR 0032).
+          final List<VideoInfo> todos = videos.list();
+          if (todos.isEmpty) {
+            throw OrderError(409, 'no hay vídeos que pasar');
+          }
+          _videoQueue = <String>[for (final VideoInfo v in todos.skip(1)) v.name];
+          _playVideo(todos.first);
         case 'video/stop':
           _video = null;
+          _videoQueue = const <String>[];
         case 'clips/mark':
           final void Function()? marca = onClipMark;
           if (marca == null) {
@@ -455,9 +647,197 @@ class MatchEngine {
       awayGoals = nuevo;
     }
     if (delta == 1) {
+      // El gol animado sale solo (ADR 0032), en el fútbol.
+      if (eventKind.isFootball) {
+        _celebration = (team: equipo, startedMs: _time.nowMs());
+      }
       onGoal?.call(equipo);
+    } else if (goal?.team == equipo) {
+      // Quitar el gol que se está celebrando quita la animación: era un error.
+      _celebration = null;
     }
   }
+
+  /// `on_air` de una orden, true o false.
+  bool _onAir(Map<String, Object?> body) {
+    final Object? alAire = body['on_air'];
+    if (alAire is! bool) {
+      throw OrderError(400, 'on_air tiene que ser true o false');
+    }
+    return alAire;
+  }
+
+  /// Los `show_s` de una orden de tanda o de rótulo: de 1 a [stripShowMaxS], o `porDefecto`.
+  int _showSeconds(Map<String, Object?> body, int porDefecto) {
+    final Object segundos = body['show_s'] ?? porDefecto;
+    if (segundos is! int || segundos < 1 || segundos > stripShowMaxS) {
+      throw OrderError(400, 'show_s tiene que ser un entero de 1 a $stripShowMaxS');
+    }
+    return segundos;
+  }
+
+  /// `match/fixture_start` (ADR 0032): el partido `index` de la jornada pasa al marcador con
+  /// sus nombres (y sus escudos, que van por nombre), sus goles si ya se jugó, el reloj a cero
+  /// y parado, y sin tarjetas. Las alineaciones van por equipo.
+  void _startFixture(Map<String, Object?> body) {
+    final Object? indice = body['index'];
+    if (indice is! int || indice < 0) {
+      throw OrderError(400, 'index tiene que ser un entero no negativo');
+    }
+    if (indice >= graphics.fixtures.length) {
+      throw OrderError(404, 'la jornada no tiene el partido ${indice + 1}');
+    }
+    final Fixture partido = graphics.fixtures[indice];
+    _swapLineups(partido.home, partido.away);
+    home = partido.home;
+    away = partido.away;
+    homeGoals = partido.homeGoals ?? 0;
+    awayGoals = partido.awayGoals ?? 0;
+    clock
+      ..pause()
+      ..reset();
+    fullScreenCard = null;
+    lineups.setOnAir(null);
+    _celebration = null;
+    scoreboardOnAir = true;
+    graphics.setCurrentFixture(indice);
+  }
+
+  /// `match/finish` (ADR 0032): el marcador queda guardado en el partido de la jornada que se
+  /// jugaba, que se da por terminado, y el reloj se para.
+  void _finishFixture() {
+    final int? indice = graphics.currentFixture;
+    if (indice == null) {
+      throw OrderError(409, 'no se juega ningún partido de la jornada: empieza uno antes');
+    }
+    graphics
+      ..setFixtureResult(indice, homeGoals, awayGoals)
+      ..setCurrentFixture(null);
+    clock.pause();
+  }
+
+  /// Las alineaciones por equipo (ADR 0032): la del que deja de jugar se aparta por la clave
+  /// de su nombre y la del que entra vuelve, si se guardó alguna vez.
+  void _swapLineups(String nuevoLocal, String nuevoVisitante) {
+    final File archivo = File('${_file.parent.path}/$lineupsArchiveFileName');
+    Map<String, Object?> guardadas = <String, Object?>{};
+    try {
+      final Object? leido = archivo.existsSync() ? jsonDecode(archivo.readAsStringSync()) : null;
+      if (leido is Map<String, Object?>) {
+        guardadas = leido;
+      }
+    } on FormatException {
+      // Un archivo roto se sustituye: las de los que juegan ahora siguen en lineups.json.
+    }
+    for (final Team t in lineups.teams.values) {
+      guardadas[GraphicsStore.crestKey(t.name)] = t.toJson();
+    }
+    try {
+      for (final (MatchTeam lado, String nombre) in <(MatchTeam, String)>[
+        (MatchTeam.home, nuevoLocal),
+        (MatchTeam.away, nuevoVisitante),
+      ]) {
+        final Team? actual = lineups.teams[lado];
+        if (actual != null && GraphicsStore.crestKey(actual.name) == GraphicsStore.crestKey(nombre)) {
+          continue;
+        }
+        final Object? suya = guardadas[GraphicsStore.crestKey(nombre)];
+        Team? vuelve;
+        try {
+          vuelve = suya == null ? null : Team.fromJson(suya);
+        } on LineupError {
+          vuelve = null;
+        }
+        if (vuelve == null) {
+          lineups.remove(lado);
+        } else {
+          lineups.set(lado, vuelve);
+        }
+      }
+      archivo.parent.createSync(recursive: true);
+      archivo.writeAsStringSync(const JsonEncoder.withIndent('  ').convert(guardadas));
+    } on LineupError catch (error) {
+      throw OrderError(500, error.message);
+    } on FileSystemException catch (error) {
+      throw OrderError(500, 'no se pudieron apartar las alineaciones: ${error.message}');
+    }
+  }
+
+  /// `graphics/caption` (ADR 0031): saca un rótulo guardado `show_s` segundos, o fijo con
+  /// `hold`; con `show_s` 0, lo quita. Corta la tanda.
+  void _showCaption(Map<String, Object?> body) {
+    if (body['show_s'] == 0) {
+      _caption = null;
+      _captionSeq = null;
+      return;
+    }
+    final Object? nombre = body['name'];
+    final CaptionPreset? rotulo = nombre is String ? graphics.caption(nombre) : null;
+    if (rotulo == null) {
+      throw OrderError(404, 'no hay ningún rótulo que se llame $nombre');
+    }
+    final bool fijo = body['hold'] == true;
+    final int? hasta =
+        fijo ? null : _time.nowMs() + _showSeconds(body, captionShowDefaultS) * Duration.millisecondsPerSecond;
+    _captionSeq = null;
+    _caption = (name: rotulo.name, untilMs: hasta);
+  }
+
+  /// Un rótulo renombrado sigue al aire (o en su tanda) con su nombre nuevo.
+  void _renameCaption(String antes, String despues) {
+    final ({String name, int? untilMs})? puesto = _caption;
+    if (puesto != null && puesto.name.toUpperCase() == antes.toUpperCase()) {
+      _caption = (name: despues, untilMs: puesto.untilMs);
+    }
+    _captionSeq = _captionSeq?.renamed(antes, despues);
+  }
+
+  /// Un rótulo borrado sale del aire y de su tanda.
+  void _dropCaption(String nombre) {
+    if (_caption?.name.toUpperCase() == nombre.toUpperCase()) {
+      _caption = null;
+    }
+    _captionSeq = _captionSeq?.without(nombre, _time.nowMs());
+  }
+
+  /// Lo que cambia solo con el tiempo (ADR 0031 y 0032): el paso de una franja o un rótulo de
+  /// su tanda al siguiente, el final de una tanda, de un rótulo o del gol, y el vídeo que acabó
+  /// sin aviso del programa. Si algo de eso cambió, sube `rev` para que los mandos lo vean.
+  /// Lo llama el maestro una vez por segundo; devuelve si hubo cambio.
+  bool tick() {
+    final int ahora = _time.nowMs();
+    if (_video != null && video == null) {
+      _video = null;
+      _playNextQueued();
+    }
+    if (_stripSeq?.endedAt(ahora) ?? false) {
+      _stripSeq = null;
+    }
+    if (_captionSeq?.endedAt(ahora) ?? false) {
+      _captionSeq = null;
+    }
+    final int? hastaRotulo = _caption?.untilMs;
+    if (hastaRotulo != null && hastaRotulo <= ahora) {
+      _caption = null;
+    }
+    if (_celebration != null && goal == null) {
+      _celebration = null;
+    }
+    if (_timedState(ahora) == _tickSeen) {
+      return false;
+    }
+    _changed();
+    return true;
+  }
+
+  /// Lo que [tick] compara: lo que cambia solo con el tiempo, sin contar lo que le queda.
+  Object _timedState(int ahora) => (
+    _stripSeq?.indexAt(ahora),
+    _captionSeq?.indexAt(ahora),
+    _caption?.name,
+    _celebration?.startedMs,
+    _video?.id,
+  );
 
   void _score(Map<String, Object?> body) {
     final Object? visto = body['expect'];
@@ -551,7 +931,7 @@ class MatchEngine {
     if (tarjeta == cardNextMatch && graphics.nextMatch == null) {
       throw OrderError(409, 'no hay próximo partido: guárdalo antes con match/next');
     }
-    if (tarjeta == cardFixtures && graphics.fixtures.isEmpty) {
+    if ((tarjeta == cardFixtures || tarjeta == cardResults) && graphics.fixtures.isEmpty) {
       throw OrderError(409, 'no hay jornada: guarda sus partidos antes con match/fixtures');
     }
     fullScreenCard = tarjeta;
@@ -663,6 +1043,7 @@ class MatchEngine {
 
   void _changed() {
     rev += 1;
+    _tickSeen = _timedState(_time.nowMs());
     _save();
     _changes.add(null);
   }
@@ -730,6 +1111,7 @@ class MatchEngine {
       'match_id': matchId,
       'boot': boot,
       'rev': rev,
+      'event_kind': eventKind.wire,
       'home': equipo(MatchTeam.home, home, homeGoals),
       'away': equipo(MatchTeam.away, away, awayGoals),
       'clock_ms': clock.elapsedMs,
@@ -751,7 +1133,8 @@ class MatchEngine {
         for (final StripPreset p in graphics.stripPresets)
           <String, Object?>{...p.toJson(), 'image': graphics.stripImageFor(p.name)?.rev},
       ],
-      'strip_preset': graphics.stripPreset,
+      'strip_preset': stripPresetName,
+      'strip_queue': stripQueue,
       'fixtures_on_air': fixturesOnAir,
       'fixtures': <Map<String, Object?>>[
         for (final Fixture f in graphics.fixtures)
@@ -761,11 +1144,26 @@ class MatchEngine {
             'away_crest': graphics.crestFor(f.away)?.rev,
           },
       ],
+      'current_fixture': graphics.currentFixture,
+      'results_on_air': resultsOnAir,
       'interview_on_air': interviewOnAir,
       'interview': graphics.interview.toJson(),
+      'scoreboard_on_air': scoreboardOnAir,
+      'goal': switch (goal) {
+        null => null,
+        (team: final MatchTeam t, elapsedMs: final int lleva) => <String, Object?>{
+          'team': t.name,
+          'remaining_ms': OverlaySpec.goal['show_ms']! - lleva,
+        },
+      },
+      'captions': <Map<String, Object?>>[for (final CaptionPreset c in graphics.captions) c.toJson()],
+      'caption': captionOnAir?.name,
+      'caption_remaining_ms': captionRemainingMs,
+      'caption_queue': captionQueue,
+      'video_queue': videoQueue,
       'strip_remaining_ms': stripRemainingMs,
-      'strip_texts': graphics.strip.toJson(),
-      'strip_image': graphics.activeStripImage?.rev,
+      'strip_texts': stripTexts.toJson(),
+      'strip_image': stripImage?.rev,
       'championship_icon': graphics.hasIcon ? graphics.iconRev : null,
       'video': switch (video) {
         null => null,
@@ -778,6 +1176,59 @@ class MatchEngine {
       'scopes': scopes.toList()..sort(),
     };
   }
+}
+
+/// Una tanda (ADR 0031 y 0032): los nombres, en orden, que salen uno tras otro `eachMs` cada
+/// uno desde `startMs`. Lo que está fuera en cada instante sale del tiempo, no de un temporizador:
+/// el programa no se queda un fotograma sin franja entre una y la siguiente.
+class _Sequence {
+  _Sequence(List<String> names, this.startMs, this.eachMs) : names = List<String>.unmodifiable(names);
+
+  final List<String> names;
+  final int startMs;
+  final int eachMs;
+
+  /// El índice del que está fuera en `ahora` (puede pasar del último: la tanda acabó).
+  int indexAt(int ahora) => max(0, ahora - startMs) ~/ eachMs;
+
+  bool endedAt(int ahora) => indexAt(ahora) >= names.length;
+
+  /// El nombre del que está fuera, o null si la tanda acabó.
+  String? currentAt(int ahora) => endedAt(ahora) ? null : names[indexAt(ahora)];
+
+  /// Lo que le queda fuera al de ahora, en ms.
+  int remainingAt(int ahora) => startMs + (indexAt(ahora) + 1) * eachMs - ahora;
+
+  /// Los que faltan después del de ahora.
+  List<String> queueAt(int ahora) =>
+      endedAt(ahora) ? const <String>[] : List<String>.unmodifiable(names.sublist(indexAt(ahora) + 1));
+
+  /// La tanda sin `nombre` (borrado): si era el de ahora, el siguiente sale ya; si no, todo
+  /// sigue igual. Null si no queda ninguno.
+  _Sequence? without(String nombre, int ahora) {
+    if (endedAt(ahora)) {
+      return null;
+    }
+    final int i = indexAt(ahora);
+    final bool esAhora = names[i].toUpperCase() == nombre.toUpperCase();
+    final List<String> quedan = <String>[
+      for (final String n in names.sublist(esAhora ? i + 1 : i))
+        if (n.toUpperCase() != nombre.toUpperCase()) n,
+    ];
+    if (quedan.isEmpty) {
+      return null;
+    }
+    // El de ahora conserva lo que llevaba; si se borró, el siguiente empieza en este instante.
+    final int inicio = esAhora ? ahora : startMs + i * eachMs;
+    return _Sequence(quedan, inicio, eachMs);
+  }
+
+  /// La tanda con `antes` renombrado a `despues`.
+  _Sequence renamed(String antes, String despues) => _Sequence(
+    <String>[for (final String n in names) n.toUpperCase() == antes.toUpperCase() ? despues : n],
+    startMs,
+    eachMs,
+  );
 }
 
 /// Un vídeo que suena en el programa (ADR 0027): la `id` de su `video/play`, su nombre,

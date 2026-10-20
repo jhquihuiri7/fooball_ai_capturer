@@ -205,6 +205,21 @@ void main() {
       },
     );
 
+    testWidgets('si el maestro emite un espectáculo, remite al mando web (ADR 0031)', (
+      WidgetTester tester,
+    ) async {
+      final FakePanelControl control = await abrir(tester);
+      control.publish(panelMatch(eventKind: 'show'));
+      await tester.pump();
+
+      expect(find.textContaining('lleva espectáculo, no fútbol'), findsOneWidget);
+      expect(find.textContaining('mando web'), findsOneWidget);
+      control.publish(panelMatch(eventKind: 'football'));
+      await tester.pump();
+      expect(find.textContaining('no fútbol'), findsNothing);
+      await cerrar(tester);
+    });
+
     testWidgets('lo que no entró se dice debajo de la cabecera', (
       WidgetTester tester,
     ) async {

@@ -1,6 +1,7 @@
 /// Lo que el operador cambia del gráfico desde el mando y es del campeonato, no de un
-/// partido (ADR 0027): los textos de la franja y el icono del campeonato; y los escudos de
-/// los equipos, por su nombre (ADR 0028).
+/// partido (ADR 0027): los textos de la franja y el icono del campeonato; los escudos de los
+/// equipos, por su nombre (ADR 0028); la jornada con sus resultados y el partido que se juega
+/// (ADR 0030 y 0032), y los rótulos del espectáculo (ADR 0031).
 ///
 /// Vive en la carpeta del partido, en `grafico.json`, `campeonato.img` y `escudos/`, pero no
 /// se aparta con el partido viejo: el partido siguiente del mismo campeonato los conserva.
@@ -103,21 +104,37 @@ class NextMatch {
   Map<String, Object?> toJson() => <String, Object?>{'home': home, 'away': away, 'when': when, 'venue': venue};
 }
 
-/// Un partido de la jornada (ADR 0030): los equipos, la hora y la fase, en texto libre.
+/// Un partido de la jornada (ADR 0030): los equipos, la hora y la fase, en texto libre; y su
+/// marcador cuando se juega (ADR 0032), null hasta entonces.
 @immutable
 class Fixture {
-  const Fixture({required this.home, required this.away, required this.time, this.subtitle = ''});
+  const Fixture({
+    required this.home,
+    required this.away,
+    required this.time,
+    this.subtitle = '',
+    this.homeGoals,
+    this.awayGoals,
+  });
 
-  /// Lee `{home, away, time, subtitle}`; [GraphicsError] si no vale.
+  /// Lee `{home, away, time, subtitle, home_goals, away_goals}`; [GraphicsError] si no vale.
+  /// Los goles son los dos enteros no negativos o los dos null.
   factory Fixture.fromJson(Object? json) {
     if (json is! Map<String, Object?>) {
       throw GraphicsError('cada partido es {home, away, time, subtitle}');
+    }
+    final Object? local = json['home_goals'], visita = json['away_goals'];
+    final bool jugado = local != null || visita != null;
+    if (jugado && (local is! int || visita is! int || local < 0 || visita < 0)) {
+      throw GraphicsError('home_goals y away_goals: los dos enteros no negativos, o ninguno');
     }
     return Fixture(
       home: _texto(json['home'], 'home', matchTeamNameMaxChars),
       away: _texto(json['away'], 'away', matchTeamNameMaxChars),
       time: _texto(json['time'], 'time', OverlaySpec.fixtures['time_max_chars']!),
       subtitle: _texto(json['subtitle'] ?? '', 'subtitle', OverlaySpec.fixtures['subtitle_max_chars']!, vacio: true),
+      homeGoals: jugado ? local! as int : null,
+      awayGoals: jugado ? visita! as int : null,
     );
   }
 
@@ -135,15 +152,80 @@ class Fixture {
   final String away;
   final String time;
   final String subtitle;
+  final int? homeGoals;
+  final int? awayGoals;
 
-  Map<String, Object?> toJson() => <String, Object?>{'home': home, 'away': away, 'time': time, 'subtitle': subtitle};
+  /// Ya se jugó y tiene su marcador guardado.
+  bool get played => homeGoals != null && awayGoals != null;
+
+  /// Los mismos dos equipos (por la clave de sus nombres, como los escudos).
+  bool sameTeams(String otroLocal, String otroVisitante) =>
+      GraphicsStore.crestKey(home) == GraphicsStore.crestKey(otroLocal) &&
+      GraphicsStore.crestKey(away) == GraphicsStore.crestKey(otroVisitante);
+
+  /// Este partido con su marcador (null y null lo borra).
+  Fixture withResult(int? local, int? visitante) => Fixture(
+    home: home,
+    away: away,
+    time: time,
+    subtitle: subtitle,
+    homeGoals: local,
+    awayGoals: visitante,
+  );
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'home': home,
+    'away': away,
+    'time': time,
+    'subtitle': subtitle,
+    'home_goals': homeGoals,
+    'away_goals': awayGoals,
+  };
 
   @override
   bool operator ==(Object other) =>
-      other is Fixture && other.home == home && other.away == away && other.time == time && other.subtitle == subtitle;
+      other is Fixture &&
+      other.home == home &&
+      other.away == away &&
+      other.time == time &&
+      other.subtitle == subtitle &&
+      other.homeGoals == homeGoals &&
+      other.awayGoals == awayGoals;
 
   @override
-  int get hashCode => Object.hash(home, away, time, subtitle);
+  int get hashCode => Object.hash(home, away, time, subtitle, homeGoals, awayGoals);
+}
+
+/// Un rótulo guardado del espectáculo (ADR 0031): su nombre, su título y su subtítulo.
+@immutable
+class CaptionPreset {
+  const CaptionPreset({required this.name, required this.title, this.subtitle = ''});
+
+  /// Lee `{name, title, subtitle}`; [GraphicsError] si no vale.
+  factory CaptionPreset.fromJson(Object? json) {
+    if (json is! Map<String, Object?>) {
+      throw GraphicsError('se espera {name, title, subtitle}');
+    }
+    final Map<String, int> lt = OverlaySpec.lowerThird;
+    return CaptionPreset(
+      name: _texto(json['name'], 'name', stripPresetNameMaxChars),
+      title: _texto(json['title'], 'title', lt['title_max_chars']!),
+      subtitle: _texto(json['subtitle'] ?? '', 'subtitle', lt['subtitle_max_chars']!, vacio: true),
+    );
+  }
+
+  final String name;
+  final String title;
+  final String subtitle;
+
+  Map<String, Object?> toJson() => <String, Object?>{'name': name, 'title': title, 'subtitle': subtitle};
+
+  @override
+  bool operator ==(Object other) =>
+      other is CaptionPreset && other.name == name && other.title == title && other.subtitle == subtitle;
+
+  @override
+  int get hashCode => Object.hash(name, title, subtitle);
 }
 
 /// Quién habla en la sección de entrevistas y su cargo (ADR 0030); los dos pueden ir vacíos.
@@ -232,6 +314,15 @@ class GraphicsStore {
       if (jornada is List<Object?> && jornada.isNotEmpty) {
         fixtures = _parte(() => Fixture.listFromJson(<String, Object?>{'matches': jornada})) ?? fixtures;
       }
+      final Object? enJuego = json['current_fixture'];
+      currentFixture = enJuego is int && enJuego >= 0 && enJuego < fixtures.length ? enJuego : null;
+      final Object? rotulos = json['captions'];
+      if (rotulos is List<Object?>) {
+        captions = <CaptionPreset>[
+          for (final Object? r in rotulos)
+            if (_parte(() => CaptionPreset.fromJson(r)) case final CaptionPreset c) c,
+        ];
+      }
       interview = _parte(() => Interview.fromJson(json['interview'])) ?? interview;
       nextMatch = _parte(() => NextMatch.fromJson(json['next_match']));
       final Object? franjas = json['strip_presets'];
@@ -277,9 +368,80 @@ class GraphicsStore {
   /// Quién habla en la sección de entrevistas (ADR 0030).
   Interview interview = const Interview();
 
+  /// El partido de la jornada que se juega ahora, por su índice (ADR 0032), o null.
+  int? currentFixture;
+
+  /// Sustituye la jornada. Un partido que sigue (los mismos dos equipos) conserva su marcador
+  /// si el nuevo no trae otro, y el que se jugaba sigue siéndolo donde quede (ADR 0032).
   void setFixtures(List<Fixture> partidos) {
-    fixtures = List<Fixture>.unmodifiable(partidos);
+    final Fixture? jugando = currentFixture == null ? null : fixtures[currentFixture!];
+    final List<Fixture> nuevos = <Fixture>[
+      for (final Fixture f in partidos)
+        if (f.played)
+          f
+        else
+          switch (fixtures.where((Fixture v) => v.played && v.sameTeams(f.home, f.away)).firstOrNull) {
+            null => f,
+            final Fixture viejo => f.withResult(viejo.homeGoals, viejo.awayGoals),
+          },
+    ];
+    fixtures = List<Fixture>.unmodifiable(nuevos);
+    final int i = jugando == null ? -1 : nuevos.indexWhere((Fixture f) => f.sameTeams(jugando.home, jugando.away));
+    currentFixture = i < 0 ? null : i;
     _save();
+  }
+
+  /// Marca el partido `index` como el que se juega (o ninguno con null).
+  void setCurrentFixture(int? index) {
+    currentFixture = index;
+    _save();
+  }
+
+  /// Guarda el marcador del partido `index` de la jornada.
+  void setFixtureResult(int index, int local, int visitante) {
+    fixtures = List<Fixture>.unmodifiable(<Fixture>[
+      for (int i = 0; i < fixtures.length; i++) i == index ? fixtures[i].withResult(local, visitante) : fixtures[i],
+    ]);
+    _save();
+  }
+
+  /// Los rótulos guardados del espectáculo (ADR 0031), en el orden del mando.
+  List<CaptionPreset> captions = const <CaptionPreset>[];
+
+  /// El rótulo guardado que se llama `name` (sin mirar mayúsculas), o null.
+  CaptionPreset? caption(String name) {
+    final String clave = name.trim().toUpperCase();
+    return captions.where((CaptionPreset c) => c.name.toUpperCase() == clave).firstOrNull;
+  }
+
+  /// Guarda un rótulo: sustituye al del mismo nombre o a `previousName` (renombrarlo), o lo
+  /// añade al final.
+  void saveCaption(CaptionPreset rotulo, {String? previousName}) {
+    final CaptionPreset? viejo = caption(previousName ?? rotulo.name);
+    final CaptionPreset? choca = caption(rotulo.name);
+    if (choca != null && choca != viejo) {
+      throw GraphicsError('ya hay un rótulo que se llama ${choca.name}', status: 409);
+    }
+    if (viejo == null && captions.length >= captionPresetsMax) {
+      throw GraphicsError('caben $captionPresetsMax rótulos: borra uno antes', status: 409);
+    }
+    captions = List<CaptionPreset>.unmodifiable(
+      viejo == null
+          ? <CaptionPreset>[...captions, rotulo]
+          : <CaptionPreset>[for (final CaptionPreset c in captions) c == viejo ? rotulo : c],
+    );
+    _save();
+  }
+
+  /// Borra el rótulo `name`; false si no existía.
+  bool deleteCaption(String name) {
+    final CaptionPreset? c = caption(name);
+    if (c == null) {
+      return false;
+    }
+    captions = List<CaptionPreset>.unmodifiable(<CaptionPreset>[for (final CaptionPreset r in captions) if (r != c) r]);
+    _save();
+    return true;
   }
 
   void setInterview(Interview entrevista) {
@@ -520,6 +682,8 @@ class GraphicsStore {
       },
       'next_match': nextMatch?.toJson(),
       'fixtures': <Map<String, Object?>>[for (final Fixture f in fixtures) f.toJson()],
+      'current_fixture': currentFixture,
+      'captions': <Map<String, Object?>>[for (final CaptionPreset c in captions) c.toJson()],
       'interview': interview.toJson(),
       'strip_presets': <Map<String, Object?>>[for (final StripPreset p in stripPresets) p.toJson()],
       'strip_preset': stripPreset,

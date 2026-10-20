@@ -121,12 +121,12 @@ void main() {
       expect(l.boxes['corner'], const ui.Rect.fromLTRB(1774, 44, 1872, 132));
       expect(l.boxes['broadcaster'], const ui.Rect.fromLTRB(1786, 56, 1860, 120));
       expect(l.boxes.containsKey('camera'), isFalse);
-      expect(l.boxes['strip'], const ui.Rect.fromLTRB(0, 972, 1920, 1080));
-      expect(l.boxes['sellable'], const ui.Rect.fromLTRB(408, 972, 1572, 1080));
+      expect(l.boxes['strip'], const ui.Rect.fromLTRB(0, 948, 1920, 1080)); // 132 px (ADR 0032)
+      expect(l.boxes['sellable'], const ui.Rect.fromLTRB(408, 948, 1572, 1080));
       // La franja: el título y el subtítulo desde el margen (enmienda del ADR 0027).
       expect(l.boxes['strip_title']!.left, 48);
-      expect((l.boxes['strip_title']!.top, l.boxes['strip_title']!.bottom), (995, 1029));
-      expect((l.boxes['strip_subtitle']!.top, l.boxes['strip_subtitle']!.bottom), (1036, 1056));
+      expect((l.boxes['strip_title']!.top, l.boxes['strip_title']!.bottom), (977, 1017));
+      expect((l.boxes['strip_subtitle']!.top, l.boxes['strip_subtitle']!.bottom), (1026, 1050));
       expect(l.boxes.containsKey('logo'), isFalse);
     });
 
@@ -215,10 +215,10 @@ void main() {
     });
 
     test('la imagen de la franja va contenida a la izquierda, donde en Python, y empuja el título', () {
-      // `directo_franja` de boxes.json: el isotipo de 97×84 a 84 de alto.
+      // `directo_franja` de boxes.json: el isotipo de 97×84 a 108 de alto (franja de 132).
       final ScoreboardLayout l = medir(con(imagen: 1), imagen: const ui.Size(97, 84));
-      expect(l.boxes['strip_image'], const ui.Rect.fromLTRB(48, 984, 145, 1068));
-      expect(l.boxes['strip_title']!.left, 173);
+      expect(l.boxes['strip_image'], const ui.Rect.fromLTRB(48, 960, 173, 1068));
+      expect(l.boxes['strip_title']!.left, 201);
       final ScoreboardLayout ancha = medir(con(imagen: 1), imagen: const ui.Size(800, 200));
       expect(ancha.boxes['strip_image']!.width, OverlaySpec.strip['image_max_w']);
     });

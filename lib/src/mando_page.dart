@@ -16,6 +16,7 @@ import 'package:football_ai_capture/src/constants.dart';
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
 import 'package:football_ai_capture/src/match_page.dart';
 import 'package:football_ai_capture/src/panel_board.dart';
+import 'package:football_ai_capture/src/event_kind.dart';
 import 'package:football_ai_capture/src/panel_control.dart';
 import 'package:football_ai_capture/src/panel_pairing.dart';
 import 'package:football_ai_capture/src/theme/zero_colors.dart';
@@ -170,6 +171,15 @@ class _MandoPageState extends State<MandoPage> {
           danger: true,
         );
       case PanelLink.connecting || PanelLink.online:
+        final EventKind kind = _control.match?.eventKind ?? EventKind.football;
+        if (!kind.isFootball) {
+          // Este mando es el del marcador (ADR 0031): el resto se lleva desde el mando web.
+          return MatchBanner(
+            text: 'El móvil que emite lleva ${kind.label.toLowerCase()}, no fútbol. Los rótulos, '
+                'las franjas y los vídeos se sacan desde el mando web: abre el QR «Mando» con la '
+                'cámara del móvil.',
+          );
+        }
         final String? message = board?.message;
         return message == null ? null : MatchBanner(text: message);
     }

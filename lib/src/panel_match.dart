@@ -8,6 +8,7 @@
 library;
 
 import 'package:football_ai_capture/src/constants.dart';
+import 'package:football_ai_capture/src/event_kind.dart';
 import 'package:football_ai_capture/src/match_state.dart';
 
 /// Un equipo, como lo ve el panel.
@@ -55,9 +56,13 @@ class PanelMatch {
     required this.formations,
     required this.saveError,
     required this.scopes,
+    this.eventKind = EventKind.football,
   });
 
   final String matchId;
+
+  /// Lo que transmite el maestro (ADR 0031); un maestro de antes, sin el campo, es fútbol.
+  final EventKind eventKind;
 
   /// Identificador del proceso del panel: cambia en cada arranque.
   final String boot;
@@ -119,6 +124,7 @@ class PanelMatch {
       formations: _strings(json, 'formations'),
       saveError: _optionalString(json, 'save_error', 'partido'),
       scopes: _strings(json, 'scopes').toSet(),
+      eventKind: EventKind.fromWire(json['event_kind']),
     );
   }
 }

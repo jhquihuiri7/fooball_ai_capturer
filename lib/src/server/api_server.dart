@@ -539,6 +539,18 @@ class MasterApi {
     'graphics/strip_texts',
     'graphics/strip_save',
     'graphics/strip_delete',
+    // ADR 0031: los rótulos del espectáculo.
+    'graphics/caption',
+    'graphics/caption_all',
+    'graphics/caption_save',
+    'graphics/caption_delete',
+    // ADR 0032: el marcador a demanda, las tandas, el partido de la jornada y los resultados.
+    'graphics/scoreboard',
+    'graphics/strip_all',
+    'graphics/results',
+    'match/fixture_start',
+    'match/finish',
+    'video/play_all',
     'video/play',
     'video/stop',
     'clips/mark',

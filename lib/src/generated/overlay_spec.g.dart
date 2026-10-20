@@ -16,9 +16,9 @@ abstract final class OverlaySpec {
   static const int programHeight = 1080;
   static const double programFps = 30.0;
   static const double refWidth = 1920.0;
-  static const int stripHeight = 108;
+  static const int stripHeight = 132;
   static const int margin = 48;
-  static const int stripTop = 972;
+  static const int stripTop = 948;
 
   /// Paleta en ARGB de 32 bits, lista para Color(valor).
   static const Map<String, int> colorsArgb = {
@@ -56,8 +56,10 @@ abstract final class OverlaySpec {
     'comp': 22,
     'live': 24,
     'crest': 26,
-    'strip_title': 34,
-    'strip_subtitle': 20,
+    'strip_title': 40,
+    'strip_subtitle': 24,
+    'lt_title': 46,
+    'lt_subtitle': 26,
   };
 
   /// Las familias: «display» es Barlow Condensed y «sans», Inter.
@@ -76,6 +78,8 @@ abstract final class OverlaySpec {
     'crest': 'display',
     'strip_title': 'display',
     'strip_subtitle': 'sans',
+    'lt_title': 'display',
+    'lt_subtitle': 'sans',
   };
 
   /// El peso de cada texto.
@@ -88,6 +92,8 @@ abstract final class OverlaySpec {
     'crest': 800,
     'strip_title': 700,
     'strip_subtitle': 500,
+    'lt_title': 700,
+    'lt_subtitle': 600,
   };
 
   /// La franja (overlay_preview.py).
@@ -97,11 +103,11 @@ abstract final class OverlaySpec {
     'reserved_right': 300,
     'logo_src_w': 97,
     'logo_src_h': 84,
-    'image_h': 84,
-    'image_max_w': 300,
+    'image_h': 108,
+    'image_max_w': 380,
     'image_gap': 28,
-    'title_dy': -14,
-    'subtitle_dy': 20,
+    'title_dy': -17,
+    'subtitle_dy': 24,
     'title_max_chars': 48,
     'subtitle_max_chars': 72,
   };
@@ -128,6 +134,47 @@ abstract final class OverlaySpec {
     'name_gap': 18,
     'name_size': 38,
     'name_max_w': 430,
+  };
+
+  /// El rótulo (overlay_preview.py).
+  static const Map<String, int> lowerThird = {
+    'gap': 28,
+    'title_h': 76,
+    'sub_h': 50,
+    'pad_x': 32,
+    'min_w': 560,
+    'max_w': 1300,
+    'title_max_chars': 48,
+    'subtitle_max_chars': 72,
+  };
+
+  /// El gol animado (goal_card.py).
+  static const Map<String, int> goal = {
+    'band_cy': 660,
+    'band_h': 168,
+    'band_w': 900,
+    'text_size': 150,
+    'raya_w': 16,
+    'raya_h': 120,
+    'raya_gap': 26,
+    'raya_step': 34,
+    'team_cy': 790,
+    'team_h': 72,
+    'team_min_w': 640,
+    'team_pad_x': 40,
+    'team_alpha': 235,
+    'crest_w': 46,
+    'crest_gap': 16,
+    'score_gap': 30,
+    'crest_initials_size': 15,
+    'name_size': 40,
+    'score_size': 44,
+    'name_max_w': 560,
+    'show_ms': 5000,
+    'in_ms': 450,
+    'out_ms': 350,
+    'text_from_pct': 125,
+    'anim_fps': 20,
   };
 
   /// El entretiempo (halftime_card.py).
@@ -394,6 +441,8 @@ abstract final class OverlaySpec {
   /// Caracteres como mucho del cuándo y del dónde del próximo partido.
   static const int nextTextMaxChars = 32;
   static const String fixturesTitle = 'JORNADA';
+  static const String resultsTitle = 'RESULTADOS';
+  static const String goalText = '¡GOL!';
   static const String interviewTitle = 'ENTREVISTAS';
   /// El título y el subtítulo de partida de la franja.
   static const String stripTitleDefault = 'EL DEPORTE TAMBIÉN CONSERVA';

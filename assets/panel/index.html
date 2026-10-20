@@ -12,7 +12,9 @@
      servidor; las llamadas lo llevan en Authorization.
      Pensado primero para el móvil del operador: botones de 56 px o más, una columna, y
      dos columnas desde 900 px. Las fuentes vienen de Google Fonts si hay red; si no (la
-     cancha sin internet), caen a las condensadas del sistema y la página aguanta igual. -->
+     cancha sin internet), caen a las condensadas del sistema y la página aguanta igual.
+     Cada tarjeta dice para qué eventos es (data-tipos, ADR 0031): el fútbol lo enseña todo; el
+     espectáculo, los rótulos, la franja, los vídeos y el icono; el vóley, solo las cámaras. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700;800&display=swap">
@@ -28,6 +30,7 @@
     --sesgo: -30deg;
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html { -webkit-text-size-adjust: 100%; }
   body {
     margin: 0; min-height: 100vh; background: var(--profundo); color: var(--claro);
@@ -57,6 +60,7 @@
   }
   .vivo::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #fff; }
   .vivo.on { display: inline-flex; }
+  .evento { font: 700 11px/1 var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--oceanico); }
 
   main { width: 100%; max-width: 1100px; margin: 0 auto; padding: 14px 16px 120px; display: grid; gap: 14px; }
   @media (min-width: 900px) {
@@ -92,6 +96,12 @@
   }
   .estado-reloj { font: 700 11px/1 var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--oceanico); }
   .estado-reloj.corre { color: var(--teal); }
+  /* Lo que está pasando en el programa: el gol, el marcador oculto y el partido de la jornada. */
+  .chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 10px; }
+  .chips:empty { display: none; }
+  .chip { padding: 5px 10px; border-radius: 6px; font: 800 12px/1.2 var(--sans); letter-spacing: .06em; text-transform: uppercase; background: var(--tinte); color: var(--oceanico); }
+  .chip.gol { background: var(--teal); color: var(--profundo); }
+  .chip.aviso { background: var(--amarillo); color: var(--profundo); }
 
   /* ---------------- tarjetas ---------------- */
   .card { padding: 14px; border-radius: 12px; background: var(--marino); box-shadow: 0 1px 2px #00000080, 0 8px 24px #00000059; }
@@ -161,6 +171,12 @@
     box-shadow: inset 0 0 0 1px var(--linea); font: 700 18px/1 var(--display); letter-spacing: .03em; text-transform: uppercase;
   }
   .campos input[type=text]:focus { outline: none; box-shadow: inset 0 0 0 2px var(--teal); }
+  /* Lo que sale tal cual se escribe (el subtítulo del rótulo, en Inter): sin mayúsculas. */
+  .campos input.tal-cual { font: 500 16px/1 var(--sans); letter-spacing: 0; text-transform: none; }
+  .campos select {
+    min-height: 48px; padding: 0 12px; border: 0; border-radius: 10px; background: var(--profundo); color: var(--claro);
+    box-shadow: inset 0 0 0 1px var(--linea); font: 600 15px/1 var(--sans);
+  }
   .pareja { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .acciones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px; }
   .uno { grid-template-columns: 1fr; }
@@ -200,6 +216,17 @@
   .escudos-jornada { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--linea); }
   .escudos-jornada:empty { display: none; }
 
+  /* ---------------- el partido de la jornada (ADR 0032) ---------------- */
+  .partidos li { grid-template-columns: 1fr auto; }
+  .partidos .puesta, .rotulos .puesta { color: var(--teal); }
+  .tanda { margin: 0 0 10px; font: 600 12px/1.4 var(--sans); letter-spacing: .04em; color: var(--teal); }
+  .tanda:empty { display: none; }
+
+  /* ---------------- los rótulos del espectáculo (ADR 0031) ---------------- */
+  .rotulos li { grid-template-columns: 1fr auto auto; }
+  .rotulos .mas { display: flex; gap: 6px; margin-top: 6px; }
+  .rotulos .mas .btn { min-height: 34px; padding: 0 10px; font-size: 14px; }
+
   /* ---------------- vídeos (ADR 0027) ---------------- */
   .sonando { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 10px; margin-bottom: 10px; padding: 10px 12px; border-radius: 10px; background: var(--tinte); box-shadow: inset 0 0 0 1px var(--teal); }
   .sonando[hidden] { display: none; }
@@ -233,12 +260,18 @@
 <body>
 <header>
   <div class="marca"><span class="franjas" aria-hidden="true"><i></i><i></i><i></i></span>Mando</div>
+  <span class="evento" id="evento"></span>
   <span class="vivo" id="vivo">EN VIVO</span>
   <div class="conexion" id="conexion" role="status"><span class="punto" aria-hidden="true"></span><span id="conexion-texto">conectando…</span></div>
 </header>
 
 <main>
-  <section class="marcador ancho" aria-label="Marcador">
+  <section class="card ancho" data-tipos="volleyball" aria-labelledby="t-voley" hidden>
+    <h2 id="t-voley">Vóleibol</h2>
+    <p class="nota">El vóley sale, por ahora, con la cámara tal cual: sin marcador ni gráficos. Desde aquí se ven las cámaras y el soporte.</p>
+  </section>
+
+  <section class="marcador ancho" aria-label="Marcador" data-tipos="football">
     <div class="equipos">
       <div class="equipo local" id="local">Local</div>
       <div class="goles" aria-live="polite">
@@ -251,10 +284,18 @@
       <span class="reloj" id="reloj">00:00</span>
       <span class="estado-reloj" id="estado-reloj">parado</span>
     </div>
+    <div class="chips" id="chips" aria-live="polite"></div>
   </section>
 
   <div class="col">
-    <section class="card" aria-labelledby="t-goles">
+    <section class="card" aria-labelledby="t-partidos" data-tipos="football">
+      <h2 id="t-partidos">Partido de la jornada</h2>
+      <ul class="videos partidos" id="partidos"></ul>
+      <button class="btn primario" style="width:100%" id="finalizar" type="button" data-propio disabled>Finalizar partido</button>
+      <p class="nota">Empezar pone en el marcador los nombres y los escudos de la jornada, el reloj a cero. Finalizar guarda el marcador en la jornada: «Resultados», en Al aire, los enseña todos.</p>
+    </section>
+
+    <section class="card" aria-labelledby="t-goles" data-tipos="football">
       <h2 id="t-goles">Goles</h2>
       <div class="goles-grid">
         <div class="lado">
@@ -270,7 +311,7 @@
       </div>
     </section>
 
-    <section class="card" aria-labelledby="t-reloj">
+    <section class="card" aria-labelledby="t-reloj" data-tipos="football">
       <h2 id="t-reloj">Reloj</h2>
       <div class="reloj-grid">
         <button type="button" class="btn acento grande toggle" id="toggle" data-reloj="start">
@@ -283,7 +324,7 @@
       </div>
     </section>
 
-    <section class="card" aria-labelledby="t-equipos">
+    <section class="card" aria-labelledby="t-equipos" data-tipos="football">
       <h2 id="t-equipos">Equipos</h2>
       <form class="campos" id="form-equipos">
         <label>Local<input type="text" id="in-local" maxlength="24" autocomplete="off" required></label>
@@ -309,7 +350,7 @@
       <p class="nota">El escudo va con el nombre del equipo y vuelve cada vez que juegue: guarda el nombre antes de subirlo. Mejor PNG con fondo transparente, hasta 4 MB.</p>
     </section>
 
-    <section class="card" aria-labelledby="t-icono">
+    <section class="card" aria-labelledby="t-icono" data-tipos="football show">
       <h2 id="t-icono">Icono del campeonato</h2>
       <div class="campos">
         <div class="icono-vista" id="icono-vista">sin icono</div>
@@ -322,25 +363,55 @@
   </div>
 
   <div class="col">
-    <section class="card" aria-labelledby="t-alin">
+    <section class="card" aria-labelledby="t-alin" data-tipos="football">
       <h2 id="t-alin">Al aire</h2>
       <div class="alin-grid">
+        <button type="button" class="btn alin" style="grid-column: 1 / -1" id="marcador-aire" data-propio aria-pressed="false"><span id="marcador-texto">Ocultar marcador y reloj</span><small id="marcador-estado">para una premiación</small></button>
         <button type="button" class="btn alin" data-alin="home" aria-pressed="false"><span id="alin-local">Local</span><small id="alin-local-estado">mostrar</small></button>
         <button type="button" class="btn alin" data-alin="away" aria-pressed="false"><span id="alin-visitante">Visitante</span><small id="alin-visitante-estado">mostrar</small></button>
         <button type="button" class="btn alin" style="grid-column: 1 / -1" id="entretiempo" data-propio aria-pressed="false"><span>Entretiempo</span><small id="entretiempo-estado">mostrar el marcador</small></button>
         <button type="button" class="btn alin" style="grid-column: 1 / -1" id="final" data-propio aria-pressed="false"><span>Final del partido</span><small id="final-estado">mostrar el resultado</small></button>
         <button type="button" class="btn alin" style="grid-column: 1 / -1" id="proximo" data-propio aria-pressed="false"><span>Próximo partido</span><small id="proximo-estado">mostrar</small></button>
         <button type="button" class="btn alin" id="jornada-aire" data-propio aria-pressed="false"><span>Jornada</span><small id="jornada-estado">mostrar</small></button>
-        <button type="button" class="btn alin" id="entrevista-aire" data-propio aria-pressed="false"><span>Entrevistas</span><small id="entrevista-estado">mostrar</small></button>
+        <button type="button" class="btn alin" id="resultados-aire" data-propio aria-pressed="false"><span>Resultados</span><small id="resultados-estado">mostrar</small></button>
+        <button type="button" class="btn alin" style="grid-column: 1 / -1" id="entrevista-aire" data-propio aria-pressed="false"><span>Entrevistas</span><small id="entrevista-estado">mostrar</small></button>
       </div>
     </section>
 
-    <section class="card" aria-labelledby="t-franja">
+    <section class="card" aria-labelledby="t-rotulos" data-tipos="show" hidden>
+      <h2 id="t-rotulos">Rótulos</h2>
+      <div class="sonando" id="rotulo-aire" hidden>
+        <div><small>Al aire</small><b id="rotulo-nombre"></b></div>
+        <span class="cuenta" id="rotulo-cuenta">fijo</span>
+        <button class="btn quitar" id="rotulo-quitar" type="button" data-propio>Quitar</button>
+      </div>
+      <p class="tanda" id="rotulo-tanda"></p>
+      <button class="btn acento" style="width:100%" id="rotulos-todos" type="button" data-propio>Pasar todos · 10 s cada uno</button>
+      <ul class="videos rotulos" id="rotulos"></ul>
+      <details class="editar" id="rotulo-editor">
+        <summary id="rotulo-editor-titulo">Agregar rótulo</summary>
+        <form class="campos" id="form-rotulo">
+          <input type="hidden" name="previo">
+          <label>Nombre<input type="text" name="nombre" maxlength="24" autocomplete="off" required placeholder="Ángeles del Cielo"></label>
+          <label>Título<input type="text" name="titulo" maxlength="48" autocomplete="off" required placeholder="Presentación artística: Los Ángeles del Cielo"></label>
+          <label>Subtítulo<input class="tal-cual" type="text" name="sub" maxlength="72" autocomplete="off" placeholder="Cantado por … (opcional)"></label>
+          <div class="acciones">
+            <button class="btn primario" type="submit">Guardar rótulo</button>
+            <button class="btn" type="button" id="rotulo-cancelar" data-propio>Cancelar</button>
+          </div>
+        </form>
+      </details>
+      <p class="nota">Como en los noticieros: abajo a la izquierda, el título en mayúsculas y el subtítulo debajo, tal cual se escribe. «10 s» lo saca y se va solo; «Fijo» lo deja hasta quitarlo.</p>
+    </section>
+
+    <section class="card" aria-labelledby="t-franja" data-tipos="football show">
       <h2 id="t-franja">Franja inferior</h2>
       <div class="acciones">
         <button class="btn acento" id="franja-sacar" type="button" data-propio>Sacar <span class="cuenta" id="franja-cuenta">15 s</span></button>
         <button class="btn" id="franja-ocultar" type="button" data-propio disabled>Ocultar</button>
+        <button class="btn" style="grid-column: 1 / -1" id="franja-todas" type="button" data-propio>Pasar todas · 15 s cada una</button>
       </div>
+      <p class="tanda" id="franja-tanda"></p>
       <ul class="videos franjas" id="franjas"></ul>
       <details class="editar" id="franja-editor">
         <summary id="franja-editor-titulo">Agregar franja</summary>
@@ -362,7 +433,7 @@
       </details>
     </section>
 
-    <section class="card" aria-labelledby="t-jornada">
+    <section class="card" aria-labelledby="t-jornada" data-tipos="football">
       <h2 id="t-jornada">Jornada</h2>
       <form class="campos" id="form-jornada">
         <div id="jornada-filas"></div>
@@ -375,7 +446,7 @@
       <p class="nota">Hasta 8 partidos. El subtítulo (final, semifinal, tercer y cuarto lugar…) es opcional. Los escudos van con el nombre de cada equipo: guarda la jornada y súbelos debajo.</p>
     </section>
 
-    <section class="card" aria-labelledby="t-entrevista">
+    <section class="card" aria-labelledby="t-entrevista" data-tipos="football">
       <h2 id="t-entrevista">Entrevistas</h2>
       <form class="campos" id="form-entrevista">
         <label>Quién habla<input type="text" id="en-nombre" maxlength="32" autocomplete="off" placeholder="opcional"></label>
@@ -384,9 +455,10 @@
       </form>
     </section>
 
-    <section class="card" aria-labelledby="t-proximo">
+    <section class="card" aria-labelledby="t-proximo" data-tipos="football">
       <h2 id="t-proximo">Próximo partido</h2>
       <form class="campos" id="form-proximo">
+        <label id="px-jornada-fila" hidden>Desde la jornada<select id="px-jornada"><option value="">elige un partido…</option></select></label>
         <div class="pareja">
           <label>Local<input type="text" id="px-local" maxlength="24" autocomplete="off" required></label>
           <label>Visitante<input type="text" id="px-visitante" maxlength="24" autocomplete="off" required></label>
@@ -414,13 +486,14 @@
       <p class="nota">Los escudos van con el nombre de cada equipo: guarda antes el próximo partido.</p>
     </section>
 
-    <section class="card" aria-labelledby="t-videos">
+    <section class="card" aria-labelledby="t-videos" data-tipos="football show">
       <h2 id="t-videos">Vídeos</h2>
       <div class="sonando" id="video-sonando" hidden>
-        <div><small>Al aire</small><b id="video-nombre"></b></div>
+        <div><small id="video-al-aire">Al aire</small><b id="video-nombre"></b></div>
         <span class="cuenta" id="video-cuenta">0:00</span>
         <button class="btn quitar" id="video-parar" type="button" data-propio>Parar</button>
       </div>
+      <button class="btn acento" style="width:100%; margin-bottom:10px" id="videos-todos" type="button" data-propio>Pasar todos, uno detrás de otro</button>
       <ul class="videos" id="videos"><li class="vacio">cargando…</li></ul>
       <div class="progreso" id="video-progreso" hidden><i id="video-barra"></i><span id="video-progreso-texto"></span></div>
       <div class="campos">
@@ -428,7 +501,7 @@
       </div>
     </section>
 
-    <section class="card" aria-labelledby="t-jugada">
+    <section class="card" aria-labelledby="t-jugada" data-tipos="football">
       <h2 id="t-jugada">Repetición</h2>
       <button type="button" class="btn acento grande" style="width:100%" data-orden="clips/mark">
         <svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/></g><circle cx="12" cy="12" r="1.8" fill="currentColor"/></svg>
@@ -485,14 +558,29 @@ function tic() {
   $('franja-ocultar').disabled = queda === 0;
   // El vídeo: lo que le queda mientras suena.
   if (partido.video) $('video-cuenta').textContent = mmss(Math.max(0, videoHasta - performance.now()) + 999);
+  // El rótulo: lo que le queda, o fijo (ADR 0031).
+  if (partido.caption) {
+    $('rotulo-cuenta').textContent = rotuloFijo ? 'fijo' : Math.max(0, Math.ceil((rotuloHasta - performance.now()) / 1000)) + ' s';
+  }
 }
 
 const PLAY = 'M8 5.2v13.6a.8.8 0 0 0 1.23.67l10.4-6.8a.8.8 0 0 0 0-1.34L9.23 4.53A.8.8 0 0 0 8 5.2z';
 const PAUSA = 'M7 5h3.5v14H7zM13.5 5H17v14h-3.5z';
 
+const TIPOS = { football: 'Fútbol', show: 'Espectáculo', volleyball: 'Vóleibol' };
+// Enseña las tarjetas del tipo de evento que emite el maestro (ADR 0031).
+function pintaTipo(tipo) {
+  if (document.body.dataset.evento === tipo) return;
+  document.body.dataset.evento = tipo;
+  $('evento').textContent = TIPOS[tipo] || tipo;
+  document.querySelectorAll('[data-tipos]').forEach(el => { el.hidden = !el.dataset.tipos.split(' ').includes(tipo); });
+  $('t-icono').textContent = tipo === 'show' ? 'Icono del evento' : 'Icono del campeonato';
+}
+
 function pinta(p) {
   if (!p || !p.home) return;
   partido = p; recibido = performance.now();
+  pintaTipo(p.event_kind || 'football');
   $('local').textContent = p.home.name; $('visitante').textContent = p.away.name;
   $('nombre-local').textContent = p.home.name; $('nombre-visitante').textContent = p.away.name;
   $('alin-local').textContent = p.home.name; $('alin-visitante').textContent = p.away.name;
@@ -537,6 +625,20 @@ function pinta(p) {
   $('jornada-estado').textContent = conJornada ? 'al aire · quitar' : (partidos.length ? 'mostrar' : 'cárgala abajo');
   $('entrevista-aire').setAttribute('aria-pressed', conEntrevista ? 'true' : 'false');
   $('entrevista-estado').textContent = conEntrevista ? 'al aire · quitar' : 'mostrar';
+  // El marcador a demanda, los resultados, el gol y el partido de la jornada (ADR 0032).
+  const sinMarcador = p.scoreboard_on_air === false, conResultados = !!p.results_on_air;
+  $('marcador-aire').setAttribute('aria-pressed', sinMarcador ? 'true' : 'false');
+  $('marcador-texto').textContent = sinMarcador ? 'Marcador y reloj ocultos' : 'Ocultar marcador y reloj';
+  $('marcador-estado').textContent = sinMarcador ? 'mostrar otra vez' : 'para una premiación';
+  $('resultados-aire').setAttribute('aria-pressed', conResultados ? 'true' : 'false');
+  $('resultados-aire').disabled = !partidos.length && !conResultados;
+  $('resultados-estado').textContent = conResultados ? 'al aire · quitar' : (partidos.length ? 'mostrar' : 'sin jornada');
+  pintaChips(p);
+  pintaPartidos(p);
+  pintaProximoDesdeJornada(partidos);
+  pintaRotulos(p);
+  $('franja-tanda').textContent = (p.strip_queue || []).length
+    ? 'Pasando ' + (p.strip_preset || '') + ' · faltan ' + p.strip_queue.length : '';
   if (p.interview) { rellena($('en-nombre'), p.interview.name); rellena($('en-cargo'), p.interview.role); }
   if (!jornadaSucia) pintaJornada(partidos);
   pintaEscudosJornada(partidos);
@@ -548,6 +650,8 @@ function pinta(p) {
   }
   $('video-sonando').hidden = !p.video;
   if (p.video) { $('video-nombre').textContent = p.video.name.replace(/\.mp4$/i, ''); videoHasta = performance.now() + p.video.remaining_ms; }
+  const cola = (p.video_queue || []).length;
+  $('video-al-aire').textContent = cola ? 'Al aire · faltan ' + cola : 'Al aire';
   document.querySelectorAll('#videos li[data-nombre]').forEach(li => li.classList.toggle('suena', !!p.video && li.dataset.nombre === p.video.name));
   if (p.save_error) aviso('El maestro no pudo guardar el partido: ' + p.save_error);
   tic();
@@ -671,6 +775,153 @@ function pintaEscudosJornada(partidos) {
     return caja;
   }));
 }
+
+// ---------------- lo que pasa en el programa (ADR 0032) ----------------
+function pintaChips(p) {
+  const chips = [];
+  if (p.goal) chips.push(['gol', '¡Gol! ' + p[p.goal.team].name]);
+  if (p.scoreboard_on_air === false) chips.push(['aviso', 'Marcador oculto']);
+  if (p.current_fixture != null && (p.fixtures || [])[p.current_fixture]) chips.push(['', 'Partido ' + (p.current_fixture + 1) + ' de la jornada']);
+  $('chips').replaceChildren(...chips.map(([clase, texto]) => {
+    const c = document.createElement('span');
+    c.className = 'chip ' + clase; c.textContent = texto;
+    return c;
+  }));
+}
+
+// ---------------- el partido de la jornada (ADR 0032) ----------------
+let partidosVistos = '';
+function pintaPartidos(p) {
+  const lista = p.fixtures || [];
+  $('finalizar').disabled = p.current_fixture == null;
+  const clave = JSON.stringify([lista.map(f => [f.home, f.away, f.time, f.subtitle, f.home_goals, f.away_goals]), p.current_fixture, p.home.goals, p.away.goals]);
+  if (clave === partidosVistos) return;
+  partidosVistos = clave;
+  if (!lista.length) {
+    $('partidos').innerHTML = '<li class="vacio">Sin jornada. Carga los partidos de la noche en la tarjeta «Jornada» y empieza cada uno desde aquí, sin volver a escribirlo.</li>';
+    return;
+  }
+  $('partidos').replaceChildren(...lista.map((f, i) => {
+    const li = document.createElement('li');
+    const enJuego = p.current_fixture === i, jugado = f.home_goals != null && f.away_goals != null;
+    li.classList.toggle('suena', enJuego);
+    const nombre = document.createElement('div');
+    nombre.className = 'nombre';
+    nombre.textContent = f.home + ' vs ' + f.away;
+    const datos = document.createElement('small');
+    datos.textContent = enJuego ? 'en juego · ' + p.home.goals + ' - ' + p.away.goals
+      : jugado ? 'final · ' + f.home_goals + ' - ' + f.away_goals
+      : f.time + (f.subtitle ? ' · ' + f.subtitle : '');
+    if (enJuego) datos.classList.add('puesta');
+    nombre.append(datos);
+    const b = document.createElement('button');
+    b.type = 'button'; b.dataset.propio = '';
+    b.className = 'btn ' + (enJuego || jugado ? '' : 'acento');
+    b.textContent = enJuego ? 'En juego' : jugado ? 'Reabrir' : 'Empezar';
+    b.disabled = enJuego;
+    b.addEventListener('click', () => {
+      const actual = partido.current_fixture;
+      if (actual != null && actual !== i && !confirm('El partido en juego no se finalizó. ¿Empezar ' + f.home + ' vs ' + f.away + ' igualmente?')) return;
+      if (jugado && !confirm('Este partido ya terminó ' + f.home_goals + ' - ' + f.away_goals + '. ¿Volver a abrirlo con ese marcador?')) return;
+      orden('match/fixture_start', { index: i }, b);
+    });
+    li.append(nombre, b);
+    return li;
+  }));
+}
+$('finalizar').addEventListener('click', e => {
+  if (!partido || partido.current_fixture == null) return;
+  const m = partido.home.name + ' ' + partido.home.goals + ' - ' + partido.away.goals + ' ' + partido.away.name;
+  if (!confirm('¿Finalizar ' + m + '? El marcador queda guardado en la jornada.')) return;
+  orden('match/finish', {}, e.currentTarget);
+});
+
+// El próximo partido, desde la jornada: rellena el formulario sin escribir.
+let proximoVisto = '';
+function pintaProximoDesdeJornada(lista) {
+  const clave = JSON.stringify(lista.map(f => [f.home, f.away, f.time]));
+  if (clave === proximoVisto) return;
+  proximoVisto = clave;
+  $('px-jornada-fila').hidden = !lista.length;
+  const sel = $('px-jornada');
+  sel.replaceChildren(new Option('elige un partido…', ''), ...lista.map((f, i) => new Option(f.home + ' vs ' + f.away + ' · ' + f.time, String(i))));
+}
+$('px-jornada').addEventListener('change', e => {
+  const f = (partido && partido.fixtures || [])[+e.target.value];
+  if (!e.target.value || !f) return;
+  for (const [id, v] of [['px-local', f.home], ['px-visitante', f.away], ['px-cuando', f.time]]) { $(id).value = v; $(id).dataset.sucio = '1'; }
+});
+
+// ---------------- los rótulos del espectáculo (ADR 0031) ----------------
+let rotulosVistos = '';
+let rotuloHasta = 0, rotuloFijo = false;
+function pintaRotulos(p) {
+  const lista = p.captions || [];
+  const fuera = p.caption;
+  $('rotulo-aire').hidden = !fuera;
+  rotuloFijo = p.caption_remaining_ms < 0;
+  rotuloHasta = performance.now() + Math.max(0, p.caption_remaining_ms || 0);
+  if (fuera) $('rotulo-nombre').textContent = fuera;
+  const cola = p.caption_queue || [];
+  $('rotulo-tanda').textContent = cola.length ? 'Pasando ' + fuera + ' · faltan ' + cola.length : '';
+  $('rotulos-todos').disabled = !lista.length;
+  const clave = JSON.stringify([lista, fuera]);
+  if (clave === rotulosVistos) return;
+  rotulosVistos = clave;
+  if (!lista.length) {
+    $('rotulos').innerHTML = '<li class="vacio">Sin rótulos. Agrega uno abajo: un título y, si quieres, un subtítulo.</li>';
+    return;
+  }
+  $('rotulos').replaceChildren(...lista.map(r => {
+    const li = document.createElement('li');
+    li.classList.toggle('suena', r.name === fuera);
+    const nombre = document.createElement('div');
+    nombre.className = 'nombre';
+    nombre.textContent = r.name;
+    const datos = document.createElement('small');
+    datos.textContent = (r.name === fuera ? 'al aire · ' : '') + r.title;
+    if (r.name === fuera) datos.classList.add('puesta');
+    const boton = (texto, clase, accion) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'btn ' + clase; b.dataset.propio = ''; b.textContent = texto;
+      b.addEventListener('click', () => accion(b));
+      return b;
+    };
+    const mas = document.createElement('div');
+    mas.className = 'mas';
+    mas.append(
+      boton('Editar', '', () => editaRotulo(r)),
+      boton('Borrar', 'quitar', b => { if (confirm('¿Borrar el rótulo ' + r.name + '?')) orden('graphics/caption_delete', { name: r.name }, b); }),
+    );
+    nombre.append(datos, mas);
+    li.append(
+      nombre,
+      boton('10 s', 'acento', b => orden('graphics/caption', { name: r.name, show_s: 10 }, b)),
+      boton('Fijo', '', b => orden('graphics/caption', { name: r.name, hold: true }, b)),
+    );
+    return li;
+  }));
+}
+function editaRotulo(r) {
+  const form = $('form-rotulo');
+  form.previo.value = r ? r.name : '';
+  form.nombre.value = r ? r.name : '';
+  form.titulo.value = r ? r.title : '';
+  form.sub.value = r ? r.subtitle : '';
+  $('rotulo-editor-titulo').textContent = r ? 'Editar rótulo: ' + r.name : 'Agregar rótulo';
+  $('rotulo-editor').open = !!r;
+  if (r) form.nombre.focus();
+}
+$('form-rotulo').addEventListener('submit', e => {
+  e.preventDefault();
+  const f = $('form-rotulo');
+  const cuerpo = { name: f.nombre.value.trim(), title: f.titulo.value.trim(), subtitle: f.sub.value.trim() };
+  if (f.previo.value) cuerpo.previous_name = f.previo.value;
+  orden('graphics/caption_save', cuerpo, e.submitter).then(ok => { if (ok) editaRotulo(null); });
+});
+$('rotulo-cancelar').addEventListener('click', () => editaRotulo(null));
+$('rotulo-quitar').addEventListener('click', e => orden('graphics/caption', { show_s: 0 }, e.currentTarget));
+$('rotulos-todos').addEventListener('click', e => orden('graphics/caption_all', { show_s: 10 }, e.currentTarget));
 
 // ---------------- franjas guardadas (ADR 0029) ----------------
 let franjasVistas = '';
@@ -960,6 +1211,10 @@ $('in-video').addEventListener('change', e => {
 $('video-parar').addEventListener('click', e => orden('video/stop', {}, e.currentTarget));
 
 $('franja-sacar').addEventListener('click', e => orden('graphics/strip', { show_s: 15 }, e.currentTarget));
+$('franja-todas').addEventListener('click', e => orden('graphics/strip_all', { show_s: 15 }, e.currentTarget));
+$('videos-todos').addEventListener('click', e => orden('video/play_all', {}, e.currentTarget));
+$('marcador-aire').addEventListener('click', e => orden('graphics/scoreboard', { on_air: !!(partido && partido.scoreboard_on_air === false) }, e.currentTarget));
+$('resultados-aire').addEventListener('click', e => orden('graphics/results', { on_air: !(partido && partido.results_on_air) }, e.currentTarget));
 $('franja-ocultar').addEventListener('click', e => orden('graphics/strip', { show_s: 0 }, e.currentTarget));
 $('entretiempo').addEventListener('click', e => orden('graphics/halftime', { on_air: !(partido && partido.halftime_on_air) }, e.currentTarget));
 $('final').addEventListener('click', e => orden('graphics/fulltime', { on_air: !(partido && partido.fulltime_on_air) }, e.currentTarget));

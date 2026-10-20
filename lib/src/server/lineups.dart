@@ -324,6 +324,22 @@ class LineupBook {
       ..addAll(nuevos);
   }
 
+  /// Quita la alineación de `side` y su tarjeta, si estaba al aire (ADR 0032: el equipo deja
+  /// de jugar al empezar otro partido de la jornada).
+  void remove(MatchTeam side) {
+    if (!_teams.containsKey(side)) {
+      return;
+    }
+    final Map<MatchTeam, Team> nuevos = <MatchTeam, Team>{..._teams}..remove(side);
+    _save(nuevos);
+    _teams
+      ..clear()
+      ..addAll(nuevos);
+    if (_onAir == side) {
+      _onAir = null;
+    }
+  }
+
   /// Muestra u oculta la tarjeta de un equipo. Solo una a la vez; sin alineación, nada.
   void toggle(MatchTeam side) => setOnAir(_onAir == side ? null : side);
 
