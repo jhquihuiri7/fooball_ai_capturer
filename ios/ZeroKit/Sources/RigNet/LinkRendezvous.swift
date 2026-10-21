@@ -53,6 +53,25 @@ public protocol LinkRendezvous {
     /// enlace, antes de cambiarla por otra (2026-10-15). nil, nunca: un anuncio de Bonjour
     /// lo ve quien llegue.
     var republishAfterS: Double? { get }
+
+    /// Intentos de control seguidos que no llegan a subir tras los que el que busca hace
+    /// borrón: suelta todo lo del par anterior y se calla un rato antes de volver a
+    /// suscribirse (Bug B, 2026-10-21). nil, nunca: por Bonjour un intento que falla no deja
+    /// nada retenido.
+    var failedAttemptsBeforeReset: Int? { get }
+
+    /// Segundos de la pausa de cada borrón seguido por intentos fallidos, por orden; el
+    /// último se repite. Vacío, sin pausa.
+    var resetQuietS: [Double] { get }
+
+    /// Segundos sin nada abierto que el que busca deja pasar tras perder un control que estaba
+    /// arriba, antes de volver a suscribirse de cero (Bug B). nil: se vuelve a buscar con la
+    /// espera creciente de siempre, sin soltar las suscripciones.
+    var settleAfterDropS: Double? { get }
+
+    /// Si el que busca conecta los medios solo con el control arriba (Bug B): mientras el
+    /// control no sube, ninguna conexión de medios retiene el datapath del par.
+    var mediaAfterControl: Bool { get }
 }
 
 extension LinkRendezvous {
@@ -67,6 +86,14 @@ extension LinkRendezvous {
     public var resubscribeAfterS: Double? { nil }
 
     public var republishAfterS: Double? { nil }
+
+    public var failedAttemptsBeforeReset: Int? { nil }
+
+    public var resetQuietS: [Double] { [] }
+
+    public var settleAfterDropS: Double? { nil }
+
+    public var mediaAfterControl: Bool { false }
 }
 
 /// Bonjour por una interfaz: `.wiredEthernet` en el campo, `.wifi` en el banco y `nil`

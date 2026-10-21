@@ -54,6 +54,24 @@ final class LinkDiagnosisTests: XCTestCase {
                        "la cita falló: sin entitlement; se reintenta")
     }
 
+    /// Bug B (2026-10-21): en la pausa del borrón, el que busca dice que es a propósito,
+    /// cuánto le queda y por qué cayó lo último; el informe lleva las cifras.
+    func testTheSearcherSaysItIsPausingOnPurpose() {
+        let d = D(role: .searches, medium: "aware", state: .connecting, lastDrop: "sin respuesta en 10 s",
+                  announcements: 0, controlAttempts: 3, failedAttempts: 0, searchResets: 1, quietS: 59.2)
+        XCTAssertEqual(d.summary(),
+                       "en pausa 60 s más para que Wi-Fi Aware suelte el enlace viejo (borrón 1; la última caída: sin respuesta en 10 s)")
+        let r = d.report()
+        XCTAssertEqual(r["search_resets"] as? Int, 1)
+        XCTAssertEqual(r["failed_attempts"] as? Int, 0)
+        XCTAssertEqual(r["quiet_s"] as? Double, 59.2)
+        XCTAssertEqual(D(role: .searches, medium: "aware", state: .connecting).report()["quiet_s"] as? Double, -1)
+        // Sin pausa, la frase de siempre.
+        XCTAssertEqual(D(role: .searches, medium: "aware", state: .connecting, lastDrop: "sin respuesta en 10 s",
+                         announcements: 1, controlAttempts: 2, failedAttempts: 2, searchResets: 1).summary(),
+                       "ve al otro pero no conecta: 2 intentos; el último: sin respuesta en 10 s")
+    }
+
     func testWithTheControlUpTheSessionSays() {
         let arriba = D(role: .publishes, medium: "aware", state: .connected, controlAttempts: 1)
         XCTAssertEqual(arriba.summary(), "enlace arriba")

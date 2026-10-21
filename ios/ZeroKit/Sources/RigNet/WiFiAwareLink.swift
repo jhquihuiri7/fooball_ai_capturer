@@ -93,6 +93,28 @@ public enum WiFiAwareTimings {
     /// la conexión del que busca en 2,4-6,3 s (2026-10-08); 30 s dejan de sobra a una que va
     /// a llegar, y no coincide con el ritmo de las suscripciones (20 s).
     public static let republishAfterS: Double = 30
+
+    /// Intentos de control seguidos sin subir tras los que el que busca hace borrón (Bug B,
+    /// 2026-10-21). Un intento son los 10 s de `connectTimeoutS` más la espera y la
+    /// suscripción (~12 s): tres son ~36 s. En las pasadas buenas el control sube al primer
+    /// intento o al segundo (20-oct 20:57, 15-oct 12:13); con el maestro cerrado y vuelto a
+    /// abrir (21-oct 09:45) el esclavo hizo diez, todos «sin respuesta en 10 s», y no enlazó.
+    public static let failedAttemptsBeforeReset = 3
+
+    /// La pausa de cada borrón seguido, sin ninguna conexión ni suscripción abierta: lo que
+    /// hacía falta para que Wi-Fi Aware suelte el datapath del par anterior. 14 s sin
+    /// conexiones no bastaron (21-oct 09:45, de las 66 a las 80 s del esclavo); cerrar Zero y
+    /// esperar 1 min sí (15-oct 11:36); y el fallo que Apple reconoce con su propio ejemplo
+    /// (FB23509767: el TCP por Wi-Fi Aware se queda en `preparing`) se cura dejando los
+    /// móviles quietos «un par de minutos». Primero 60 s, después 120 s, y 120 s cada vez.
+    public static let resetQuietS: [Double] = [60, 120]
+
+    /// Segundos sin nada abierto tras perder un control que estaba arriba, antes de volver a
+    /// suscribirse de cero (Bug B). Las conexiones viejas se cancelan en milisegundos, pero
+    /// un intento lanzado al instante sobre el datapath que se está desmontando cayó con
+    /// «connectionTerminated» y «Connection refused» (17, 20-oct 20:58:29). Un parón de la
+    /// radio sigue curándose en segundos (IOS-14c).
+    public static let settleAfterDropS: Double = 2
 }
 
 public enum WiFiAwareLinkError: Error, CustomStringConvertible {
@@ -144,6 +166,19 @@ public struct WiFiAwareRendezvous: LinkRendezvous {
     public var resubscribeAfterS: Double? { WiFiAwareTimings.resubscribeAfterS }
 
     public var republishAfterS: Double? { WiFiAwareTimings.republishAfterS }
+
+    public var failedAttemptsBeforeReset: Int? { WiFiAwareTimings.failedAttemptsBeforeReset }
+
+    public var resetQuietS: [Double] { WiFiAwareTimings.resetQuietS }
+
+    public var settleAfterDropS: Double? { WiFiAwareTimings.settleAfterDropS }
+
+    /// Bug B: dos conexiones montando a la vez el datapath con el mismo par cayeron las dos
+    /// (17, 20-oct 20:57:57: medios «connectionTerminated», control «connectionFailed»), y
+    /// una de medios lista sobre un datapath viejo se quedó 85 s abierta mientras el control
+    /// no subía (16 Pro, 21-oct 09:45). Con el control arriba, la de medios queda lista en
+    /// décimas (20-oct 20:46:56: «medios mudos» al subir el control y primera trama a 0,1 s).
+    public var mediaAfterControl: Bool { true }
 
     public static var isSupported: Bool {
         WACapabilities.supportedFeatures.contains(.wifiAware)

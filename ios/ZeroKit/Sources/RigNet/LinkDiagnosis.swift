@@ -42,12 +42,18 @@ public struct LinkDiagnosis: Equatable, Sendable {
     public var controlAttempts: Int
     /// Segundos sin el control arriba (desde el arranque o la última caída); nil, arriba.
     public var withoutLinkS: Double?
+    /// Bug B (2026-10-21): intentos de control seguidos que no han subido (el que busca),
+    /// borrones hechos y, si hay uno en curso, los segundos que le quedan de pausa.
+    public var failedAttempts: Int
+    public var searchResets: Int
+    public var quietS: Double?
 
     public init(
         role: Role, medium: String, state: LinkTransportState, waiting: String? = nil,
         lastRendezvousEnd: String? = nil, lastDrop: String? = nil, rendezvousReady: Bool = false,
         announcements: Int = 0, mediaAnnouncements: Int = 0, rendezvousOpened: Int = 0, resubscribes: Int = 0,
-        republishes: Int = 0, controlAttempts: Int = 0, withoutLinkS: Double? = nil
+        republishes: Int = 0, controlAttempts: Int = 0, withoutLinkS: Double? = nil, failedAttempts: Int = 0,
+        searchResets: Int = 0, quietS: Double? = nil
     ) {
         self.role = role
         self.medium = medium
@@ -63,6 +69,9 @@ public struct LinkDiagnosis: Equatable, Sendable {
         self.republishes = republishes
         self.controlAttempts = controlAttempts
         self.withoutLinkS = withoutLinkS
+        self.failedAttempts = failedAttempts
+        self.searchResets = searchResets
+        self.quietS = quietS
     }
 
     /// La frase para la cancha. Con la sesión, dice además si el control subió y la sesión no
@@ -80,6 +89,12 @@ public struct LinkDiagnosis: Equatable, Sendable {
             break
         }
         let citas = "\(rendezvousOpened) citas, \(role == .publishes ? republishes : resubscribes) rehechas"
+        if role == .searches, let quietS {
+            // El borrón (Bug B): se dice que es a propósito, cuánto le queda y por qué.
+            let porque = lastDrop.map { "; la última caída: \($0)" } ?? ""
+            return String(format: "en pausa %.0f s más para que Wi-Fi Aware suelte el enlace viejo (borrón %d%@)",
+                          quietS.rounded(.up), searchResets, porque)
+        }
         if let waiting {
             return role == .publishes ? "la cita no se publica: \(waiting) (\(citas))"
                 : "la suscripción espera: \(waiting) (\(citas))"
@@ -120,6 +135,9 @@ public struct LinkDiagnosis: Equatable, Sendable {
             "republishes": republishes,
             "control_attempts": controlAttempts,
             "without_link_s": withoutLinkS ?? -1,
+            "failed_attempts": failedAttempts,
+            "search_resets": searchResets,
+            "quiet_s": quietS ?? -1,
         ]
     }
 }

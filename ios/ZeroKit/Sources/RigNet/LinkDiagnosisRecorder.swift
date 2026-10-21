@@ -116,7 +116,7 @@ public final class LinkDiagnosisRecorder {
             "stats": [
                 "reconnects": m.stats.reconnects, "silence_drops": m.stats.silenceDrops,
                 "rendezvous_ends": m.stats.rendezvousEnds, "resubscribes": m.stats.resubscribes,
-                "republishes": m.stats.republishes,
+                "republishes": m.stats.republishes, "search_resets": m.stats.searchResets,
             ],
         ]
         if let linkedAfterS { informe["linked_after_s"] = (linkedAfterS * 10).rounded() / 10 }

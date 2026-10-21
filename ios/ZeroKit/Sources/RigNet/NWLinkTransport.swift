@@ -136,6 +136,20 @@ public final class NWLinkTransport: LinkTransport {
         return ageS >= limitS
     }
 
+    /// Si el que busca hace borrón tras un intento de control que no subió (Bug B,
+    /// 2026-10-21): la cita da tope y van ya ese número de intentos seguidos sin subir.
+    static func searchNeedsReset(failedAttempts: Int, limit: Int?) -> Bool {
+        guard let limit, limit > 0 else { return false }
+        return failedAttempts >= limit
+    }
+
+    /// La pausa del borrón que hace `previous + 1` seguido por intentos fallidos: la de su
+    /// turno en el calendario de la cita, y la última para los que pasen de ahí.
+    static func resetQuietS(previous: Int, schedule: [Double]) -> Double {
+        guard let ultima = schedule.last else { return 0 }
+        return previous < schedule.count ? schedule[max(previous, 0)] : ultima
+    }
+
     public var onFrame: ((LinkFrame, LinkChannel) -> Void)?
     public var onState: ((LinkTransportState) -> Void)?
     public var onPath: ((String) -> Void)?
@@ -275,6 +289,15 @@ public final class NWLinkTransport: LinkTransport {
     // llegado alguien desde entonces.
     private var listenerQuietSinceNs: UInt64?
     private var controlArrived = false
+    // Bug B (2026-10-21): el borrón del que busca. Intentos de control seguidos sin subir,
+    // borrones seguidos por ellos desde que el control subió por última vez, y la pausa en
+    // curso (hasta cuándo, en ns de uptime; y su turno, para que un fin de pausa viejo no
+    // abra nada).
+    private var failedAttempts = 0
+    private var failedResets = 0
+    private var quietUntilNs: UInt64?
+    private var quietTurn = 0
+    private var quiet: Bool { quietUntilNs != nil }
     private var mediaListenerQuietSinceNs: UInt64?
     private var mediaArrived = false
     private var publicationWatchdog: DispatchSourceTimer?
@@ -303,7 +326,9 @@ public final class NWLinkTransport: LinkTransport {
                 announcements: controlCandidates.count, mediaAnnouncements: mediaCandidates.count,
                 rendezvousOpened: citasAbiertas, resubscribes: stats.resubscribes, republishes: stats.republishes,
                 controlAttempts: intentosControl,
-                withoutLinkS: state == .connected ? nil : sinEnlaceDesdeNs.map { Double(ahora &- $0) / 1e9 }
+                withoutLinkS: state == .connected ? nil : sinEnlaceDesdeNs.map { Double(ahora &- $0) / 1e9 },
+                failedAttempts: failedAttempts, searchResets: stats.searchResets,
+                quietS: quietUntilNs.map { Double($0 > ahora ? $0 - ahora : 0) / 1e9 }
             )
         }
     }
@@ -391,6 +416,8 @@ public final class NWLinkTransport: LinkTransport {
             cancelRetiredListeners()
             cancellingListeners = [:]
             pendingPublication = [:]
+            quietUntilNs = nil
+            quietTurn += 1
             pathMonitor?.cancel()
             pathMonitor = nil
             state = .idle
@@ -565,8 +592,9 @@ public final class NWLinkTransport: LinkTransport {
             scheduleReopen()
             return
         }
-        browser.browseResultsChangedHandler = { [weak self] results, cambios in
-            guard let self else { return }
+        browser.browseResultsChangedHandler = { [weak self, weak browser] results, cambios in
+            // Lo que vea una suscripción ya soltada no cuenta (Bug B).
+            guard let self, let browser, browser === self.browser else { return }
             // En un orden fijo (los resultados son un conjunto): rotar tiene que avanzar.
             self.controlCandidates = results.map(\.endpoint).sorted { "\($0)" < "\($1)" }
             self.noteResults("control", total: results.count, cambios: cambios)
@@ -580,7 +608,10 @@ public final class NWLinkTransport: LinkTransport {
                 return nil
             }.last
             if let nuevo {
-                self.connection?.cancel()
+                if let previo = self.connection {
+                    self.note("control: se deja el intento en marcha por un anuncio nuevo")
+                    previo.cancel()
+                }
                 self.openConnection(to: nuevo)
             } else if self.connection == nil, !self.controlCandidates.isEmpty {
                 // Tras una caída, el siguiente anuncio: el que falló puede ser el muerto.
@@ -644,6 +675,8 @@ public final class NWLinkTransport: LinkTransport {
             switch estado {
             case .ready:
                 self.reconnectAttempt = 0
+                self.failedAttempts = 0
+                self.failedResets = 0
                 // El vigía de silencio se arma con los primeros medios de esta conexión.
                 self.peerMediaSinceConnect = false
                 self.sinEnlaceDesdeNs = nil
@@ -658,6 +691,11 @@ public final class NWLinkTransport: LinkTransport {
                 }
                 self.state = .connected
                 self.receive(on: nueva)
+                if case .browse = self.mode, self.rendezvous.mediaAfterControl, self.mediaConnection == nil,
+                   let primero = self.mediaCandidates.first {
+                    self.mediaCandidateIndex = 0
+                    self.openMediaConnection(to: primero, why: "el control subió")
+                }
             case let .failed(error):
                 self.log.info("control caído: \(String(describing: error))")
                 self.dropConnection("falló: \(self.describe(error))")
@@ -702,6 +740,23 @@ public final class NWLinkTransport: LinkTransport {
             controlCandidateIndex += 1
             // El browser del control lo abre nuevo scheduleReopen.
             endedRendezvous.remove(.control)
+            // Bug B (2026-10-21): por Wi-Fi Aware, perder un control que estaba arriba o
+            // encadenar intentos que no suben suelta TODO lo del par anterior y deja un rato
+            // sin nada abierto antes de volver a suscribirse (resetSearch).
+            if estabaArriba, let pausa = rendezvous.settleAfterDropS {
+                failedAttempts = 0
+                resetSearch("el control cayó: \(motivo)", quietS: pausa)
+                return
+            }
+            if !estabaArriba { failedAttempts += 1 }
+            if Self.searchNeedsReset(failedAttempts: failedAttempts, limit: rendezvous.failedAttemptsBeforeReset) {
+                let pausa = Self.resetQuietS(previous: failedResets, schedule: rendezvous.resetQuietS)
+                let n = failedAttempts
+                failedResets += 1
+                failedAttempts = 0
+                resetSearch("\(n) intentos seguidos sin subir; el último: \(motivo)", quietS: pausa)
+                return
+            }
             scheduleReopen()
         }
         // Con vigía de silencio (Wi-Fi Aware) el enlace es uno: si cae el control que
@@ -766,6 +821,55 @@ public final class NWLinkTransport: LinkTransport {
         mediaConnection = nil
     }
 
+    // MARK: - El borrón del que busca (Bug B, 2026-10-21)
+
+    /// El que busca suelta todo lo del par anterior —el intento o la conexión de control, la
+    /// de medios, las dos suscripciones y sus anuncios— y no abre nada en `quietS`; después
+    /// se suscribe de cero. Con el maestro cerrado y vuelto a abrir, el esclavo seguía viendo
+    /// su anuncio y cada intento se quedaba «sin respuesta en 10 s», diez seguidos, con una
+    /// conexión de medios lista 85 s sobre un datapath que el maestro nuevo no veía (16 Pro,
+    /// 21-oct 09:45). Solo lo curaba matar la app y esperar: esto hace lo mismo con el
+    /// transporte, sin tocar la cámara ni la emisión.
+    private func resetSearch(_ motivo: String, quietS: Double) {
+        stats.searchResets += 1
+        note(String(format: "borrón (%@): se suelta todo y %.0f s sin buscar", motivo, quietS))
+        connection?.cancel()
+        connection = nil
+        browser?.cancel()
+        browser = nil
+        browserOpenedNs = nil
+        discardMedia("borrón")
+        mediaOpenedAt = nil
+        mediaBrowser?.cancel()
+        mediaBrowser = nil
+        mediaBrowserOpenedNs = nil
+        controlCandidates = []
+        mediaCandidates = []
+        endedRendezvous = []
+        citaLista = false
+        state = .connecting
+        quietTurn += 1
+        let turno = quietTurn
+        quietUntilNs = DispatchTime.now().uptimeNanoseconds &+ UInt64(max(quietS, 0) * 1e9)
+        queue.asyncAfter(deadline: .now() + max(quietS, 0)) { [weak self] in self?.endQuiet(turno) }
+    }
+
+    private func endQuiet(_ turno: Int) {
+        guard !stopped, turno == quietTurn, quiet else { return }
+        quietUntilNs = nil
+        note("fin de la pausa: se busca de cero")
+        switch mode {
+        case .browse:
+            openBrowser()
+            openMediaBrowser()
+        case .connect:
+            open()
+            openMedia()
+        case .advertise, .listen:
+            break
+        }
+    }
+
     // MARK: - El vigía de silencio (IOS-14c)
 
     /// Por Wi-Fi Aware, si el datapath muere nada avisa: el TCP tarda decenas de segundos
@@ -813,7 +917,7 @@ public final class NWLinkTransport: LinkTransport {
     }
 
     private func checkSubscriptions() {
-        guard !stopped, let limite = rendezvous.resubscribeAfterS else { return }
+        guard !stopped, !quiet, let limite = rendezvous.resubscribeAfterS else { return }
         let ahora = DispatchTime.now().uptimeNanoseconds
         let edad = { (ns: UInt64?) in ns.map { Double(ahora &- $0) / 1e9 } }
         // El control: sin enlace y sin un intento en marcha.
@@ -1015,6 +1119,7 @@ public final class NWLinkTransport: LinkTransport {
     /// abre con una conexión en marcha: abrirlo pasa el estado a `.connecting`.
     private func renewEndedRendezvous() {
         guard !stopped else { return }
+        if quiet, case .browse = mode { return }
         for canal in endedRendezvous {
             switch (mode, canal) {
             case (.advertise, _):
@@ -1059,7 +1164,7 @@ public final class NWLinkTransport: LinkTransport {
         let delay = Self.reconnectDelaysS[min(reconnectAttempt, Self.reconnectDelaysS.count - 1)]
         reconnectAttempt += 1
         queue.asyncAfter(deadline: .now() + delay) { [weak self] in
-            guard let self, !self.stopped, self.connection == nil else { return }
+            guard let self, !self.stopped, !self.quiet, self.connection == nil else { return }
             switch self.mode {
             case .browse:
                 self.browser?.cancel()
@@ -1082,6 +1187,9 @@ public final class NWLinkTransport: LinkTransport {
                 self.readControl(data)
             }
             if terminado || error != nil {
+                // La lectura que acaba de una conexión ya descartada (la cancelamos al tirarla)
+                // no es otra caída: antes contaba dos y abría dos suscripciones (Bug B).
+                guard connection === self.connection else { return }
                 self.dropConnection(error.map { "al recibir: \(self.describe($0))" } ?? "cerrada por el otro")
                 return
             }
@@ -1136,7 +1244,7 @@ public final class NWLinkTransport: LinkTransport {
             openMediaConnection(to: NWEndpoint.hostPort(
                 host: NWEndpoint.Host(host),
                 port: NWEndpoint.Port(rawValue: port + 1)!
-            ))
+            ), why: "puerto fijo de los tests")
         }
     }
 
@@ -1201,8 +1309,8 @@ public final class NWLinkTransport: LinkTransport {
             note("medios sin browser: \(describe(error))")
             return
         }
-        browser.browseResultsChangedHandler = { [weak self] results, cambios in
-            guard let self else { return }
+        browser.browseResultsChangedHandler = { [weak self, weak browser] results, cambios in
+            guard let self, let browser, browser === self.mediaBrowser else { return }
             // Lo recién aparecido primero: el anuncio viejo de la caché suele ser el que
             // ya estaba.
             let nuevos = cambios.compactMap { cambio -> NWEndpoint? in
@@ -1212,9 +1320,15 @@ public final class NWLinkTransport: LinkTransport {
             let resto = results.map(\.endpoint).filter { e in !nuevos.contains(where: { $0 == e }) }
             self.mediaCandidates = nuevos.reversed() + resto
             self.noteResults("medios", total: results.count, cambios: cambios)
+            // Bug B: por Wi-Fi Aware los medios esperan al control (adopt los conecta al subir).
+            if self.rendezvous.mediaAfterControl, self.state != .connected {
+                self.discardMedia("los medios esperan a que suba el control")
+                return
+            }
             if self.mediaConnection == nil || !nuevos.isEmpty, !self.mediaCandidates.isEmpty {
                 self.mediaCandidateIndex = 0
-                self.openMediaConnection(to: self.mediaCandidates[0])
+                self.openMediaConnection(to: self.mediaCandidates[0],
+                                         why: nuevos.isEmpty ? "sin conexión de medios" : "anuncio nuevo")
             }
         }
         browser.stateUpdateHandler = { [weak self, weak browser] estado in
@@ -1234,22 +1348,27 @@ public final class NWLinkTransport: LinkTransport {
         browser.start(queue: queue)
     }
 
-    private func openMediaConnection(to endpoint: NWEndpoint) {
-        mediaConnection?.cancel()
-        note("medios: se conecta a \(endpoint)")
+    private func openMediaConnection(to endpoint: NWEndpoint, why motivo: String) {
+        discardMedia("otra en su lugar: \(motivo)")
+        note("medios: se conecta a \(endpoint) (\(motivo))")
         let conexion = NWConnection(to: endpoint, using: mediaParameters())
         mediaConnection = conexion
         mediaOpenedAt = Date()
-        conexion.stateUpdateHandler = { [weak self] estado in
+        conexion.stateUpdateHandler = { [weak self, weak conexion] estado in
+            // Lo que diga una conexión ya descartada no cuenta (Bug B).
+            guard let self, let conexion, conexion === self.mediaConnection else { return }
             switch estado {
             case .ready:
-                self?.note("medios: conexión lista")
-                self?.receiveMedia(on: conexion)
+                self.note("medios: conexión lista")
+                self.receiveMedia(on: conexion)
                 // Un sondeo: por UDP, el que escucha solo conoce al otro cuando le llega
                 // algo. El reensamblador del otro lo cuenta como basura y lo tira.
                 conexion.send(content: Data([0]), completion: .contentProcessed { _ in })
             case let .failed(error), let .waiting(error):
-                self?.note("medios: conexión en espera o caída (\(self?.describe(error) ?? ""))")
+                // Se suelta (Bug B): una conexión caída o en espera sin cancelar retiene lo
+                // suyo, y la siguiente la abren un anuncio nuevo o el vigía de medios.
+                self.note("medios: conexión en espera o caída (\(self.describe(error)))")
+                self.discardMedia("en espera o caída")
             default:
                 break
             }
@@ -1285,11 +1404,11 @@ public final class NWLinkTransport: LinkTransport {
             mediaCandidateIndex = (mediaCandidateIndex + 1) % mediaCandidates.count
             log.info("medios mudos: se prueba el anuncio \(self.mediaCandidateIndex)")
             note("medios mudos: se prueba el anuncio \(mediaCandidateIndex + 1) de \(mediaCandidates.count)")
-            openMediaConnection(to: mediaCandidates[mediaCandidateIndex])
+            openMediaConnection(to: mediaCandidates[mediaCandidateIndex], why: "medios mudos")
         case let .connect(host, port):
             openMediaConnection(to: NWEndpoint.hostPort(
                 host: NWEndpoint.Host(host), port: NWEndpoint.Port(rawValue: port + 1)!
-            ))
+            ), why: "medios mudos")
         default:
             break
         }

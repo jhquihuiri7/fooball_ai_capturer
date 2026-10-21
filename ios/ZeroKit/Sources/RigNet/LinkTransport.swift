@@ -49,6 +49,11 @@ public struct LinkTransportStats: Equatable, Sendable {
     /// nadie a ellas, publicadas o en espera (Wi-Fi Aware, 2026-10-15).
     public var republishes = 0
 
+    /// Borrones del que busca: lo soltó todo y estuvo un rato sin nada abierto antes de
+    /// volver a suscribirse, por perder el control o por intentos seguidos que no subían
+    /// (Wi-Fi Aware, Bug B, 2026-10-21).
+    public var searchResets = 0
+
     /// Bytes recibidos por control (TCP). En el maestro son sobre todo las miniaturas del
     /// esclavo, a 1 Hz.
     public var controlBytesReceived = 0
