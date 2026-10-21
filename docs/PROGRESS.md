@@ -12,7 +12,7 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
-## 2026-10-21 · BUGS ABIERTOS de la prueba del cosido del 20-oct (17 + 16 Pro por Wi-Fi Aware, app 1.0.0 (9)) · 🐞 C sin arreglar; A ✅ (probado en el iPhone); B ✅ cerrado el 21-oct por Alexander: el enlace vuelve solo; la espera es de iOS (FB23509767), de 31 a 139 s tras reiniciar un móvil y ~216 s tras cambiar de lado; la (14), que solo alarga el plazo a 240 s, queda sin probar
+## 2026-10-21 · BUGS ABIERTOS de la prueba del cosido del 20-oct (17 + 16 Pro por Wi-Fi Aware, app 1.0.0 (9)) · 🐞 C diagnosticado y con arreglo en la (15), sin probar en el iPhone; A ✅ (probado en el iPhone); B ✅ cerrado el 21-oct por Alexander: el enlace vuelve solo; la espera es de iOS (FB23509767), de 31 a 139 s tras reiniciar un móvil y ~216 s tras cambiar de lado; la (14), que solo alarga el plazo a 240 s, queda sin probar
 
 Leído de los dos iPhone (solo lectura) y del VPS. Ficheros: `Documents/bench/link-diag-*`,
 `program-live-*`, `program-split-*` y `Documents/partido/*.json` de los dos, del 20-oct
@@ -280,6 +280,36 @@ medios tras el control, y un publicador viejo podía cambiarle la cita de medios
 ### Bug C · (sigue) el audio en silencio (entrada del 2026-10-16)
 - Dato nuevo de Alexander: **entró una llamada y el sonido siguió; se dañó un poco
   después**. No basta «interrupción de la llamada» como causa directa.
+- **Diagnóstico del 21-oct**, leído del 17 (solo lectura). La grabación del programa que
+  guarda el propio 17 (`Documents/program-m_f50b97dd8d1a-1792209597.mov` y `…1792211460.mov`)
+  da el sonido al segundo, y se cruza con los `app_events` de `program-live-left-1792209597.json`:
+  - 22:12:12 «cámara interrumpida: otra app usa el micrófono», y Zero pasa al fondo 10 s.
+    **El sonido acaba a las 22:12:13.** `yieldMicrophone` quita el micro de la sesión y solo
+    lo devolvía el fin de una interrupción del audio o de una llamada, una sola vez y sin
+    reintentar. Volvió a las 22:20:48.
+  - Ceros de 22:24:03 a 22:29:31 y desde 22:29:53 **sin ningún aviso de la cámara**, con el
+    micro puesto. Tras PARAR/EMITIR (22:31), ceros los 259 s: EMITIR no toca el micro.
+  - Sin vídeos del mando esa noche (sin `ad_cues` ni vídeos): el sustituto de IOS-103 queda
+    descartado.
+  - Causas que dan ceros exactos con el micro puesto: el audio de la app interrumpido sin
+    que la cámara lo diga (no se miraba); el micro silenciado por el sistema; o la entrada a
+    otra frecuencia (un micro Bluetooth va a 16 o 24 kHz), que `AacEncoder` rechazaba con
+    `.format` búfer a búfer. **Los informes no guardaban nada del micro**, así que no se
+    puede saber cuál fue.
+- **Arreglo (15)**:
+  - `AacEncoder` pasa cualquier frecuencia a 48 kHz, también con un cambio a mitad.
+  - `MicWatch` (RigMedia) y `CaptureEngine.checkMicrophone`, cada segundo: si el micro está
+    fuera, no entrega búferes en 3 s, da ceros exactos 5 s o falla 3 s, y no hay llamada en
+    curso, **se rehace solo**. Reintenta a los 5, 15, 30 y 60 s, y luego cada 60 s. Desde el
+    segundo intento también rehace la salida de audio y reactiva la sesión de audio.
+  - El informe en directo y el final llevan `audio` (búferes, ceros, frecuencia, intentos).
+    `app_events` apunta el micro que se va, vuelve o se rehace, las interrupciones del audio,
+    la ruta con su frecuencia y el reinicio de los servicios de audio. `app_events` guarda
+    ahora los 24 primeros y los 40 últimos (antes, solo los 64 primeros).
+- **Probado**: los 607 tests de ZeroKit (4 saltados), entre ellos los de 44,1 y 16 kHz con
+  cambio a mitad y los de `MicWatchTests`. Compila para iOS. La (15) está instalada en los dos
+  a las 12:21. **Sin probar en el iPhone**: falta provocar el corte (otra app que tome el micro,
+  o una llamada) emitiendo y ver que vuelve solo.
 - Petición: ver en el panel de administrador si hay sonido (un medidor de nivel del audio
   del programa).
 
