@@ -1237,7 +1237,9 @@ class CaptureHostApi {
 
   /// El secreto del mando del partido `matchId`: HMAC-SHA256(S, "zero-control-v1 " ‖
   /// match_id) en base64url (ADR 0023 §3). Lo deriva el nativo, así que el secreto del
-  /// soporte S no pasa nunca a Dart. Vacío si este móvil no tiene S.
+  /// soporte S no pasa nunca a Dart. Sin S (un móvil que nunca lo recibió, en «Una
+  /// cámara»), con el secreto propio de este móvil (Bug A, 2026-10-21): el QR se firma
+  /// siempre. Vacío solo si tampoco hay ese.
   Future<String> controlSecret(String matchId) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.CaptureHostApi.controlSecret$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
@@ -1255,6 +1257,27 @@ class CaptureHostApi {
     )
     ;
     return pigeonVar_replyValue! as String;
+  }
+
+  /// El estado del mando del maestro (Bug A, 2026-10-21), en JSON: `serving`, `port`,
+  /// `match_id`, `addresses`, `can_pair` y `problem`. Va al latido y al informe de la
+  /// emisión.
+  Future<void> noteMandoState(String json) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.CaptureHostApi.noteMandoState$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[json]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
   }
 
   /// El partido que dirige este móvil (IOS-62): va en el hello de las conexiones

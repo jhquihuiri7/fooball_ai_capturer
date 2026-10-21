@@ -35,17 +35,59 @@ String appDocumentsPath() => '${Directory.systemTemp.parent.path}/Documents';
 /// Nombre del fichero del partido en la carpeta del maestro.
 const String matchFileName = 'match.json';
 
-/// Las IPv4 de la LAN de este móvil, la Wi-Fi o el hub primero.
-Future<List<String>> lanAddresses() async {
-  final List<NetworkInterface> interfaces = await NetworkInterface.list(type: InternetAddressType.IPv4);
-  // en0 es la Wi-Fi en iOS; el adaptador Ethernet del hub sale como en1, en2…
-  interfaces.sort((NetworkInterface a, NetworkInterface b) => a.name.compareTo(b.name));
-  return <String>[
+/// Las interfaces por las que un mando de la LAN llega a este móvil, por orden de
+/// preferencia. `en`: en0 es la Wi-Fi en iOS y el adaptador Ethernet del hub sale como
+/// en1, en2…; `bridge`: la red que sirve este móvil cuando comparte sus datos (Bug A,
+/// 2026-10-21: con el punto de acceso personal, en0 se queda sin IPv4 y la red va por
+/// bridge100, 172.20.10.1); `ap`, la interfaz del punto de acceso, por si alguna versión
+/// le da a ella la IPv4. Fuera quedan los datos móviles (`pdp_ip`), Wi-Fi Aware y AWDL.
+const List<String> lanInterfacePrefixes = <String>['en', 'bridge', 'ap'];
+
+/// Las IPv4 de la LAN entre `interfaces`: las de [lanInterfacePrefixes], por ese orden y
+/// por nombre dentro de cada familia; sin loopback ni link-local.
+List<String> lanAddressesOf(List<NetworkInterface> interfaces) {
+  int familia(String nombre) => lanInterfacePrefixes.indexWhere(nombre.startsWith);
+  final List<NetworkInterface> lan = <NetworkInterface>[
     for (final NetworkInterface i in interfaces)
-      if (i.name.startsWith('en'))
-        for (final InternetAddress a in i.addresses)
-          if (!a.isLoopback && !a.isLinkLocal) a.address,
+      if (familia(i.name) >= 0) i,
+  ]..sort((NetworkInterface a, NetworkInterface b) {
+      final int orden = familia(a.name).compareTo(familia(b.name));
+      return orden != 0 ? orden : a.name.compareTo(b.name);
+    });
+  return <String>[
+    for (final NetworkInterface i in lan)
+      for (final InternetAddress a in i.addresses)
+        if (a.type == InternetAddressType.IPv4 && !a.isLoopback && !a.isLinkLocal) a.address,
   ];
+}
+
+/// Las IPv4 de la LAN de este móvil, la Wi-Fi o el hub primero y el punto de acceso detrás.
+Future<List<String>> lanAddresses() async =>
+    lanAddressesOf(await NetworkInterface.list(type: InternetAddressType.IPv4));
+
+/// Por qué no hay QR Mando, tal cual lo lee el operador en la hoja (Bug A, 2026-10-21).
+const String mandoReasonNotServing = 'el mando no está en marcha: este móvil no dirige';
+const String mandoReasonNoLan =
+    'sin red local: conecta este móvil a la Wi-Fi del mando (o comparte sus datos) y '
+    'pulsa REINTENTAR MANDO';
+const String mandoReasonNoSecret = 'sin secreto con el que firmar el QR: entra a mano con el PIN del operador';
+
+/// Lo que dice `problem` cuando el mando no arranca.
+const String mandoFailedPrefix = 'el mando no arrancó';
+
+/// El QR Mando, o por qué no lo hay; y por dónde se entra a mano con el PIN.
+@immutable
+class MandoPairing {
+  const MandoPairing({this.text, this.reason, this.manual = const <Uri>[]});
+
+  /// El texto del QR; null si no hay QR.
+  final String? text;
+
+  /// Por qué no hay QR; null si lo hay.
+  final String? reason;
+
+  /// El panel de este móvil en la LAN (http://IP:puerto), para entrar con el PIN.
+  final List<Uri> manual;
 }
 
 class MasterHost extends ChangeNotifier {
@@ -72,6 +114,7 @@ class MasterHost extends ChangeNotifier {
     this.videoSink,
     this.freeDiskBytes,
     this.localRecording,
+    this.reportState,
     this.eventKind = EventKind.football,
   }) : wallS = wallS ?? _wallClockS,
        _time = time ?? StopwatchTimeSource(),
@@ -154,6 +197,10 @@ class MasterHost extends ChangeNotifier {
   StreamSubscription<void>? _videoChanges;
   Timer? _videoTick;
 
+  /// El estado del mando hacia el latido y el informe de la emisión (Bug A, 2026-10-21):
+  /// un JSON con `serving`, `port`, `match_id`, `addresses`, `can_pair` y `problem`.
+  final Future<void> Function(String json)? reportState;
+
   /// El vídeo del programa mientras se sirve.
   ProgramVideo? get video => _video;
   StreamSubscription<void>? _replicaChanges;
@@ -188,19 +235,55 @@ class MasterHost extends ChangeNotifier {
 
   bool get serving => _server != null;
 
-  /// Hay con qué firmar el QR Mando (sin secreto del soporte, solo abre el PIN).
+  /// Hay con qué firmar el QR Mando (el secreto del soporte o, sin él, el propio del
+  /// móvil; sin ninguno, solo abre el PIN).
   bool get canPair => _secret != null;
 
   int? get boundPort => _server?.port;
 
+  /// La cola de [becomeMaster], [stepDown] y [retry] (Bug A, 2026-10-21): `onRigRole`
+  /// las lanza sin esperar, y una que empieza mientras otra espera al nativo abría un
+  /// segundo servidor en el mismo puerto o dejaba sirviendo a un esclavo. Cada una empieza
+  /// cuando acaba la anterior, así que manda la última.
+  Future<void> _turn = Future<void>.value();
+
+  /// Lo último que pidió el enlace: dirigir y con qué partido (el anunciado, si lo
+  /// empezó este móvil), para [retry].
+  bool _wantsMaster = false;
+  String? _wantedMatchId;
+
+  /// Cerrado con la pantalla: lo que quede en la cola ya no arranca nada.
+  bool _disposed = false;
+
+  Future<void> _inTurn(Future<void> Function() action) {
+    final Future<void> esta = _turn.then((_) => _disposed ? Future<void>.value() : action());
+    _turn = esta.catchError((Object _) {});
+    return esta;
+  }
+
   /// Pasa a servir el partido `matchId` (el del enlace) o, si es null, el guardado o uno
   /// nuevo, que se anuncia al enlace. Dos veces con el mismo partido no hace nada.
-  Future<void> becomeMaster(String? matchId) async {
+  Future<void> becomeMaster(String? matchId) => _inTurn(() {
+    _wantsMaster = true;
+    _wantedMatchId = matchId;
+    return _becomeMaster(matchId);
+  });
+
+  /// «REINTENTAR MANDO»: si el enlace dijo que este móvil dirige y el mando no se sirve,
+  /// lo arranca otra vez con el mismo partido. No toca la emisión, que es nativa. Si ya
+  /// se sirve, no hace nada: lo que falte (la red) lo vuelve a mirar la hoja.
+  Future<void> retry() => _inTurn(() async {
+    if (_wantsMaster && !serving) {
+      await _becomeMaster(_wantedMatchId);
+    }
+  });
+
+  Future<void> _becomeMaster(String? matchId) async {
     final MatchEngine? actual = _engine;
     if (actual != null && serving && (matchId == null || actual.matchId == matchId)) {
       return;
     }
-    await stepDown();
+    await _stepDown();
     try {
       final MatchTimeSource reloj = _time;
       if (reloj is RigTimeSource) {
@@ -220,6 +303,8 @@ class MasterHost extends ChangeNotifier {
       if (matchId == null) {
         await announceMatch(engine.matchId);
       }
+      // Reintentar sigue con este partido, ya anunciado, y no empieza otro.
+      _wantedMatchId = engine.matchId;
       final String secreto = await controlSecret(engine.matchId);
       final String pin = await operatorPin();
       _secret = secreto.isEmpty ? null : secreto.codeUnits;
@@ -233,7 +318,13 @@ class MasterHost extends ChangeNotifier {
         thumbnail: thumbnail,
         rigStatus: rigStatus,
       );
-      _server = await MasterApiServer.start(api, port: port);
+      final MasterApiServer servidor = await MasterApiServer.start(api, port: port);
+      if (_disposed) {
+        // La pantalla se cerró mientras arrancaba: que no quede un servidor sin dueño.
+        await servidor.close();
+        return;
+      }
+      _server = servidor;
       _engine = engine;
       _api = api;
       _engineTick = Timer.periodic(const Duration(seconds: 1), (_) => engine.tick());
@@ -243,9 +334,32 @@ class MasterHost extends ChangeNotifier {
       await _startAds(engine);
       problem = engine.lineupsError;
     } on Exception catch (error) {
-      problem = 'no se pudo servir el mando: $error';
+      _secret = null;
+      problem = '$mandoFailedPrefix: $error';
     }
     notifyListeners();
+    unawaited(_reportState());
+  }
+
+  /// El estado del mando al latido (Bug A): lo que se ve en la pantalla, también en el
+  /// informe de la emisión. Que no llegue no cambia nada del mando.
+  Future<void> _reportState() async {
+    final Future<void> Function(String json)? sink = reportState;
+    if (sink == null) {
+      return;
+    }
+    try {
+      await sink(jsonEncode(<String, Object?>{
+        'serving': serving,
+        'port': boundPort,
+        'match_id': _engine?.matchId,
+        'addresses': serving ? await addresses() : const <String>[],
+        'can_pair': canPair,
+        'problem': problem,
+      }));
+    } on Exception {
+      // Sin canal o sin interfaces: el latido se queda con el estado anterior.
+    }
   }
 
   Future<void> _migrateIfNeeded(String? matchId) async {
@@ -399,7 +513,12 @@ class MasterHost extends ChangeNotifier {
   }
 
   /// Deja de servir: otro móvil dirige, o se cerró la sesión.
-  Future<void> stepDown() async {
+  Future<void> stepDown() => _inTurn(() {
+    _wantsMaster = false;
+    return _stepDown();
+  });
+
+  Future<void> _stepDown() async {
     _stopGraphics();
     await _stopVideo();
     _stopReplica();
@@ -408,9 +527,15 @@ class MasterHost extends ChangeNotifier {
     _server = null;
     _engine = null;
     _secret = null;
+    // Un fallo de arranque ya no es de este rol.
+    final bool habiaProblema = problem != null;
+    problem = null;
     if (server != null) {
       await server.close();
+    }
+    if (server != null || habiaProblema) {
       notifyListeners();
+      unawaited(_reportState());
     }
   }
 
@@ -419,26 +544,37 @@ class MasterHost extends ChangeNotifier {
     _server?.api.operatorPin = pin.isEmpty ? null : pin;
   }
 
-  /// El texto del QR Mando: este móvil, el otro y el VPS, con un token del partido.
-  /// null si no se sirve o no hay secreto con el que firmarlo.
-  Future<String?> pairingText({bool stream = false}) async {
+  /// El texto del QR Mando, o null; [pairing] dice además por qué no.
+  Future<String?> pairingText({bool stream = false}) async => (await pairing(stream: stream)).text;
+
+  /// El QR Mando: este móvil, el otro y el VPS, con un token del partido. Sin QR, el
+  /// motivo (Bug A: la hoja decía «sin secreto» por cualquier cosa) y, si se sirve, la
+  /// dirección del panel para entrar a mano con el PIN.
+  Future<MandoPairing> pairing({bool stream = false}) async {
     final MatchEngine? engine = _engine;
-    final List<int>? secreto = _secret;
     final int? puerto = boundPort;
-    if (engine == null || secreto == null || puerto == null) {
-      return null;
+    if (engine == null || puerto == null) {
+      return MandoPairing(reason: problem ?? mandoReasonNotServing);
     }
-    final List<String> mias = await addresses();
-    final String otro = await peerAddress();
+    final List<Uri> mias = <Uri>[
+      for (final String ip in await _orNothing(addresses, const <String>[]))
+        Uri(scheme: 'http', host: ip, port: puerto),
+    ];
+    final String otro = await _orNothing(peerAddress, '');
+    // Sin dirección propia ni VPS no hay QR: el otro móvil solo sirve tras un relevo.
+    if (mias.isEmpty && vpsUrl == null) {
+      return const MandoPairing(reason: mandoReasonNoLan);
+    }
+    final List<int>? secreto = _secret;
+    if (secreto == null) {
+      return MandoPairing(reason: mandoReasonNoSecret, manual: mias);
+    }
     final List<Uri> panels = <Uri>[
-      for (final String ip in mias) Uri(scheme: 'http', host: ip, port: puerto),
+      ...mias,
       if (otro.isNotEmpty) Uri(scheme: 'http', host: otro, port: masterApiPort),
       ?vpsUrl,
     ];
-    if (panels.isEmpty) {
-      return null;
-    }
-    return PanelPairing.compose(
+    final String texto = PanelPairing.compose(
       panels,
       issueToken(
         secreto,
@@ -449,10 +585,29 @@ class MasterHost extends ChangeNotifier {
         ),
       ),
     );
+    return MandoPairing(text: texto, manual: mias);
+  }
+
+  /// Lo que devuelve `read`, o `nothing` si el canal o el sistema fallan: un fallo al
+  /// mirar la red es «sin red», no una hoja colgada.
+  static Future<T> _orNothing<T>(Future<T> Function() read, T nothing) async {
+    try {
+      return await read();
+    } on Exception {
+      return nothing;
+    }
+  }
+
+  @override
+  void notifyListeners() {
+    if (!_disposed) {
+      super.notifyListeners();
+    }
   }
 
   @override
   void dispose() {
+    _disposed = true;
     _stopGraphics();
     _stopReplica();
     _stopAds();

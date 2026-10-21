@@ -77,7 +77,7 @@ void main() {
     expect(await host.pairingText(), isNull);
   });
 
-  test('sin secreto del soporte sirve igual, pero sin QR', () async {
+  test('sin secreto sirve igual, sin QR: lo dice y da el panel para el PIN', () async {
     final MasterHost sinS = MasterHost(
       directory: dir,
       controlSecret: (_) async => '',
@@ -91,7 +91,136 @@ void main() {
     expect(sinS.serving, isTrue);
     expect(sinS.canPair, isFalse);
     expect(await sinS.pairingText(), isNull);
+    final MandoPairing p = await sinS.pairing();
+    expect(p.reason, mandoReasonNoSecret);
+    expect(p.manual.single.toString(), 'http://192.168.7.20:${sinS.boundPort}');
     await sinS.stepDown();
+  });
+
+  test('sin IPv4 propia: «sin red local» y no «sin secreto», aunque el otro móvil tenga dirección', () async {
+    final MasterHost sinRed = MasterHost(
+      directory: dir,
+      controlSecret: (String id) async => ascii.decode(deriveControlSecret(s, id)),
+      announceMatch: (_) async {},
+      // El otro móvil sí tiene dirección, pero no sirve el mando mientras no haya relevo.
+      peerAddress: () async => '172.20.10.3',
+      operatorPin: () async => '',
+      addresses: () async => <String>[],
+      port: 0,
+    );
+    await sinRed.becomeMaster('m_x');
+    final MandoPairing p = await sinRed.pairing();
+    expect(p.text, isNull);
+    expect(p.reason, mandoReasonNoLan);
+    expect(p.manual, isEmpty);
+    await sinRed.stepDown();
+  });
+
+  test('sin servir: el motivo; y si no arrancó, el problema tal cual', () async {
+    expect((await host.pairing()).reason, mandoReasonNotServing);
+    // El puerto ocupado (otro servidor, una pantalla anterior): no arranca.
+    final ServerSocket ocupado = await ServerSocket.bind(InternetAddress.anyIPv4, 0);
+    final MasterHost h = MasterHost(
+      directory: dir,
+      controlSecret: (String id) async => ascii.decode(deriveControlSecret(s, id)),
+      announceMatch: api.setMatchId,
+      peerAddress: () async => '',
+      operatorPin: () async => '',
+      addresses: () async => <String>['192.168.7.20'],
+      wallS: () => _ahoraS,
+      port: ocupado.port,
+    );
+    await h.becomeMaster(null);
+    expect(h.serving, isFalse);
+    expect(h.problem, startsWith('$mandoFailedPrefix: '));
+    expect(h.canPair, isFalse);
+    final MandoPairing p = await h.pairing();
+    expect(p.text, isNull);
+    expect(p.reason, h.problem);
+    final String anunciado = api.announcedMatchId!;
+
+    // «REINTENTAR MANDO» con el puerto libre: sirve el mismo partido, sin anunciar otro.
+    await ocupado.close();
+    api.announcedMatchId = null;
+    await h.retry();
+    expect(h.serving, isTrue);
+    expect(h.problem, isNull);
+    expect(h.engine!.matchId, anunciado);
+    expect(api.announcedMatchId, isNull);
+    expect((await h.pairing()).text, isNotNull);
+
+    // Ya sirviendo, reintentar no reabre nada; de esclavo, tampoco arranca.
+    final int? puerto = h.boundPort;
+    await h.retry();
+    expect(h.boundPort, puerto);
+    await h.stepDown();
+    await h.retry();
+    expect(h.serving, isFalse);
+    expect(h.problem, isNull);
+  });
+
+  test('el estado del mando sale hacia el latido al servir y al dejarlo', () async {
+    final List<Map<String, Object?>> estados = <Map<String, Object?>>[];
+    final MasterHost h = MasterHost(
+      directory: dir,
+      controlSecret: (String id) async => ascii.decode(deriveControlSecret(s, id)),
+      announceMatch: (_) async {},
+      peerAddress: () async => '',
+      operatorPin: () async => '',
+      addresses: () async => <String>['172.20.10.1'],
+      port: 0,
+      reportState: (String json) async => estados.add(jsonDecode(json) as Map<String, Object?>),
+    );
+    await h.becomeMaster('m_latido');
+    await pumpEventQueue();
+    expect(estados.last, <String, Object?>{
+      'serving': true,
+      'port': h.boundPort,
+      'match_id': 'm_latido',
+      'addresses': <Object?>['172.20.10.1'],
+      'can_pair': true,
+      'problem': null,
+    });
+    await h.stepDown();
+    await pumpEventQueue();
+    expect(estados.last['serving'], isFalse);
+    expect(estados.last['addresses'], isEmpty);
+  });
+
+  group('lanAddressesOf', () {
+    test('el punto de acceso (bridge100) cuenta, detrás de la Wi-Fi; los datos móviles no', () {
+      final List<NetworkInterface> red = <NetworkInterface>[
+        _Interfaz('pdp_ip0', <String>['10.120.4.7']),
+        _Interfaz('bridge100', <String>['172.20.10.1']),
+        _Interfaz('lo0', <String>['127.0.0.1']),
+        _Interfaz('en0', <String>['192.168.1.34']),
+        _Interfaz('awdl0', <String>['169.254.3.9']),
+      ];
+      expect(lanAddressesOf(red), <String>['192.168.1.34', '172.20.10.1']);
+    });
+
+    test('el móvil que comparte datos: en0 sin IPv4, solo el puente', () {
+      expect(
+        lanAddressesOf(<NetworkInterface>[
+          _Interfaz('en0', <String>[]),
+          _Interfaz('pdp_ip0', <String>['10.120.4.7']),
+          _Interfaz('bridge100', <String>['172.20.10.1']),
+        ]),
+        <String>['172.20.10.1'],
+      );
+    });
+
+    test('el orden: en (Wi-Fi y hub), bridge y ap; sin link-local ni IPv6', () {
+      expect(
+        lanAddressesOf(<NetworkInterface>[
+          _Interfaz('ap1', <String>['172.20.10.2']),
+          _Interfaz('en2', <String>['192.168.50.2', '169.254.7.7']),
+          _Interfaz('bridge100', <String>['172.20.10.1', 'fe80::1']),
+          _Interfaz('en0', <String>['192.168.1.34']),
+        ]),
+        <String>['192.168.1.34', '192.168.50.2', '172.20.10.1', '172.20.10.2'],
+      );
+    });
   });
 
   test('CaptureSession lo arranca al dirigir y lo para al pasar a esclavo', () async {
@@ -102,6 +231,20 @@ void main() {
     session.onRigRole(RigRole.slave, 2, 'm_s');
     await _until(() => !host.serving);
   });
+}
+
+/// Una interfaz de red de mentira, con el nombre que da iOS y sus direcciones.
+class _Interfaz implements NetworkInterface {
+  _Interfaz(this.name, List<String> ips) : addresses = <InternetAddress>[for (final String ip in ips) InternetAddress(ip)];
+
+  @override
+  final String name;
+
+  @override
+  final List<InternetAddress> addresses;
+
+  @override
+  int get index => 0;
 }
 
 Future<void> _until(bool Function() condition) async {

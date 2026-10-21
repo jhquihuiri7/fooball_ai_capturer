@@ -159,6 +159,71 @@ final class ProgramRunTests: XCTestCase {
         XCTAssertEqual(guardado, [])
     }
 
+    // MARK: - ControlKeySource (Bug A, 2026-10-21)
+
+    private struct KeychainRoto: Error {}
+
+    func testWithTheRigSecretTheControlKeyIsTheRigSecret() {
+        var leido = false
+        let k = ControlKeySource.resolve(
+            rig: Data(repeating: 1, count: 32),
+            cached: .init(secret: Data(repeating: 9, count: 32), origin: .device),
+            stored: { leido = true; return .success(nil) }, save: { _ in XCTFail("no guarda"); return true }
+        )
+        XCTAssertEqual(k, .init(secret: Data(repeating: 1, count: 32), origin: .rig))
+        XCTAssertFalse(leido, "con S no se mira el secreto propio")
+    }
+
+    func testWithoutTheRigSecretTheDeviceSecretIsCreatedOnceAndKept() {
+        var guardado: [String] = []
+        let nuevo = ControlKeySource.resolve(
+            rig: nil, cached: nil, stored: { .success(nil) },
+            generate: { Data(repeating: 7, count: ControlKeySource.deviceSecretBytes) },
+            save: { guardado.append($0); return true }
+        )
+        XCTAssertEqual(nuevo, .init(secret: Data(repeating: 7, count: 32), origin: .device))
+        XCTAssertEqual(guardado, [Data(repeating: 7, count: 32).base64EncodedString()])
+        // La siguiente vez (otra app abierta) sale del Keychain y no se crea otra.
+        let otraVez = ControlKeySource.resolve(
+            rig: nil, cached: nil, stored: { .success(guardado[0]) },
+            generate: { XCTFail("no crea otra"); return Data() }, save: { _ in XCTFail("no guarda"); return true }
+        )
+        XCTAssertEqual(otraVez, nuevo)
+        // En el mismo proceso, la ya resuelta, sin leer el Keychain.
+        let enMemoria = ControlKeySource.resolve(
+            rig: nil, cached: nuevo, stored: { XCTFail("no lee"); return .success(nil) },
+            save: { _ in XCTFail("no guarda"); return true }
+        )
+        XCTAssertEqual(enMemoria, nuevo)
+    }
+
+    func testABrokenKeychainGivesAKeyThatIsNotSavedOverTheOldOne() {
+        let k = ControlKeySource.resolve(
+            rig: nil, cached: nil, stored: { .failure(KeychainRoto()) },
+            generate: { Data(repeating: 3, count: 32) }, save: { _ in XCTFail("no pisa"); return true }
+        )
+        XCTAssertEqual(k, .init(secret: Data(repeating: 3, count: 32), origin: .deviceUnsaved))
+        let sinGuardar = ControlKeySource.resolve(
+            rig: nil, cached: nil, stored: { .success(nil) },
+            generate: { Data(repeating: 4, count: 32) }, save: { _ in false }
+        )
+        XCTAssertEqual(sinGuardar.origin, .deviceUnsaved)
+        // Lo guardado roto (otro tamaño, no base64) se sustituye.
+        var guardado: [String] = []
+        let sustituida = ControlKeySource.resolve(
+            rig: nil, cached: nil, stored: { .success(Data(repeating: 1, count: 8).base64EncodedString()) },
+            generate: { Data(repeating: 5, count: 32) }, save: { guardado.append($0); return true }
+        )
+        XCTAssertEqual(sustituida.secret, Data(repeating: 5, count: 32))
+        XCTAssertEqual(guardado.count, 1)
+    }
+
+    func testTheDeviceSecretIsRandomAnd32Bytes() {
+        let a = ControlKeySource.randomDeviceSecret()
+        XCTAssertEqual(a.count, 32)
+        XCTAssertNotEqual(a, ControlKeySource.randomDeviceSecret())
+    }
+
     // MARK: - RateMeter
 
     func testTheRateIsTheRiseSinceTheLastReading() {

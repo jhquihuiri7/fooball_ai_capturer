@@ -152,6 +152,8 @@ class _CapturePageState extends State<CapturePage> {
               videoSink: RigVideoSink(),
               freeDiskBytes: () => _session.status?.freeDiskBytes,
               localRecording: () => _session.saveVideo,
+              // El estado del mando, al latido y al informe de la emisión (Bug A).
+              reportState: _api.noteMandoState,
               eventKind: widget.eventKind,
             );
 

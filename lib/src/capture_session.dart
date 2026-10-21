@@ -893,6 +893,7 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
     rigTerm = term;
     rigMatchId = matchId;
     // El que dirige sirve el mando en la LAN (IOS-62); el que deja de dirigir, cierra.
+    // Sin esperar: el host las pone en cola y manda la última (Bug A, 2026-10-21).
     final MasterHost? host = masterHost;
     if (host != null) {
       unawaited(role == RigRole.master ? host.becomeMaster(matchId) : host.stepDown());

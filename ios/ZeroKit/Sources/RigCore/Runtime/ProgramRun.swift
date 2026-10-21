@@ -157,6 +157,68 @@ public enum RigSecretSource {
     }
 }
 
+/// La clave con la que este móvil firma y verifica el mando (ADR 0023 §3; Bug A,
+/// 2026-10-21). Con el secreto del soporte S, S: lo comparten los dos móviles y el VPS, y
+/// cualquiera de ellos acepta el token del otro. Sin S —un iPhone que nunca lo recibió,
+/// en «Una cámara»— no había con qué firmar el QR Mando, ni matando la app; ahí basta un
+/// secreto propio de este móvil, porque el único que verifica es él: aleatorio, creado
+/// una vez y guardado en su Keychain.
+public enum ControlKeySource {
+    /// De dónde salió la clave, para el latido.
+    public enum Origin: String, Sendable {
+        /// El secreto del soporte S.
+        case rig
+        /// El propio de este móvil, guardado.
+        case device
+        /// El propio, que no se pudo guardar (o el Keychain no se pudo leer): vale hasta
+        /// que se cierre la app.
+        case deviceUnsaved = "device_unsaved"
+    }
+
+    public struct Key: Equatable, Sendable {
+        public let secret: Data
+        public let origin: Origin
+
+        public init(secret: Data, origin: Origin) {
+            self.secret = secret
+            self.origin = origin
+        }
+    }
+
+    /// Lo que mide el secreto propio, en bytes: 256 bits, como S.
+    public static let deviceSecretBytes = 32
+
+    /// `rig`: S, si lo hay. `cached`: la propia que ya se resolvió en este proceso (la
+    /// misma en cada QR mientras viva la app). `stored`: lo del Keychain, leído solo si
+    /// hace falta; un `.failure` no se pisa con una nueva, que se queda sin guardar.
+    /// `save`: guarda la nueva en base64 y dice si pudo.
+    public static func resolve(
+        rig: Data?, cached: Key?, stored: () -> Result<String?, any Error>,
+        generate: () -> Data = randomDeviceSecret, save: (String) -> Bool
+    ) -> Key {
+        if let rig { return Key(secret: rig, origin: .rig) }
+        if let cached, cached.origin != .rig { return cached }
+        let leido = stored()
+        if case let .success(texto?) = leido, let guardado = Data(base64Encoded: texto),
+           guardado.count == deviceSecretBytes
+        {
+            return Key(secret: guardado, origin: .device)
+        }
+        let nuevo = generate()
+        guard case .success = leido, save(nuevo.base64EncodedString()) else {
+            return Key(secret: nuevo, origin: .deviceUnsaved)
+        }
+        return Key(secret: nuevo, origin: .device)
+    }
+
+    /// 32 bytes del generador del sistema, que en las plataformas de Apple es
+    /// criptográficamente seguro.
+    public static func randomDeviceSecret() -> Data {
+        var generador = SystemRandomNumberGenerator()
+        return Data((0 ..< deviceSecretBytes).map { _ in UInt8.random(in: .min ... .max, using: &generador) })
+    }
+}
+
 /// El ritmo de un contador entre dos lecturas: los fps del programa y los Mbit/s de la
 /// parte que enseña la pantalla, sin guardar historia.
 public struct RateMeter: Sendable {

@@ -1,8 +1,11 @@
 /// El QR Mando en la pantalla del maestro (IOS-63) y el PIN del operador (IOS-62).
 ///
-/// Aparece solo en el móvil que dirige y sirve el mando. El QR lleva este móvil, el otro y
-/// el VPS (si hay), con un token del partido que caduca a las doce horas; «puede emitir»
-/// añade el ámbito `stream`. El PIN abre los tres ámbitos y se guarda en el Keychain.
+/// Aparece en el móvil que dirige y sirve el mando, o que debería y no pudo (Bug A,
+/// 2026-10-21: el botón ya no desaparece sin decir por qué). El QR lleva este móvil, el
+/// otro y el VPS (si hay), con un token del partido que caduca a las doce horas; «puede
+/// emitir» añade el ámbito `stream`. El PIN abre los tres ámbitos y se guarda en el
+/// Keychain. Sin QR, la hoja dice por qué, da la dirección del panel para entrar con el
+/// PIN y deja reintentar el mando sin matar la app ni parar la emisión.
 library;
 
 import 'dart:async';
@@ -22,7 +25,8 @@ const double mandoQrSize = 260;
 /// Cifras del PIN del operador, como mínimo: con menos se adivina en la banda.
 const int operatorPinMinDigits = 6;
 
-/// El botón «QR MANDO» de la pantalla de captura: solo si este móvil sirve el mando.
+/// El botón «QR MANDO» de la pantalla de captura: si este móvil sirve el mando, o si
+/// tenía que servirlo y no arrancó, con el motivo debajo.
 class MandoQrButton extends StatelessWidget {
   const MandoQrButton({required this.host, required this.savePin, super.key});
 
@@ -36,19 +40,32 @@ class MandoQrButton extends StatelessWidget {
     return ListenableBuilder(
       listenable: host,
       builder: (BuildContext context, Widget? _) {
-        if (!host.serving) {
+        final String? problema = host.serving ? null : host.problem;
+        if (!host.serving && problema == null) {
           return const SizedBox.shrink();
         }
         return Padding(
           padding: const EdgeInsets.only(top: 10),
-          child: ZeroButton.secondary(
-            label: 'QR MANDO',
-            onPressed: () => unawaited(showModalBottomSheet<void>(
-              context: context,
-              backgroundColor: ZeroColors.background,
-              isScrollControlled: true,
-              builder: (BuildContext _) => MandoQrSheet(host: host, savePin: savePin),
-            )),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              ZeroButton.secondary(
+                label: 'QR MANDO',
+                onPressed: () => unawaited(showModalBottomSheet<void>(
+                  context: context,
+                  backgroundColor: ZeroColors.background,
+                  isScrollControlled: true,
+                  builder: (BuildContext _) => MandoQrSheet(host: host, savePin: savePin),
+                )),
+              ),
+              if (problema != null) ...<Widget>[
+                const SizedBox(height: 6),
+                Text(
+                  'Mando: $problema',
+                  style: ZeroType.plex(size: 13, weight: FontWeight.w500, color: ZeroColors.alarm),
+                ),
+              ],
+            ],
           ),
         );
       },
@@ -68,7 +85,7 @@ class MandoQrSheet extends StatefulWidget {
 
 class _MandoQrSheetState extends State<MandoQrSheet> {
   bool _stream = false;
-  String? _text;
+  MandoPairing? _pairing;
   bool _loading = true;
   final TextEditingController _pin = TextEditingController();
   String? _pinNote;
@@ -86,13 +103,20 @@ class _MandoQrSheetState extends State<MandoQrSheet> {
   }
 
   Future<void> _compose() async {
-    final String? texto = await widget.host.pairingText(stream: _stream);
+    final MandoPairing p = await widget.host.pairing(stream: _stream);
     if (mounted) {
       setState(() {
-        _text = texto;
+        _pairing = p;
         _loading = false;
       });
     }
+  }
+
+  /// «REINTENTAR MANDO»: arranca el mando si no se sirve y vuelve a mirar la red.
+  Future<void> _retry() async {
+    setState(() => _loading = true);
+    await widget.host.retry();
+    await _compose();
   }
 
   Future<void> _savePin() async {
@@ -111,7 +135,8 @@ class _MandoQrSheetState extends State<MandoQrSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final String? texto = _text;
+    final MandoPairing? pairing = _pairing;
+    final String? texto = pairing?.text;
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.fromLTRB(
@@ -127,12 +152,26 @@ class _MandoQrSheetState extends State<MandoQrSheet> {
             const ZeroSectionHeader('Mando'),
             if (_loading)
               const Center(child: CircularProgressIndicator())
-            else if (texto == null)
+            else if (texto == null) ...<Widget>[
               Text(
-                'Sin secreto del soporte no se puede firmar el QR: entra con el PIN del operador.',
-                style: ZeroType.plex(size: 14, weight: FontWeight.w400, color: ZeroColors.inkSecondary),
-              )
-            else
+                'Sin QR: ${pairing?.reason ?? mandoReasonNotServing}.',
+                style: ZeroType.plex(size: 14, weight: FontWeight.w500, color: ZeroColors.alarm),
+              ),
+              if (pairing != null && pairing.manual.isNotEmpty) ...<Widget>[
+                const SizedBox(height: 8),
+                Text(
+                  'A mano, con el PIN del operador:',
+                  style: ZeroType.plex(size: 14, weight: FontWeight.w400, color: ZeroColors.inkSecondary),
+                ),
+                for (final Uri panel in pairing.manual)
+                  SelectableText(
+                    panel.toString(),
+                    style: ZeroType.data(size: 16, weight: FontWeight.w600, color: ZeroColors.ink),
+                  ),
+              ],
+              const SizedBox(height: 10),
+              ZeroButton.secondary(label: 'REINTENTAR MANDO', onPressed: () => unawaited(_retry())),
+            ] else
               Center(child: QrView(data: texto, size: mandoQrSize)),
             const SizedBox(height: 12),
             SwitchListTile(

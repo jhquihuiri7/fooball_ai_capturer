@@ -142,11 +142,39 @@ final class RigLinkNW: PeerLinking {
         }
     }
 
-    /// El secreto del mando del partido (ADR 0023 §3), derivado aquí para que S no salga
-    /// de nativo. nil sin secreto del soporte.
-    static func controlSecret(matchId: String) -> String? {
-        guard let secreto = benchSecret() else { return nil }
-        return LinkAuth.controlSecret(secret: secreto, matchId: matchId)
+    /// El secreto del mando del partido (ADR 0023 §3), derivado aquí para que ninguna clave
+    /// salga de nativo: de S o, sin S, del secreto propio de este móvil (Bug A, 2026-10-21;
+    /// `ControlKeySource`). Así el QR Mando se firma siempre.
+    static func controlSecret(matchId: String) -> String {
+        let clave = controlKey()
+        MandoHub.note(keyOrigin: clave.origin.rawValue)
+        return LinkAuth.controlSecret(secret: clave.secret, matchId: matchId)
+    }
+
+    /// La clave propia ya resuelta en este proceso: la misma en cada QR mientras viva la app.
+    private static var deviceKey: ControlKeySource.Key?
+    private static let deviceKeyLock = NSLock()
+
+    private static func controlKey() -> ControlKeySource.Key {
+        deviceKeyLock.lock()
+        defer { deviceKeyLock.unlock() }
+        let clave = ControlKeySource.resolve(
+            rig: benchSecret(), cached: deviceKey,
+            stored: { Result { try KeychainText.deviceControlSecret.read() } }
+        ) { nuevo in
+            do {
+                try KeychainText.deviceControlSecret.write(nuevo)
+                NSLog("[mando] sin secreto del soporte: secreto propio del mando creado en el Keychain")
+                return true
+            } catch {
+                NSLog("[mando] no se pudo guardar el secreto propio del mando: vale hasta cerrar la app")
+                return false
+            }
+        }
+        if clave.origin != .rig {
+            deviceKey = clave
+        }
+        return clave
     }
 
     /// El rol que negoció el enlace (IOS-80), con su term y su partido.
@@ -1417,6 +1445,8 @@ final class SplitBench {
             (.capturePreviewDeferred,
              { "vista previa espera: \($0.userInfo?["reason"] as? String ?? "?")" }),
             (.capturePreviewAttached, { _ in "vista previa con sesión" }),
+            // Bug A (2026-10-21): el mando que arranca, cambia de red o no arranca.
+            (.mandoStateChanged, { $0.userInfo?["text"] as? String ?? "mando: ?" }),
         ]
         for (nombre, texto) in conMotivo {
             appObservers.append(NotificationCenter.default.addObserver(forName: nombre, object: nil, queue: nil) {
@@ -2678,6 +2708,8 @@ final class SplitBench {
             "footprint_jumps_dropped": footprintJumps.dropped,
             "peer_states_footprint_mb": peerStatesFootprintMb,
             "app_events": appEvents,
+            // Bug A (2026-10-21): el mando del maestro al acabar (dónde sirve o por qué no).
+            "mando": MandoHub.snapshot(),
             "program_encoder_in_flight_peak": programEncoderInFlightPeak,
             "camera_drops": cameraDrops(),
             "files": recordedFiles(),
@@ -2884,6 +2916,8 @@ final class SplitBench {
             "ladder_changes": Array(ladderChanges.suffix(Self.liveLadderChanges)),
             "peer_states": Array(peerStates.suffix(Self.livePeerStates)),
             "app_events": Array(appEvents.suffix(Self.livePeerStates)),
+            // Bug A (2026-10-21): el mando del maestro (dónde sirve o por qué no, y la clave).
+            "mando": MandoHub.snapshot(),
             "footprint_mb": Self.footprintMb(),
             "thermal": Self.thermalName(ProcessInfo.processInfo.thermalState),
             "thermal_by_minute": thermalByMinute,

@@ -200,7 +200,11 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
     // MARK: - La API del mando en el maestro (IOS-62, IOS-63)
 
     func controlSecret(matchId: String) throws -> String {
-        RigLinkNW.controlSecret(matchId: matchId) ?? ""
+        RigLinkNW.controlSecret(matchId: matchId)
+    }
+
+    func noteMandoState(json: String) throws {
+        MandoHub.note(json: json)
     }
 
     func rigClockSnapshot() throws -> String {
@@ -659,6 +663,60 @@ enum ProgramHub {
     static weak var capture: CaptureHostApiImpl?
 }
 
+/// El estado del mando del maestro para el latido y el informe de la emisión (Bug A,
+/// 2026-10-21): el QR que no salía no dejaba rastro. Dart manda el suyo al cambiar
+/// (`serving`, `port`, `match_id`, `addresses`, `can_pair`, `problem`); de dónde sale la
+/// clave (`rig`, `device`…) lo pone `RigLinkNW.controlSecret`. Cada cambio va también a los
+/// `app_events` de la pasada que esté en marcha.
+enum MandoHub {
+    private static let lock = NSLock()
+    private static var state: [String: Any] = [:]
+    private static var keyOrigin = ""
+
+    static func note(json: String) {
+        guard let datos = json.data(using: .utf8),
+              let estado = (try? JSONSerialization.jsonObject(with: datos)) as? [String: Any]
+        else { return }
+        lock.lock()
+        state = estado
+        lock.unlock()
+        let linea = summary(estado)
+        NSLog("[mando] %@", linea)
+        NotificationCenter.default.post(name: .mandoStateChanged, object: nil, userInfo: ["text": linea])
+    }
+
+    static func note(keyOrigin origen: String) {
+        lock.lock()
+        keyOrigin = origen
+        lock.unlock()
+    }
+
+    /// Lo último que se sabe, con `key`: lo que va al latido y al informe.
+    static func snapshot() -> [String: Any] {
+        lock.lock()
+        defer { lock.unlock() }
+        var d = state
+        if !keyOrigin.isEmpty { d["key"] = keyOrigin }
+        return d
+    }
+
+    /// Una línea para los `app_events`: dónde sirve o por qué no.
+    static func summary(_ estado: [String: Any]) -> String {
+        if estado["serving"] as? Bool == true {
+            let ips = (estado["addresses"] as? [String]) ?? []
+            let puerto = estado["port"] as? Int ?? 0
+            return "mando: sirve en " + (ips.isEmpty ? "ninguna IPv4 de la LAN" : ips.joined(separator: ", "))
+                + " puerto \(puerto)" + ((estado["can_pair"] as? Bool) == true ? "" : ", sin clave para el QR")
+        }
+        return "mando: no sirve" + ((estado["problem"] as? String).map { ": \($0)" } ?? "")
+    }
+}
+
+extension Notification.Name {
+    /// Un cambio del estado del mando (`MandoHub`); `userInfo["text"]` lo resume.
+    static let mandoStateChanged = Notification.Name("football-ai.mando.state")
+}
+
 /// Un texto en el Keychain: el QR «Mando» (ADR 0017 de football-ai), el PIN del operador
 /// (IOS-62), el QR «Soporte» del VPS y el servidor del pod (IOS-68).
 ///
@@ -680,6 +738,10 @@ struct KeychainText {
     /// El secreto del soporte S en base64 (ADR 0023 §3), hasta el QR de IOS-97 (IOS-58).
     static let linkSecret = KeychainText(service: "football-ai.enlace", account: "secreto",
                                          what: "el secreto del soporte")
+    /// El secreto propio del mando de este móvil en base64, para cuando no tiene S (Bug A,
+    /// 2026-10-21; `ControlKeySource`). Nunca sale del móvil ni al log.
+    static let deviceControlSecret = KeychainText(service: "football-ai.enlace", account: "secreto-mando-propio",
+                                                  what: "el secreto propio del mando")
 
     var service = "football-ai.mando"
     let account: String

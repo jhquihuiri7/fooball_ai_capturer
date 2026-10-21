@@ -439,8 +439,15 @@ abstract class CaptureHostApi {
 
   /// El secreto del mando del partido `matchId`: HMAC-SHA256(S, "zero-control-v1 " ‖
   /// match_id) en base64url (ADR 0023 §3). Lo deriva el nativo, así que el secreto del
-  /// soporte S no pasa nunca a Dart. Vacío si este móvil no tiene S.
+  /// soporte S no pasa nunca a Dart. Sin S (un móvil que nunca lo recibió, en «Una
+  /// cámara»), con el secreto propio de este móvil (Bug A, 2026-10-21): el QR se firma
+  /// siempre. Vacío solo si tampoco hay ese.
   String controlSecret(String matchId);
+
+  /// El estado del mando del maestro (Bug A, 2026-10-21), en JSON: `serving`, `port`,
+  /// `match_id`, `addresses`, `can_pair` y `problem`. Va al latido y al informe de la
+  /// emisión.
+  void noteMandoState(String json);
 
   /// El partido que dirige este móvil (IOS-62): va en el hello de las conexiones
   /// siguientes, para que el otro lo adopte. Sin enlace de Network no hace nada.
