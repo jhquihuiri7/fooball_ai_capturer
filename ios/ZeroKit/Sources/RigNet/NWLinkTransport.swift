@@ -61,6 +61,12 @@ public final class NWLinkTransport: LinkTransport {
     /// todavía no ha aparecido y hay que seguir publicando o buscando.
     static let rendezvousRetryS: Double = 0.5
 
+    /// Segundos que la cita nueva de un canal espera a que la vieja diga `.cancelled` antes
+    /// de publicarse igual (Bug B, 2026-10-21). Por Wi-Fi Aware dos publicaciones del mismo
+    /// servicio no conviven: la nueva cae con `serviceAlreadyPublishing`. Cancelar un
+    /// listener tarda milisegundos; el tope es por si el `.cancelled` no llegara nunca.
+    static let listenerCancelWaitS: Double = 2
+
     /// Cuántas veces por plazo de silencio mira el vigía: con 4, un enlace muerto se tira
     /// entre 1 y 1,25 plazos después de lo último que llegó.
     static let silenceChecksPerTimeout: Double = 4
@@ -246,6 +252,11 @@ public final class NWLinkTransport: LinkTransport {
     private var endedRendezvous: Set<LinkChannel> = []
     /// Listeners acabados que se guardan mientras siga la conexión que salió de ellos.
     private var retiredListeners: [NWListener] = []
+    /// Bug B (2026-10-21): listeners cancelados que aún no han dicho `.cancelled`, por canal,
+    /// y el turno de la cita nueva de cada canal que espera a que acaben.
+    private var cancellingListeners: [LinkChannel: [NWListener]] = [:]
+    private var pendingPublication: [LinkChannel: Int] = [:]
+    private var publicationTurn = 0
 
     // IOS-14c: el vigía de silencio. Cuándo llegó lo último del otro por medios (ns de
     // uptime, monótono) y si llegó algo desde que subió el control.
@@ -378,6 +389,8 @@ public final class NWLinkTransport: LinkTransport {
             mediaCandidates = []
             endedRendezvous = []
             cancelRetiredListeners()
+            cancellingListeners = [:]
+            pendingPublication = [:]
             pathMonitor?.cancel()
             pathMonitor = nil
             state = .idle
@@ -501,8 +514,14 @@ public final class NWLinkTransport: LinkTransport {
                 }
             }
             listener.stateUpdateHandler = { [weak self, weak listener] estado in
-                // Lo que diga un listener ya sustituido no cuenta.
-                guard let self, let listener, listener === self.listener else { return }
+                guard let self, let listener else { return }
+                // Uno sustituido solo cuenta para decir que ya acabó (Bug B): la cita nueva
+                // del canal puede estar esperándolo.
+                if case .cancelled = estado {
+                    self.listenerCancelled(listener, .control)
+                    return
+                }
+                guard listener === self.listener else { return }
                 switch estado {
                 case .ready:
                     self.esperaPor = nil
@@ -629,6 +648,11 @@ public final class NWLinkTransport: LinkTransport {
                 self.peerMediaSinceConnect = false
                 self.sinEnlaceDesdeNs = nil
                 self.note("control arriba")
+                if self.publishes, !self.mediaArrived {
+                    // El que busca conecta los medios con el control arriba (Bug B): el vigía
+                    // de la cita de medios le da su plazo entero desde aquí.
+                    self.mediaListenerQuietSinceNs = DispatchTime.now().uptimeNanoseconds
+                }
                 if self.stats.firstControlUpNs == nil {
                     self.stats.firstControlUpNs = DispatchTime.now().uptimeNanoseconds
                 }
@@ -690,14 +714,26 @@ public final class NWLinkTransport: LinkTransport {
         // Las citas que se acabaron con la conexión viva se cambian ya por otras: sin
         // ellas, por Wi-Fi Aware, los dos no podrían volver a encontrarse.
         cancelRetiredListeners()
+        if estabaArriba, rendezvous.silenceTimeoutS != nil, case .advertise = mode {
+            // Bug B (2026-10-21): el otro montó su datapath con estas citas y se fue (murió,
+            // se cerró su app o calló la radio). Lo que lo espere tiene que ser nuevo: las
+            // dos citas se cambian, sin que convivan con las viejas.
+            note("el enlace cayó: citas nuevas, nada del par anterior")
+            for canal in [LinkChannel.control, .media] {
+                let acabada = endedRendezvous.contains(canal)
+                endedRendezvous.remove(canal)
+                publishAnew(canal, oldEnded: acabada)
+            }
+        }
         renewEndedRendezvous()
     }
 
     /// El lado que busca suelta su conexión de medios y se suscribe de nuevo; el que
-    /// conecta (los tests) la vuelve a abrir. El que anuncia no toca la suya: la
-    /// sustituye la siguiente que acepte su listener (o el que abra renewEndedRendezvous
-    /// si el suyo caducó). Cancelarla aquí podría tirar la nueva, que puede llegar antes
-    /// que el control y no trae latidos hasta que la sesión sube.
+    /// conecta (los tests) la vuelve a abrir. El que anuncia también suelta la suya (Bug B,
+    /// 2026-10-21): antes la guardaba hasta que llegara otra, y con el otro muerto quedaba
+    /// una conexión al par anterior reteniendo su datapath. La nueva no puede adelantarse:
+    /// el que busca conecta los medios cuando sube el control nuevo, después de esta caída.
+    /// El que escucha en los tests (`.listen`) sigue sin tocarla.
     private func dropMedia() {
         switch mode {
         case .browse:
@@ -714,9 +750,20 @@ public final class NWLinkTransport: LinkTransport {
             mediaConnection = nil
             mediaOpenedAt = nil
             openMedia()
-        case .advertise, .listen:
+        case .advertise:
+            discardMedia("el enlace cayó")
+        case .listen:
             break
         }
+    }
+
+    /// Suelta la conexión de medios y dice por qué (Bug B: cada conexión que se tira, con
+    /// su motivo, en la línea de tiempo).
+    private func discardMedia(_ motivo: String) {
+        guard let vieja = mediaConnection else { return }
+        note("medios: se descarta la conexión (\(motivo))")
+        vieja.cancel()
+        mediaConnection = nil
     }
 
     // MARK: - El vigía de silencio (IOS-14c)
@@ -830,8 +877,13 @@ public final class NWLinkTransport: LinkTransport {
         ) {
             republish(.control, afterS: s)
         }
+        // Los medios, en uso también con una conexión de control a medio montar (Bug B): el
+        // que busca conecta los medios cuando el control sube, y cambiarle la cita entonces
+        // es tirarle el intento.
+        let controlAMedias = connection != nil && state != .connected
         if let s = edad(mediaListenerQuietSinceNs), Self.publicationIsStuck(
-            inUse: state == .connected && peerMediaSinceConnect, arrived: mediaArrived, ageS: s, limitS: limite
+            inUse: controlAMedias || (state == .connected && peerMediaSinceConnect), arrived: mediaArrived,
+            ageS: s, limitS: limite
         ) {
             republish(.media, afterS: s)
         }
@@ -839,21 +891,79 @@ public final class NWLinkTransport: LinkTransport {
 
     private func republish(_ canal: LinkChannel, afterS edad: Double) {
         stats.republishes += 1
+        let acabada = endedRendezvous.contains(canal)
         endedRendezvous.remove(canal)
         let espera = (canal == .control ? esperaPor : nil).map { " (en espera: \($0))" } ?? ""
         note(String(format: "%@: no ha llegado nadie a la cita en %.0f s%@: otra",
                     canal == .control ? "control" : "medios", edad, espera))
-        switch canal {
-        case .control:
-            retire(listener)
+        publishAnew(canal, oldEnded: acabada)
+    }
+
+    // MARK: - Una cita nueva sin que convivan dos (Bug B, 2026-10-21)
+
+    /// Cambia la cita de un canal del que anuncia por otra sin que convivan dos
+    /// publicaciones del mismo servicio. Antes, con el control arriba, la vieja se guardaba
+    /// sin cancelar (`retire`) aunque siguiera publicada, y por Wi-Fi Aware la nueva caía con
+    /// `serviceAlreadyPublishing` cada 5 s (16 Pro, 20-oct, 20:59). Ahora la vieja que sigue
+    /// viva (publicada o en espera) se cancela y la nueva sale cuando la vieja dice
+    /// `.cancelled`. La que ya acabó (caducó o falló) no publica nada: se retira como antes
+    /// (con la conexión arriba se guarda, de ella pudo salir) y la nueva sale ya.
+    private func publishAnew(_ canal: LinkChannel, oldEnded: Bool) {
+        let viejo = canal == .control ? listener : mediaListener
+        if canal == .control {
             listener = nil
             citaLista = false
-            open()
-        case .media:
-            retire(mediaListener)
+        } else {
             mediaListener = nil
-            openMedia()
         }
+        if let viejo, !oldEnded {
+            cancellingListeners[canal, default: []].append(viejo)
+            viejo.cancel()
+        } else {
+            retire(viejo)
+        }
+        publicationTurn += 1
+        let turno = publicationTurn
+        pendingPublication[canal] = turno
+        guard cancellingListeners[canal]?.isEmpty == false else {
+            publishPending(canal, turn: turno, forced: false)
+            return
+        }
+        note("\(Self.channelName(canal)): la cita vieja se cancela y la nueva espera a que acabe")
+        queue.asyncAfter(deadline: .now() + Self.listenerCancelWaitS) { [weak self] in
+            self?.publishPending(canal, turn: turno, forced: true)
+        }
+    }
+
+    /// Publica la cita nueva del canal si sigue pendiente con ese turno. `forced`: la vieja
+    /// no dijo `.cancelled` a tiempo.
+    private func publishPending(_ canal: LinkChannel, turn turno: Int, forced: Bool) {
+        guard !stopped, pendingPublication[canal] == turno else { return }
+        pendingPublication[canal] = nil
+        if forced, cancellingListeners[canal]?.isEmpty == false {
+            note(String(format: "%@: la cita vieja no acabó en %.0f s; se publica la nueva igual",
+                        Self.channelName(canal), Self.listenerCancelWaitS))
+            cancellingListeners[canal] = nil
+        }
+        switch canal {
+        case .control: open()
+        case .media: openMedia()
+        }
+    }
+
+    /// Un listener cancelado ya acabó: si era el último del canal, sale la cita nueva.
+    private func listenerCancelled(_ viejo: NWListener, _ canal: LinkChannel) {
+        guard var quedan = cancellingListeners[canal], let i = quedan.firstIndex(where: { $0 === viejo }) else {
+            return
+        }
+        quedan.remove(at: i)
+        cancellingListeners[canal] = quedan.isEmpty ? nil : quedan
+        guard quedan.isEmpty, let turno = pendingPublication[canal] else { return }
+        publishPending(canal, turn: turno, forced: false)
+    }
+
+    static func channelName(_ canal: LinkChannel) -> String {
+        canal == .control ? "control" : "medios"
     }
 
     // MARK: - El fin de una cita (IOS-14)
@@ -907,14 +1017,10 @@ public final class NWLinkTransport: LinkTransport {
         guard !stopped else { return }
         for canal in endedRendezvous {
             switch (mode, canal) {
-            case (.advertise, .control):
-                retire(listener)
-                listener = nil
-                open()
-            case (.advertise, .media):
-                retire(mediaListener)
-                mediaListener = nil
-                openMedia()
+            case (.advertise, _):
+                // La cita acabada ya no publica: la nueva sale ya, salvo que otra del canal
+                // esté todavía cancelándose (publishAnew espera a que acabe).
+                publishAnew(canal, oldEnded: true)
             case (.browse, .control):
                 guard connection == nil else { continue }
                 browser?.cancel()
@@ -961,7 +1067,7 @@ public final class NWLinkTransport: LinkTransport {
             case .connect:
                 self.open()
             case .advertise, .listen:
-                if self.listener == nil { self.open() }
+                if self.listener == nil, self.pendingPublication[.control] == nil { self.open() }
             }
         }
     }
@@ -1052,7 +1158,12 @@ public final class NWLinkTransport: LinkTransport {
                 self.receiveMedia(on: nueva)
             }
             listener.stateUpdateHandler = { [weak self, weak listener] estado in
-                guard let self, let listener, listener === self.mediaListener else { return }
+                guard let self, let listener else { return }
+                if case .cancelled = estado {
+                    self.listenerCancelled(listener, .media)
+                    return
+                }
+                guard listener === self.mediaListener else { return }
                 switch estado {
                 case .ready:
                     self.mediaLocalPort = listener.port?.rawValue ?? 0
