@@ -173,12 +173,42 @@ final class AacEncoderTests: XCTestCase {
         XCTAssertEqual(enc.syncStats.silenceSamples, 2000 * 48)
     }
 
-    func testOtraFrecuenciaNoSeAcepta() throws {
-        let f44 = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 1)!
-        let b = AVAudioPCMBuffer(pcmFormat: f44, frameCapacity: 441)!
-        b.frameLength = 441
-        XCTAssertThrowsError(try AacEncoder().append(b, rigMs: 0)) {
-            XCTAssertEqual($0 as? AacEncoder.EncoderError, .format)
+    /// Bug C (2026-10-21): un micro a otra frecuencia (Bluetooth a 16 o 24 kHz, 44,1 kHz)
+    /// suena a 48 kHz, sin huecos, y el cambio de frecuencia a mitad no corta. Antes cada
+    /// búfer lanzaba `.format` y el programa salía en ceros mientras durara.
+    func testOtraFrecuenciaSePasaA48kHzYUnCambioAMitadNoCorta() throws {
+        let enc = try AacEncoder()
+        var tramas: [AacFrame] = []
+        var ms = 1000.0
+        // 2 s a 44,1 kHz, 2 s a 16 kHz y 2 s a 48 kHz, todo un 440 Hz seguido.
+        for tasa in [44_100.0, 16_000, 48_000] {
+            let fmt = AVAudioFormat(standardFormatWithSampleRate: tasa, channels: 1)!
+            let porBufer = 1024
+            for inicio in stride(from: 0, to: Int(tasa) * 2, by: porBufer) {
+                let b = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: AVAudioFrameCount(porBufer))!
+                b.frameLength = AVAudioFrameCount(porBufer)
+                for i in 0..<porBufer {
+                    b.floatChannelData![0][i] = Float(0.5 * sin(2 * .pi * 440 * Double(inicio + i) / tasa))
+                }
+                try enc.append(b, rigMs: ms)
+                while let f = enc.pop() { tramas.append(f) }
+                ms += Double(porBufer) * 1000 / tasa
+            }
+        }
+        let eje = enc.syncStats
+        XCTAssertEqual(eje.inputRateHz, 48_000)
+        XCTAssertEqual(eje.inputRateChanges, 2)
+        // Ni huecos ni recortes de verdad: lo que se corrige es del orden de una muestra.
+        XCTAssertLessThan(eje.silenceSamples, 480, "menos de 10 ms de silencio metido")
+        XCTAssertLessThan(eje.droppedSamples, 480)
+        XCTAssertEqual(eje.reanchors, 0)
+        // ~6 s de AAC y, en cada tramo, un 440 Hz con energía: nada de ceros.
+        XCTAssertGreaterThanOrEqual(Double(tramas.count), 6 * 48_000 / 1024 - 4)
+        let pcm = try AudioSignals.decodifica(tramas)[0]
+        for segundo in [1, 3, 5] {
+            let tramo = Array(pcm[(segundo * 48_000)..<((segundo + 1) * 48_000)])
+            XCTAssertGreaterThan(AudioSignals.energia(tramo), 0.05, "suena en el segundo \(segundo)")
+            XCTAssertEqual(AudioSignals.ciclos(tramo), 440, accuracy: 10, "440 Hz en el segundo \(segundo)")
         }
     }
 

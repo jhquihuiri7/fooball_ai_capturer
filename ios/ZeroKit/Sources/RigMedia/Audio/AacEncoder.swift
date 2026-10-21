@@ -1,7 +1,7 @@
 // El codificador AAC del programa (IOS-54).
 //
-// PCM de 48 kHz (Int16 o Float32, intercalado o no, mono o estéreo) → Float32 estéreo →
-// AVAudioConverter → AAC-LC a 128 kbit/s → tramas con su cabecera ADTS en una
+// PCM del micro (Int16 o Float32, intercalado o no, mono o estéreo, a 48 kHz o pasado a
+// 48 kHz) → Float32 estéreo → AVAudioConverter → AAC-LC a 128 kbit/s → tramas con su cabecera ADTS en una
 // BoundedQueue con descarte de lo viejo. Es el formato del contrato del programa
 // (football-ai/tools/program_contract.py): el relé lo copia sin recodificar (ADR 0011).
 //
@@ -37,6 +37,9 @@ public enum AudioConstants {
     public static let silenceTickMs = 100
     /// Muestras por búfer de silencio: el relleno va en trozos, no en uno de un segundo.
     static let silenceChunk = 4096
+    /// Muestras de holgura del búfer de salida al pasar otra frecuencia a 48 kHz: lo que el
+    /// convertidor puede entregar de más en una llamada sobre la cuenta exacta.
+    static let resampleSlackFrames: AVAudioFrameCount = 64
 }
 
 /// Lo que suena en el programa en lugar del micro (ADR 0027: el sonido de un vídeo).
@@ -67,6 +70,9 @@ public final class AacEncoder {
         public let droppedSamples: Int
         public let nudges: Int
         public let reanchors: Int
+        /// La frecuencia del último búfer del micro (0, ninguno) y las veces que ha cambiado.
+        public let inputRateHz: Double
+        public let inputRateChanges: Int
     }
 
     public let channels: Int
@@ -78,6 +84,8 @@ public final class AacEncoder {
     private let converter: AVAudioConverter
     /// Pasa el PCM del micro al canónico; se rehace si el formato de entrada cambia.
     private var normalizer: AVAudioConverter?
+    private var inputRateHz: Double = 0
+    private var inputRateChanges = 0
     private var timeline = AudioTimeline(sampleRate: AudioConstants.sampleRate)
     private var queue = BoundedQueue<AacFrame>(capacity: AudioConstants.encodedQueueSlots, policy: .dropOldest)
     private let lock = NSLock()
@@ -126,13 +134,15 @@ public final class AacEncoder {
 
     /// Mete PCM cuyo primer frame es del instante `rigMs` y codifica todo lo que pueda. Si
     /// el sello no cae donde el eje espera, AudioTimeline dice si se rellena, se recorta o
-    /// se reancla. Solo 48 kHz: otra frecuencia lanza `.format`.
+    /// se reancla. Otra frecuencia que no sea 48 kHz se convierte (Bug C).
     public func append(_ buffer: AVAudioPCMBuffer, rigMs: Double) throws {
         guard buffer.frameLength > 0 else { return }
         lock.lock()
         defer { lock.unlock() }
         let pcm = try normalized(buffer)
         let n = Int(pcm.frameLength)
+        // El convertidor de frecuencia puede guardarse todo un búfer corto la primera vez.
+        guard n > 0 else { return }
         switch timeline.place(rigMs: rigMs, frames: n) {
         case .asIs, .reanchored:
             feed(pcm)
@@ -201,7 +211,8 @@ public final class AacEncoder {
         lock.lock(); defer { lock.unlock() }
         return SyncStats(
             silenceSamples: timeline.silenceSamples, droppedSamples: timeline.droppedSamples,
-            nudges: timeline.nudges, reanchors: timeline.reanchors
+            nudges: timeline.nudges, reanchors: timeline.reanchors,
+            inputRateHz: inputRateHz, inputRateChanges: inputRateChanges
         )
     }
 
@@ -209,21 +220,53 @@ public final class AacEncoder {
 
     /// El búfer en el formato canónico. El mono va igual a los dos canales: es lo que hace
     /// AVAudioConverter por defecto (channelMap [0, 0]).
+    ///
+    /// Otra frecuencia se pasa a 48 kHz (Bug C, 2026-10-21). Antes se rechazaba con
+    /// `.format`: si la entrada cambiaba de frecuencia (un micro Bluetooth va a 16 o 24 kHz),
+    /// cada búfer fallaba y el vigilante llenaba el programa de ceros mientras durara.
     private func normalized(_ buffer: AVAudioPCMBuffer) throws -> AVAudioPCMBuffer {
-        guard buffer.format.sampleRate == Double(AudioConstants.sampleRate) else { throw EncoderError.format }
+        let tasa = buffer.format.sampleRate
+        if tasa != inputRateHz {
+            if inputRateHz > 0 { inputRateChanges += 1 }
+            inputRateHz = tasa
+        }
         if buffer.format == canonical { return buffer }
         if normalizer?.inputFormat != buffer.format {
-            normalizer = AVAudioConverter(from: buffer.format, to: canonical)
+            let nuevo = AVAudioConverter(from: buffer.format, to: canonical)
+            // Sin cebado: lo que sale cuenta desde la primera muestra, como el sello.
+            nuevo?.primeMethod = .none
+            normalizer = nuevo
         }
         guard let normalizer else { throw EncoderError.converter }
-        guard let salida = AVAudioPCMBuffer(pcmFormat: canonical, frameCapacity: buffer.frameLength) else {
-            throw EncoderError.format
+        if tasa == canonical.sampleRate {
+            guard let salida = AVAudioPCMBuffer(pcmFormat: canonical, frameCapacity: buffer.frameLength) else {
+                throw EncoderError.format
+            }
+            do {
+                try normalizer.convert(to: salida, from: buffer)
+            } catch {
+                throw EncoderError.encode(error.localizedDescription)
+            }
+            return salida
         }
-        do {
-            try normalizer.convert(to: salida, from: buffer)
-        } catch {
-            throw EncoderError.encode(error.localizedDescription)
+        // Con cambio de frecuencia `convert(to:from:)` no sirve: hace falta el de bloque, que
+        // guarda el estado del filtro entre búferes.
+        let exactas = (Double(buffer.frameLength) * canonical.sampleRate / tasa).rounded(.up)
+        guard let salida = AVAudioPCMBuffer(
+            pcmFormat: canonical, frameCapacity: AVAudioFrameCount(exactas) + AudioConstants.resampleSlackFrames
+        ) else { throw EncoderError.format }
+        var entregado = false
+        var error: NSError?
+        let estado = normalizer.convert(to: salida, error: &error) { _, estadoEntrada in
+            guard !entregado else {
+                estadoEntrada.pointee = .noDataNow
+                return nil
+            }
+            entregado = true
+            estadoEntrada.pointee = .haveData
+            return buffer
         }
+        if estado == .error { throw EncoderError.encode(error?.localizedDescription ?? "frecuencia") }
         return salida
     }
 
