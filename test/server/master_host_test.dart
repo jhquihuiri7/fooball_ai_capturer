@@ -43,6 +43,34 @@ void main() {
     dir.deleteSync(recursive: true);
   });
 
+  test('un partido guardado ilegible se aparta y el mando arranca igual (no muere en cada arranque)', () async {
+    // Un nombre vacío o un número negativo hacían que MatchEngine.open lanzara y el mando
+    // no arrancara nunca: ni matando la app, porque el fichero sigue ahí.
+    for (final String roto in <String>[
+      '{"version": 1, "match_id": "m_viejo", "home": "", "away": "B", "home_goals": 0, "away_goals": 0,'
+          ' "clock_ms": 0, "clock_running": false, "started_rig_ms": null, "clock_domain": "d"}',
+      '{"version": 1, "match_id": "m_viejo", "home": "A", "away": "B", "home_goals": -1, "away_goals": 0,'
+          ' "clock_ms": 0, "clock_running": false, "started_rig_ms": null, "clock_domain": "d"}',
+      '{roto',
+    ]) {
+      File('${dir.path}/$matchFileName').writeAsStringSync(roto);
+      await host.becomeMaster(null);
+      expect(host.serving, isTrue, reason: roto);
+      expect(host.problem, contains('se empezó uno nuevo'), reason: roto);
+      expect(await host.pairingText(), isNotNull, reason: roto);
+      final List<String> apartados = dir
+          .listSync()
+          .map((FileSystemEntity e) => e.path.split('/').last)
+          .where((String n) => n.startsWith('$matchFileName.$unreadableMatchSuffix-'))
+          .toList();
+      expect(apartados, isNotEmpty, reason: 'se guarda el roto para mirarlo');
+      await host.stepDown();
+      for (final FileSystemEntity e in dir.listSync()) {
+        e.deleteSync(recursive: true);
+      }
+    }
+  });
+
   test('sin partido del enlace, empieza uno y lo anuncia', () async {
     await host.becomeMaster(null);
     expect(host.serving, isTrue);

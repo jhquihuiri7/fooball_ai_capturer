@@ -23,6 +23,7 @@ import 'package:football_ai_capture/src/panel_pairing.dart';
 import 'package:football_ai_capture/src/server/api_server.dart';
 import 'package:football_ai_capture/src/server/control_token.dart';
 import 'package:football_ai_capture/src/server/match_engine.dart';
+import 'package:football_ai_capture/src/server/match_record.dart';
 import 'package:football_ai_capture/src/server/match_migration.dart';
 import 'package:football_ai_capture/src/server/program_video.dart';
 import 'package:football_ai_capture/src/server/replica.dart';
@@ -34,6 +35,9 @@ String appDocumentsPath() => '${Directory.systemTemp.parent.path}/Documents';
 
 /// Nombre del fichero del partido en la carpeta del maestro.
 const String matchFileName = 'match.json';
+
+/// Sufijo con el que se aparta un `match.json` que no se puede leer (va seguido de la hora).
+const String unreadableMatchSuffix = 'ilegible';
 
 /// Las interfaces por las que un mando de la LAN llega a este móvil, por orden de
 /// preferencia. `en`: en0 es la Wi-Fi en iOS y el adaptador Ethernet del hub sale como
@@ -278,6 +282,32 @@ class MasterHost extends ChangeNotifier {
     }
   });
 
+  /// Abre el partido guardado. Si `match.json` no se puede leer (roto o con un valor que
+  /// no vale), se aparta con otro nombre y se empieza uno limpio: si no, el mando fallaría
+  /// en cada arranque y ni matar la app lo arreglaría. Devuelve también el aviso, o null.
+  (MatchEngine, String?) _openEngine(String? matchId) {
+    final File fichero = File('${directory.path}/$matchFileName');
+    MatchEngine abre() => MatchEngine.open(
+      file: fichero,
+      time: _time,
+      matchId: matchId,
+      freeBytes: freeDiskBytes,
+      localRecording: localRecording,
+      eventKind: eventKind,
+    );
+    try {
+      return (abre(), null);
+    } on MatchRecordError catch (error) {
+      final String apartado = '${fichero.path}.$unreadableMatchSuffix-${wallS()}';
+      fichero.renameSync(apartado);
+      return (
+        abre(),
+        'el partido guardado no se podía leer (${error.message}): se apartó como '
+            '${apartado.split('/').last} y se empezó uno nuevo',
+      );
+    }
+  }
+
   Future<void> _becomeMaster(String? matchId) async {
     final MatchEngine? actual = _engine;
     if (actual != null && serving && (matchId == null || actual.matchId == matchId)) {
@@ -292,14 +322,7 @@ class MasterHost extends ChangeNotifier {
         await reloj.refresh();
       }
       await _migrateIfNeeded(matchId);
-      final MatchEngine engine = MatchEngine.open(
-        file: File('${directory.path}/$matchFileName'),
-        time: _time,
-        matchId: matchId,
-        freeBytes: freeDiskBytes,
-        localRecording: localRecording,
-        eventKind: eventKind,
-      );
+      final (MatchEngine engine, String? apartado) = _openEngine(matchId);
       if (matchId == null) {
         await announceMatch(engine.matchId);
       }
@@ -332,7 +355,7 @@ class MasterHost extends ChangeNotifier {
       _startVideo(engine);
       _startReplica(engine);
       await _startAds(engine);
-      problem = engine.lineupsError;
+      problem = engine.lineupsError ?? apartado;
     } on Exception catch (error) {
       _secret = null;
       problem = '$mandoFailedPrefix: $error';
