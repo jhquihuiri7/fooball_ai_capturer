@@ -97,6 +97,7 @@ private final class NobodyRendezvous: LinkRendezvous {
     }
 
     var label: String { "nobody-test" }
+    var staleDatapathS: Double? { nil }
 
     var resubscribeAfterS: Double? { plazo }
 

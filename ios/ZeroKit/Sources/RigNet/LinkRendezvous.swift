@@ -70,7 +70,9 @@ public protocol LinkRendezvous {
 
     /// Segundos sin enlace en los que el medio puede retener el datapath del par anterior y
     /// el que busca no hace borrón por intentos fallidos: pausar no lo suelta antes. nil,
-    /// sin espera: el borrón llega con el tope de intentos.
+    /// sin espera: el borrón llega con el tope de intentos. Sin valor por defecto: la 1.0.0
+    /// (12) salió con la cita de Wi-Fi Aware sin él, y como esa cita solo compila para iOS,
+    /// ningún test del Mac lo vio; así lo exige el compilador al construir la app.
     var staleDatapathS: Double? { get }
 
     /// Segundos sin nada abierto que el que busca deja pasar tras perder un control que estaba
@@ -104,8 +106,6 @@ extension LinkRendezvous {
 
     public var resetQuietS: [Double] { [] }
 
-    public var staleDatapathS: Double? { nil }
-
     public var settleAfterDropS: Double? { nil }
 
     public var mediaAfterControl: Bool { false }
@@ -131,6 +131,9 @@ public struct BonjourRendezvous: LinkRendezvous {
         default: "otra"
         }
     }
+
+    /// Por Bonjour un intento que falla no deja nada retenido.
+    public var staleDatapathS: Double? { nil }
 
     public func parameters(for channel: LinkChannel) -> NWParameters {
         let params: NWParameters = channel == .control ? .tcp : .udp

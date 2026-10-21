@@ -180,6 +180,8 @@ public struct WiFiAwareRendezvous: LinkRendezvous {
 
     public var resetQuietS: [Double] { WiFiAwareTimings.resetQuietS }
 
+    public var staleDatapathS: Double? { WiFiAwareTimings.staleDatapathS }
+
     public var settleAfterDropS: Double? { WiFiAwareTimings.settleAfterDropS }
 
     /// Bug B: dos conexiones montando a la vez el datapath con el mismo par cayeron las dos

@@ -143,6 +143,7 @@ private final class LoopbackRendezvous: LinkRendezvous {
     init(port: UInt16) { self.port = port }
 
     var label: String { "loopback-test" }
+    var staleDatapathS: Double? { nil }
 
     func parameters(for channel: LinkChannel) -> NWParameters {
         BonjourRendezvous(interfaceType: nil).parameters(for: channel)
@@ -288,6 +289,7 @@ private final class BusyFirstRendezvous: LinkRendezvous {
     }
 
     var label: String { "busy-first-test" }
+    var staleDatapathS: Double? { nil }
 
     func parameters(for channel: LinkChannel) -> NWParameters {
         BonjourRendezvous(interfaceType: nil).parameters(for: channel)

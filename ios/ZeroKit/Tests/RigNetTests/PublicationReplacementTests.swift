@@ -115,6 +115,7 @@ private final class FixedPortsRendezvous: LinkRendezvous {
     }
 
     var label: String { "fixed-ports-test" }
+    var staleDatapathS: Double? { nil }
 
     var republishAfterS: Double? { republish }
 

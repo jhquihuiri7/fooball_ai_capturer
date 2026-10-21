@@ -106,6 +106,7 @@ private final class EmptyRoomRendezvous: LinkRendezvous {
     }
 
     var label: String { "empty-room-test" }
+    var staleDatapathS: Double? { nil }
 
     var republishAfterS: Double? { plazo }
 

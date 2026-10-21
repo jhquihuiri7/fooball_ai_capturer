@@ -253,6 +253,7 @@ private struct ResetRendezvous: LinkRendezvous {
     var silence: Double?
 
     var label: String { "reset-test" }
+    var staleDatapathS: Double? { nil }
 
     var failedAttemptsBeforeReset: Int? { failedAttempts }
     var resetQuietS: [Double] { quiet }
@@ -303,6 +304,7 @@ private final class BrowseRendezvous: LinkRendezvous {
     }
 
     var label: String { "browse-test" }
+    var staleDatapathS: Double? { nil }
 
     var connectTimeoutS: Double { 1 }
     var failedAttemptsBeforeReset: Int? { failed }

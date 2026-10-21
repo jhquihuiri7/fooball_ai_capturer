@@ -153,6 +153,7 @@ private struct SilenceRendezvous: LinkRendezvous {
     let silenceS: Double
 
     var label: String { "silence-test" }
+    var staleDatapathS: Double? { nil }
 
     var silenceTimeoutS: Double? { silenceS }
 
