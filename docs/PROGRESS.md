@@ -32,6 +32,14 @@ entre las 20:46 y las 21:12 (hora local).
   publicaron desde la misma IP de la operadora móvil (190.63.102.122): o los dos iban por
   datos, o el 16 Pro estaba en una Wi-Fi sin internet que sí le daba IPv4 de LAN. **Falta
   confirmarlo con Alexander:** ¿el 17 estaba conectado a alguna Wi-Fi?
+- **Confirmado con Alexander (21-oct): el 17 compartía sus datos (Punto de acceso
+  personal)** y el 16 Pro y el móvil del mando (un Samsung) estaban conectados a esa red. Ya
+  pasó otro día con un tercer móvil prestado haciendo de punto de acceso. En iOS, el móvil
+  que comparte datos no tiene IPv4 en `en0`: la red que sirve va por `bridge100`
+  (172.20.10.1), y `lanAddresses` solo mira las interfaces `en*`. El 16 Pro, cliente de esa
+  red, sí tiene 172.20.10.x en `en0`: por eso con él de maestro el QR salía. Matar la app no
+  cambia nada porque la red sigue igual; el orden (EMITIR antes o después del QR) tampoco.
+  **Arreglo:** `lanAddresses` también con `bridge*` (el punto de acceso), detrás de `en*`.
 - Además, la hoja pone «Sin secreto del soporte no se puede firmar el QR», que **es falso en
   este caso**: hay que decir el motivo real («sin red local: conecta este móvil a una Wi-Fi»).
 - Arreglo esperado: el motivo correcto en la hoja; el QR con la dirección del enlace o del
@@ -55,6 +63,12 @@ entre las 20:46 y las 21:12 (hora local).
   (el 17 publicaba y el 16 Pro buscaba) y que no se limpia al cambiar de papel; (3) el
   emparejamiento de Aware hecho en un sentido (el derecho elige al izquierdo) que no vale
   igual en el otro.
+- Dato del 21-oct: en las dos configuraciones **el 17 compartía datos (punto de acceso) a la
+  vez que hacía Wi-Fi Aware**. La radio Wi-Fi del 17 servía la red y el Aware al mismo tiempo;
+  con el 17 publicando (primera vez) enlazó a los 20 s, y buscando (con los papeles
+  cambiados) no se sostuvo. Hipótesis (4): el punto de acceso en el mismo móvil que Aware.
+  Alternativa en la cancha: si los dos están en la misma red (el punto de acceso), usar el
+  enlace «Wi-Fi» en vez de «Aware».
 - Siguiente paso: reproducirlo en la mesa (emparejar, emitir, cambiar los papeles) con el
   diagnóstico de enlace, y revisar en `NWLinkTransport` que la cita vieja se cancela y se
   espera su fin antes de publicar otra.
