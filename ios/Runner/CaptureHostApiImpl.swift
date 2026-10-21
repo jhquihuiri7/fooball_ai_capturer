@@ -462,6 +462,7 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
             self?.engine.benchFrameDuration(pedida, benchS: benchS, rigMs: rigMs)
         }
         s.frameSpikeReport = { [weak self] in self?.engine.frameSpikeReport() ?? [:] }
+        s.audioReport = { [weak self] in self?.engine.audioReport() ?? [:] }
         // IOS-06: la escalera de la pasada lee los sensores de la cámara, actúa y es la que
         // enseña la pantalla mientras dura.
         s.ladderSensors = { [weak self] in self?.engine.ladderSensorTarget() ?? .l0 }

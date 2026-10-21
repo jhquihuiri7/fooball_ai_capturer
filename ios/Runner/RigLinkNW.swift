@@ -1081,8 +1081,10 @@ final class SplitBench {
     /// La huella en cada cambio de salud del esclavo, en paralelo a `peerStates`.
     private var peerStatesFootprintMb: [Double] = []
     /// Lo que le pasa a la app (avisos de memoria, primer plano y fondo), con su segundo y
-    /// la huella: el salto del ensayo coincidió con alguien junto al soporte.
-    private var appEvents: [String] = []
+    /// la huella: el salto del ensayo coincidió con alguien junto al soporte. El arranque y lo
+    /// último (Bug C, 2026-10-21): antes solo se guardaban los 64 primeros y en un partido
+    /// largo se perdía justo lo que pasaba al final.
+    private var appEvents = LinkEventLog(headCount: SplitBench.appEventsHead, tailCount: SplitBench.appEventsTail)
     private var appObservers: [NSObjectProtocol] = []
     /// El AAC del programa es estéreo (el micro mono va a los dos canales, IOS-54) y el
     /// PMT lo declara desde el primer paquete.
@@ -1171,6 +1173,8 @@ final class SplitBench {
     var frameSpikeArm: ((Int) -> Void)?
     var frameDurationRequest: ((FrameDuration?, Double, Int64) -> Void)?
     var frameSpikeReport: () -> [String: Any] = { [:] }
+    /// Bug C (2026-10-21): el micro y el AAC del CaptureEngine, para el informe.
+    var audioReport: () -> [String: Any] = { [:] }
     /// Lo que el desajuste aplicó de verdad (ISO y obturación antes y después).
     var exposureApplied: [String: Double] = [:]
     private var evDone = false
@@ -1447,6 +1451,8 @@ final class SplitBench {
             (.capturePreviewAttached, { _ in "vista previa con sesión" }),
             // Bug A (2026-10-21): el mando que arranca, cambia de red o no arranca.
             (.mandoStateChanged, { $0.userInfo?["text"] as? String ?? "mando: ?" }),
+            // Bug C (2026-10-21): el micro que se va, vuelve o se rehace, y la ruta del audio.
+            (.audioStateChanged, { $0.userInfo?["text"] as? String ?? "audio: ?" }),
         ]
         for (nombre, texto) in conMotivo {
             appObservers.append(NotificationCenter.default.addObserver(forName: nombre, object: nil, queue: nil) {
@@ -1458,7 +1464,6 @@ final class SplitBench {
     }
 
     private func noteAppEvent(_ texto: String) {
-        guard appEvents.count < Self.maxAppEvents else { return }
         let s = Double(DispatchTime.now().uptimeNanoseconds - startNs) / 1e9
         appEvents.append(String(format: "%.1f [%.0f MB] ", s, Self.footprintMb()) + texto)
     }
@@ -1486,7 +1491,7 @@ final class SplitBench {
             "detect_runs": detect?.runCount ?? 0,
             "overlay_uploads": OverlayHub.shared?.uploads ?? 0,
             "camera_drops": cameraDrops(),
-            "app_events": Array(appEvents.suffix(Self.appEventsInJump)),
+            "app_events": Array(appEvents.lines.suffix(Self.appEventsInJump)),
         ]
         if let m = master {
             let st = m.stats
@@ -2056,8 +2061,9 @@ final class SplitBench {
     /// Cada cuánto se mira si la huella saltó (2026-10-14), en s: el salto queda situado
     /// a 5 s y `task_info` cuesta microsegundos.
     private static let footprintCheckEveryS = 5.0
-    /// Sucesos de la app que se guardan como mucho, y los últimos que van con cada salto.
-    private static let maxAppEvents = 64
+    /// Sucesos de la app que se guardan: los primeros y los últimos; y los que van con cada salto.
+    private static let appEventsHead = 24
+    private static let appEventsTail = 40
     private static let appEventsInJump = 4
     /// Instantes que el director recupera como mucho si el tic se los saltó: más de
     /// cuatro (133 ms) es un parón, no un tic tarde, y se sigue desde el último.
@@ -2707,7 +2713,9 @@ final class SplitBench {
             "footprint_jumps": footprintJumpContexts,
             "footprint_jumps_dropped": footprintJumps.dropped,
             "peer_states_footprint_mb": peerStatesFootprintMb,
-            "app_events": appEvents,
+            "app_events": appEvents.lines,
+            // Bug C (2026-10-21): el micro y el AAC al acabar.
+            "audio": audioReport(),
             // Bug A (2026-10-21): el mando del maestro al acabar (dónde sirve o por qué no).
             "mando": MandoHub.snapshot(),
             "program_encoder_in_flight_peak": programEncoderInFlightPeak,
@@ -2915,7 +2923,9 @@ final class SplitBench {
             "ladder_by_minute": ladderByMinute,
             "ladder_changes": Array(ladderChanges.suffix(Self.liveLadderChanges)),
             "peer_states": Array(peerStates.suffix(Self.livePeerStates)),
-            "app_events": Array(appEvents.suffix(Self.livePeerStates)),
+            "app_events": Array(appEvents.lines.suffix(Self.livePeerStates)),
+            // Bug C (2026-10-21): el micro (puesto, búferes, ceros exactos, rehecho) y el AAC.
+            "audio": audioReport(),
             // Bug A (2026-10-21): el mando del maestro (dónde sirve o por qué no, y la clave).
             "mando": MandoHub.snapshot(),
             "footprint_mb": Self.footprintMb(),

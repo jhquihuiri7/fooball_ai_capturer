@@ -69,6 +69,15 @@ final class CaptureEngine: NSObject {
     /// Las llamadas en curso: con una, el micro no se intenta recuperar.
     private let callObserver = CXCallObserver()
     private var audioObservers: [NSObjectProtocol] = []
+    // Bug C (2026-10-21): el vigía del micro, en la cola de captura. Si el micro está fuera,
+    // mudo o en ceros, lo rehace solo (MicWatch); y lo que ve del audio va al informe.
+    private var micWatch = MicWatch()
+    private var micWatchTimer: DispatchSourceTimer?
+    private let audioStateLock = NSLock()
+    private var micRebuilds = 0
+    /// Cada cuánto mira el vigía del micro, en ms: el más corto de sus plazos es de 3 s.
+    private static let micWatchTickMs = 1000
+    private var lastMicProblem: String?
     /// El programa lleva AAC (con micro o con silencio). Lo mira también el banco.
     static let audioEnabled = ProcessInfo.processInfo.environment["RIG_AUDIO"] != "0"
     /// Las tramas AAC, además, a un fichero del banco (se mira en cada trama: una vez).
@@ -466,6 +475,7 @@ final class CaptureEngine: NSObject {
                 audioOutput.setSampleBufferDelegate(captura, queue: audioQueue)
                 audio = captura
                 startSilenceWatch()
+                startMicWatch()
                 observeMicrophoneOwner()
             } catch {
                 NSLog("[audio] sin codificador AAC: %@", error.localizedDescription)
@@ -494,7 +504,76 @@ final class CaptureEngine: NSObject {
             session.addOutput(audioOutput)
         }
         micInput = entrada
+        audio?.micAttached()
         return true
+    }
+
+    // MARK: - El vigía del micro (Bug C, 2026-10-21)
+
+    /// Cada `micWatchTickMs`, en la cola de captura: si el micro está fuera, mudo, en ceros o
+    /// fallando, sin llamada en curso, se rehace (MicWatch). Lo que el vigilante del AAC
+    /// tapaba con silencio ahora además se cura solo, sin matar la app.
+    private func startMicWatch() {
+        let t = DispatchSource.makeTimerSource(queue: queue)
+        let periodo = DispatchTimeInterval.milliseconds(Self.micWatchTickMs)
+        t.schedule(deadline: .now() + periodo, repeating: periodo)
+        t.setEventHandler { [weak self] in self?.checkMicrophone() }
+        t.resume()
+        micWatchTimer = t
+    }
+
+    private func checkMicrophone() {
+        guard let audio else { return }
+        let llamada = callObserver.calls.contains { !$0.hasEnded }
+        let ahoraS = Double(DispatchTime.now().uptimeNanoseconds) / 1e9
+        guard let problema = micWatch.check(
+            nowS: ahoraS, running: session.isRunning, allowed: micAllowed, callActive: llamada,
+            attached: micInput != nil, health: audio.health()
+        ) else { return }
+        rebuildMicrophone(problema)
+    }
+
+    /// Quita el micro (si está) y lo vuelve a poner. Desde el segundo intento seguido,
+    /// también la salida de audio y la sesión de audio de la app: lo que matar Zero rehacía.
+    private func rebuildMicrophone(_ problema: MicWatch.Problem) {
+        let aFondo = micWatch.attempts >= 2
+        if aFondo { try? AVAudioSession.sharedInstance().setActive(true) }
+        session.beginConfiguration()
+        if let micInput { session.removeInput(micInput) }
+        micInput = nil
+        if aFondo { session.removeOutput(audioOutput) }
+        let puesto = attachMicrophone()
+        session.commitConfiguration()
+        micSuspended = !puesto
+        if !session.isRunning { session.startRunning() }
+        audioStateLock.lock()
+        micRebuilds += 1
+        lastMicProblem = problema.text
+        audioStateLock.unlock()
+        noteAudio((puesto ? "micro rehecho" : "micro no se pudo poner")
+            + " (\(problema.text); intento \(micWatch.attempts)\(aFondo ? ", a fondo" : ""))")
+    }
+
+    /// Un suceso del audio: al registro y a `app_events` del informe (RigLinkNW).
+    private func noteAudio(_ texto: String) {
+        NSLog("[audio] %@", texto)
+        NotificationCenter.default.post(name: .audioStateChanged, object: nil, userInfo: ["text": texto])
+    }
+
+    /// El micro y el AAC para el informe en directo: lo que faltaba para leer el 16-oct.
+    func audioReport() -> [String: Any] {
+        guard let audio else { return ["enabled": false] }
+        let h = audio.health()
+        let eje = audio.syncStats
+        audioStateLock.lock()
+        defer { audioStateLock.unlock() }
+        return [
+            "enabled": true, "mic_allowed": micAllowed, "buffers_in": h.buffersIn, "failures": h.failures,
+            "without_buffers_s": h.withoutBuffersS, "digital_silence_s": h.digitalSilenceS ?? -1,
+            "failing_s": h.failingS ?? -1, "input_rate_hz": h.inputRateHz, "input_rate_changes": h.inputRateChanges,
+            "silence_s": Double(eje.silenceSamples) / Double(AudioConstants.sampleRate),
+            "silence_ticks": audio.silenceTicks, "mic_rebuilds": micRebuilds, "last_mic_problem": lastMicProblem ?? "",
+        ]
     }
 
     /// El vigilante: cada `silenceTickMs`, con la cámara en marcha, el AAC sigue con
@@ -536,9 +615,25 @@ final class CaptureEngine: NSObject {
             forName: AVAudioSession.interruptionNotification, object: nil, queue: nil
         ) { [weak self] aviso in
             guard let raw = aviso.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
-                  AVAudioSession.InterruptionType(rawValue: raw) == .ended
+                  let tipo = AVAudioSession.InterruptionType(rawValue: raw)
             else { return }
-            self?.reclaimMicrophone()
+            // Bug C: el audio de la app interrumpido sin que la cámara lo diga también deja
+            // el micro mudo; se apunta y, al acabar, el vigía comprueba que vuelva a sonar.
+            self?.noteAudio(tipo == .began ? "audio interrumpido" : "fin de la interrupción del audio")
+            if tipo == .ended { self?.reclaimMicrophone() }
+        })
+        audioObservers.append(centro.addObserver(
+            forName: AVAudioSession.routeChangeNotification, object: nil, queue: nil
+        ) { [weak self] aviso in
+            let raw = aviso.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt ?? 0
+            let s = AVAudioSession.sharedInstance()
+            let entrada = s.currentRoute.inputs.first.map { "\($0.portType.rawValue)" } ?? "sin entrada"
+            self?.noteAudio(String(format: "ruta del audio (motivo %lu): %@ a %.0f Hz", raw, entrada, s.sampleRate))
+        })
+        audioObservers.append(centro.addObserver(
+            forName: AVAudioSession.mediaServicesWereResetNotification, object: nil, queue: nil
+        ) { [weak self] _ in
+            self?.noteAudio("los servicios de audio del sistema se reiniciaron")
         })
         callObserver.setDelegate(self, queue: queue)
     }
@@ -554,21 +649,20 @@ final class CaptureEngine: NSObject {
             self.micInput = nil
             micSuspended = true
             if !session.isRunning { session.startRunning() }
-            NSLog("[audio] otro cliente tomó el micrófono: se quita para que siga el vídeo")
+            noteAudio("otra app tomó el micro: se quita para que siga el vídeo")
         }
     }
 
-    /// Vuelve el micro si se quitó por otro cliente y no queda ninguna llamada en curso.
+    /// Vuelve el micro si se quitó por otro cliente y no queda ninguna llamada en curso. Si
+    /// no se puede poner aún, lo reintenta el vigía del micro (antes se quedaba fuera).
     private func reclaimMicrophone() {
         queue.async { [self] in
             guard micSuspended, micAllowed, !callObserver.calls.contains(where: { !$0.hasEnded }) else { return }
             session.beginConfiguration()
             let vuelve = attachMicrophone()
             session.commitConfiguration()
-            if vuelve {
-                micSuspended = false
-                NSLog("[audio] el micrófono vuelve a la sesión")
-            }
+            if vuelve { micSuspended = false }
+            noteAudio(vuelve ? "el micro vuelve a la sesión" : "el micro aún no se puede poner: lo reintenta el vigía")
         }
     }
 
@@ -1522,4 +1616,9 @@ extension CaptureEngine: AVCaptureVideoDataOutputSampleBufferDelegate {
         )
         return status == noErr ? copy : nil
     }
+}
+
+extension Notification.Name {
+    /// Un suceso del micro o de la sesión de audio (Bug C); `userInfo["text"]` lo dice.
+    static let audioStateChanged = Notification.Name("football-ai.audio.state")
 }

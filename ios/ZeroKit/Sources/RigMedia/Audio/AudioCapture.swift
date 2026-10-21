@@ -42,15 +42,49 @@ public final class AudioCapture: NSObject, AVCaptureAudioDataOutputSampleBufferD
     public private(set) var silenceTicks = 0
     private var lastEndMs: Double?
 
+    // Bug C (2026-10-21): lo que mira el vigía del micro (MicWatch), en ns monótonos. El
+    // último búfer (o cuándo se puso el micro), desde cuándo todo son ceros exactos y desde
+    // cuándo falla cada búfer.
+    private let nowNs: () -> UInt64
+    private var lastBufferNs: UInt64
+    private var zerosSinceNs: UInt64?
+    private var failingSinceNs: UInt64?
+
     /// El formato del AAC (con su ESDS), desde el principio.
     public var formatDescription: CMAudioFormatDescription? { encoder.formatDescription }
 
     /// Lo que el eje del AAC ha corregido: silencio, recortes, muestra a muestra y saltos.
     public var syncStats: AacEncoder.SyncStats { encoder.syncStats }
 
-    public init(rigMsOf: @escaping (CMTime) -> Double) throws {
+    public init(rigMsOf: @escaping (CMTime) -> Double,
+                nowNs: @escaping () -> UInt64 = { DispatchTime.now().uptimeNanoseconds }) throws {
         self.rigMsOf = rigMsOf
+        self.nowNs = nowNs
+        lastBufferNs = nowNs()
         encoder = try AacEncoder()
+    }
+
+    /// El micro se acaba de poner (o de rehacer): el vigía cuenta desde ahora.
+    public func micAttached() {
+        lock.lock()
+        defer { lock.unlock() }
+        lastBufferNs = nowNs()
+        zerosSinceNs = nil
+        failingSinceNs = nil
+    }
+
+    /// Cómo está el micro ahora, para el vigía y el informe.
+    public func health() -> MicHealth {
+        lock.lock()
+        defer { lock.unlock() }
+        let ahora = nowNs()
+        let segundos = { (desde: UInt64) in Double(ahora &- desde) / 1e9 }
+        let eje = encoder.syncStats
+        return MicHealth(
+            buffersIn: buffersIn, failures: failures, withoutBuffersS: segundos(lastBufferNs),
+            digitalSilenceS: zerosSinceNs.map(segundos), failingS: failingSinceNs.map(segundos),
+            inputRateHz: eje.inputRateHz, inputRateChanges: eje.inputRateChanges
+        )
     }
 
     public func captureOutput(
@@ -62,24 +96,57 @@ public final class AudioCapture: NSObject, AVCaptureAudioDataOutputSampleBufferD
     /// Un búfer del micro: a la 4K, al DSP y al AAC. Aparte del delegado para probarlo.
     func receive(_ sampleBuffer: CMSampleBuffer) {
         onSampleBuffer?(sampleBuffer)
+        let llega = nowNs()
         guard let pcm = Self.pcm(of: sampleBuffer) else {
-            lock.lock(); failures += 1; lock.unlock()
+            lock.lock()
+            lastBufferNs = llega
+            failures += 1
+            if failingSinceNs == nil { failingSinceNs = llega }
+            lock.unlock()
             return
         }
         let ms = rigMsOf(CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
         onPcm?(pcm, ms)
+        let ceros = Self.isDigitalSilence(pcm)
         lock.lock()
         defer { lock.unlock() }
         buffersIn += 1
+        lastBufferNs = llega
+        if !ceros {
+            zerosSinceNs = nil
+        } else if zerosSinceNs == nil {
+            zerosSinceNs = llega
+        }
         let tramaMs = 1000 * Double(AudioConstants.samplesPerFrame) / Double(AudioConstants.sampleRate)
         if let fin = lastEndMs, ms - fin > tramaMs { gaps += 1 }
         lastEndMs = ms + 1000 * Double(pcm.frameLength) / pcm.format.sampleRate
         do {
             try encoder.append(pcm, rigMs: ms)
             while let f = encoder.pop() { onFrame?(f) }
+            failingSinceNs = nil
         } catch {
             failures += 1
+            if failingSinceNs == nil { failingSinceNs = llega }
         }
+    }
+
+    /// Si todas las muestras son cero exacto: el sistema silencia el micro (un micro de
+    /// verdad siempre tiene ruido de fondo). Intercalado, el canal 0 lleva todos.
+    static func isDigitalSilence(_ pcm: AVAudioPCMBuffer) -> Bool {
+        let n = Int(pcm.frameLength)
+        let canales = Int(pcm.format.channelCount)
+        let planos = pcm.format.isInterleaved ? 1 : canales
+        let porPlano = pcm.format.isInterleaved ? n * canales : n
+        func todoCero<T: BinaryFloatingPoint>(_ datos: UnsafePointer<UnsafeMutablePointer<T>>) -> Bool {
+            (0..<planos).allSatisfy { c in (0..<porPlano).allSatisfy { datos[c][$0] == 0 } }
+        }
+        func todoCeroEntero<T: BinaryInteger>(_ datos: UnsafePointer<UnsafeMutablePointer<T>>) -> Bool {
+            (0..<planos).allSatisfy { c in (0..<porPlano).allSatisfy { datos[c][$0] == 0 } }
+        }
+        if let f = pcm.floatChannelData { return todoCero(f) }
+        if let s = pcm.int16ChannelData { return todoCeroEntero(s) }
+        if let s = pcm.int32ChannelData { return todoCeroEntero(s) }
+        return false
     }
 
     /// Lo que suena en el programa en lugar del micro (el vídeo del ADR 0027), o nil. La
