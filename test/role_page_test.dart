@@ -213,17 +213,17 @@ void main() {
       final SemanticsHandle semantica = tester.ensureSemantics();
       await abrir(tester, FakeCaptureApi());
       Finder fila() => find.bySemanticsLabel('Este móvil dirige');
-      expect(tester.getSemantics(fila()), containsSemantics(isToggled: true));
+      expect(tester.getSemantics(fila()), isSemantics(isToggled: true));
 
       await tester.tap(find.text('DERECHA'));
       await tester.pumpAndSettle();
-      expect(tester.getSemantics(fila()), containsSemantics(isToggled: false));
+      expect(tester.getSemantics(fila()), isSemantics(isToggled: false));
       final SharedPreferences prefs = await SharedPreferences.getInstance();
       expect(prefs.getBool(prefersMasterKey), isNull);
 
       await tester.tap(find.text('IZQUIERDA'));
       await tester.pumpAndSettle();
-      expect(tester.getSemantics(fila()), containsSemantics(isToggled: true));
+      expect(tester.getSemantics(fila()), isSemantics(isToggled: true));
       semantica.dispose();
     });
 
