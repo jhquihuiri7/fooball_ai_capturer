@@ -227,6 +227,33 @@ medios tras el control, y un publicador viejo podía cambiarle la cita de medios
 - **Queda fuera**: acortar los ~2 min (es de iOS); que el operador no tenga que reiniciar
   Zero (el Bug C de audio es el motivo más probable en la cancha).
 
+### Bug B · Prueba de la 1.0.0 (12), 21-oct 11:13-11:23, y arreglo de la (13)
+- **La (12) no cambió nada por Aware**: `WiFiAwareRendezvous` no declaraba `staleDatapathS` y
+  tomaba el `nil` por defecto del protocolo. Esa cita solo compila para iOS y ningún test del
+  Mac lo vio. En los registros sigue saliendo «borrón (3 intentos…) 60 s» a los 31 s.
+  **(13), 0173ac3**: la cita de Aware lo declara y el protocolo ya no tiene valor por
+  defecto. Toda cita tiene que decirlo, así que el compilador lo exige al construir la app.
+- **A (matar el esclavo 16 Pro)**: caída a las 11:14:25 y control arriba a las 11:16:44,
+  **139 s**, igual que en la (11) (139 s): el plazo de iOS cuenta desde la caída.
+- **B (matar el maestro 17)**: **no enlazó**. El 17 reabierto publicó y el 16 Pro hizo 3
+  intentos fallidos («connectionFailed» al instante y «sin respuesta en 10 s») y borrón; a
+  los ~50 s se pasó a C. Pareció inmediato porque el 17, como maestro, está LISTO solo, y el
+  16 Pro siguió en LISTA con el Reloj en verde con la hora de antes. **(13), 86553e4**: el
+  esclavo con la hora retenida y sin enlace dice `SIN ENLACE` en el chip y el Reloj sale en
+  rojo con «retenido, sin enlace» (`CaptureSession.clockHeldWithoutLink`).
+- **C (papeles cambiados: 16 Pro publica, 17 busca)**: control arriba a los 146 s del cambio
+  (11:20:41). A las 11:21:45 **los dos** cortaron por «silencio de 3 s» sin que nadie cerrara
+  la app (el datapath murió solo; por averiguar qué pasó en ese momento). Volvió a los 96 s
+  (11:23:21), tras un borrón de 60 s.
+- **El 20-oct, con el punto de acceso del 17**: de 14 arranques solo 2 aguantaron más de 2 min
+  (100 y 117 s, el resto entre 20 y 95 s). Cada cierre y apertura volvía a empezar la espera de
+  iOS, así que no era que no funcionara: se cortaba antes de tiempo. Además salía
+  `serviceAlreadyPublishing` (arreglado en la (11)). El punto de acceso no explica los 2 min:
+  hoy, con wifi de casa, se repiten igual. Sí rompía el QR (Bug A, arreglado).
+- **Probado**: 111 tests de RigNet (4 saltados) y 128 de `capture_session_test`, `widget_test`
+  y `capture_labels_*`. `flutter analyze` limpio. La (13) está instalada en los dos a las 11:29.
+  **Sin probar en el iPhone.**
+
 ### Bug C · (sigue) el audio en silencio (entrada del 2026-10-16)
 - Dato nuevo de Alexander: **entró una llamada y el sonido siguió; se dañó un poco
   después**. No basta «interrupción de la llamada» como causa directa.
