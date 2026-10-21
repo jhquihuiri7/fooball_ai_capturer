@@ -12,6 +12,32 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-21 · Prueba del cosido desatendida con la 1.0.0 (15) (17 IZQ maestro + 16 Pro DER, Aware, en casa) · ✅ cose y emite; 3 cosas que mirar
+
+Con el trípode en casa (pared, cama y mesita a 1-3 m) y sin tocar las pantallas:
+- **EMITIR 10 min** (`tools/emitir_auto.sh … 600 --link aware`,
+  `bench/emitir-auto-cosido-20261021-1228/`). Enlace a los 10 s. 17 975 fotogramas a 30,0
+  fps (p5 29,1), 1 tramo SRT sin reconexiones, latencia añadida p95 143 ms y copia .mov
+  completa. Medias sincronizadas (p50 1 ms) y partes del 16 Pro a 85 ms, 0 perdidas.
+  **Audio**: micro a 48 kHz en los dos, 0 fallos, 0 ceros, 0 micros rehechos. El esclavo
+  parpadeó 2 veces (0,3 s y 0,13 s), y de ahí salen 25 instantes saltados. Con la escena
+  fija, el director encuadra casi siempre una lente: solo cose el 1 %.
+- **Barrido de la costura 5 min** (`tools/banco_dos_moviles.sh split … 300` con Aware,
+  `bench/dos-moviles-costura-20261021-1243/`). 8 991 fotogramas a 30 fps, 6 246 cosidos (69 %),
+  99 sin la parte a tiempo (1,6 %, dos tropiezos cortos), 0 rasgados.
+- **Lo que se ve** (fotogramas del .mov):
+  1. **Paralaje en la franja de fundido**: la mesita a ~1,5 m sale medio transparente. Es de
+     la distancia; en una cancha (10-60 m) apenas se nota.
+  2. **Color**: la mitad del 16 Pro sale más cálida (pared beige frente a blanca). Las
+     ganancias de color solo corrigen ±2,5 %.
+  3. **Una cuña negra** en el borde izquierdo con la vista casi toda a la derecha (yaw
+     ≥ 0,41 rad: `sides: ["right"]` aunque el borde cruza la costura). Ese borde no lo cubre
+     la imagen real del 16 Pro, que **no tiene `rig.json`** (va con el soporte nominal) ni el
+     detector. Con el móvil derecho calibrado del soporte no debería salir; si sale, es la
+     elección de lados del compositor.
+- Al acabar, la (15) normal (sin los defines automáticos) quedó instalada en los dos a las
+  12:54, con Zero cerrada.
+
 ## 2026-10-21 · BUGS ABIERTOS de la prueba del cosido del 20-oct (17 + 16 Pro por Wi-Fi Aware, app 1.0.0 (9)) · 🐞 C diagnosticado y con arreglo en la (15), sin probar en el iPhone; A ✅ (probado en el iPhone); B ✅ cerrado el 21-oct por Alexander: el enlace vuelve solo; la espera es de iOS (FB23509767), de 31 a 139 s tras reiniciar un móvil y ~216 s tras cambiar de lado; la (14), que solo alarga el plazo a 240 s, queda sin probar
 
 Leído de los dos iPhone (solo lectura) y del VPS. Ficheros: `Documents/bench/link-diag-*`,
