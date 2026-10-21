@@ -61,7 +61,13 @@ final class SearchResetTests: XCTestCase {
         defer { busca.stop() }
         busca.start()
         try waitUntil(busca.events.contains { $0.contains("borrón (2 intentos seguidos sin subir") })
+        // Cada intento que cae dice su ruta, y el último queda en el diagnóstico.
+        XCTAssertTrue(busca.events.contains { $0.contains("control caído (en espera") && $0.contains(" · ruta ") },
+                      "\(busca.events)")
         let d = busca.diagnosis
+        XCTAssertTrue(d.lastAttempt?.hasPrefix("a 127.0.0.1:\(puerto) · ruta ") == true, d.lastAttempt ?? "nil")
+        XCTAssertEqual(d.liveConnections, 0, "en la pausa no queda nada abierto")
+        XCTAssertEqual(d.subscriptions, 0)
         XCTAssertNotNil(d.quietS)
         XCTAssertEqual(d.searchResets, 1)
         XCTAssertTrue(d.summary().hasPrefix("en pausa"), d.summary())

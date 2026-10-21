@@ -72,6 +72,30 @@ final class LinkDiagnosisTests: XCTestCase {
                        "ve al otro pero no conecta: 2 intentos; el último: sin respuesta en 10 s")
     }
 
+    /// Bug B: la ruta de un intento en palabras. «satisfied» sin dirección local es la firma
+    /// del datapath de Wi-Fi Aware sin IPv6 (FB22904826), y se dice.
+    func testThePathOfAnAttemptInWords() {
+        XCTAssertEqual(
+            NWLinkTransport.describePath(status: "satisfied", interfaces: ["nan0"], local: "fe80::1%nan0.51000",
+                                         remote: "fe80::2%nan0.52000"),
+            "satisfied por nan0, local fe80::1%nan0.51000, remoto fe80::2%nan0.52000"
+        )
+        XCTAssertEqual(
+            NWLinkTransport.describePath(status: "satisfied", interfaces: ["nan0"], local: nil, remote: nil),
+            "satisfied por nan0, local ninguna, remoto ninguno (sin dirección local: ¿datapath sin IPv6? FB22904826)"
+        )
+        XCTAssertEqual(NWLinkTransport.describePath(status: "unsatisfied", interfaces: [], local: nil, remote: nil),
+                       "unsatisfied sin interfaz, local ninguna, remoto ninguno")
+        // Y el informe lleva lo que el transporte tiene abierto del par.
+        let r = D(role: .searches, medium: "aware", state: .connecting, lastAttempt: "a iPhone · ruta x",
+                  liveConnections: 1, retiredListeners: 2, cancellingListeners: 1, subscriptions: 2).report()
+        XCTAssertEqual(r["last_attempt"] as? String, "a iPhone · ruta x")
+        XCTAssertEqual(r["live_connections"] as? Int, 1)
+        XCTAssertEqual(r["retired_listeners"] as? Int, 2)
+        XCTAssertEqual(r["listeners_cancelling"] as? Int, 1)
+        XCTAssertEqual(r["subscriptions"] as? Int, 2)
+    }
+
     func testWithTheControlUpTheSessionSays() {
         let arriba = D(role: .publishes, medium: "aware", state: .connected, controlAttempts: 1)
         XCTAssertEqual(arriba.summary(), "enlace arriba")
@@ -130,5 +154,13 @@ final class LinkDiagnosisTests: XCTestCase {
         XCTAssertEqual(conecta.diagnosis.role, .searches)
         XCTAssertEqual(conecta.diagnosis.controlAttempts, 1)
         XCTAssertTrue(escucha.events.contains { $0.contains("control: llega una conexión") })
+        // Bug B: a quién conecta, de quién llega, por qué ruta sube y lo que hay abierto.
+        XCTAssertEqual(conecta.diagnosis.lastAttempt, "a 127.0.0.1:\(puerto)")
+        XCTAssertTrue(escucha.diagnosis.lastAttempt?.hasPrefix("de ") == true)
+        XCTAssertTrue(conecta.events.contains { $0.contains("control: ruta satisfied por lo0") },
+                      "\(conecta.events)")
+        XCTAssertGreaterThanOrEqual(escucha.diagnosis.liveConnections, 1)
+        XCTAssertEqual(escucha.diagnosis.retiredListeners, 0)
+        XCTAssertEqual(escucha.diagnosis.cancellingListeners, 0)
     }
 }

@@ -29,6 +29,10 @@ public protocol LinkRendezvous {
     /// entitlement o el emparejado).
     func explain(_ error: NWError) -> String
 
+    /// Un punto del otro en palabras, para la línea de tiempo: el anuncio y, si el medio lo
+    /// sabe, la interfaz o el dispositivo (Wi-Fi Aware: el emparejado y su id). Bug B.
+    func describe(_ endpoint: NWEndpoint) -> String
+
     /// Si el error de un listener o un browser dice que la cita caducó, y no que falló:
     /// Wi-Fi Aware deja de publicar y de suscribirse cuando ya ha encontrado a todos
     /// (`publisherTimeout`, `subscriberTimeout`), y las conexiones siguen. Bonjour no
@@ -76,6 +80,10 @@ public protocol LinkRendezvous {
 
 extension LinkRendezvous {
     public func explain(_ error: NWError) -> String { "\(error)" }
+
+    public func describe(_ endpoint: NWEndpoint) -> String {
+        endpoint.interface.map { "\(endpoint) por \($0.name)" } ?? "\(endpoint)"
+    }
 
     public func isExpiry(_: NWError) -> Bool { false }
 

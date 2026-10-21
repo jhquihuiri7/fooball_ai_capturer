@@ -136,6 +136,30 @@ public final class NWLinkTransport: LinkTransport {
         return ageS >= limitS
     }
 
+    /// La ruta de una conexión en palabras, para la línea de tiempo (Bug B): estado, por qué
+    /// interfaces y las dos direcciones. «satisfied» sin dirección local es la firma de un
+    /// datapath de Wi-Fi Aware sin IPv6 en `nan0` (FB22904826: wifip2pd sin descriptores; la
+    /// conexión se queda en `preparing` y solo se cura reiniciando el móvil).
+    static func describePath(status: String, interfaces: [String], local: String?, remote: String?) -> String {
+        let por = interfaces.isEmpty ? "sin interfaz" : "por " + interfaces.joined(separator: ",")
+        var texto = "\(status) \(por), local \(local ?? "ninguna"), remoto \(remote ?? "ninguno")"
+        if status == "satisfied", local == nil {
+            texto += " (sin dirección local: ¿datapath sin IPv6? FB22904826)"
+        }
+        return texto
+    }
+
+    static func describe(path: NWPath) -> String {
+        let estado = switch path.status {
+        case .satisfied: "satisfied"
+        case .unsatisfied: "unsatisfied"
+        case .requiresConnection: "requiresConnection"
+        @unknown default: "desconocido"
+        }
+        return describePath(status: estado, interfaces: path.availableInterfaces.map(\.name),
+                            local: path.localEndpoint.map { "\($0)" }, remote: path.remoteEndpoint.map { "\($0)" })
+    }
+
     /// Si el que busca hace borrón tras un intento de control que no subió (Bug B,
     /// 2026-10-21): la cita da tope y van ya ese número de intentos seguidos sin subir.
     static func searchNeedsReset(failedAttempts: Int, limit: Int?) -> Bool {
@@ -295,6 +319,8 @@ public final class NWLinkTransport: LinkTransport {
     // abra nada).
     private var failedAttempts = 0
     private var failedResets = 0
+    /// El último intento de control (a quién, o de quién si llega) y su ruta al caer.
+    private var ultimoIntento: String?
     private var quietUntilNs: UInt64?
     private var quietTurn = 0
     private var quiet: Bool { quietUntilNs != nil }
@@ -328,7 +354,12 @@ public final class NWLinkTransport: LinkTransport {
                 controlAttempts: intentosControl,
                 withoutLinkS: state == .connected ? nil : sinEnlaceDesdeNs.map { Double(ahora &- $0) / 1e9 },
                 failedAttempts: failedAttempts, searchResets: stats.searchResets,
-                quietS: quietUntilNs.map { Double($0 > ahora ? $0 - ahora : 0) / 1e9 }
+                quietS: quietUntilNs.map { Double($0 > ahora ? $0 - ahora : 0) / 1e9 },
+                lastAttempt: ultimoIntento,
+                liveConnections: (connection == nil ? 0 : 1) + (mediaConnection == nil ? 0 : 1),
+                retiredListeners: retiredListeners.count,
+                cancellingListeners: cancellingListeners.values.reduce(0) { $0 + $1.count },
+                subscriptions: (browser == nil ? 0 : 1) + (mediaBrowser == nil ? 0 : 1)
             )
         }
     }
@@ -523,8 +554,9 @@ public final class NWLinkTransport: LinkTransport {
                 // que Network puede tardar en dar por muerta (el patrón de RigLink).
                 self.intentosControl += 1
                 self.controlArrived = true
-                self.note(self.connection == nil ? "control: llega una conexión"
-                    : "control: llega otra y sustituye a la de antes")
+                self.ultimoIntento = "de " + self.rendezvous.describe(nueva.endpoint)
+                self.note((self.connection == nil ? "control: llega una conexión"
+                    : "control: llega otra y sustituye a la de antes") + " (\(self.ultimoIntento ?? ""))")
                 self.connection?.cancel()
                 // Si la vieja seguía arriba, la sesión tiene que verlo para darse la mano
                 // otra vez por la nueva; si no, se queda con la clave de la vieja.
@@ -653,7 +685,8 @@ public final class NWLinkTransport: LinkTransport {
     private func openConnection(to endpoint: NWEndpoint) {
         state = .connecting
         intentosControl += 1
-        note("control: se conecta a \(endpoint)")
+        ultimoIntento = "a " + rendezvous.describe(endpoint)
+        note("control: se conecta \(ultimoIntento ?? "")")
         let conexion = NWConnection(to: endpoint, using: parameters())
         adopt(connection: conexion)
         // Por Wi-Fi Aware la conexión monta antes un datapath: se le da más plazo.
@@ -681,6 +714,8 @@ public final class NWLinkTransport: LinkTransport {
                 self.peerMediaSinceConnect = false
                 self.sinEnlaceDesdeNs = nil
                 self.note("control arriba")
+                // Por qué ruta sube (Bug B): la interfaz y las dos direcciones del datapath.
+                if let ruta = nueva.currentPath { self.note("control: ruta " + Self.describe(path: ruta)) }
                 if self.publishes, !self.mediaArrived {
                     // El que busca conecta los medios con el control arriba (Bug B): el vigía
                     // de la cita de medios le da su plazo entero desde aquí.
@@ -716,7 +751,10 @@ public final class NWLinkTransport: LinkTransport {
     private func dropConnection(_ motivo: String) {
         guard !stopped else { return }
         let estabaArriba = state == .connected
-        note("control caído (\(motivo))")
+        // Con la ruta de la conexión que se tira: dice si llegó a tener datapath y dirección.
+        let ruta = connection?.currentPath.map(Self.describe(path:))
+        note("control caído (\(motivo))" + (ruta.map { " · ruta \($0)" } ?? ""))
+        if let ruta, !estabaArriba { ultimoIntento = (ultimoIntento ?? "?") + " · ruta \(ruta)" }
         ultimaCaida = motivo
         if estabaArriba || sinEnlaceDesdeNs == nil { sinEnlaceDesdeNs = DispatchTime.now().uptimeNanoseconds }
         connection?.cancel()
@@ -1258,6 +1296,7 @@ public final class NWLinkTransport: LinkTransport {
             listener.newConnectionHandler = { [weak self] nueva in
                 guard let self else { return }
                 self.mediaArrived = true
+                // La de quién se lee en la de control (el mismo par).
                 self.note(self.mediaConnection == nil ? "medios: llega una conexión"
                     : "medios: llega otra y sustituye a la de antes")
                 self.mediaConnection?.cancel()
@@ -1350,7 +1389,7 @@ public final class NWLinkTransport: LinkTransport {
 
     private func openMediaConnection(to endpoint: NWEndpoint, why motivo: String) {
         discardMedia("otra en su lugar: \(motivo)")
-        note("medios: se conecta a \(endpoint) (\(motivo))")
+        note("medios: se conecta a \(rendezvous.describe(endpoint)) (\(motivo))")
         let conexion = NWConnection(to: endpoint, using: mediaParameters())
         mediaConnection = conexion
         mediaOpenedAt = Date()

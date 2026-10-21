@@ -47,13 +47,23 @@ public struct LinkDiagnosis: Equatable, Sendable {
     public var failedAttempts: Int
     public var searchResets: Int
     public var quietS: Double?
+    /// El último intento de control: a quién (o de quién, si llega) y su ruta al caer.
+    public var lastAttempt: String?
+    /// Lo que el transporte tiene abierto del par: conexiones de control y medios vivas,
+    /// citas acabadas guardadas sin cancelar, citas canceladas que aún no han acabado y
+    /// suscripciones (Bug B: nada del par anterior tiene que quedar retenido).
+    public var liveConnections: Int
+    public var retiredListeners: Int
+    public var cancellingListeners: Int
+    public var subscriptions: Int
 
     public init(
         role: Role, medium: String, state: LinkTransportState, waiting: String? = nil,
         lastRendezvousEnd: String? = nil, lastDrop: String? = nil, rendezvousReady: Bool = false,
         announcements: Int = 0, mediaAnnouncements: Int = 0, rendezvousOpened: Int = 0, resubscribes: Int = 0,
         republishes: Int = 0, controlAttempts: Int = 0, withoutLinkS: Double? = nil, failedAttempts: Int = 0,
-        searchResets: Int = 0, quietS: Double? = nil
+        searchResets: Int = 0, quietS: Double? = nil, lastAttempt: String? = nil, liveConnections: Int = 0,
+        retiredListeners: Int = 0, cancellingListeners: Int = 0, subscriptions: Int = 0
     ) {
         self.role = role
         self.medium = medium
@@ -72,6 +82,11 @@ public struct LinkDiagnosis: Equatable, Sendable {
         self.failedAttempts = failedAttempts
         self.searchResets = searchResets
         self.quietS = quietS
+        self.lastAttempt = lastAttempt
+        self.liveConnections = liveConnections
+        self.retiredListeners = retiredListeners
+        self.cancellingListeners = cancellingListeners
+        self.subscriptions = subscriptions
     }
 
     /// La frase para la cancha. Con la sesión, dice además si el control subió y la sesión no
@@ -138,6 +153,11 @@ public struct LinkDiagnosis: Equatable, Sendable {
             "failed_attempts": failedAttempts,
             "search_resets": searchResets,
             "quiet_s": quietS ?? -1,
+            "last_attempt": lastAttempt ?? "",
+            "live_connections": liveConnections,
+            "retired_listeners": retiredListeners,
+            "listeners_cancelling": cancellingListeners,
+            "subscriptions": subscriptions,
         ]
     }
 }

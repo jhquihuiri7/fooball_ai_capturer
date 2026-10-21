@@ -225,6 +225,16 @@ public struct WiFiAwareRendezvous: LinkRendezvous {
         }
     }
 
+    /// El anuncio y el emparejado que hay detrás, con su id: si el que busca conecta a un
+    /// dispositivo que no es el de antes, o al mismo con otro anuncio, se lee (Bug B).
+    public func describe(_ endpoint: NWEndpoint) -> String {
+        var texto = endpoint.interface.map { "\(endpoint) por \($0.name)" } ?? "\(endpoint)"
+        if #available(iOS 26.4, *), let wa = endpoint.wifiAware {
+            texto += " [\(wa.device.name ?? "sin nombre"), id \(wa.device.id)]"
+        }
+        return texto
+    }
+
     /// Con `active: nil`, el sistema publica y se suscribe «lo justo para completar la
     /// acción con todos los dispositivos de destino cercanos» (la documentación de
     /// `wifiAware(_:active:)`) y después el listener y el browser fallan con estos
