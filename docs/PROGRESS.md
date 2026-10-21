@@ -12,7 +12,7 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
-## 2026-10-21 · BUGS ABIERTOS de la prueba del cosido del 20-oct (17 + 16 Pro por Wi-Fi Aware, app 1.0.0 (9)) · 🐞 B y C sin arreglar; A arreglado en d15fd6c, sin probar en el iPhone
+## 2026-10-21 · BUGS ABIERTOS de la prueba del cosido del 20-oct (17 + 16 Pro por Wi-Fi Aware, app 1.0.0 (9)) · 🐞 C sin arreglar; A (d15fd6c) y B (411d3ae, 8b131f8, e28e177) arreglados, sin probar en el iPhone
 
 Leído de los dos iPhone (solo lectura) y del VPS. Ficheros: `Documents/bench/link-diag-*`,
 `program-live-*`, `program-split-*` y `Documents/partido/*.json` de los dos, del 20-oct
@@ -88,32 +88,117 @@ entre las 20:46 y las 21:12 (hora local).
   escucha en el 8090 y el mando dejar de entrar aunque el botón siga; REINTENTAR MANDO no lo
   cubre porque `serving` sigue en verdad.
 
-### Bug B · Con los papeles cambiados (16 Pro maestro, 17 esclavo), el 17 no consigue el reloj
-- 20:53-21:01: el 17 DERECHA busca y **ve** al 16 Pro (anuncios de control y medios), pero el
-  control no se sostiene: «ve al otro pero no conecta: sin respuesta en 10 s» (8 intentos en
-  100 s), «Wi-Fi Aware: connectionFailed», «Operation canceled», «Connection reset by peer».
-  Una vez enlaza (20:57:53, a los 30 s) y se cae a los 12 s («cerrada por el otro»). Sin
-  control no hay `clock_pong`: la fila Reloj nunca se pone en verde.
-- En el 16 Pro (publica): «publicando; no ha llegado nadie en 117 s (4 citas, 6 rehechas)» y,
-  a las 20:59, **«cita de medios acabada (Wi-Fi Aware: serviceAlreadyPublishing):
-  renewLater» cada 5 s**: el vigía de republicación (546917d) publica la cita nueva sin que la
-  vieja haya terminado, y Aware la rechaza. Las conexiones que llegan «no siguen»
-  («connectionTerminated», «Operation timed out»).
-- Hipótesis, por orden: (1) el vigía de republicación del que publica tira y rehace el
-  listener mientras el otro está conectando, y deja publicaciones a medio cerrar
-  (`serviceAlreadyPublishing`); (2) estado de Aware que queda de la configuración anterior
-  (el 17 publicaba y el 16 Pro buscaba) y que no se limpia al cambiar de papel; (3) el
-  emparejamiento de Aware hecho en un sentido (el derecho elige al izquierdo) que no vale
-  igual en el otro.
-- Dato del 21-oct: en las dos configuraciones **el 17 compartía datos (punto de acceso) a la
-  vez que hacía Wi-Fi Aware**. La radio Wi-Fi del 17 servía la red y el Aware al mismo tiempo;
-  con el 17 publicando (primera vez) enlazó a los 20 s, y buscando (con los papeles
-  cambiados) no se sostuvo. Hipótesis (4): el punto de acceso en el mismo móvil que Aware.
-  Alternativa en la cancha: si los dos están en la misma red (el punto de acceso), usar el
-  enlace «Wi-Fi» en vez de «Aware».
-- Siguiente paso: reproducirlo en la mesa (emparejar, emitir, cambiar los papeles) con el
-  diagnóstico de enlace, y revisar en `NWLinkTransport` que la cita vieja se cancela y se
-  espera su fin antes de publicar otra.
+### Bug B · Al cerrar y abrir el que publica con el que busca abierto, no vuelven a enlazar
+- 20:53-21:01 (20-oct, 16 Pro maestro y publica, 17 esclavo y busca): el 17 **ve** al 16 Pro
+  (anuncios de control y medios), pero el control no se sostiene: «ve al otro pero no conecta:
+  sin respuesta en 10 s» (8 intentos en 100 s), «Wi-Fi Aware: connectionFailed», «Operation
+  canceled», «Connection reset by peer». Una vez enlaza (20:57:53, a los 30 s) y se cae a los
+  12 s («cerrada por el otro»). Sin control no hay `clock_pong`: la fila Reloj nunca en verde.
+- En el 16 Pro (publica): «publicando; no ha llegado nadie en 117 s (4 citas, 6 rehechas)» y, a
+  las 20:59, **«cita de medios acabada (Wi-Fi Aware: serviceAlreadyPublishing): renewLater» cada
+  5 s**.
+- **Reproducido el 21-oct, sin cambiar los papeles** (`bugs/hoy/` del scratchpad de la sesión):
+  09:43:48 el 17 (izquierdo, publica) enlaza con el 16 Pro (derecho, busca) en 10 s. Alexander
+  mata Zero en el 17 y la abre: 09:45:09 el 17 publica y en 90 s nadie llega a su cita (3 citas,
+  4 rehechas). El 16 Pro, que siguió abierto, 10 intentos, todos «sin respuesta en 10 s», y
+  «medios: la suscripción no ha dado con nadie en 99 s». Sin cambiar de papel: **el bug es
+  cerrar y abrir el que publica con el que busca abierto**.
+
+**Diagnóstico (21-oct, con el código y los `link-diag` de los dos días)**
+1. **El que busca se queda colgado de un datapath viejo.** Línea de tiempo del 16 Pro (t desde
+   su arranque; el reloj del 17 va ~7 s por detrás del suyo, medido con las llegadas del
+   20-oct): a los 66,0 s el vigía de silencio tira el enlace y se cancela todo. A los 79,8 s
+   (0,3 s después de que el 17 nuevo publique, con ese desfase) ve **el anuncio nuevo**, no uno
+   viejo de caché:
+   el +1 coincide con el arranque del 17 y cada −1/+1 posterior con sus citas rehechas a los 30
+   y 67 s. Conecta control y medios, y **la de medios queda lista en 0,0 s** (en la buena de
+   las 09:43, 1 s): ya había un datapath montado con el 17, el del proceso muerto, aunque el
+   16 Pro llevaba 14 s sin ninguna conexión. El 17 no ve llegar nada, ni control ni medios.
+   Cada TCP de control se queda en `preparing` («sin respuesta en 10 s»), y la conexión de
+   medios de los 79,8 s sigue abierta hasta el final (85 s): `resubscribe(.media)` cambiaba el
+   browser y no la conexión, y el vigía de medios solo actúa con el control arriba. El 20-oct,
+   con los papeles cambiados, lo mismo en el 17: medios «lista» en 0,0-0,1 s y el control
+   «sin respuesta» 8 veces. Apple lo reconoce con su propio ejemplo (FB23509767, foro de
+   desarrolladores 836085, iOS 26.5): el TCP por Wi-Fi Aware se queda en `preparing` tras
+   reiniciar la app; recrearlo cada 10 s cura a veces a los 1,5-2 min, y lo seguro es dejar los
+   móviles quietos «un par de minutos». Lo nuestro del 15-oct cuadra: cerrar Zero en los dos y
+   esperar 1 min enlazó.
+2. **`serviceAlreadyPublishing` es nuestro.** 16 Pro, `link-diag-left-1792551579`: el control
+   sube a los 30,5 s y los medios del 17 no llegan; a los 67,5 s el vigía de la publicación
+   (546917d) cambia la cita de medios y `retire()`, con el control arriba, **guarda la vieja
+   sin cancelar y sigue publicada** (lo de 0d10448 era para citas caducadas, que ya no
+   publican). La nueva cae con `serviceAlreadyPublishing` → `renewLater` → a los 5 s otra igual
+   (67,5, 72,6 y 77,7 s), y cada una se queda en `retiredListeners` hasta que cae el control.
+3. **Una lectura vieja tiraba el enlace dos veces.** Al tirar el control se cancela la conexión
+   y su `receive` acaba después: contaba como otra caída y abría dos suscripciones (16 Pro hoy a
+   los 66,0/66,3/66,5 s; 20-oct a los 306,5 s y 85,3 s).
+4. **El que publica guardaba la conexión de medios del par que se fue** (`dropMedia` no hacía
+   nada en él) y el que busca, una de medios caída o en espera sin cancelar.
+5. **Dos conexiones montando a la vez el datapath con el mismo par** cayeron las dos (17,
+   20-oct 20:57:57: medios `connectionTerminated`, control `connectionFailed`), y un transporte
+   nuevo 4,5 s después de parar el viejo falló al instante (20:58:29: `connectionTerminated`,
+   «Connection refused»).
+6. Lo que no se puede saber con estos ficheros: si el datapath viejo lo retiene el wifip2pd del
+   que busca o el del que publica, y cuánto tarda en soltarlo (por eso la pausa crece). La
+   hipótesis del punto de acceso en el 17 ni se confirma ni se descarta.
+
+**Arreglo (sin probar en el iPhone)**
+- **411d3ae, el que publica**: nunca dos citas vivas del mismo canal. La vieja que sigue viva se
+  cancela y la nueva sale cuando la vieja dice `.cancelled` (tope 2 s); la que ya acabó se
+  retira como antes. Al caer un enlace que estaba arriba suelta la conexión de medios del par y
+  abre las dos citas nuevas. El vigía no cambia la cita de medios con un control a medio montar
+  y le da su plazo entero desde que sube el control.
+- **8b131f8, el que busca: borrón.** Suelta el intento o la conexión de control, la de medios,
+  las dos suscripciones y sus anuncios, y no abre nada en una pausa; después se suscribe de
+  cero. Es lo que hacía matar la app, sin tocar la cámara ni la emisión. Por Wi-Fi Aware: al
+  perder un control que estaba arriba, 2 s; tras 3 intentos seguidos sin subir, 60 s, y 120 s
+  cada borrón siguiente hasta que suba. Los medios se conectan cuando sube el control (ninguna
+  conexión de medios retiene el datapath mientras el control no sube). Una de medios caída se
+  cancela; la lectura de una conexión ya tirada no cuenta. Bonjour no cambia. La fila Enlace
+  dice «en pausa 60 s más para que Wi-Fi Aware suelte el enlace viejo (borrón 1; …)».
+- **e28e177, el diagnóstico**: a quién va cada intento (anuncio, interfaz y, con iOS 26.4, el
+  emparejado y su id), la ruta al caer y al subir («control caído (sin respuesta en 10 s) ·
+  ruta satisfied por nan0, local …»; «satisfied» sin dirección local se señala, es la firma de
+  FB22904826, que solo cura reiniciar el móvil), y en `link-diag`/latido `last_attempt`,
+  `live_connections`, `retired_listeners`, `listeners_cancelling`, `subscriptions`,
+  `failed_attempts`, `search_resets` y `quiet_s`. Cada conexión de medios que se tira, con su
+  motivo. Las líneas de siempre no cambian.
+- `docs/GUIA-CANCHA.md`: la fila de la pausa («no cierres Zero en la pausa»).
+- **Comprobado en el Mac**: `swift test --skip ModelBench` 601 tests, 4 saltados, 0 fallos
+  (nuevos: `PublicationReplacementTests` 2, rojos sin el arreglo porque en el Mac dos listeners
+  vivos en el mismo puerto chocan con EADDRINUSE; `SearchResetTests` 6, dos con Bonjour de
+  verdad; y en `LinkDiagnosisTests`); sin la guarda de la lectura, el loopback reproduce las dos
+  caídas. `tools/check_layers.sh` limpio. RigNet con `swiftc -typecheck` para
+  arm64-apple-ios26.0 (la parte de Wi-Fi Aware solo compila para iOS): 0 errores, 0 avisos. El
+  Runner no se toca (usa la cita como tipo; nadie la implementa fuera de RigNet).
+  `test_cancha.py` 27 OK.
+- **Queda fuera**: que el que publica también se calle (si con esto sigue sin enlazar y matar
+  los dos sí, el datapath viejo está en el que publica); que un transporte nuevo espere a que el
+  viejo del mismo proceso acabe de cancelarse (volver atrás y entrar a la cámara en menos de un
+  segundo).
+
+**Qué probar con los dos iPhone** (los dos con este código: el que busca nuevo conecta los
+medios tras el control, y un publicador viejo podía cambiarle la cita de medios en ese momento)
+1. 17 IZQUIERDA, 16 Pro DERECHA, Aware, «Abrir cámara» en los dos hasta LISTA (Enlace y Reloj
+   en verde). Apuntar si el 17 comparte datos (punto de acceso).
+2. **Matar el maestro con el esclavo abierto**: en el 17, deslizar Zero fuera en el selector de
+   apps; sin tocar el 16 Pro, abrir Zero en el 17 a los 10 s (IZQUIERDA, Aware, «Abrir
+   cámara»). Cronometrar desde que se abre hasta Enlace y Reloj en verde en los dos. Mirar la
+   fila Enlace del 16 Pro: «ve al otro…» y, si no sube en ~36 s, «en pausa 60 s más…». **Bien**:
+   enlaza solo en ≤ 2 min. Repetir con 5 s, 30 s y 2 min entre matar y abrir.
+3. **Matar el esclavo con el maestro abierto**: lo mismo en el 16 Pro. **Bien**: enlaza en
+   ≤ 30 s y el 17 apunta «el enlace cayó: citas nuevas»; si tarda más, apuntar si el 16 Pro
+   hizo «borrón (» y cuántos.
+4. **Papeles cambiados**: 16 Pro IZQUIERDA (publica) y 17 DERECHA (busca), Aware; pasos 2 y 3
+   otra vez, y un EMITIR corto. **Bien**: ningún «serviceAlreadyPublishing» y el Reloj del 17
+   en verde.
+5. Recoger `Documents/bench/link-diag-*.json` de los dos (los traen los guiones de la cancha) y
+   buscar: «borrón (» y «fin de la pausa» (cuántos hicieron falta), «control: ruta» (por qué
+   interfaz sube), «· ruta satisfied por nan0, local ninguna» (FB22904826: reiniciar ese
+   iPhone), «la cita vieja no acabó en 2 s» y «serviceAlreadyPublishing» (no tienen que salir).
+6. Si con el primer borrón (60 s) no enlaza y con el segundo (120 s) sí, la pausa buena es la
+   larga: subir la primera. Si no enlaza nunca y matar los dos y esperar sí, el siguiente paso
+   es que también se calle el que publica. Plan B mientras: «Una cámara (sin pareja)» en el 17.
 
 ### Bug C · (sigue) el audio en silencio (entrada del 2026-10-16)
 - Dato nuevo de Alexander: **entró una llamada y el sonido siguió; se dañó un poco
