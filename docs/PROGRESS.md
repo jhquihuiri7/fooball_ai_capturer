@@ -12,6 +12,63 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-21 · BUGS ABIERTOS de la prueba del cosido del 20-oct (17 + 16 Pro por Wi-Fi Aware, app 1.0.0 (9)) · 🐞 sin arreglar, no olvidar
+
+Leído de los dos iPhone (solo lectura) y del VPS. Ficheros: `Documents/bench/link-diag-*`,
+`program-live-*`, `program-split-*` y `Documents/partido/*.json` de los dos, del 20-oct
+entre las 20:46 y las 21:12 (hora local).
+
+### Bug A · El QR Mando no aparece en el 17 cuando dirige (en el 16 Pro sí)
+- 20:46-20:51: 17 IZQUIERDA (maestro) + 16 Pro DERECHA por Aware, enlace arriba a los 20 s,
+  EMITIR 161 s al VPS (4 787 fotogramas, 1 conexión). El mando sí funcionaba por dentro: el
+  16 Pro recibió la pizarra del 17 (`partido/replica.json` del 16 Pro, 20:51). **El QR no
+  salía en el 17**, ni tras matar la app y emparejar de nuevo. Con los papeles al revés, el
+  16 Pro sí lo enseñaba.
+- El QR sale de `MasterHost.pairingText`: es null si no hay motor, si no hay secreto, o si
+  **no hay ninguna dirección para el panel**: ni IPv4 de la LAN (`lanAddresses`, interfaces
+  `en*`), ni la del otro móvil, ni la URL del VPS (el túnel de IOS-65 no existe). El secreto
+  está (el enlace autentica con él). **Hipótesis principal: el 17 no estaba en ninguna Wi-Fi**
+  (solo Aware y datos móviles), así que no tenía IPv4 en `en0`. En el VPS, los dos
+  publicaron desde la misma IP de la operadora móvil (190.63.102.122): o los dos iban por
+  datos, o el 16 Pro estaba en una Wi-Fi sin internet que sí le daba IPv4 de LAN. **Falta
+  confirmarlo con Alexander:** ¿el 17 estaba conectado a alguna Wi-Fi?
+- Además, la hoja pone «Sin secreto del soporte no se puede firmar el QR», que **es falso en
+  este caso**: hay que decir el motivo real («sin red local: conecta este móvil a una Wi-Fi»).
+- Arreglo esperado: el motivo correcto en la hoja; el QR con la dirección del enlace o del
+  VPS cuando no hay LAN (IOS-65); y el estado del mando (`serving`, `problem`, direcciones)
+  en el latido y el informe, que hoy no lo llevan.
+
+### Bug B · Con los papeles cambiados (16 Pro maestro, 17 esclavo), el 17 no consigue el reloj
+- 20:53-21:01: el 17 DERECHA busca y **ve** al 16 Pro (anuncios de control y medios), pero el
+  control no se sostiene: «ve al otro pero no conecta: sin respuesta en 10 s» (8 intentos en
+  100 s), «Wi-Fi Aware: connectionFailed», «Operation canceled», «Connection reset by peer».
+  Una vez enlaza (20:57:53, a los 30 s) y se cae a los 12 s («cerrada por el otro»). Sin
+  control no hay `clock_pong`: la fila Reloj nunca se pone en verde.
+- En el 16 Pro (publica): «publicando; no ha llegado nadie en 117 s (4 citas, 6 rehechas)» y,
+  a las 20:59, **«cita de medios acabada (Wi-Fi Aware: serviceAlreadyPublishing):
+  renewLater» cada 5 s**: el vigía de republicación (546917d) publica la cita nueva sin que la
+  vieja haya terminado, y Aware la rechaza. Las conexiones que llegan «no siguen»
+  («connectionTerminated», «Operation timed out»).
+- Hipótesis, por orden: (1) el vigía de republicación del que publica tira y rehace el
+  listener mientras el otro está conectando, y deja publicaciones a medio cerrar
+  (`serviceAlreadyPublishing`); (2) estado de Aware que queda de la configuración anterior
+  (el 17 publicaba y el 16 Pro buscaba) y que no se limpia al cambiar de papel; (3) el
+  emparejamiento de Aware hecho en un sentido (el derecho elige al izquierdo) que no vale
+  igual en el otro.
+- Siguiente paso: reproducirlo en la mesa (emparejar, emitir, cambiar los papeles) con el
+  diagnóstico de enlace, y revisar en `NWLinkTransport` que la cita vieja se cancela y se
+  espera su fin antes de publicar otra.
+
+### Bug C · (sigue) el audio en silencio (entrada del 2026-10-16)
+- Dato nuevo de Alexander: **entró una llamada y el sonido siguió; se dañó un poco
+  después**. No basta «interrupción de la llamada» como causa directa.
+- Petición: ver en el panel de administrador si hay sonido (un medidor de nivel del audio
+  del programa).
+
+### También visto
+- 16 Pro, 21:02, «Una cámara»: la app pasó al fondo a los 90,9 s («cámara interrumpida») y
+  el latido sigue sin cerrar a los 629 s (2 907 fotogramas, SRT «waiting»): no volvió.
+
 ## 2026-10-19 · IOS-110 a IOS-113 — El tipo de evento, el espectáculo y la noche de partidos · 🚧 probado en Windows; falta verlo en el iPhone
 
 ADR 0031 y 0032 de football-ai (REF-65 y REF-66, e102763 y 5bc4622), pedidos por Jhonatan
