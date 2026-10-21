@@ -113,10 +113,12 @@ public enum WiFiAwareTimings {
     /// borrón: sigue intentando cada 10 s. Tras reiniciar Zero en un móvil, iOS no deja montar
     /// el datapath con el otro hasta pasados ~2 min, haga lo que haga la app (FB23509767; el
     /// foro de Apple 836085: «1.5 - 2 minutes», y rehacer browser y listener «doesn't speed up
-    /// this process»). En la v11 (21-oct 10:50) el 17 perdió al 16 Pro y el control volvió a
-    /// los 139 s de la caída, en el primer intento tras la pausa de 60 s que ya no ayudaba: con
-    /// la de 120 s detrás, la vuelta podía irse a más de 4 min. 150 s cubren los ~2 min con margen.
-    public static let staleDatapathS: Double = 150
+    /// this process»). Medido el 21-oct desde la caída hasta el control arriba: reiniciar el
+    /// esclavo, 31 s y 139 s (dos veces); reiniciar el maestro, 62 s; **cambiar de lado** (el
+    /// que publicaba pasa a buscar), 215 s y 216 s. En la (13) el cambio de lado hizo 10 intentos
+    /// en 150 s, borrón de 60 s y subió al primero tras la pausa (219 s): una pausa que empiece
+    /// antes de que iOS suelte puede costar casi un minuto entero. 240 s cubren los 216 s.
+    public static let staleDatapathS: Double = 240
 
     /// Segundos sin nada abierto tras perder un control que estaba arriba, antes de volver a
     /// suscribirse de cero (Bug B). Las conexiones viejas se cancelan en milisegundos, pero

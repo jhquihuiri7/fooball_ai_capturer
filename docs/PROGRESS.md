@@ -12,7 +12,7 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
-## 2026-10-21 · BUGS ABIERTOS de la prueba del cosido del 20-oct (17 + 16 Pro por Wi-Fi Aware, app 1.0.0 (9)) · 🐞 C sin arreglar; A ✅ (probado en el iPhone); B: los ~2 min tras reiniciar son de iOS (FB23509767), la (12) no lo aplicaba por Aware; la (13) sí, sin probar
+## 2026-10-21 · BUGS ABIERTOS de la prueba del cosido del 20-oct (17 + 16 Pro por Wi-Fi Aware, app 1.0.0 (9)) · 🐞 C sin arreglar; A ✅ (probado en el iPhone); B: los ~2 min tras reiniciar son de iOS (FB23509767), la (13) lo aplica (probado); cambiar de lado es el peor caso (~3,5 min); la (14) alarga el plazo, sin probar
 
 Leído de los dos iPhone (solo lectura) y del VPS. Ficheros: `Documents/bench/link-diag-*`,
 `program-live-*`, `program-split-*` y `Documents/partido/*.json` de los dos, del 20-oct
@@ -252,6 +252,29 @@ medios tras el control, y un publicador viejo podía cambiarle la cita de medios
   hoy, con wifi de casa, se repiten igual. Sí rompía el QR (Bug A, arreglado).
 - **Probado**: 111 tests de RigNet (4 saltados) y 128 de `capture_session_test`, `widget_test`
   y `capture_labels_*`. `flutter analyze` limpio. La (13) está instalada en los dos a las 11:29.
+  **Sin probar en el iPhone.**
+
+### Bug B · Prueba de la 1.0.0 (13), 21-oct 11:37-11:46, y plazo de la (14)
+- **Probado en los iPhone** (desde la caída hasta el control arriba):
+  - **A (matar el esclavo 16 Pro)**: 31 s; Alexander cronometró ~13 s desde que lo abrió. El
+    16 Pro subió al primer intento, 3,5 s después de abrir. Esta vez el 17 vio la caída como
+    «silencio de 3,2 s» y no como «connectionTerminated», y no hubo datapath retenido.
+  - **B (matar el maestro 17)**: 62 s. El 16 Pro pasó a SIN ENLACE (86553e4 funciona) y
+    Alexander, creyendo que se había roto, salió y volvió a entrar sin cerrar Zero. Siguió
+    intentando sin borrón (0173ac3 funciona) y subió ~30 s después.
+  - **C (cambiar de lado)**: 219 s, los «3 min 40 s» de Alexander. El 17, que ahora busca, hizo
+    10 intentos «sin respuesta en 10 s» en 150 s, borrón de 60 s y subió al primero tras la
+    pausa. En la (12) el cambio de lado tardó 215 s: **cambiar de lado es el peor caso (~3,5
+    min)**. Hasta ahora: reiniciar un móvil, de 31 a 139 s; cambiar de lado, ~216 s.
+- **(14)**: `staleDatapathS` pasa de 150 a 240 s, para que la pausa del borrón no empiece
+  antes de que iOS suelte, también al cambiar de lado. El aviso de la fila Enlace dice ahora:
+  «Tras reiniciar un móvil, iOS tarda hasta 2,5 min en dejar enlazar, y hasta 4 min tras
+  cambiar de lado: no cierres Zero».
+- **Para la cancha**: decidir los lados antes de enlazar y no cambiarlos.
+- **Visto de paso**: un intento del 17 salió con «ruta satisfied por pdp_ip0» (datos
+  móviles) y otros «por en0». Los que suben dicen «sin interfaz». Por mirar si conviene
+  prohibir esas interfaces en la conexión de Aware.
+- **Probado**: 111 tests de RigNet (4 saltados). La (14) está instalada en los dos a las 11:49.
   **Sin probar en el iPhone.**
 
 ### Bug C · (sigue) el audio en silencio (entrada del 2026-10-16)

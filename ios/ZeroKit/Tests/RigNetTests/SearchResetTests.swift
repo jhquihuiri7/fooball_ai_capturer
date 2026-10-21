@@ -43,10 +43,11 @@ final class SearchResetTests: XCTestCase {
             XCTAssertNil(bonjour.staleDatapathS)
             XCTAssertFalse(bonjour.mediaAfterControl)
         }
-        // El plazo del datapath viejo cubre los ~2 min que tarda iOS (FB23509767; 139 s en la
-        // v11) y no se va mucho más allá: pasado, vuelve el borrón con sus pausas.
-        XCTAssertGreaterThanOrEqual(WiFiAwareTimings.staleDatapathS, 140)
-        XCTAssertLessThanOrEqual(WiFiAwareTimings.staleDatapathS, 180)
+        // El plazo del datapath viejo cubre lo que tarda iOS (FB23509767): hasta 139 s tras
+        // reiniciar un móvil y 216 s tras cambiar de lado (21-oct). Y no se va mucho más allá:
+        // pasado, vuelve el borrón con sus pausas.
+        XCTAssertGreaterThanOrEqual(WiFiAwareTimings.staleDatapathS, 220)
+        XCTAssertLessThanOrEqual(WiFiAwareTimings.staleDatapathS, 300)
         // Las pasadas buenas suben al primer intento o al segundo: el tope deja margen, y
         // llega antes de un minuto de intentos (con 10 s cada uno).
         let tope = WiFiAwareTimings.failedAttemptsBeforeReset

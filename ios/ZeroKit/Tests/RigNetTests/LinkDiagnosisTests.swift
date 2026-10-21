@@ -37,8 +37,8 @@ final class LinkDiagnosisTests: XCTestCase {
         XCTAssertEqual(
             D(role: .searches, medium: "aware", state: .connecting, lastDrop: "sin respuesta en 10 s",
               announcements: 1, controlAttempts: 4, failedAttempts: 4).summary(),
-            "ve al otro pero no conecta: 4 intentos; el último: sin respuesta en 10 s. Si un móvil se reinició, "
-                + "iOS tarda unos 2 min en dejar enlazar: no cierres Zero"
+            "ve al otro pero no conecta: 4 intentos; el último: sin respuesta en 10 s. Tras reiniciar un móvil, "
+                + "iOS tarda hasta 2,5 min en dejar enlazar, y hasta 4 min tras cambiar de lado: no cierres Zero"
         )
         XCTAssertEqual(
             D(role: .searches, medium: "wifi", state: .connecting, lastDrop: "sin respuesta en 4 s",

@@ -91,7 +91,8 @@ public struct LinkDiagnosis: Equatable, Sendable {
 
     /// Lo que se añade a «ve al otro pero no conecta» por Wi-Fi Aware: la espera que impone
     /// iOS tras reiniciar un móvil (`WiFiAwareTimings.staleDatapathS`).
-    static let staleDatapathHint = ". Si un móvil se reinició, iOS tarda unos 2 min en dejar enlazar: no cierres Zero"
+    static let staleDatapathHint =
+        ". Tras reiniciar un móvil, iOS tarda hasta 2,5 min en dejar enlazar, y hasta 4 min tras cambiar de lado: no cierres Zero"
 
     /// La frase para la cancha. Con la sesión, dice además si el control subió y la sesión no
     /// (rechazada por el secreto, un conflicto de maestros…).
