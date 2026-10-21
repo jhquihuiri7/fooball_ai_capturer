@@ -12,7 +12,7 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
-## 2026-10-21 · BUGS ABIERTOS de la prueba del cosido del 20-oct (17 + 16 Pro por Wi-Fi Aware, app 1.0.0 (9)) · 🐞 C sin arreglar; A ✅ (probado en el iPhone); B: los ~2 min tras reiniciar son de iOS (FB23509767), la (13) lo aplica (probado); cambiar de lado es el peor caso (~3,5 min); la (14) alarga el plazo, sin probar
+## 2026-10-21 · BUGS ABIERTOS de la prueba del cosido del 20-oct (17 + 16 Pro por Wi-Fi Aware, app 1.0.0 (9)) · 🐞 C sin arreglar; A ✅ (probado en el iPhone); B ✅ cerrado el 21-oct por Alexander: el enlace vuelve solo; la espera es de iOS (FB23509767), de 31 a 139 s tras reiniciar un móvil y ~216 s tras cambiar de lado; la (14), que solo alarga el plazo a 240 s, queda sin probar
 
 Leído de los dos iPhone (solo lectura) y del VPS. Ficheros: `Documents/bench/link-diag-*`,
 `program-live-*`, `program-split-*` y `Documents/partido/*.json` de los dos, del 20-oct
