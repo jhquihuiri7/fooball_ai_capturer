@@ -206,6 +206,27 @@ void main() {
         .widget<ZeroPill>(find.ancestor(of: find.text(texto), matching: find.byType(ZeroPill)))
         .selected;
 
+    testWidgets('«Este móvil dirige» no se arrastra al cambiar de lado (21-oct)', (WidgetTester tester) async {
+      // El 17 dirigía en la izquierda: guardado a true. Al pasarlo a la derecha, vuelve a lo
+      // del lado (no dirige) y lo guardado se borra; al volver a la izquierda, dirige.
+      SharedPreferences.setMockInitialValues(<String, Object>{prefersMasterKey: true});
+      final SemanticsHandle semantica = tester.ensureSemantics();
+      await abrir(tester, FakeCaptureApi());
+      Finder fila() => find.bySemanticsLabel('Este móvil dirige');
+      expect(tester.getSemantics(fila()), containsSemantics(isToggled: true));
+
+      await tester.tap(find.text('DERECHA'));
+      await tester.pumpAndSettle();
+      expect(tester.getSemantics(fila()), containsSemantics(isToggled: false));
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      expect(prefs.getBool(prefersMasterKey), isNull);
+
+      await tester.tap(find.text('IZQUIERDA'));
+      await tester.pumpAndSettle();
+      expect(tester.getSemantics(fila()), containsSemantics(isToggled: true));
+      semantica.dispose();
+    });
+
     testWidgets('por defecto el pod de siempre; elegir otro lo guarda', (WidgetTester tester) async {
       SharedPreferences.setMockInitialValues(<String, Object>{});
       await abrir(tester, FakeCaptureApi());

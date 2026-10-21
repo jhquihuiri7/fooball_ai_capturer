@@ -218,6 +218,26 @@ class _RolePageState extends State<RolePage> {
     }
   }
 
+  /// Al cambiar de lado, «Este móvil dirige» vuelve a lo del lado (el izquierdo dirige, el
+  /// derecho no): lo que se guardó en el otro lado no se arrastra. Si no, un móvil que dirigía
+  /// en la izquierda seguía queriendo dirigir al pasarlo a la derecha, y con los papeles
+  /// invertidos los dos querían ser maestro (21-oct).
+  Future<void> _setRole(CameraRole role) async {
+    if (role == _role) {
+      return;
+    }
+    setState(() {
+      _role = role;
+      _prefersMaster = null;
+    });
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.remove(prefersMasterKey);
+    } on Exception {
+      // Si no se borra, vale para esta vez.
+    }
+  }
+
   Future<void> _toggleDirects() async {
     final bool nuevo = !_directs;
     setState(() => _prefersMaster = nuevo);
@@ -493,7 +513,7 @@ class _RolePageState extends State<RolePage> {
                               label: 'IZQUIERDA',
                               note: 'MAESTRO',
                               selected: _role == CameraRole.left,
-                              onTap: () => setState(() => _role = CameraRole.left),
+                              onTap: () => unawaited(_setRole(CameraRole.left)),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -502,7 +522,7 @@ class _RolePageState extends State<RolePage> {
                               label: 'DERECHA',
                               note: 'SIGUE AL RELOJ',
                               selected: _role == CameraRole.right,
-                              onTap: () => setState(() => _role = CameraRole.right),
+                              onTap: () => unawaited(_setRole(CameraRole.right)),
                             ),
                           ),
                         ],
