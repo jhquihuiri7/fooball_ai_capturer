@@ -12,7 +12,7 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
-## 2026-10-21 · BUGS ABIERTOS de la prueba del cosido del 20-oct (17 + 16 Pro por Wi-Fi Aware, app 1.0.0 (9)) · 🐞 sin arreglar, no olvidar
+## 2026-10-21 · BUGS ABIERTOS de la prueba del cosido del 20-oct (17 + 16 Pro por Wi-Fi Aware, app 1.0.0 (9)) · 🐞 B y C sin arreglar; A arreglado en d15fd6c, sin probar en el iPhone
 
 Leído de los dos iPhone (solo lectura) y del VPS. Ficheros: `Documents/bench/link-diag-*`,
 `program-live-*`, `program-split-*` y `Documents/partido/*.json` de los dos, del 20-oct
@@ -45,6 +45,48 @@ entre las 20:46 y las 21:12 (hora local).
 - Arreglo esperado: el motivo correcto en la hoja; el QR con la dirección del enlace o del
   VPS cuando no hay LAN (IOS-65); y el estado del mando (`serving`, `problem`, direcciones)
   en el latido y el informe, que hoy no lo llevan.
+- **Segunda causa (21-oct), el iPhone prestado en «Una cámara»:** falló tras EMITIR y ni
+  matando la app volvió; luego el 17 en la misma red sí. Un móvil que nunca recibió
+  `RIG_LINK_SECRET` desde un Mac no tiene S: `controlSecret` daba "" y el QR no se podía
+  firmar nunca (la hoja decía «sin secreto»). EMITIR no tiene que ver: en «Una cámara»
+  `onRigRole` llega **una sola vez** por apertura de la cámara: `CapturePage.initState` →
+  `prepare` → `startLink(.single)` → `RigSoloLink.start` → `session.startAlone` →
+  `onRole(.master, 0, nil)` → `flutter.onRigRole` → `becomeMaster(null)` → partido →
+  `announceMatch` (= `setMatchId`, que solo apunta el partido en la sesión y no vuelve a
+  avisar) → `controlSecret` → PIN → `bind` en el 8090. EMITIR (`_api.start` +
+  `startProgram`) no llama a `startLink` ni a `onRigRole`. Donde sí se solapan:
+  con dos móviles (`start()` avisa del rol al momento y la negociación otra vez al
+  conectar, y en cada reconexión o relevo) y entre dos pantallas de captura (volver atrás y
+  entrar: el `stepDown` del host viejo va sin esperar; son dos hosts distintos, para eso está
+  REINTENTAR MANDO).
+- **Arreglado en d15fd6c (sin probar en el iPhone):**
+  - `lanAddresses` mira `en*`, después `bridge*` (el punto de acceso) y después `ap*`.
+  - Sin S, el mando se firma con un secreto propio del móvil: 32 bytes aleatorios, creados
+    una vez y guardados en el Keychain (`football-ai.enlace` / `secreto-mando-propio`,
+    ThisDeviceOnly). Solo lo verifica ese maestro: con un móvil no hay nadie más. Con S, lo
+    de siempre (lo verifican los dos móviles y el VPS).
+  - La hoja dice el motivo real («sin red local…», «sin secreto…», «el mando no arrancó:
+    …»), enseña `http://IP:puerto` para entrar a mano con el PIN y tiene REINTENTAR MANDO
+    (vuelve a arrancar el mando sin matar la app ni parar la emisión). El botón QR MANDO no
+    desaparece si el mando no arrancó: sigue, con el motivo debajo.
+  - `becomeMaster`/`stepDown`/`retry` en cola. Antes, dos avisos de rol solapados abrían
+    dos servidores en el mismo puerto (uno caía con «Address already in use» y el problema
+    no se veía) o dejaban sirviendo a un móvil que ya era esclavo
+    (`test/server/master_host_race_test.dart`, rojo antes del arreglo).
+  - El estado del mando va al latido y al informe (`mando`: `serving`, `port`, `match_id`,
+    `addresses`, `can_pair`, `problem` y `key`: `rig`, `device` o `device_unsaved`), y cada
+    cambio a `app_events` («mando: sirve en 172.20.10.1 puerto 8090» / «mando: no sirve: …»).
+  - Un QR con solo la dirección del otro móvil ya no sale (el otro no sirve el mando hasta
+    un relevo): sin dirección propia ni VPS, «sin red local».
+- **Qué probar en el iPhone:** (1) el 17 compartiendo datos, de maestro: QR MANDO sale con
+  172.20.10.1 y el Samsung conectado a esa red lo escanea y mueve el marcador; (2) un móvil
+  sin S (o el prestado) en «Una cámara»: sale el QR y el mando entra; matar la app y volver:
+  el QR anterior sigue valiendo para el mismo partido; (3) sin Wi-Fi ni punto de acceso: la
+  hoja dice «sin red local»; conectar a una Wi-Fi y REINTENTAR MANDO saca el QR; (4) el
+  `program-live-*.json` de una EMITIR trae `mando` y las líneas «mando: …» en `app_events`.
+- Por mirar, sin arreglo: si iOS suspende la app (al fondo), puede recuperar el socket que
+  escucha en el 8090 y el mando dejar de entrar aunque el botón siga; REINTENTAR MANDO no lo
+  cubre porque `serving` sigue en verdad.
 
 ### Bug B · Con los papeles cambiados (16 Pro maestro, 17 esclavo), el 17 no consigue el reloj
 - 20:53-21:01: el 17 DERECHA busca y **ve** al 16 Pro (anuncios de control y medios), pero el
