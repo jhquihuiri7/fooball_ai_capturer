@@ -12,7 +12,7 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
-## 2026-10-21 · BUGS ABIERTOS de la prueba del cosido del 20-oct (17 + 16 Pro por Wi-Fi Aware, app 1.0.0 (9)) · 🐞 C sin arreglar; A ✅ (probado en el iPhone); B: los ~2 min tras reiniciar son de iOS (FB23509767), la (12) deja de alargarlos, sin probar
+## 2026-10-21 · BUGS ABIERTOS de la prueba del cosido del 20-oct (17 + 16 Pro por Wi-Fi Aware, app 1.0.0 (9)) · 🐞 C sin arreglar; A ✅ (probado en el iPhone); B: los ~2 min tras reiniciar son de iOS (FB23509767), la (12) no lo aplicaba por Aware; la (13) sí, sin probar
 
 Leído de los dos iPhone (solo lectura) y del VPS. Ficheros: `Documents/bench/link-diag-*`,
 `program-live-*`, `program-split-*` y `Documents/partido/*.json` de los dos, del 20-oct
