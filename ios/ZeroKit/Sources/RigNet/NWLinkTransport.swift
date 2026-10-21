@@ -161,9 +161,13 @@ public final class NWLinkTransport: LinkTransport {
     }
 
     /// Si el que busca hace borrón tras un intento de control que no subió (Bug B,
-    /// 2026-10-21): la cita da tope y van ya ese número de intentos seguidos sin subir.
-    static func searchNeedsReset(failedAttempts: Int, limit: Int?) -> Bool {
+    /// 2026-10-21): la cita da tope y van ya ese número de intentos seguidos sin subir, y el
+    /// enlace lleva caído más de lo que el medio puede retener el datapath viejo
+    /// (`graceS`): dentro de ese plazo, pausar no lo suelta antes y solo retrasa la vuelta.
+    static func searchNeedsReset(failedAttempts: Int, limit: Int?, withoutLinkS: Double = .infinity,
+                                 graceS: Double? = nil) -> Bool {
         guard let limit, limit > 0 else { return false }
+        if let graceS, withoutLinkS < graceS { return false }
         return failedAttempts >= limit
     }
 
@@ -787,7 +791,9 @@ public final class NWLinkTransport: LinkTransport {
                 return
             }
             if !estabaArriba { failedAttempts += 1 }
-            if Self.searchNeedsReset(failedAttempts: failedAttempts, limit: rendezvous.failedAttemptsBeforeReset) {
+            let sinEnlaceS = sinEnlaceDesdeNs.map { Double(DispatchTime.now().uptimeNanoseconds &- $0) / 1e9 }
+            if Self.searchNeedsReset(failedAttempts: failedAttempts, limit: rendezvous.failedAttemptsBeforeReset,
+                                     withoutLinkS: sinEnlaceS ?? 0, graceS: rendezvous.staleDatapathS) {
                 let pausa = Self.resetQuietS(previous: failedResets, schedule: rendezvous.resetQuietS)
                 let n = failedAttempts
                 failedResets += 1

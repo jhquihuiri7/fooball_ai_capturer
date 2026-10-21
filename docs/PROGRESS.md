@@ -12,7 +12,7 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
-## 2026-10-21 · BUGS ABIERTOS de la prueba del cosido del 20-oct (17 + 16 Pro por Wi-Fi Aware, app 1.0.0 (9)) · 🐞 C sin arreglar; A (d15fd6c) y B (411d3ae, 8b131f8, e28e177) arreglados, sin probar en el iPhone
+## 2026-10-21 · BUGS ABIERTOS de la prueba del cosido del 20-oct (17 + 16 Pro por Wi-Fi Aware, app 1.0.0 (9)) · 🐞 C sin arreglar; A ✅ (probado en el iPhone); B: los ~2 min tras reiniciar son de iOS (FB23509767), la (12) deja de alargarlos, sin probar
 
 Leído de los dos iPhone (solo lectura) y del VPS. Ficheros: `Documents/bench/link-diag-*`,
 `program-live-*`, `program-split-*` y `Documents/partido/*.json` de los dos, del 20-oct
@@ -199,6 +199,33 @@ medios tras el control, y un publicador viejo podía cambiarle la cita de medios
 6. Si con el primer borrón (60 s) no enlaza y con el segundo (120 s) sí, la pausa buena es la
    larga: subir la primera. Si no enlaza nunca y matar los dos y esperar sí, el siguiente paso
    es que también se calle el que publica. Plan B mientras: «Una cámara (sin pareja)» en el 17.
+
+### Bug B · Prueba de la 1.0.0 (11), 21-oct 10:50, y cambio de la (12)
+- **Probado en los iPhone** (17 IZQUIERDA publica, 16 Pro DERECHA busca, Aware): paso 3
+  (matar el esclavo con el maestro abierto). El 17 perdió el control a las 10:50:39
+  («connectionTerminated») y publicó citas nuevas sin `serviceAlreadyPublishing`. El 16 Pro se
+  reabrió ~37 s después, vio el anuncio al instante y 4 intentos se quedaron «sin respuesta en
+  10 s» con «ruta satisfied por en0,nan0, local ninguna»: 3 seguidos, borrón de 60 s y otro tras
+  la pausa. El 5.º subió en 2 s (control y medios). **El reloj volvió solo a los 104 s de abrir,
+  139 s después de la caída**: nadie tocó nada.
+- **Causa**: es el fallo de iOS FB23509767 (foro de Apple 836085). Tras reiniciar la app en un
+  móvil, el datapath viejo no deja montar uno nuevo durante «1.5 - 2 minutes», y «creating a
+  completely new NetworkBrowser and NetworkListener doesn't speed up this process». Apple lo
+  reconoce y sigue sin arreglar. Esta mañana (09:45, al revés: matar el que publica) fueron
+  >112 s de intentos fallidos, la misma ventana. La app no puede acortarla.
+- **Lo que sí empeoraba la app**: el borrón por intentos metía pausas de 60 s y luego 120 s.
+  La de 60 s no soltó nada (el primer intento tras ella también falló). Con mala suerte, la
+  de 120 s detrás llevaba la vuelta a más de 4 min.
+- **Cambio (12)**: `WiFiAwareTimings.staleDatapathS = 150`. Durante 150 s sin enlace (desde
+  la caída o el arranque), el que busca no hace borrón por intentos y sigue probando cada
+  ~10 s; pasado ese plazo vuelven el tope de 3 y las pausas. La fila Enlace del que busca
+  añade, con intentos fallidos por Aware: «Si un móvil se reinició, iOS tarda unos 2 min en
+  dejar enlazar: no cierres Zero». Volver a cerrar la app reinicia la espera.
+- **Probado**: los 111 tests de RigNet en el Mac (4 saltados) y `SearchResetTests` y
+  `LinkDiagnosisTests` con casos nuevos. La (12) está instalada en los dos a las 11:06.
+  **Sin probar todavía en los iPhone.**
+- **Queda fuera**: acortar los ~2 min (es de iOS); que el operador no tenga que reiniciar
+  Zero (el Bug C de audio es el motivo más probable en la cancha).
 
 ### Bug C · (sigue) el audio en silencio (entrada del 2026-10-16)
 - Dato nuevo de Alexander: **entró una llamada y el sonido siguió; se dañó un poco

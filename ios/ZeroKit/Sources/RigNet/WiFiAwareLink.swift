@@ -109,6 +109,15 @@ public enum WiFiAwareTimings {
     /// móviles quietos «un par de minutos». Primero 60 s, después 120 s, y 120 s cada vez.
     public static let resetQuietS: [Double] = [60, 120]
 
+    /// Segundos sin enlace (desde la caída o el arranque) en los que el que busca no hace
+    /// borrón: sigue intentando cada 10 s. Tras reiniciar Zero en un móvil, iOS no deja montar
+    /// el datapath con el otro hasta pasados ~2 min, haga lo que haga la app (FB23509767; el
+    /// foro de Apple 836085: «1.5 - 2 minutes», y rehacer browser y listener «doesn't speed up
+    /// this process»). En la v11 (21-oct 10:50) el 17 perdió al 16 Pro y el control volvió a
+    /// los 139 s de la caída, en el primer intento tras la pausa de 60 s que ya no ayudaba: con
+    /// la de 120 s detrás, la vuelta podía irse a más de 4 min. 150 s cubren los ~2 min con margen.
+    public static let staleDatapathS: Double = 150
+
     /// Segundos sin nada abierto tras perder un control que estaba arriba, antes de volver a
     /// suscribirse de cero (Bug B). Las conexiones viejas se cancelan en milisegundos, pero
     /// un intento lanzado al instante sobre el datapath que se está desmontando cayó con

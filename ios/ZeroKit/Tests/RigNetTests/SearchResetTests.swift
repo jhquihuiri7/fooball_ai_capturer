@@ -22,6 +22,12 @@ final class SearchResetTests: XCTestCase {
         // Sin tope (Bonjour) o con un tope sin sentido, nunca.
         XCTAssertFalse(T.searchNeedsReset(failedAttempts: 99, limit: nil))
         XCTAssertFalse(T.searchNeedsReset(failedAttempts: 99, limit: 0))
+        // Mientras iOS puede retener el datapath viejo (v11, 21-oct 10:50), ningún borrón por
+        // intentos: se sigue intentando. Pasado el plazo, el tope de siempre.
+        XCTAssertFalse(T.searchNeedsReset(failedAttempts: 9, limit: 3, withoutLinkS: 104, graceS: 150))
+        XCTAssertTrue(T.searchNeedsReset(failedAttempts: 9, limit: 3, withoutLinkS: 151, graceS: 150))
+        XCTAssertFalse(T.searchNeedsReset(failedAttempts: 2, limit: 3, withoutLinkS: 151, graceS: 150))
+        XCTAssertTrue(T.searchNeedsReset(failedAttempts: 3, limit: 3, withoutLinkS: 0, graceS: nil))
         // Cada borrón seguido, la pausa de su turno; después, la última.
         XCTAssertEqual(T.resetQuietS(previous: 0, schedule: [60, 120]), 60)
         XCTAssertEqual(T.resetQuietS(previous: 1, schedule: [60, 120]), 120)
@@ -34,8 +40,13 @@ final class SearchResetTests: XCTestCase {
             XCTAssertNil(bonjour.failedAttemptsBeforeReset)
             XCTAssertNil(bonjour.settleAfterDropS)
             XCTAssertTrue(bonjour.resetQuietS.isEmpty)
+            XCTAssertNil(bonjour.staleDatapathS)
             XCTAssertFalse(bonjour.mediaAfterControl)
         }
+        // El plazo del datapath viejo cubre los ~2 min que tarda iOS (FB23509767; 139 s en la
+        // v11) y no se va mucho más allá: pasado, vuelve el borrón con sus pausas.
+        XCTAssertGreaterThanOrEqual(WiFiAwareTimings.staleDatapathS, 140)
+        XCTAssertLessThanOrEqual(WiFiAwareTimings.staleDatapathS, 180)
         // Las pasadas buenas suben al primer intento o al segundo: el tope deja margen, y
         // llega antes de un minuto de intentos (con 10 s cada uno).
         let tope = WiFiAwareTimings.failedAttemptsBeforeReset

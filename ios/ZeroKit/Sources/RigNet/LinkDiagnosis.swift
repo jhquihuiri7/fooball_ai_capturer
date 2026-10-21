@@ -89,6 +89,10 @@ public struct LinkDiagnosis: Equatable, Sendable {
         self.subscriptions = subscriptions
     }
 
+    /// Lo que se añade a «ve al otro pero no conecta» por Wi-Fi Aware: la espera que impone
+    /// iOS tras reiniciar un móvil (`WiFiAwareTimings.staleDatapathS`).
+    static let staleDatapathHint = ". Si un móvil se reinició, iOS tarda unos 2 min en dejar enlazar: no cierres Zero"
+
     /// La frase para la cancha. Con la sesión, dice además si el control subió y la sesión no
     /// (rechazada por el secreto, un conflicto de maestros…).
     public func summary(session: RigLinkSession.State? = nil) -> String {
@@ -124,7 +128,12 @@ public struct LinkDiagnosis: Equatable, Sendable {
             return "llegaron \(controlAttempts) conexiones y no sigue ninguna; la última: \(lastDrop ?? "?")"
         case .searches:
             if controlAttempts > 0 {
+                // Por Wi-Fi Aware, tras reiniciar Zero en un móvil, iOS no deja enlazar en ~2 min
+                // (FB23509767): se dice en la cancha para que nadie vuelva a cerrar la app, que
+                // empezaría la espera otra vez.
+                let espera = medium == "aware" && failedAttempts > 0 ? Self.staleDatapathHint : ""
                 return "ve al otro pero no conecta: \(controlAttempts) intentos; el último: \(lastDrop ?? "en marcha")"
+                    + espera
             }
             if announcements > 0 { return "ve al otro; conectando" }
             return "no ve al otro\(hace) (\(citas)\(rendezvousReady ? "" : ", la última sin estar lista"))"

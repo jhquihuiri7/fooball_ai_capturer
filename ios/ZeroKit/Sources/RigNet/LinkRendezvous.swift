@@ -68,6 +68,11 @@ public protocol LinkRendezvous {
     /// último se repite. Vacío, sin pausa.
     var resetQuietS: [Double] { get }
 
+    /// Segundos sin enlace en los que el medio puede retener el datapath del par anterior y
+    /// el que busca no hace borrón por intentos fallidos: pausar no lo suelta antes. nil,
+    /// sin espera: el borrón llega con el tope de intentos.
+    var staleDatapathS: Double? { get }
+
     /// Segundos sin nada abierto que el que busca deja pasar tras perder un control que estaba
     /// arriba, antes de volver a suscribirse de cero (Bug B). nil: se vuelve a buscar con la
     /// espera creciente de siempre, sin soltar las suscripciones.
@@ -98,6 +103,8 @@ extension LinkRendezvous {
     public var failedAttemptsBeforeReset: Int? { nil }
 
     public var resetQuietS: [Double] { [] }
+
+    public var staleDatapathS: Double? { nil }
 
     public var settleAfterDropS: Double? { nil }
 

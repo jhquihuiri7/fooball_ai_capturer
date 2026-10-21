@@ -32,6 +32,19 @@ final class LinkDiagnosisTests: XCTestCase {
               announcements: 1, controlAttempts: 3).summary(),
             "ve al otro pero no conecta: 3 intentos; el último: sin respuesta en 10 s"
         )
+        // Con intentos seguidos sin subir por Wi-Fi Aware, la espera de iOS tras un reinicio y
+        // que no se cierre la app (v11, 21-oct 10:50); por Bonjour, no.
+        XCTAssertEqual(
+            D(role: .searches, medium: "aware", state: .connecting, lastDrop: "sin respuesta en 10 s",
+              announcements: 1, controlAttempts: 4, failedAttempts: 4).summary(),
+            "ve al otro pero no conecta: 4 intentos; el último: sin respuesta en 10 s. Si un móvil se reinició, "
+                + "iOS tarda unos 2 min en dejar enlazar: no cierres Zero"
+        )
+        XCTAssertEqual(
+            D(role: .searches, medium: "wifi", state: .connecting, lastDrop: "sin respuesta en 4 s",
+              announcements: 1, controlAttempts: 2, failedAttempts: 2).summary(),
+            "ve al otro pero no conecta: 2 intentos; el último: sin respuesta en 4 s"
+        )
         XCTAssertEqual(D(role: .searches, medium: "aware", state: .connecting, announcements: 1).summary(),
                        "ve al otro; conectando")
         // El maestro: publicando y sin nadie, o con conexiones que no siguen.
@@ -66,10 +79,11 @@ final class LinkDiagnosisTests: XCTestCase {
         XCTAssertEqual(r["failed_attempts"] as? Int, 0)
         XCTAssertEqual(r["quiet_s"] as? Double, 59.2)
         XCTAssertEqual(D(role: .searches, medium: "aware", state: .connecting).report()["quiet_s"] as? Double, -1)
-        // Sin pausa, la frase de siempre.
+        // Sin pausa, la frase de siempre, con la espera de iOS tras un reinicio.
         XCTAssertEqual(D(role: .searches, medium: "aware", state: .connecting, lastDrop: "sin respuesta en 10 s",
                          announcements: 1, controlAttempts: 2, failedAttempts: 2, searchResets: 1).summary(),
-                       "ve al otro pero no conecta: 2 intentos; el último: sin respuesta en 10 s")
+                       "ve al otro pero no conecta: 2 intentos; el último: sin respuesta en 10 s"
+                           + LinkDiagnosis.staleDatapathHint)
     }
 
     /// Bug B: la ruta de un intento en palabras. «satisfied» sin dirección local es la firma
