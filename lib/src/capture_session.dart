@@ -555,9 +555,20 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
     }
     final double offsetMs = estimate.offsetNs / 1e6;
     final double uncertaintyMs = estimate.uncertaintyNs / 1e6;
+    final String held = clockHeldWithoutLink ? ' · retenido, sin enlace' : '';
     return '${offsetMs.toStringAsFixed(1)} ms ±${uncertaintyMs.toStringAsFixed(1)} · '
-        '${estimate.driftPpm.toStringAsFixed(1)} ppm';
+        '${estimate.driftPpm.toStringAsFixed(1)} ppm$held';
   }
+
+  /// El esclavo perdió el enlace y sigue con la hora de antes: graba en hora un rato, pero
+  /// no hay pareja. En la prueba del 21-oct (11:17) el 16 Pro siguió en LISTA con el Reloj en
+  /// verde mientras el maestro se reiniciaba, y pareció que había vuelto al instante.
+  bool get clockHeldWithoutLink =>
+      !singleCamera &&
+      !standalone &&
+      !isClockMaster &&
+      linkState == LinkState.searching &&
+      (_nativeClockEstimate ?? _clock.estimate) != null;
 
   String get phaseLabel {
     final int? measured = exposurePhaseNs;

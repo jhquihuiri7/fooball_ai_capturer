@@ -80,17 +80,20 @@ class CaptureReadout {
 
   /// El chip de la cabecera. Solo `LISTA` y `GRABANDO` van en acento; lo demás es una
   /// espera o un fallo, y ninguna de las dos cosas merece el color de «esto está bien».
+  /// El esclavo LISTO que perdió el enlace dice `SIN ENLACE`: con la hora retenida podría
+  /// grabar, pero el maestro no lo ve.
   String get statusChipLabel => switch (session.phase) {
     SessionPhase.preparando => 'ABRIENDO CÁMARA',
     SessionPhase.esperandoReloj => 'ESPERANDO RELOJ',
     SessionPhase.ajustandoFase => 'AJUSTANDO FASE',
-    SessionPhase.lista => 'LISTA',
+    SessionPhase.lista => session.clockHeldWithoutLink ? 'SIN ENLACE' : 'LISTA',
     SessionPhase.grabando => session.programMode ? 'EMITIENDO' : 'GRABANDO',
     SessionPhase.fallo => 'FALLO',
   };
 
   bool get statusChipIsGood =>
-      session.phase == SessionPhase.lista || session.phase == SessionPhase.grabando;
+      (session.phase == SessionPhase.lista && !session.clockHeldWithoutLink) ||
+      session.phase == SessionPhase.grabando;
 
   /// `3840×2160 · 30p`. `null` mientras no haya `status`: el chip no se dibuja.
   String? get formatChipLabel {
@@ -159,7 +162,7 @@ class CaptureReadout {
     if (session.standalone) {
       return ZeroTone.neutral;
     }
-    return session.clockLabel == 'sin reloj' ? ZeroTone.bad : ZeroTone.ok;
+    return session.clockLabel == 'sin reloj' || session.clockHeldWithoutLink ? ZeroTone.bad : ZeroTone.ok;
   }
 
   List<CaptureReading> get rigReadings => <CaptureReading>[

@@ -4,10 +4,12 @@ import 'dart:io';
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:football_ai_capture/src/calibration_upload.dart';
+import 'package:football_ai_capture/src/capture_labels.dart';
 import 'package:football_ai_capture/src/capture_session.dart';
 import 'package:football_ai_capture/src/constants.dart';
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
 import 'package:football_ai_capture/src/generated/rig_api.g.dart';
+import 'package:football_ai_capture/src/widgets/zero_widgets.dart';
 
 import 'fake_capture_api.dart';
 import 'fake_rig_api.dart';
@@ -350,6 +352,34 @@ void main() {
       expect(session.clockLabel, contains('7.0 ms ±1.0'));
       expect(session.exposurePhaseNs, 2 * nsPerMillisecond);
       expect(session.phase, SessionPhase.lista);
+    });
+
+    test('el esclavo que pierde el enlace dice SIN ENLACE y el reloj retenido, no LISTA (21-oct)', () async {
+      final FakeCaptureApi api = FakeCaptureApi(phases: <int>[2 * nsPerMillisecond]);
+      final CaptureSession session =
+          CaptureSession(role: CameraRole.right, api: api, phaseSettle: Duration.zero);
+      await session.prepare();
+      session.onLinkStateChanged(LinkState.connected, 'iPhone (izquierda)');
+      session.onClockEstimate(7 * nsPerMillisecond, 1.5, 12, nsPerMillisecond);
+      await pumpEventQueue();
+      final CaptureReadout r = CaptureReadout(session);
+      expect(session.phase, SessionPhase.lista);
+      expect(r.statusChipLabel, 'LISTA');
+      expect(r.statusChipIsGood, isTrue);
+      expect(session.clockHeldWithoutLink, isFalse);
+
+      // El maestro se reinicia: la hora se guarda, pero ya no hay pareja.
+      session.onLinkStateChanged(LinkState.searching, 've al otro pero no conecta');
+      expect(session.clockHeldWithoutLink, isTrue);
+      expect(session.clockLabel, endsWith(' · retenido, sin enlace'));
+      expect(r.statusChipLabel, 'SIN ENLACE');
+      expect(r.statusChipIsGood, isFalse);
+      expect(r.rigReadings.firstWhere((CaptureReading x) => x.label == 'Reloj').tone, ZeroTone.bad);
+
+      // Vuelve: LISTA otra vez, sin tocar nada.
+      session.onLinkStateChanged(LinkState.connected, 'iPhone (izquierda)');
+      expect(r.statusChipLabel, 'LISTA');
+      expect(session.clockLabel, isNot(contains('retenido')));
     });
 
     test('el aviso del reloj nativo (IOS-13) también saca de esperandoReloj', () async {
