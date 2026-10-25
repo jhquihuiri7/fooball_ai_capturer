@@ -72,4 +72,63 @@ public enum RecordingPolicy {
     public static func mustStopForDisk(freeBytes: Int64) -> Bool {
         freeBytes < diskFloorBytes
     }
+
+    // MARK: - La copia del programa (2026-10-24)
+    //
+    // El 24-oct la copia .mov del programa, que se graba siempre al EMITIR (~2 GB/h) y nunca se
+    // borraba, llenó el disco del 17 tras ~5 h de partidos: falló a las 19:53, se reabrió con
+    // IDR forzado y la emisión se atascó. La copia es un respaldo (el VPS graba el programa):
+    // nunca puede costar la emisión. Se borran las copias viejas cuando hace falta sitio y, si
+    // aun así no lo hay, la copia se para y la emisión sigue.
+
+    /// GB libres por debajo de los que la copia del programa no se abre, y la abierta se cierra.
+    /// Por encima del suelo de la 4K (`diskFloorGb`): la copia es lo primero que sobra.
+    public static let programCopyFloorGb: Int64 = 3
+    public static var programCopyFloorBytes: Int64 { programCopyFloorGb * bytesPerGb }
+
+    /// GB libres que se intentan dejar borrando copias viejas del programa, al abrir la copia y
+    /// cada minuto de emisión: unas 5 h más de copia (el 24-oct fueron 4,8 h de emisión).
+    public static let programCopyTargetFreeGb: Int64 = 12
+    public static var programCopyTargetFreeBytes: Int64 { programCopyTargetFreeGb * bytesPerGb }
+
+    /// Si con este disco libre la copia del programa puede abrirse o seguir abierta.
+    public static func programCopyAllowed(freeBytes: Int64) -> Bool {
+        freeBytes >= programCopyFloorBytes
+    }
+
+    /// Si un fichero de Documents es una copia del programa: `program-<partido>-<t>.mov` y sus
+    /// segmentos `…-N.mov`. Las del banco van en `bench/`, que no se mira.
+    public static func isProgramCopy(_ name: String) -> Bool {
+        name.hasPrefix("program-") && name.hasSuffix(".mov")
+    }
+
+    /// Una copia guardada: su nombre, lo que ocupa y cuándo se escribió por última vez (s).
+    public struct StoredCopy: Equatable, Sendable {
+        public let name: String
+        public let bytes: Int64
+        public let modifiedS: Double
+
+        public init(name: String, bytes: Int64, modifiedS: Double) {
+            self.name = name
+            self.bytes = bytes
+            self.modifiedS = modifiedS
+        }
+    }
+
+    /// Las copias viejas que borrar, de la más vieja a la más nueva, hasta que queden
+    /// `targetFreeBytes` libres. Las de `keeping` (la que se está escribiendo) no se tocan.
+    public static func programCopiesToDelete(
+        _ copias: [StoredCopy], freeBytes: Int64, targetFreeBytes: Int64 = programCopyTargetFreeBytes,
+        keeping: Set<String> = []
+    ) -> [String] {
+        var libre = freeBytes
+        var borrar: [String] = []
+        for copia in copias.sorted(by: { $0.modifiedS < $1.modifiedS }) {
+            guard libre < targetFreeBytes else { break }
+            guard !keeping.contains(copia.name) else { continue }
+            borrar.append(copia.name)
+            libre += copia.bytes
+        }
+        return borrar
+    }
 }

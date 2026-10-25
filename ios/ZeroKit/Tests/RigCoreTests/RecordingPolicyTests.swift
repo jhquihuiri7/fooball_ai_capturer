@@ -45,3 +45,47 @@ final class RecordingPolicyFieldTests: XCTestCase {
         XCTAssertFalse(RecordingPolicy.mustStopForDisk(freeBytes: 2_000_000_000))
     }
 }
+
+/// 2026-10-24: la copia del programa llenó el disco del 17 y se llevó la emisión.
+final class ProgramCopyPolicyTests: XCTestCase {
+    private typealias P = RecordingPolicy
+    private let gb: Int64 = 1_000_000_000
+
+    func testLaCopiaSeParaAntesQueLa4KYConMargen() {
+        XCTAssertGreaterThan(P.programCopyFloorBytes, P.diskFloorBytes, "la copia sobra antes que la 4K")
+        XCTAssertTrue(P.programCopyAllowed(freeBytes: 3 * gb))
+        XCTAssertFalse(P.programCopyAllowed(freeBytes: 3 * gb - 1))
+        // El 24-oct: 0,5 GB libres a las 19:52, y la copia seguía escribiendo.
+        XCTAssertFalse(P.programCopyAllowed(freeBytes: gb / 2))
+        // Cinco horas más de copia (~2 GB/h) caben en lo que deja la limpieza.
+        XCTAssertGreaterThanOrEqual(P.programCopyTargetFreeBytes - P.programCopyFloorBytes, 9 * gb)
+    }
+
+    func testSoloLasCopiasDelProgramaDeDocuments() {
+        XCTAssertTrue(P.isProgramCopy("program-m_f50b97dd8d1a-1792885593.mov"))
+        XCTAssertTrue(P.isProgramCopy("program-m_f50b97dd8d1a-1792885593-2.mov"))
+        XCTAssertFalse(P.isProgramCopy("left-1792087110.mov"), "la 4K no")
+        XCTAssertFalse(P.isProgramCopy("rig.json"))
+        XCTAssertFalse(P.isProgramCopy("program-m_x.json"))
+    }
+
+    /// Las más viejas primero, solo hasta dejar el objetivo libre, y nunca la que se escribe.
+    func testSeBorranLasMasViejasHastaDejarSitio() {
+        let copias = [
+            P.StoredCopy(name: "c", bytes: 6 * gb, modifiedS: 300),
+            P.StoredCopy(name: "a", bytes: 2 * gb, modifiedS: 100),
+            P.StoredCopy(name: "actual", bytes: 4 * gb, modifiedS: 50),
+            P.StoredCopy(name: "b", bytes: 5 * gb, modifiedS: 200),
+        ]
+        // 4 GB libres y 12 de objetivo: hacen falta 8. La "actual" se salta aunque sea la más
+        // vieja; "a" (2) y "b" (5) no bastan, "c" (6) sí.
+        XCTAssertEqual(P.programCopiesToDelete(copias, freeBytes: 4 * gb, targetFreeBytes: 12 * gb,
+                                               keeping: ["actual"]), ["a", "b", "c"])
+        XCTAssertEqual(P.programCopiesToDelete(copias, freeBytes: 6 * gb, targetFreeBytes: 12 * gb,
+                                               keeping: ["actual"]), ["a", "b"])
+        // Con sitio de sobra, nada.
+        XCTAssertEqual(P.programCopiesToDelete(copias, freeBytes: 30 * gb), [])
+        // Sin copias que borrar, nada, aunque no llegue.
+        XCTAssertEqual(P.programCopiesToDelete([], freeBytes: gb), [])
+    }
+}

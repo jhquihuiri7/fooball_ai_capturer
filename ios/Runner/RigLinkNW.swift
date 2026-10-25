@@ -1132,6 +1132,12 @@ final class SplitBench {
     /// Lo más que se intenta abrir la copia: pasado esto, el disco o el escritor no se
     /// arreglan solos y se deja de intentar en cada fotograma.
     private static let movMaxSegments = 8
+    // 2026-10-24: el vigía del disco de la copia (RecordingPolicy.programCopy*). Si se paró
+    // por falta de sitio no se vuelve a abrir en la pasada (ni IDR forzados); y las copias
+    // viejas que se borraron para dejar sitio, con lo que ocupaban.
+    private var movStoppedForDiskAtFreeGb: Double?
+    private var programCopiesDeleted: [String] = []
+    private var programCopiesDeletedBytes: Int64 = 0
     /// 2026-10-14: el latido, `Documents/bench/program-live-<lado>-<t>.json`, cada
     /// `liveEveryS`: lo que se sabe de la pasada aunque la app muera antes de PARAR (el
     /// informe de verdad solo se escribe al final).
@@ -1838,6 +1844,8 @@ final class SplitBench {
             thermalByMinute.append(Self.thermalName(ProcessInfo.processInfo.thermalState))
             batteryByMinute.append(Double(UIDevice.current.batteryLevel))
             diskFreeGbByMinute.append(Double(CaptureEngine.freeDiskBytes()) / Self.bytesPerGb)
+            // 2026-10-24: con la copia abierta, el vigía del disco cada minuto.
+            if recorder != nil { makeRoomForProgramCopy() }
         }
         sampleFootprint(transcurrido)
         if transcurrido >= nextLiveS {
@@ -2183,8 +2191,8 @@ final class SplitBench {
             // RIG_SPLIT_NO_MOV=1 / RIG_SPLIT_NO_TS=1: sin la copia .mov o sin el .ts, para
             // separar de dónde crece la memoria del maestro.
             if recorder == nil, env["RIG_SPLIT_NO_MOV"] != "1", movOpenAttempts < Self.movMaxSegments,
-               !movWaitingKeyframe || f.isKeyframe, let fd = f.formatDescription,
-               let url = programMovURL(segment: movOpenAttempts + 1) {
+               movStoppedForDiskAtFreeGb == nil, !movWaitingKeyframe || f.isKeyframe, let fd = f.formatDescription,
+               makeRoomForProgramCopy(), let url = programMovURL(segment: movOpenAttempts + 1) {
                 movOpenAttempts += 1
                 movWaitingKeyframe = false
                 do {
@@ -2249,8 +2257,74 @@ final class SplitBench {
         movFramesClosed.video += r.videoFrames
         movFramesClosed.audio += r.audioFrames
         recorder = nil
+        // 2026-10-24: si falló por el disco, no se reabre: cada intento con el disco lleno
+        // fallaba al momento y forzaba otro IDR en la emisión.
+        guard makeRoomForProgramCopy() else { return }
         movWaitingKeyframe = true
         enc.forceIDR()
+    }
+
+    /// El vigía del disco de la copia del programa (2026-10-24): con menos de
+    /// `programCopyTargetFreeGb` libres borra las copias viejas del programa, de la más vieja a
+    /// la más nueva y nunca la de esta pasada; si aun así queda menos de `programCopyFloorGb`,
+    /// cierra la copia (lo escrito queda entero) y no la vuelve a abrir. La emisión sigue: la
+    /// copia es un respaldo. Devuelve si la copia puede abrirse o seguir abierta. En la cola.
+    @discardableResult
+    private func makeRoomForProgramCopy() -> Bool {
+        if movStoppedForDiskAtFreeGb != nil { return false }
+        var libre = CaptureEngine.freeDiskBytes()
+        // Las del banco van en bench/ y no se tocan: solo las de la raíz de Documents.
+        if !config.benchFiles, libre < RecordingPolicy.programCopyTargetFreeBytes,
+           let carpeta = try? FileManager.default.url(for: .documentDirectory, in: .userDomainMask,
+                                                       appropriateFor: nil, create: false) {
+            let claves: Set<URLResourceKey> = [.fileSizeKey, .contentModificationDateKey]
+            let urls = (try? FileManager.default.contentsOfDirectory(at: carpeta, includingPropertiesForKeys: Array(claves)))
+                ?? []
+            let copias = urls.filter { RecordingPolicy.isProgramCopy($0.lastPathComponent) }.compactMap { url in
+                (try? url.resourceValues(forKeys: claves)).map {
+                    RecordingPolicy.StoredCopy(name: url.lastPathComponent, bytes: Int64($0.fileSize ?? 0),
+                                               modifiedS: $0.contentModificationDate?.timeIntervalSince1970 ?? 0)
+                }
+            }
+            let tamanos = Dictionary(copias.map { ($0.name, $0.bytes) }, uniquingKeysWith: { a, _ in a })
+            let borrar = RecordingPolicy.programCopiesToDelete(
+                copias, freeBytes: libre, keeping: Set(movSegments.map(\.lastPathComponent))
+            )
+            var borradas = 0
+            var bytes: Int64 = 0
+            for nombre in borrar where (try? FileManager.default.removeItem(at: carpeta.appendingPathComponent(nombre))) != nil {
+                borradas += 1
+                bytes += tamanos[nombre] ?? 0
+                programCopiesDeleted.append(nombre)
+            }
+            if borradas > 0 {
+                programCopiesDeletedBytes += bytes
+                libre = CaptureEngine.freeDiskBytes()
+                noteAppEvent(String(format: "disco: se borran %d copias viejas del programa (%.1f GB); quedan %.1f GB libres",
+                                    borradas, Double(bytes) / Self.bytesPerGb, Double(libre) / Self.bytesPerGb))
+            }
+        }
+        guard !RecordingPolicy.programCopyAllowed(freeBytes: libre) else { return true }
+        let libreGb = Double(libre) / Self.bytesPerGb
+        movStoppedForDiskAtFreeGb = libreGb
+        if let r = recorder {
+            movFramesClosed.video += r.videoFrames
+            movFramesClosed.audio += r.audioFrames
+            recorder = nil
+            r.finish { _ in }
+        }
+        noteAppEvent(String(format: "disco: la copia local del programa se para con %.1f GB libres; la emisión sigue", libreGb))
+        NSLog("[split] copia del programa parada por el disco: %.1f GB libres", libreGb)
+        return false
+    }
+
+    /// Lo que el vigía del disco ha hecho con la copia, para los informes.
+    private var programCopyReport: [String: Any] {
+        [
+            "stopped_for_disk": movStoppedForDiskAtFreeGb != nil, "stopped_at_free_gb": movStoppedForDiskAtFreeGb ?? -1,
+            "deleted": programCopiesDeleted, "deleted_gb": Double(programCopiesDeletedBytes) / Self.bytesPerGb,
+            "floor_gb": RecordingPolicy.programCopyFloorGb, "target_free_gb": RecordingPolicy.programCopyTargetFreeGb,
+        ]
     }
 
     /// El paquete del detector de EMITIR, si está en el móvil: RIG_DETECT si se lanzó con él;
@@ -2764,6 +2838,8 @@ final class SplitBench {
             // VideoToolbox rehechas (al volver del segundo plano).
             "mov_segments": movSegments.count,
             "mov_failures": movFailures,
+            // 2026-10-24: el vigía del disco de la copia (paradas y copias viejas borradas).
+            "program_copy": programCopyReport,
             "vt_session_resets": ["program_encoder": programEncoder?.sessionResets ?? 0,
                                   "part_encoder": slaveEncoder?.sessionResets ?? 0,
                                   "part_decoder": master?.decoderSessionResets ?? 0],
@@ -2946,6 +3022,8 @@ final class SplitBench {
             } ?? [:],
             "mov_segments": movSegments.count,
             "mov_failures": movFailures,
+            // 2026-10-24: el vigía del disco de la copia (paradas y copias viejas borradas).
+            "program_copy": programCopyReport,
             "mov_video_frames": movFramesClosed.video + (recorder?.videoFrames ?? 0),
             "vt_session_resets": ["program_encoder": programEncoder?.sessionResets ?? 0,
                                   "part_encoder": slaveEncoder?.sessionResets ?? 0,
