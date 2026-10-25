@@ -482,10 +482,7 @@ class CaptureReadout {
       return const <CaptureReading>[];
     }
     final bool hot = applied.thermalState.index >= ThermalState.serious.index;
-    // El fichero local va a 45 Mbit/s: unos 20 GB por hora, casi 39 GB un partido con
-    // descanso. Con menos, AVAssetWriter se queda sin sitio a mitad y no avisa dos veces.
-    final bool tight = applied.freeDiskBytes < matchRecordingBytes;
-    final String free = '${(applied.freeDiskBytes / 1e9).toStringAsFixed(1)} GB';
+    final (String diskText, ZeroTone diskTone) = _diskReading(applied.freeDiskBytes);
     return <CaptureReading>[
       CaptureReading(
         'Temperatura',
@@ -509,11 +506,7 @@ class CaptureReadout {
         '${(applied.batteryLevel * 100).round()} %',
         tone: applied.batteryLevel < 0.2 ? ZeroTone.bad : ZeroTone.neutral,
       ),
-      CaptureReading(
-        'Disco libre',
-        tight ? '$free · no llega al final del partido' : free,
-        tone: tight ? ZeroTone.bad : ZeroTone.neutral,
-      ),
+      CaptureReading('Disco libre', diskText, tone: diskTone),
       CaptureReading(
         'Frames perdidos',
         '${applied.droppedFrames}',
@@ -532,5 +525,38 @@ class CaptureReadout {
     if (session.problem != null) CaptureReading('Problema', session.problem!, tone: ZeroTone.bad),
     if (session.interruption != null)
       CaptureReading('Interrupción', session.interruption!, tone: ZeroTone.bad),
+    if (lowDiskWarning != null) CaptureReading('Espacio', lowDiskWarning!, tone: ZeroTone.bad),
   ];
+
+  /// El aviso de poco disco en palabras de cualquiera (2026-10-24: el disco lleno se llevó
+  /// la emisión y nadie en la cancha sabía por qué). Nil con sitio de sobra.
+  String? get lowDiskWarning {
+    final int? free = _status?.freeDiskBytes;
+    if (free == null || free >= programCopyTargetFreeBytes) {
+      return null;
+    }
+    final String gb = (free / 1e9).toStringAsFixed(1);
+    if (free < programCopyFloorBytes) {
+      return 'Al teléfono solo le quedan $gb GB: Zero ya no guarda la copia del partido en el '
+          'teléfono, pero la emisión sigue. Libera espacio cuando puedas.';
+    }
+    return 'Al teléfono le quedan $gb GB. Zero borra solo las copias viejas del partido para '
+        'hacer sitio; si no basta, deja de guardar la copia y la emisión sigue.';
+  }
+
+  /// La fila «Disco libre»: con la 4K encendida, si llega al final del partido (va a
+  /// 45 Mbit/s, ~39 GB con descanso); sin ella, para cuánta copia del programa queda.
+  (String, ZeroTone) _diskReading(int freeBytes) {
+    final String free = '${(freeBytes / 1e9).toStringAsFixed(1)} GB';
+    if (freeBytes < programCopyFloorBytes) {
+      return ('$free · copia local parada, la emisión sigue', ZeroTone.bad);
+    }
+    if (session.saveVideo) {
+      final bool tight = freeBytes < matchRecordingBytes;
+      return (tight ? '$free · la 4K no llega al final del partido' : free, tight ? ZeroTone.bad : ZeroTone.neutral);
+    }
+    final double hours = (freeBytes - programCopyFloorBytes) / programCopyBytesPerHour;
+    final String forCopy = '$free · copia del partido para ~${hours.floor()} h';
+    return (forCopy, freeBytes < programCopyTargetFreeBytes ? ZeroTone.bad : ZeroTone.neutral);
+  }
 }

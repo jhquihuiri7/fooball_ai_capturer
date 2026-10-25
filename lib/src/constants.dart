@@ -414,6 +414,19 @@ const String singleResolutionKey = 'zero.singleResolution';
 /// donde el nativo la hace cumplir.
 const int phoneDiskReserveBytes = 40 * 1000 * 1000 * 1000;
 
+/// Por debajo de esto libre, la copia local del programa no se abre y la abierta se cierra;
+/// la emisión sigue (2026-10-24: la copia llenó el disco del 17 y se llevó la emisión).
+/// Copia de `RecordingPolicy.programCopyFloorGb` en RigCore, donde el nativo la hace cumplir.
+const int programCopyFloorBytes = 3 * 1000 * 1000 * 1000;
+
+/// Lo que el nativo intenta dejar libre borrando copias viejas del programa: por debajo, se
+/// avisa. Copia de `RecordingPolicy.programCopyTargetFreeGb`.
+const int programCopyTargetFreeBytes = 12 * 1000 * 1000 * 1000;
+
+/// Lo que ocupa la copia del programa por hora de emisión: 5,63 GB en 2 h 53 min el 24-oct
+/// (1080p a ~6 Mbit/s y el AAC), redondeado a 2 GB.
+const int programCopyBytesPerHour = 2 * 1000 * 1000 * 1000;
+
 // --------------------------------------------------------------------------- //
 // Anuncios de la franja (IOS-49, ADR 0008 y ADR 0022 §6)
 // --------------------------------------------------------------------------- //
