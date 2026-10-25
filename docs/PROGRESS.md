@@ -12,7 +12,7 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
-## 2026-10-24 · BUG ABIERTO: el disco lleno tumbó la emisión tras ~5 h de partidos (17, 1.0.0 (15) de TestFlight) · 🐞 diagnosticado, sin arreglar
+## 2026-10-24 · BUG: el disco lleno tumbó la emisión tras ~5 h de partidos (17, 1.0.0 (15) de TestFlight) · 🚧 arreglado en la (16), sin probar en el iPhone
 
 Leído del 17 (solo lectura: el listado de devicectl y los informes `program-live`/`program-split`
 de ayer y hoy, en el scratchpad `espacio/`):
@@ -34,6 +34,26 @@ de ayer y hoy, en el scratchpad `espacio/`):
      y la pantalla y el panel lo dicen. La emisión nunca depende de la copia.
   2. Las copias del programa con tope (los últimos N partidos o X GB) o desactivables.
   3. Nada de `bench/`, `bench4k/` ni `nv12/` en la app de TestFlight. Y un botón «Liberar espacio».
+- **Arreglo (16), 25-oct** (f9559c0, 36b582e). Alexander pidió no borrar los datos del 17:
+  son el caso de prueba.
+  - `RecordingPolicy.programCopy*` (RigCore, con tests): con menos de 12 GB libres se borran las
+    copias viejas del programa, de la más vieja a la más nueva, nunca la de la pasada ni nada
+    de `bench/`. Con menos de 3 GB, la copia se cierra (entera) y no se reabre.
+  - `SplitBench.makeRoomForProgramCopy`: lo aplica al abrir la copia, cada minuto y cuando el
+    escritor falla. Ya no fuerza un IDR por cada reapertura fallida, que es lo que atascó la
+    emisión. Los informes llevan `program_copy` y `app_events` lo cuenta.
+  - Pantalla: «Disco libre» dice para cuántas horas de copia queda (sin 4K). La tarjeta de
+    atención avisa en palabras de cualquiera: «Zero borra solo las copias viejas…» y «ya no
+    guarda la copia, pero la emisión sigue».
+  - Con lo que tiene ahora el 17 (~28 GB libres) no se borra nada: la limpieza empieza por
+    debajo de 12 GB. Los 66 GB de pruebas no los toca nunca.
+  - **Probado**: los tests de `RecordingPolicy` (8), los de Flutter (540 pasan; los 8 dorados de
+    `test/graphics` fallan igual sin estos cambios: el macOS 27 dibuja distinto) y la app
+    compila para iOS. **Sin probar en el iPhone.**
+- **De paso, con la Xcode 27.1**: 2 tests de `ProgramRecorderTests` fallan en el Mac (macOS
+  27, `finishWriting` no responde). En el iPhone (iOS 27.0.1, la (15) de TestFlight compilada
+  con esa Xcode) las copias se escribieron bien el 24-oct: `mov_failures` vacío y 310 183
+  fotogramas. Es del Mac.
 - **Limpieza pendiente del sí de Alexander**: `tools/limpiar_moviles.sh --borrar-pruebas` borra de
   `bench/`, `bench4k/` y `nv12/` lo anterior a hoy (~66 GB) y nunca toca las copias de los
   partidos, la calibración ni `n0/`. Necesita el 17 desbloqueado.
