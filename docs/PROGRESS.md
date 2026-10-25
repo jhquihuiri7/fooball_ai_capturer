@@ -12,6 +12,32 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-24 · BUG ABIERTO: el disco lleno tumbó la emisión tras ~5 h de partidos (17, 1.0.0 (15) de TestFlight) · 🐞 diagnosticado, sin arreglar
+
+Leído del 17 (solo lectura: el listado de devicectl y los informes `program-live`/`program-split`
+de ayer y hoy, en el scratchpad `espacio/`):
+- **Zero ocupaba 97,7 GB** (2 641 ficheros), acumulados desde el 4-oct:
+  - ~66 GB son restos de nuestras pruebas de desarrollo: `bench/` 41,3 GB, `bench4k/` 18,4 GB
+    y `nv12/` 6,4 GB.
+  - ~31 GB son copias locales del programa en la raíz: un `program-*.mov` por emisión, unos
+    2 GB/h. Se graban siempre al EMITIR, sin «Guardar vídeo», y no se borran nunca.
+  - Ayer 6,3 GB (157 min) y hoy 10,8 GB (173 + 126 min y varias cortas).
+- **Cómo se cayó**: hoy se empezó con 11 GB libres. Tras la emisión de 14:53 quedaban 4,6 GB, y
+  la de 17:46 los bajó a 0,5 GB. Su último latido es de las 19:52:57 (aún publicando). Después,
+  nada: ni latido ni informe final, que no cabía. A las 19:53 hay un `…-2.mov` vacío. La copia
+  .mov (un extra) llenó el disco y se llevó la emisión.
+- **Lo que sí funcionó (Bug C)**: a las 15:31 otra app tomó el micro (llamada, ruta a 44,1 kHz).
+  La app lo quitó, lo devolvió sola a los 18,7 s, y el sonido siguió: 22,7 s de silencio en
+  2 h 53 min. Primer caso real del arreglo de la (15), y funciona.
+- **Arreglo propuesto**:
+  1. Un vigía de disco: la copia .mov no arranca, o se cierra, si el disco baja de un mínimo,
+     y la pantalla y el panel lo dicen. La emisión nunca depende de la copia.
+  2. Las copias del programa con tope (los últimos N partidos o X GB) o desactivables.
+  3. Nada de `bench/`, `bench4k/` ni `nv12/` en la app de TestFlight. Y un botón «Liberar espacio».
+- **Limpieza pendiente del sí de Alexander**: `tools/limpiar_moviles.sh --borrar-pruebas` borra de
+  `bench/`, `bench4k/` y `nv12/` lo anterior a hoy (~66 GB) y nunca toca las copias de los
+  partidos, la calibración ni `n0/`. Necesita el 17 desbloqueado.
+
 ## 2026-10-21 · Prueba del cosido desatendida con la 1.0.0 (15) (17 IZQ maestro + 16 Pro DER, Aware, en casa) · ✅ cose y emite; 3 cosas que mirar
 
 Con el trípode en casa (pared, cama y mesita a 1-3 m) y sin tocar las pantallas:
