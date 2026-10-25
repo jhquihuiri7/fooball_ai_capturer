@@ -54,9 +54,11 @@ de ayer y hoy, en el scratchpad `espacio/`):
   27, `finishWriting` no responde). En el iPhone (iOS 27.0.1, la (15) de TestFlight compilada
   con esa Xcode) las copias se escribieron bien el 24-oct: `mov_failures` vacío y 310 183
   fotogramas. Es del Mac.
-- **Limpieza pendiente del sí de Alexander**: `tools/limpiar_moviles.sh --borrar-pruebas` borra de
-  `bench/`, `bench4k/` y `nv12/` lo anterior a hoy (~66 GB) y nunca toca las copias de los
-  partidos, la calibración ni `n0/`. Necesita el 17 desbloqueado.
+- **Limpieza hecha el 25-oct a las 17:41, con el sí de Alexander** (v17 de desarrollo en el 17,
+  `RIG_PURGE_BENCH=1 RIG_PURGE_COPIES=1`). Zero pasó de 97,7 GB a 0,8 GB. Siguen `rig.json`, el
+  detector de `bench-resources/`, `calib/`, `n0/` y `partido/`. Informe en `bench/purge-1792971686.json`.
+- **IPA 1.0.0 (17)** con el vigía del disco y la limpieza de copias:
+  `build/ios/ipa/Zero-1.0.0-17.ipa`.
 
 ## 2026-10-21 · Prueba del cosido desatendida con la 1.0.0 (15) (17 IZQ maestro + 16 Pro DER, Aware, en casa) · ✅ cose y emite; 3 cosas que mirar
 
