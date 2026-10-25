@@ -96,6 +96,38 @@ final class BenchPurgeTests: XCTestCase {
         XCTAssertEqual(informe?["cutoff_unix_s"] as? Int, 1_792_044_000)
     }
 
+    /// 2026-10-25: con RIG_PURGE_COPIES=1, también las copias locales viejas de la raíz (el
+    /// programa y la 4K). Lo de hoy, la calibración, los modelos, el partido y el N0 se quedan.
+    func testWithCopiesItAlsoRemovesTheOldLocalCopiesAndNothingElse() throws {
+        try pon("bench/program-split-1791000000.ts", bytes: 1000, fecha: ayer)
+        let viejas = ["program-m_f50b97dd8d1a-1792076844.mov", "program-m_f50b97dd8d1a-1792076844-2.mov",
+                      "left-1791160494.mov", "right-1791160494.mov"]
+        for ruta in viejas { try pon(ruta, bytes: 2000, fecha: ayer) }
+        let quedan = ["program-m_f50b97dd8d1a-1792150000.mov", "rig.json", "bench.json",
+                      "bench-resources/players-centernet-mnv4.mlpackage/Manifest.json",
+                      "calib/687731642/left-687731642.jpg", "n0/zero-1792076844-left.jsonl",
+                      "partido/match.json", "partido/videos/anuncio.mp4", "program-m_x.json"]
+        for ruta in quedan {
+            try pon(ruta, fecha: ruta == "program-m_f50b97dd8d1a-1792150000.mov" ? hoy : ayer)
+        }
+
+        let r = try XCTUnwrap(BenchPurge.purgeIfAsked(
+            environment: ["RIG_PURGE_BENCH": "1", "RIG_PURGE_COPIES": "1"], documents: docs, now: ahora,
+            calendar: calendario
+        ))
+
+        XCTAssertEqual(r.byFolder[BenchPurge.copiesKey],
+                       BenchPurge.FolderResult(removedFiles: 4, removedBytes: 8000, keptFiles: 1))
+        XCTAssertEqual(r.removedFiles, 5)
+        for ruta in viejas { XCTAssertFalse(hay(ruta), ruta) }
+        for ruta in quedan { XCTAssertTrue(hay(ruta), ruta) }
+        // Sin la variable de las copias, las copias no se tocan (el caso de antes).
+        try pon("program-m_f50b97dd8d1a-1.mov", fecha: ayer)
+        BenchPurge.purgeIfAsked(environment: ["RIG_PURGE_BENCH": "1"], documents: docs, now: ahora,
+                                calendar: calendario)
+        XCTAssertTrue(hay("program-m_f50b97dd8d1a-1.mov"))
+    }
+
     func testWithoutTheFoldersThereIsNothingToDo() throws {
         let r = BenchPurge.run(documents: docs, cutoff: ahora)
         XCTAssertEqual(r.removedFiles, 0)

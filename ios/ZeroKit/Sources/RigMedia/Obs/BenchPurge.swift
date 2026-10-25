@@ -12,12 +12,30 @@
 // hace falta. Nunca rig.json, bench-resources/, calib/, n0/, las copias program-*.mov de
 // EMITIR ni nada fuera de esas tres carpetas. Los enlaces simbólicos no se siguen ni se borran.
 // Deja su informe en `bench/purge-<hora Unix>.json`: así el guion del Mac sabe que acabó.
+//
+// Con RIG_PURGE_COPIES=1 además (2026-10-25, `--borrar-copias`), las copias locales de antes de
+// hoy de la raíz de Documents: las del programa (`program-*.mov`, ~2 GB por hora de EMITIR) y
+// las 4K (`left-*.mov`, `right-*.mov`). El 24-oct eran 34 GB en el 17 y ayudaron a llenar el
+// disco que tumbó la emisión. El VPS graba el programa.
 
 import Foundation
+import RigCore
 
 public enum BenchPurge {
     /// La variable de entorno del lanzamiento que la pide.
     public static let environmentKey = "RIG_PURGE_BENCH"
+
+    /// La que pide, además, las copias locales de la raíz de Documents.
+    public static let copiesEnvironmentKey = "RIG_PURGE_COPIES"
+
+    /// La clave de esas copias en el informe (no es una carpeta: es la raíz).
+    public static let copiesKey = "copias"
+
+    /// Si un fichero de la raíz de Documents es una copia local: la del programa o una 4K.
+    public static func isLocalCopy(_ name: String) -> Bool {
+        RecordingPolicy.isProgramCopy(name)
+            || ((name.hasPrefix("left-") || name.hasPrefix("right-")) && name.hasSuffix(".mov"))
+    }
 
     /// Las carpetas de Documents que se limpian: informes y vídeos de los bancos, las 4K de
     /// las pasadas y los volcados NV12.
@@ -50,7 +68,8 @@ public enum BenchPurge {
     public static func purgeIfAsked(environment: [String: String], documents: URL, now: Date,
                                     calendar: Calendar = .current) -> Report? {
         guard environment[environmentKey] == "1" else { return nil }
-        let report = run(documents: documents, cutoff: cutoff(now: now, calendar: calendar))
+        let report = run(documents: documents, cutoff: cutoff(now: now, calendar: calendar),
+                         copies: environment[copiesEnvironmentKey] == "1")
         do {
             try writeReport(report, documents: documents, now: now)
         } catch {
@@ -61,8 +80,10 @@ public enum BenchPurge {
     }
 
     /// Borra de `folders` los ficheros normales modificados antes de `cutoff` y las
-    /// subcarpetas que se quedan vacías (no las tres carpetas: los bancos escriben ahí).
-    public static func run(documents: URL, cutoff: Date, fileManager: FileManager = .default) -> Report {
+    /// subcarpetas que se quedan vacías (no las tres carpetas: los bancos escriben ahí). Con
+    /// `copies`, también las copias locales de antes de `cutoff` de la raíz (`isLocalCopy`).
+    public static func run(documents: URL, cutoff: Date, copies: Bool = false,
+                           fileManager: FileManager = .default) -> Report {
         var report = Report(cutoff: cutoff, byFolder: [:], failures: [])
         let claves: [URLResourceKey] = [.isRegularFileKey, .isDirectoryKey, .isSymbolicLinkKey,
                                         .contentModificationDateKey, .fileSizeKey]
@@ -104,7 +125,36 @@ public enum BenchPurge {
             }
             report.byFolder[folder] = result
         }
+        if copies {
+            report.byFolder[copiesKey] = purgeCopies(documents: documents, cutoff: cutoff, keys: claves,
+                                                     fileManager: fileManager, failures: &report.failures)
+        }
         return report
+    }
+
+    /// Las copias locales de la raíz de Documents (sin bajar a ninguna carpeta).
+    private static func purgeCopies(documents: URL, cutoff: Date, keys: [URLResourceKey], fileManager: FileManager,
+                                    failures: inout [String]) -> FolderResult {
+        var result = FolderResult()
+        let urls = (try? fileManager.contentsOfDirectory(at: documents, includingPropertiesForKeys: keys)) ?? []
+        for url in urls where isLocalCopy(url.lastPathComponent) {
+            guard let v = try? url.resourceValues(forKeys: Set(keys)), v.isSymbolicLink != true,
+                  v.isRegularFile == true
+            else { continue }
+            guard let fecha = v.contentModificationDate, fecha < cutoff else {
+                result.keptFiles += 1
+                continue
+            }
+            do {
+                try fileManager.removeItem(at: url)
+                result.removedFiles += 1
+                result.removedBytes += Int64(v.fileSize ?? 0)
+            } catch {
+                result.keptFiles += 1
+                failures.append("\(url.lastPathComponent): \(error.localizedDescription)")
+            }
+        }
+        return result
     }
 
     /// `bench/purge-<hora Unix>.json`: el corte, lo borrado por carpeta y los fallos.
