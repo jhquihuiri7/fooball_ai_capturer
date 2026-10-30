@@ -165,13 +165,13 @@ final class RigHostApiImpl: NSObject, RigHostApi {
 
     // IOS-58: EMITIR en la arquitectura B. La pasada vive con la cámara y el enlace.
 
-    func startProgram(resolution: ProgramResolution) throws -> String {
+    func startProgram(resolution: ProgramResolution, zoom: Double) throws -> String {
         // IOS-99: la del contrato de Pigeon, en el tipo de RigCore.
         let salida: ProgramOutput = switch resolution {
         case .p1080: .hd1080
         case .p720: .hd720
         }
-        return ProgramHub.capture?.startProgram(output: salida) ?? "sin cámara"
+        return ProgramHub.capture?.startProgram(output: salida, zoom: zoom) ?? "sin cámara"
     }
 
     func stopProgram() throws {

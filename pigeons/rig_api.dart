@@ -103,9 +103,10 @@ abstract class RigHostApi {
   /// enlace de Network abierto por `startLink` (o sin enlace, con «Una cámara»). En el
   /// maestro, la composición, el director, el detector, la copia .mov y el SRT al destino del
   /// QR Soporte; en el esclavo, su parte y su detector. La 4K va aparte, por
-  /// `CaptureHostApi.start`. `resolution` solo cuenta con «Una cámara» (IOS-99). Devuelve ""
-  /// o por qué no arrancó.
-  String startProgram(ProgramResolution resolution);
+  /// `CaptureHostApi.start`. `resolution` solo cuenta con «Una cámara» (IOS-99), y `zoom`
+  /// también (2026-10-30): el de la app Cámara, 0,5 es la lente entera. Devuelve "" o por
+  /// qué no arrancó.
+  String startProgram(ProgramResolution resolution, double zoom);
 
   /// PARAR: cierra la copia, el SRT y la parte, y deja el informe en Documents/bench.
   void stopProgram();

@@ -62,10 +62,14 @@ class FakeRigApi extends RigHostApi {
   /// IOS-99: la resolución que pidió el último `startProgram`.
   ProgramResolution? lastResolution;
 
+  /// 2026-10-30: el zoom que pidió el último `startProgram`.
+  double? lastZoom;
+
   @override
-  Future<String> startProgram(ProgramResolution resolution) async {
+  Future<String> startProgram(ProgramResolution resolution, double zoom) async {
     startCalls++;
     lastResolution = resolution;
+    lastZoom = zoom;
     return startProblem;
   }
 

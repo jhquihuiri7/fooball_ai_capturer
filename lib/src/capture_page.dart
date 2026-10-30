@@ -64,6 +64,7 @@ class CapturePage extends StatefulWidget {
     this.onMasterHost,
     this.linkMode = LinkMode.multipeer,
     this.resolution = ProgramResolution.p1080,
+    this.zoom = singleDefaultZoom,
     this.autoEmitir,
     this.eventKind = EventKind.football,
     super.key,
@@ -76,6 +77,9 @@ class CapturePage extends StatefulWidget {
 
   /// La resolución con «Una cámara» (ver `CaptureSession.resolution`).
   final ProgramResolution resolution;
+
+  /// El zoom con «Una cámara» (ver `CaptureSession.zoom`).
+  final double zoom;
 
   /// EMITIR sin tocar la pantalla (dart-define `AUTO_EMITIR`, ver `AutoEmitir`). null: la
   /// pantalla de siempre.
@@ -190,6 +194,7 @@ class _CapturePageState extends State<CapturePage> {
         prefersMaster: widget.prefersMaster,
         linkMode: widget.linkMode,
         resolution: widget.resolution,
+        zoom: widget.zoom,
         masterHost: _host,
         replicaStore: _host == null
             ? null

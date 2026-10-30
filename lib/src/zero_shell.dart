@@ -17,6 +17,7 @@ import 'package:flutter/material.dart';
 import 'package:football_ai_capture/src/auto_emitir.dart';
 import 'package:football_ai_capture/src/capture_page.dart';
 import 'package:football_ai_capture/src/capture_session.dart';
+import 'package:football_ai_capture/src/constants.dart';
 import 'package:football_ai_capture/src/event_kind.dart';
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
 import 'package:football_ai_capture/src/generated/rig_api.g.dart';
@@ -41,6 +42,7 @@ class ZeroShell extends StatefulWidget {
     this.match,
     this.linkMode = LinkMode.multipeer,
     this.resolution = ProgramResolution.p1080,
+    this.zoom = singleDefaultZoom,
     this.autoEmitir,
     this.eventKind = EventKind.football,
     super.key,
@@ -57,6 +59,9 @@ class ZeroShell extends StatefulWidget {
 
   /// La resolución con «Una cámara» (ver `CaptureSession.resolution`).
   final ProgramResolution resolution;
+
+  /// El zoom con «Una cámara» (ver `CaptureSession.zoom`).
+  final double zoom;
 
   final CameraRole role;
 
@@ -167,6 +172,7 @@ class _ZeroShellState extends State<ZeroShell> {
       onMasterHost: _onMasterHost,
       linkMode: widget.linkMode,
       resolution: widget.resolution,
+        zoom: widget.zoom,
       autoEmitir: widget.autoEmitir,
       eventKind: widget.eventKind,
     );

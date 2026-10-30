@@ -473,7 +473,7 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
     /// EMITIR (IOS-58): "" o por qué no. Una sola pasada a la vez; con el banco split en
     /// marcha no se mezcla otra. `output` solo cuenta con «Una cámara»: el soporte de dos va
     /// siempre a 1080p (IOS-99, ADR 0025).
-    func startProgram(output: ProgramOutput) -> String {
+    func startProgram(output: ProgramOutput, zoom: Double = FullLensView.fullLensZoom) -> String {
         let solo = link as? RigSoloLink
         let nw = link as? RigLinkNW
         guard solo != nil || (nw != nil && linkMedium != nil) else {
@@ -491,7 +491,7 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
         if let solo {
             // «Una cámara (sin pareja)»: la misma pasada, de una sola lente.
             s = makeProgramRun(session: solo.session, role: lado,
-                               config: .single(detectorPackage: detector, output: output))
+                               config: .single(detectorPackage: detector, output: output, zoom: zoom))
         } else if let nw, let medio = linkMedium {
             s = makeProgramRun(nw: nw, role: lado, config: .production(medium: medio, detectorPackage: detector))
         } else {

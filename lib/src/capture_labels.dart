@@ -339,6 +339,7 @@ class CaptureReadout {
       // IOS-99: con una cámara, la resolución elegida (el soporte va siempre a 1080p).
       if (session.singleCamera)
         CaptureReading('Resolución', CaptureSession.resolutionLabel(session.resolution)),
+      if (session.singleCamera) CaptureReading('Zoom', CaptureSession.zoomLabel(session.zoom)),
       if (p == null)
         CaptureReading(
           'Programa',

@@ -314,16 +314,17 @@ class RigHostApi {
   /// enlace de Network abierto por `startLink` (o sin enlace, con «Una cámara»). En el
   /// maestro, la composición, el director, el detector, la copia .mov y el SRT al destino del
   /// QR Soporte; en el esclavo, su parte y su detector. La 4K va aparte, por
-  /// `CaptureHostApi.start`. `resolution` solo cuenta con «Una cámara» (IOS-99). Devuelve ""
-  /// o por qué no arrancó.
-  Future<String> startProgram(ProgramResolution resolution) async {
+  /// `CaptureHostApi.start`. `resolution` solo cuenta con «Una cámara» (IOS-99), y `zoom`
+  /// también (2026-10-30): el de la app Cámara, 0,5 es la lente entera. Devuelve "" o por
+  /// qué no arrancó.
+  Future<String> startProgram(ProgramResolution resolution, double zoom) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.RigHostApi.startProgram$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[resolution]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[resolution, zoom]);
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(

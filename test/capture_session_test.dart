@@ -1262,6 +1262,38 @@ void main() {
       );
     });
 
+    test('2026-10-30: «Una cámara» pide su zoom; la lente entera (0,5×) de partida', () async {
+      for (final double elegido in singleZooms) {
+        final FakeRigApi rig = FakeRigApi();
+        final CaptureSession session = CaptureSession(
+          role: CameraRole.left,
+          api: FakeCaptureApi(),
+          rigApi: rig,
+          linkMode: LinkMode.single,
+          zoom: elegido,
+        );
+        await session.prepare();
+        await session.toggleRecording();
+        expect(rig.lastZoom, elegido);
+      }
+      expect(CaptureSession(role: CameraRole.left, api: FakeCaptureApi(), linkMode: LinkMode.single).zoom, 0.5);
+      expect(singleZooms.map(CaptureSession.zoomLabel), <String>['0,5×', '1×', '2×']);
+    });
+
+    test('2026-10-30: el soporte de dos pide siempre la lente entera aunque le llegue otro zoom', () async {
+      final FakeRigApi rig = FakeRigApi();
+      final CaptureSession session = CaptureSession(
+        role: CameraRole.left,
+        api: FakeCaptureApi(),
+        rigApi: rig,
+        linkMode: LinkMode.aware,
+        zoom: 2,
+      );
+      await session.prepare();
+      await session.toggleRecording();
+      expect(rig.lastZoom, singleDefaultZoom);
+    });
+
     test('IOS-99: el soporte de dos pide 1080p aunque le llegue otra', () async {
       final FakeRigApi rig = FakeRigApi();
       final CaptureSession session = CaptureSession(

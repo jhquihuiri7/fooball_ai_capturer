@@ -66,4 +66,28 @@ final class FullLensViewTests: XCTestCase {
             XCTAssertFalse(Self.esquinas(rig, mayor).allSatisfy(Self.dentro), "roll \(roll)")
         }
     }
+
+    // MARK: - El zoom de «Una cámara» (2026-10-30)
+
+    /// Los campos de la app Cámara del iPhone: 1× es la principal de 26 mm (69,4°), 2× la
+    /// mitad de cerca (38,2°) y 0,5× la ultra gran angular (108,3°). Por debajo de 0,5×, 0,5×.
+    func testElZoomDaElCampoDeLaAppCamara() {
+        let grados = { (z: Double) in FullLensView.hfovRad(zoom: z) * 180 / .pi }
+        XCTAssertEqual(grados(1), 69.39, accuracy: 0.01)
+        XCTAssertEqual(grados(2), 38.19, accuracy: 0.01)
+        XCTAssertEqual(grados(0.5), 108.33, accuracy: 0.01)
+        XCTAssertEqual(grados(0.2), grados(0.5), accuracy: 1e-9)
+    }
+
+    /// Con la lente de 106°, 0,5× se queda en la lente entera (no puede abrir más de lo que
+    /// ve) y 1× y 2× cierran la vista a su campo.
+    func testConZoomNuncaPasaDeLaLenteEntera() throws {
+        let camara = try Self.lente(roll: 0)
+        let entera = FullLensView.hfovRad(of: camara, width: 1920, height: 1080)
+        XCTAssertEqual(FullLensView.hfovRad(of: camara, width: 1920, height: 1080, zoom: 0.5), entera, accuracy: 1e-12)
+        XCTAssertEqual(FullLensView.hfovRad(of: camara, width: 1920, height: 1080, zoom: 1),
+                       FullLensView.hfovRad(zoom: 1), accuracy: 1e-12)
+        XCTAssertLessThan(FullLensView.hfovRad(of: camara, width: 1920, height: 1080, zoom: 2),
+                          FullLensView.hfovRad(of: camara, width: 1920, height: 1080, zoom: 1))
+    }
 }

@@ -366,9 +366,10 @@ protocol RigHostApi {
   /// enlace de Network abierto por `startLink` (o sin enlace, con «Una cámara»). En el
   /// maestro, la composición, el director, el detector, la copia .mov y el SRT al destino del
   /// QR Soporte; en el esclavo, su parte y su detector. La 4K va aparte, por
-  /// `CaptureHostApi.start`. `resolution` solo cuenta con «Una cámara» (IOS-99). Devuelve ""
-  /// o por qué no arrancó.
-  func startProgram(resolution: ProgramResolution) throws -> String
+  /// `CaptureHostApi.start`. `resolution` solo cuenta con «Una cámara» (IOS-99), y `zoom`
+  /// también (2026-10-30): el de la app Cámara, 0,5 es la lente entera. Devuelve "" o por
+  /// qué no arrancó.
+  func startProgram(resolution: ProgramResolution, zoom: Double) throws -> String
   /// PARAR: cierra la copia, el SRT y la parte, y deja el informe en Documents/bench.
   func stopProgram() throws
   /// Cómo va. Con `running` a false si no hay pasada.
@@ -423,15 +424,17 @@ class RigHostApiSetup {
     /// enlace de Network abierto por `startLink` (o sin enlace, con «Una cámara»). En el
     /// maestro, la composición, el director, el detector, la copia .mov y el SRT al destino del
     /// QR Soporte; en el esclavo, su parte y su detector. La 4K va aparte, por
-    /// `CaptureHostApi.start`. `resolution` solo cuenta con «Una cámara» (IOS-99). Devuelve ""
-    /// o por qué no arrancó.
+    /// `CaptureHostApi.start`. `resolution` solo cuenta con «Una cámara» (IOS-99), y `zoom`
+    /// también (2026-10-30): el de la app Cámara, 0,5 es la lente entera. Devuelve "" o por
+    /// qué no arrancó.
     let startProgramChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.RigHostApi.startProgram\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       startProgramChannel.setMessageHandler { message, reply in
         let args = message as! [Any?]
         let resolutionArg = args[0] as! ProgramResolution
+        let zoomArg = args[1] as! Double
         do {
-          let result = try api.startProgram(resolution: resolutionArg)
+          let result = try api.startProgram(resolution: resolutionArg, zoom: zoomArg)
           reply(wrapResult(result))
         } catch {
           reply(wrapError(error))

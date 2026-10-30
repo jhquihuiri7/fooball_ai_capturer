@@ -5,6 +5,12 @@
 // hacia donde mira la cámara y abre el campo más ancho que cabe en ella a la relación de
 // aspecto del programa. Así el render, el gráfico, la franja y el codificador no cambian,
 // y el horizonte sale recto aunque el móvil vaya un poco girado (la vista no tiene roll).
+//
+// Con zoom (2026-10-30, lo pidió Alexander: la lente entera se veía como el 0,5× de la app
+// Cámara). El operador elige 0,5× (la lente entera), 1× o 2×, como en la app Cámara, y la
+// vista se cierra a ese campo por el mismo eje. Se reproyecta con la geometría de la ultra
+// gran angular, así que sale recta; a 2× usa unos 1 350 px del sensor para 1 920 y se ve
+// más blanda.
 
 import Foundation
 
@@ -13,6 +19,27 @@ public enum FullLensView {
     /// enlace la vista se redondea (`ViewWire.quantized`) y el muestreo bilineal lee medio
     /// píxel alrededor; sin este margen, el borde del programa podría salir negro.
     public static let fillFraction = 0.99
+
+    /// El 1× del iPhone, en mm equivalentes de 35 mm: la cámara principal de 26 mm. Traduce el
+    /// zoom de la app Cámara (0,5×, 1×, 2×) a un campo de visión.
+    public static let mainCameraEquivalentFocalMm = 26.0
+
+    /// La mitad del ancho del fotograma de 35 mm, en mm (36 / 2).
+    public static let fullFrameHalfWidthMm = 18.0
+
+    /// El zoom de «la lente entera»: el 0,5× de la ultra gran angular.
+    public static let fullLensZoom = 0.5
+
+    /// El campo de visión horizontal, en rad, del zoom `zoom` de la app Cámara del iPhone
+    /// (1 es la cámara principal; 2, el doble de cerca).
+    public static func hfovRad(zoom: Double) -> Double {
+        2 * atan(fullFrameHalfWidthMm / (mainCameraEquivalentFocalMm * max(zoom, fullLensZoom)))
+    }
+
+    /// El de «Una cámara» con zoom: el del zoom, sin pasar nunca de la lente entera.
+    public static func hfovRad(of camera: RigCamera, width: Int, height: Int, zoom: Double) -> Double {
+        min(hfovRad(of: camera, width: width, height: height), hfovRad(zoom: zoom))
+    }
 
     /// El campo de visión horizontal, en rad, de la vista más ancha que cabe entera en la
     /// lente de `camera` con la relación de aspecto `width`×`height` del programa.

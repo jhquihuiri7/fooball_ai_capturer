@@ -1755,7 +1755,9 @@ final class SplitBench {
             // con todo lo que ve; sin barrido que cruce a la otra lente.
             yaw = rig.camera(side).pose.yawRad
             pitch = rig.camera(side).pose.pitchRad
-            hfov = FullLensView.hfovRad(of: rig.camera(side), width: Self.programWidth, height: Self.programHeight)
+            // 2026-10-30: con el zoom que eligió el operador (0,5× es la lente entera).
+            hfov = FullLensView.hfovRad(of: rig.camera(side), width: Self.programWidth, height: Self.programHeight,
+                                        zoom: config.singleZoom)
             lados = [side]
         } else if let v = try? RectilinearView(yawRad: yaw, pitchRad: pitch, hfovRad: hfov,
                                                width: Self.programWidth, height: Self.programHeight) {

@@ -50,9 +50,9 @@ class _OrderedRig extends FakeRigApi {
   final List<String> calls;
 
   @override
-  Future<String> startProgram(ProgramResolution resolution) {
+  Future<String> startProgram(ProgramResolution resolution, double zoom) {
     calls.add('startProgram');
-    return super.startProgram(resolution);
+    return super.startProgram(resolution, zoom);
   }
 
   @override

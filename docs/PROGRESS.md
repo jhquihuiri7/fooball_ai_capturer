@@ -12,6 +12,40 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-30 · La caída del 25-oct a las 20:53 y el zoom de «Una cámara» · 🚧 el zoom, sin probar en el iPhone
+
+**La caída (25-oct, 17 en «Una cámara», de 19:33 a 20:53)**, leída del 17 y del VPS en solo
+lectura:
+- El 17 salía a internet por **Starlink** (129.222.179.220, de SpaceX). Perdió el **15,1 % de los
+  paquetes** (362 025 de 2 390 658, con 308 582 reenviados).
+- El SRT se rompió y se rehízo **40 veces en 80 min**, desde el minuto 2: en el VPS, «closed: EOF»
+  y vuelta a los segundos. En el informe: 37 reconexiones, 2 por atasco, y el último error «SRT:
+  sin respuesta del servidor».
+- Cada corte paró el relé a YouTube («el panel dejó de publicar») y lo volvió a arrancar.
+- Entre las 20:47 y las 20:51 los cortes se juntaron, con conexiones solapadas («terminated»). A
+  las 20:53:58 se volvió a pulsar EMITIR.
+- Facebook rechazó toda la tarde: «Operation not permitted», 190 veces. Es de la clave o del
+  permiso de Facebook.
+- El micro aguantó una llamada a los 70 min: volvió solo a los 16 s.
+- **Qué mejoraría**: que YouTube no vea los cortes, con la tarjeta de espera del VPS (NUBE-18, a
+  medias). No se tocan los plazos del SRT: el `SRTO_PEERIDLETIMEO` por defecto (5 s) y el vigía
+  de atasco (5 s) van juntos, y cambiarlos sin probar en Starlink podría dejar la emisión
+  atascada más rato.
+
+**El zoom de «Una cámara»** (lo pidió Alexander: la lente entera se veía como el 0,5×). ADR 0025,
+enmienda del 2026-10-30 (football-ai b5162a7).
+- Píldoras 0,5× / 1× / 2× junto a la calidad, guardadas en `zero.singleZoom`. Viajan en
+  `startProgram(resolution, zoom)` (Pigeon regenerado) hasta `ProgramRunConfig.single(zoom:)`.
+- La vista se cierra a `FullLensView.hfovRad(of:width:height:zoom:)`: 1× = 69,4° (la principal
+  de 26 mm), 2× = 38,2°, y nunca más que la lente entera. Se queda la ultra gran angular.
+- A 2× amplía y se ve más blando (~1 350 px del sensor para 1 920).
+- **Probado**: tests de RigCore (`FullLensViewTests`, `ProgramRunTests`) y de Flutter (153).
+  Compila para iOS. **Sin probar en el iPhone.**
+
+**Con dos móviles** cada uno usa su **ultra gran angular (0,5×)**: el soporte cose las dos para
+cubrir el campo entero, y la calibración es de esa lente. El director encuadra dentro de ese
+panorama.
+
 ## 2026-10-24 · BUG: el disco lleno tumbó la emisión tras ~5 h de partidos (17, 1.0.0 (15) de TestFlight) · 🚧 arreglado en la (16), sin probar en el iPhone
 
 Leído del 17 (solo lectura: el listado de devicectl y los informes `program-live`/`program-split`

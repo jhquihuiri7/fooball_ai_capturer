@@ -76,6 +76,9 @@ final class ProgramRunTests: XCTestCase {
         XCTAssertEqual(ProgramRunConfig.bench(environment: [:]).output, .hd1080)
         XCTAssertEqual(ProgramRunConfig.single(detectorPackage: nil).output, .hd1080, "1080p de partida")
         XCTAssertEqual(ProgramRunConfig.single(detectorPackage: nil, output: .hd720).output, .hd720)
+        // 2026-10-30: el zoom de «Una cámara»; la lente entera (0,5×) de partida.
+        XCTAssertEqual(ProgramRunConfig.single(detectorPackage: nil).singleZoom, FullLensView.fullLensZoom)
+        XCTAssertEqual(ProgramRunConfig.single(detectorPackage: nil, zoom: 2).singleZoom, 2)
     }
 
     func testTheOutputsAre16By9AndNeverEnlargeTheComposition() {

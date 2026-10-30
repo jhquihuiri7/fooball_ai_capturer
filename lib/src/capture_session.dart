@@ -87,6 +87,7 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
     this.replicaStore,
     this.linkMode = LinkMode.multipeer,
     this.resolution = ProgramResolution.p1080,
+    this.zoom = singleDefaultZoom,
     RigHostApi? rigApi,
   })  : prefersMaster = prefersMaster ?? role == CameraRole.left,
         _api = api ?? CaptureHostApi(),
@@ -201,6 +202,13 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
   final ProgramResolution resolution;
 
   /// Lo que se le pide al nativo al EMITIR: la elegida con una cámara; si no, 1080p.
+  /// El zoom de «Una cámara» (2026-10-30), como en la app Cámara: 0,5 es la lente entera.
+  /// Con el soporte de dos no cuenta.
+  final double zoom;
+
+  /// `0,5×`, `1×`, `2×`.
+  static String zoomLabel(double z) => '${z == z.roundToDouble() ? z.toStringAsFixed(0) : z.toString().replaceAll('.', ',')}×';
+
   ProgramResolution get programResolution => singleCamera ? resolution : ProgramResolution.p1080;
 
   /// `1080p` o `720p`, para la pantalla.
@@ -806,7 +814,7 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
   Future<String?> _startProgram() async {
     String motivo;
     try {
-      motivo = await _rig.startProgram(programResolution);
+      motivo = await _rig.startProgram(programResolution, singleCamera ? zoom : singleDefaultZoom);
     } on Exception catch (error) {
       motivo = error is PlatformException ? (error.message ?? error.code) : '$error';
     }

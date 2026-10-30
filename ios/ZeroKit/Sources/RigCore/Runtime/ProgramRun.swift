@@ -47,6 +47,8 @@ public struct ProgramRunConfig: Equatable, Sendable {
     /// El tamaño y el techo con los que sale el programa (IOS-99, ADR 0025). 1080p salvo con
     /// «Una cámara», que puede ir a 720p.
     public var output: ProgramOutput
+    /// El zoom de «Una cámara» (2026-10-30), como en la app Cámara: 0,5× es la lente entera.
+    public var singleZoom: Double
 
     /// Lo que dura el banco si RIG_SPLIT_S no dice otra cosa: los 10 min de IOS-44, en s.
     public static let benchDefaultDurationS = 600.0
@@ -58,7 +60,7 @@ public struct ProgramRunConfig: Equatable, Sendable {
     public init(
         purpose: Purpose, durationS: Double, director: Bool, publish: Bool, record4K: Bool,
         detectorPackage: String?, partBitrateBps: Int, benchFiles: Bool, ladderForce: LadderForce? = nil,
-        singleCamera: Bool = false, output: ProgramOutput = .hd1080
+        singleCamera: Bool = false, output: ProgramOutput = .hd1080, singleZoom: Double = FullLensView.fullLensZoom
     ) {
         self.purpose = purpose
         self.durationS = durationS
@@ -71,6 +73,7 @@ public struct ProgramRunConfig: Equatable, Sendable {
         self.ladderForce = ladderForce
         self.singleCamera = singleCamera
         self.output = output
+        self.singleZoom = singleZoom
     }
 
     /// El banco split, como siempre: todo del entorno.
@@ -103,12 +106,14 @@ public struct ProgramRunConfig: Equatable, Sendable {
     /// gráfico y la franja, la copia .mov y el SRT si hay QR Soporte), sin enlace y con el
     /// programa de una sola lente **tal cual**: sin director, la lente entera enderezada
     /// (`FullLensView`; ADR 0025, enmienda del 2026-10-15). Sin parte, su bitrate no se usa.
-    /// Sale a la resolución que eligió el operador (IOS-99): 1080p de partida.
-    public static func single(detectorPackage: String?, output: ProgramOutput = .hd1080) -> ProgramRunConfig {
+    /// Sale a la resolución que eligió el operador (IOS-99): 1080p de partida. Y con su zoom
+    /// (2026-10-30): la lente entera (0,5×) de partida.
+    public static func single(detectorPackage: String?, output: ProgramOutput = .hd1080,
+                              zoom: Double = FullLensView.fullLensZoom) -> ProgramRunConfig {
         ProgramRunConfig(
             purpose: .production, durationS: .infinity, director: false, publish: true, record4K: false,
             detectorPackage: detectorPackage, partBitrateBps: noPartBitrateBps, benchFiles: false,
-            singleCamera: true, output: output
+            singleCamera: true, output: output, singleZoom: zoom
         )
     }
 

@@ -18,6 +18,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:football_ai_capture/src/capture_session.dart';
 import 'package:football_ai_capture/src/constants.dart';
 import 'package:football_ai_capture/src/event_kind.dart';
 import 'package:football_ai_capture/src/generated/capture_api.g.dart';
@@ -79,6 +80,7 @@ class _RolePageState extends State<RolePage> {
   /// La resolución con «Una cámara (sin pareja)» (IOS-99, ADR 0025 de football-ai): lo
   /// único que se elige en ese modo. Se guarda; sin nada, 1080p.
   ProgramResolution _resolution = ProgramResolution.p1080;
+  double _zoom = singleDefaultZoom;
 
   bool _searching = false;
   _ServerOrigin _origin = _ServerOrigin.none;
@@ -193,6 +195,10 @@ class _RolePageState extends State<RolePage> {
       if (r != null && mounted) {
         setState(() => _resolution = r);
       }
+      final double? zoom = prefs.getDouble(singleZoomKey);
+      if (zoom != null && singleZooms.contains(zoom) && mounted) {
+        setState(() => _zoom = zoom);
+      }
     } on Exception {
       // Sin almacenamiento (tests): manda el valor por defecto.
     }
@@ -213,6 +219,16 @@ class _RolePageState extends State<RolePage> {
     try {
       final SharedPreferences prefs = await SharedPreferences.getInstance();
       await prefs.setString(singleResolutionKey, resolution.name);
+    } on Exception {
+      // Si no se guarda, vale para esta vez.
+    }
+  }
+
+  Future<void> _setZoom(double zoom) async {
+    setState(() => _zoom = zoom);
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.setDouble(singleZoomKey, zoom);
     } on Exception {
       // Si no se guarda, vale para esta vez.
     }
@@ -364,6 +380,7 @@ class _RolePageState extends State<RolePage> {
                 prefersMaster: _directs || _linkMode == LinkMode.single,
                 linkMode: _linkMode,
                 resolution: _resolution,
+                zoom: _zoom,
               )
             // El espectáculo y el vóley (ADR 0031): «Una cámara (sin pareja)», que dirige.
             : ZeroShell(
@@ -371,6 +388,7 @@ class _RolePageState extends State<RolePage> {
                 prefersMaster: true,
                 linkMode: LinkMode.single,
                 resolution: _resolution,
+                zoom: _zoom,
                 eventKind: widget.eventKind,
               ),
       ),
@@ -560,6 +578,8 @@ class _RolePageState extends State<RolePage> {
                       onMode: (LinkMode m) => unawaited(_setLinkMode(m)),
                       resolution: _resolution,
                       onResolution: (ProgramResolution r) => unawaited(_setResolution(r)),
+                      zoom: _zoom,
+                      onZoom: (double z) => unawaited(_setZoom(z)),
                     ),
                     const SizedBox(height: ZeroMetrics.innerGap),
                     // Una vez por soporte, con los dos móviles delante: el plan B si no
@@ -683,6 +703,8 @@ extension on _RolePageState {
                     _ResolutionCard(
                       resolution: _resolution,
                       onResolution: (ProgramResolution r) => unawaited(_setResolution(r)),
+                      zoom: _zoom,
+                      onZoom: (double z) => unawaited(_setZoom(z)),
                     ),
                     const SizedBox(height: ZeroMetrics.innerGap),
                     _VpsCard(
@@ -763,10 +785,17 @@ class _TopBar extends StatelessWidget {
 
 /// La calidad de la emisión con una cámara (IOS-99): lo único que se elige, además del VPS.
 class _ResolutionCard extends StatelessWidget {
-  const _ResolutionCard({required this.resolution, required this.onResolution});
+  const _ResolutionCard({
+    required this.resolution,
+    required this.onResolution,
+    required this.zoom,
+    required this.onZoom,
+  });
 
   final ProgramResolution resolution;
   final ValueChanged<ProgramResolution> onResolution;
+  final double zoom;
+  final ValueChanged<double> onZoom;
 
   @override
   Widget build(BuildContext context) {
@@ -788,6 +817,8 @@ class _ResolutionCard extends StatelessWidget {
               ],
             ],
           ),
+          const SizedBox(height: 8),
+          _ZoomRow(zoom: zoom, onZoom: onZoom),
           const SizedBox(height: 10),
           Text(
             nota,
@@ -1058,6 +1089,8 @@ class _LinkCard extends StatelessWidget {
     required this.onMode,
     required this.resolution,
     required this.onResolution,
+    required this.zoom,
+    required this.onZoom,
   });
 
   final LinkMode mode;
@@ -1066,6 +1099,10 @@ class _LinkCard extends StatelessWidget {
   /// IOS-99: la resolución de «Una cámara», que solo se ve con ella elegida.
   final ProgramResolution resolution;
   final ValueChanged<ProgramResolution> onResolution;
+
+  /// El zoom de «Una cámara» (2026-10-30), que también solo se ve con ella elegida.
+  final double zoom;
+  final ValueChanged<double> onZoom;
 
   static const List<(ProgramResolution, String)> _resolutions = <(ProgramResolution, String)>[
     (ProgramResolution.p1080, '1080p'),
@@ -1133,6 +1170,8 @@ class _LinkCard extends StatelessWidget {
                 ],
               ],
             ),
+            const SizedBox(height: 8),
+            _ZoomRow(zoom: zoom, onZoom: onZoom),
           ],
           const SizedBox(height: 10),
           Text(
@@ -1146,6 +1185,27 @@ class _LinkCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// El zoom de «Una cámara» (2026-10-30, lo pidió Alexander: la lente entera se veía como el
+/// 0,5× de la app Cámara). Las mismas píldoras que la app Cámara.
+class _ZoomRow extends StatelessWidget {
+  const _ZoomRow({required this.zoom, required this.onZoom});
+
+  final double zoom;
+  final ValueChanged<double> onZoom;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: <Widget>[
+        for (final double z in singleZooms) ...<Widget>[
+          if (z != singleZooms.first) const SizedBox(width: 8),
+          ZeroPill(label: CaptureSession.zoomLabel(z), selected: zoom == z, onTap: () => onZoom(z)),
+        ],
+      ],
     );
   }
 }

@@ -409,6 +409,17 @@ const String linkModeKey = 'zero.linkMode';
 /// (`ProgramResolution.name`). Sin nada, 1080p.
 const String singleResolutionKey = 'zero.singleResolution';
 
+/// Dónde se guarda el zoom de «Una cámara» (2026-10-30), como número: 0.5, 1 o 2.
+const String singleZoomKey = 'zero.singleZoom';
+
+/// Los zooms de «Una cámara», como en la app Cámara del iPhone: 0,5× es la lente entera (la
+/// ultra gran angular), 1× el campo de la cámara principal y 2× el doble de cerca, que amplía
+/// y se ve más blando. El nativo los traduce a un campo de visión (`FullLensView`).
+const List<double> singleZooms = <double>[0.5, 1, 2];
+
+/// El zoom de partida: la lente entera, como hasta el 2026-10-30.
+const double singleDefaultZoom = 0.5;
+
 /// PHONE_DISK_RESERVE_GB (IOS-57) en bytes: lo que tiene que quedar libre para que la
 /// 4K local vaya encendida por defecto y arranque. Copia de `RecordingPolicy` en RigCore,
 /// donde el nativo la hace cumplir.
