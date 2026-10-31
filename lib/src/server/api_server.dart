@@ -546,6 +546,8 @@ class MasterApi {
     'graphics/caption_delete',
     // ADR 0032: el marcador a demanda, las tandas, el partido de la jornada y los resultados.
     'graphics/scoreboard',
+    // Enmienda del ADR 0032 del 2026-10-31: cada elemento del gráfico a demanda.
+    'graphics/element',
     'graphics/strip_all',
     'graphics/results',
     'match/fixture_start',

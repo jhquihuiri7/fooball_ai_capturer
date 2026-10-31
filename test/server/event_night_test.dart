@@ -110,6 +110,28 @@ void main() {
     expect(abrir().scoreboardOnAir, isTrue, reason: 'tras reiniciar vuelve');
   });
 
+  test('cada elemento del gráfico se apaga por su nombre, va en el estado y no se guarda', () {
+    final Map<String, Object?> todos = m.toJson()['elements_on_air']! as Map<String, Object?>;
+    expect(todos.keys, onAirElements, reason: 'los seis, en su orden');
+    expect(todos.values, everyElement(isTrue));
+    m.apply('graphics/element', <String, Object?>{'element': 'clock', 'on_air': false});
+    final Map<String, Object?> dto =
+        m.apply('graphics/element', <String, Object?>{'element': 'championship', 'on_air': false});
+    expect(m.hiddenElements, <String>{'clock', 'championship'});
+    expect((dto['elements_on_air']! as Map<String, Object?>)['clock'], isFalse);
+    m.apply('graphics/element', <String, Object?>{'element': 'clock', 'on_air': true});
+    expect(m.hiddenElements, <String>{'championship'});
+    for (final Map<String, Object?> mala in <Map<String, Object?>>[
+      <String, Object?>{'element': 'tortuga', 'on_air': false},
+      <String, Object?>{'element': 'clock', 'on_air': 'no'},
+      <String, Object?>{'on_air': false},
+    ]) {
+      expect(_error(() => m.apply('graphics/element', mala)).status, 400, reason: '$mala');
+    }
+    expect(m.hiddenElements, <String>{'championship'}, reason: 'una orden mala no toca nada');
+    expect(abrir().hiddenElements, isEmpty, reason: 'tras reiniciar vuelven');
+  });
+
   group('las tandas (ADR 0032)', () {
     test('pasar todas las franjas: una tras otra, sin hueco, y al final se ocultan', () {
       m.apply('graphics/strip_save', <String, Object?>{'name': 'Radio', 'title': 'RADIO MAR'});
@@ -245,6 +267,7 @@ void main() {
       reloj.ms = 60000;
       m.apply('graphics/halftime', <String, Object?>{'on_air': true});
       m.apply('graphics/scoreboard', <String, Object?>{'on_air': false});
+      m.apply('graphics/element', <String, Object?>{'element': 'live', 'on_air': false});
       final Map<String, Object?> dto = m.apply('match/fixture_start', <String, Object?>{'index': 0});
       expect((m.home, m.away), ('Santa Cruz', 'San Cristóbal'));
       expect((m.homeGoals, m.awayGoals), (0, 0));
@@ -252,6 +275,7 @@ void main() {
       expect(m.fullScreenCard, isNull);
       expect(m.goal, isNull);
       expect(m.scoreboardOnAir, isTrue);
+      expect(m.hiddenElements, <String>{'live'}, reason: 'son del evento: empezar un partido no los enciende');
       expect(dto['current_fixture'], 0);
       expect(_error(() => m.apply('match/fixture_start', <String, Object?>{'index': 2})).status, 404);
       expect(_error(() => m.apply('match/fixture_start', <String, Object?>{'index': -1})).status, 400);

@@ -145,6 +145,20 @@
   .alin[aria-pressed="true"] { background: var(--amarillo); color: var(--profundo); box-shadow: none; }
   .alin[aria-pressed="true"] small { color: var(--profundo); }
 
+  /* Los interruptores de «En pantalla» (enmienda del ADR 0032 del 2026-10-31). */
+  .interruptores { display: grid; gap: 8px; }
+  .interruptor { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; padding: 0 14px; border-radius: 12px; background: var(--tinte); box-shadow: inset 0 0 0 1px var(--linea); cursor: pointer; }
+  .interruptor span { display: grid; gap: 4px; font: 700 17px/1.1 var(--display); letter-spacing: .04em; text-transform: uppercase; }
+  .interruptor small { font: 600 11px/1 var(--sans); letter-spacing: .06em; color: var(--oceanico); }
+  .interruptor input { appearance: none; -webkit-appearance: none; position: relative; flex: none; width: 52px; height: 30px; margin: 0; border-radius: 15px; background: var(--profundo); box-shadow: inset 0 0 0 1px var(--linea); cursor: pointer; transition: background .15s; }
+  .interruptor input::after { content: ""; position: absolute; top: 4px; left: 4px; width: 22px; height: 22px; border-radius: 50%; background: var(--oceanico); transition: transform .15s, background .15s; }
+  .interruptor input:checked { background: var(--teal); box-shadow: none; }
+  .interruptor input:checked::after { transform: translateX(22px); background: var(--profundo); }
+  .interruptor input:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--profundo), 0 0 0 4px var(--teal); }
+  .interruptor input:disabled, .interruptor.ocupado input { opacity: .5; cursor: default; }
+  .interruptor.ocupado { pointer-events: none; }
+  .interruptor:has(input:disabled) { cursor: default; }
+
   /* ---------------- cámaras y soporte ---------------- */
   details > summary { list-style: none; cursor: pointer; }
   details > summary::-webkit-details-marker { display: none; }
@@ -375,6 +389,18 @@
         <button type="button" class="btn alin" id="jornada-aire" data-propio aria-pressed="false"><span>Jornada</span><small id="jornada-estado">mostrar</small></button>
         <button type="button" class="btn alin" id="resultados-aire" data-propio aria-pressed="false"><span>Resultados</span><small id="resultados-estado">mostrar</small></button>
         <button type="button" class="btn alin" style="grid-column: 1 / -1" id="entrevista-aire" data-propio aria-pressed="false"><span>Entrevistas</span><small id="entrevista-estado">mostrar</small></button>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="t-pantalla" data-tipos="football show">
+      <h2 id="t-pantalla">En pantalla</h2>
+      <div class="interruptores">
+        <label class="interruptor" data-tipos="football"><span>Competición<small data-nota="el chip de arriba">el chip de arriba</small></span><input type="checkbox" role="switch" data-elemento="competition" checked></label>
+        <label class="interruptor" data-tipos="football"><span>Marcador<small data-nota="escudos, nombres y goles">escudos, nombres y goles</small></span><input type="checkbox" role="switch" data-elemento="bar" checked></label>
+        <label class="interruptor" data-tipos="football"><span>Tiempo<small data-nota="el reloj">el reloj</small></span><input type="checkbox" role="switch" data-elemento="clock" checked></label>
+        <label class="interruptor"><span>En vivo<small data-nota="mientras se emite">mientras se emite</small></span><input type="checkbox" role="switch" data-elemento="live" checked></label>
+        <label class="interruptor"><span>Logo de la casa<small data-nota="arriba a la derecha">arriba a la derecha</small></span><input type="checkbox" role="switch" data-elemento="broadcaster" checked></label>
+        <label class="interruptor"><span>Icono de la copa<small data-nota="arriba a la derecha">arriba a la derecha</small></span><input type="checkbox" role="switch" data-elemento="championship" checked></label>
       </div>
     </section>
 
@@ -630,6 +656,7 @@ function pinta(p) {
   $('marcador-aire').setAttribute('aria-pressed', sinMarcador ? 'true' : 'false');
   $('marcador-texto').textContent = sinMarcador ? 'Marcador y reloj ocultos' : 'Ocultar marcador y reloj';
   $('marcador-estado').textContent = sinMarcador ? 'mostrar otra vez' : 'para una premiación';
+  pintaElementos(p);
   $('resultados-aire').setAttribute('aria-pressed', conResultados ? 'true' : 'false');
   $('resultados-aire').disabled = !partidos.length && !conResultados;
   $('resultados-estado').textContent = conResultados ? 'al aire · quitar' : (partidos.length ? 'mostrar' : 'sin jornada');
@@ -776,11 +803,34 @@ function pintaEscudosJornada(partidos) {
   }));
 }
 
+// ---------------- cada elemento a demanda (enmienda del ADR 0032 del 2026-10-31) ----------------
+const ELEMENTOS = { competition: 'competición', bar: 'marcador', clock: 'tiempo', live: 'en vivo', broadcaster: 'logo', championship: 'copa' };
+const DEL_MARCADOR = ['competition', 'bar', 'clock'];
+// El interruptor dice lo que el maestro tiene; la nota, por qué no sale aunque esté encendido.
+function pintaElementos(p) {
+  const en = p.elements_on_air || {};
+  document.querySelectorAll('input[data-elemento]').forEach(i => {
+    const e = i.dataset.elemento, nota = i.closest('label').querySelector('small');
+    i.checked = en[e] !== false;
+    i.disabled = p.scoreboard_on_air === false && DEL_MARCADOR.includes(e);
+    nota.textContent = i.disabled ? 'con el marcador oculto no sale'
+      : (e === 'championship' && p.championship_icon == null && i.checked ? 'sube el icono abajo' : nota.dataset.nota);
+  });
+}
+document.querySelectorAll('input[data-elemento]').forEach(i => i.addEventListener('change', async e => {
+  const caja = e.currentTarget;
+  if (navigator.vibrate) navigator.vibrate(12);
+  const ok = await orden('graphics/element', { element: caja.dataset.elemento, on_air: caja.checked }, caja.closest('label'));
+  if (!ok && partido) pintaElementos(partido); // vuelve a lo que tiene el maestro
+}));
+
 // ---------------- lo que pasa en el programa (ADR 0032) ----------------
 function pintaChips(p) {
   const chips = [];
   if (p.goal) chips.push(['gol', '¡Gol! ' + p[p.goal.team].name]);
   if (p.scoreboard_on_air === false) chips.push(['aviso', 'Marcador oculto']);
+  const apagados = Object.entries(p.elements_on_air || {}).filter(([, v]) => v === false).map(([k]) => ELEMENTOS[k] || k);
+  if (apagados.length) chips.push(['aviso', 'Sin ' + apagados.join(', ')]);
   if (p.current_fixture != null && (p.fixtures || [])[p.current_fixture]) chips.push(['', 'Partido ' + (p.current_fixture + 1) + ' de la jornada']);
   $('chips').replaceChildren(...chips.map(([clase, texto]) => {
     const c = document.createElement('span');

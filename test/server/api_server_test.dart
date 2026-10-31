@@ -540,6 +540,14 @@ void main() {
       expect(html, contains('/api/v1/rig/thumb/'));
     });
 
+    test('«En pantalla» tiene un interruptor por elemento del gráfico (enmienda del ADR 0032)', () {
+      final String html = File('assets/panel/index.html').readAsStringSync();
+      for (final String e in onAirElements) {
+        expect(html, contains('data-elemento="$e"'), reason: e);
+      }
+      expect(html, contains("orden('graphics/element'"));
+    });
+
     test('cada botón declara su type y el reparto de clics no depende de él', () {
       // 2026-10-16: los goles y el reloj dejaron de responder. El reparto descartaba los
       // botones con type «submit» (los de los formularios), y un <button> sin atributo vale
@@ -995,6 +1003,13 @@ void main() {
       final (_, Map<String, Object?> sinMarcador) =
           await pedir('POST', 'graphics/scoreboard', bearer: token(), body: <String, Object?>{'on_air': false});
       expect(sinMarcador['scoreboard_on_air'], isFalse);
+      final (int apagar, Map<String, Object?> sinReloj) = await pedir('POST', 'graphics/element',
+          bearer: token(), body: <String, Object?>{'element': 'clock', 'on_air': false});
+      expect(apagar, 200);
+      expect((sinReloj['elements_on_air']! as Map<String, Object?>)['clock'], isFalse);
+      final (int mala, _) = await pedir('POST', 'graphics/element',
+          bearer: token(), body: <String, Object?>{'element': 'x', 'on_air': false});
+      expect(mala, 400);
     });
 
     test('las tandas y los rótulos se piden por la API', () async {

@@ -37,6 +37,10 @@ Al acabar, **Finalizar partido**: el marcador queda guardado. Al final de la noc
 **Resultados**. El gol sale solo en pantalla con cada «+ Gol»; si fue un error, «− 1» lo quita.
 Para una premiación, en Al aire, **Ocultar marcador y reloj**.
 
+**Quitar una sola cosa de la pantalla**: en el mando web, la tarjeta **En pantalla** tiene un
+interruptor por cada elemento: competición, marcador, tiempo, en vivo, logo de la casa e icono
+de la copa. Apagado, no sale; lo demás no se mueve. Si se reinicia el maestro vuelven todos.
+
 **Anuncios de la franja**: la franja pasó de 108 a 132 px y una app solo carga anuncios de su
 alto. Los de 132 ya están rendrizados (en football-ai, `remotion/out/franja-132/`); se publican en
 el VPS cuando el iPhone tenga la build nueva, no antes.

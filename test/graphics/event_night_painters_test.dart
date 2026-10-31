@@ -8,6 +8,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:football_ai_capture/src/constants.dart';
 import 'package:football_ai_capture/src/generated/overlay_spec.g.dart';
 import 'package:football_ai_capture/src/graphics/fixtures_card_painter.dart';
 import 'package:football_ai_capture/src/graphics/gala_brand.dart';
@@ -210,6 +211,76 @@ void main() {
         expect(fraccion, lessThanOrEqualTo(0.03));
         img.dispose();
       });
+    });
+  });
+
+  group('cada elemento a demanda (enmienda del ADR 0032 del 2026-10-31)', () {
+    /// RENDER_STATES['directo'] con el icono de la copa, sin franja.
+    ScoreboardState directo({Set<String> hidden = const <String>{}, bool scoreboard = true}) => ScoreboardState(
+          competition: espectaculo.competition,
+          home: espectaculo.home,
+          away: espectaculo.away,
+          homeGoals: espectaculo.homeGoals,
+          awayGoals: espectaculo.awayGoals,
+          clockS: espectaculo.clockS,
+          live: true,
+          cameraMode: espectaculo.cameraMode,
+          stripVisible: false,
+          iconRev: 1,
+          scoreboard: scoreboard,
+          hidden: hidden,
+        );
+    ScoreboardLayout medir(ScoreboardState s) =>
+        ScoreboardLayout.measure(OverlaySpec.programWidth, OverlaySpec.programHeight, s);
+
+    test('cada pieza del marcador se apaga sin mover lo demás, como en Python', () {
+      final ScoreboardLayout todo = medir(directo());
+      const Map<String, Set<String>> suyas = <String, Set<String>>{
+        'competition': <String>{'competition'},
+        'bar': <String>{'bug', 'home_crest', 'home_name', 'home_score', 'away_score', 'away_name', 'away_crest'},
+        'clock': <String>{'clock'},
+      };
+      for (final MapEntry<String, Set<String>> e in suyas.entries) {
+        final ScoreboardLayout sin = medir(directo(hidden: <String>{e.key}));
+        expect(todo.boxes.keys.toSet().difference(sin.boxes.keys.toSet()), e.value, reason: e.key);
+        for (final MapEntry<String, ui.Rect> caja in sin.boxes.entries) {
+          expect(caja.value, todo.boxes[caja.key], reason: '${e.key}: ${caja.key}');
+        }
+      }
+    });
+
+    test('sin competición, barra ni reloj es el marcador apagado; EN VIVO se apaga aunque se emita', () {
+      expect(medir(directo(hidden: scoreboardElements)).boxes, medir(directo(scoreboard: false)).boxes);
+      final ScoreboardLayout conReloj = medir(directo(hidden: <String>{'competition', 'bar'}));
+      expect(conReloj.boxes['live'], medir(directo()).boxes['live'], reason: 'queda el reloj: EN VIVO no sube');
+      for (final bool marcador in <bool>[true, false]) {
+        expect(medir(directo(hidden: <String>{'live'}, scoreboard: marcador)).boxes.containsKey('live'), isFalse);
+      }
+    });
+
+    test('la esquina se ciñe a lo que lleva', () {
+      final ScoreboardLayout sinCasa = medir(directo(hidden: <String>{'broadcaster'}));
+      expect(sinCasa.boxes.containsKey('broadcaster'), isFalse);
+      expect(sinCasa.boxes['championship']!.right, 1860, reason: 'la copa pasa al sitio del logo');
+      expect(sinCasa.boxes['corner'], const ui.Rect.fromLTRB(1860 - 64 - 12, 44, 1872, 132));
+      final ScoreboardLayout nada = medir(directo(hidden: <String>{'broadcaster', 'championship'}));
+      expect(nada.boxes.keys, isNot(contains('corner')));
+      final ScoreboardLayout arriba =
+          medir(directo(hidden: <String>{'broadcaster', 'championship'}, scoreboard: false));
+      expect(arriba.boxes['live'], medir(directo(scoreboard: false)).boxes['live'], reason: 'EN VIVO no se mueve');
+    });
+
+    test('lo apagado no se pinta', () async {
+      final ScoreboardLayout todo = medir(directo());
+      final ui.Image img = await paintScoreboard(directo(hidden: <String>{'clock', 'broadcaster', 'championship'}),
+          OverlaySpec.programWidth, OverlaySpec.programHeight);
+      final Uint8List rgba = await _rgba(img);
+      img.dispose();
+      int alfa(ui.Offset p) => rgba[(p.dy.round() * OverlaySpec.programWidth + p.dx.round()) * 4 + 3];
+      final int sombra = (255 * OverlaySpec.scoreboard['bar_shadow_alpha_pct']! / 100).round();
+      expect(alfa(todo.boxes['clock']!.center), lessThanOrEqualTo(sombra), reason: 'a lo sumo, la sombra de la barra');
+      expect(alfa(todo.boxes['corner']!.center), 0);
+      expect(alfa(todo.boxes['home_name']!.centerLeft), 255, reason: 'la barra sigue');
     });
   });
 }

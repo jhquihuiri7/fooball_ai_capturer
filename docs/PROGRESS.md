@@ -12,6 +12,31 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-31 · IOS-114 — cada elemento del gráfico a demanda · 🚧 hecho, sin probar en el iPhone
+
+Lo pidió Jhonatan: un interruptor en el mando por cada cosa que sale en pantalla. Enmienda del
+ADR 0032 del 2026-10-31; la referencia es REF-67 (football-ai 7925d91).
+- **Maestro**: `graphics/element` (`{"element", "on_air"}`, 400 con un nombre que no está o un
+  `on_air` que no es booleano) y `elements_on_air` en el estado, con los seis en el orden de
+  `onAirElements`. No se guarda, como `scoreboard_on_air`, pero empezar un partido de la
+  jornada no los enciende.
+- **Painter**: `ScoreboardState.hidden`, porte de `hidden` de la referencia. Lo apagado no
+  tiene caja ni se pinta y lo demás no se mueve. EN VIVO sube si no queda nada del marcador.
+  La esquina se ciñe a lo que lleva: sin el logo, la copa pasa a su sitio. Con todo
+  encendido, el dibujo no cambia.
+- **Mando web**: la tarjeta **En pantalla**, con un interruptor por elemento (Competición,
+  Marcador, Tiempo, En vivo, Logo de la casa e Icono de la copa). En el espectáculo solo salen
+  los tres últimos. Con «Ocultar marcador y reloj» puesto, los tres del marcador se ven
+  deshabilitados, y el chip de arriba dice qué está apagado.
+- **Dorado del túnel**: `tunnel.json` y su sha copiados de football-ai 7925d91 a los dos
+  destinos. Es lo único que cambia desde el último `--sync` (5bc4622).
+- **Probado**: `flutter analyze` limpio. `flutter test`: 547 pasan y 9 fallan. Son los de
+  antes del cambio, los dorados de imagen y `master_host_test`. En la base eran 540 y 10; el
+  de «se pinta en ≤50 ms» es de tiempo y esta vez pasó. **Sin probar en el iPhone.**
+
+**Siguiente**: Alexander, en el iPhone, apaga el reloj y la copa desde el mando y los ve
+irse del programa emitido.
+
 ## 2026-10-30 · La caída del 25-oct a las 20:53 y el zoom de «Una cámara» · 🚧 el zoom, sin probar en el iPhone
 
 **La caída (25-oct, 17 en «Una cámara», de 19:33 a 20:53)**, leída del 17 y del VPS en solo

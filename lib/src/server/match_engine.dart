@@ -220,6 +220,17 @@ class MatchEngine {
   /// ejemplo, en una premiación. No se guarda: tras reiniciar vuelven.
   bool scoreboardOnAir = true;
 
+  /// Qué elementos del gráfico salen, por su nombre de [onAirElements] (enmienda del ADR
+  /// 0032 del 2026-10-31). No se guarda, como [scoreboardOnAir], pero empezar un partido de
+  /// la jornada no los enciende: son del evento, no de un momento.
+  final Map<String, bool> elementsOnAir = <String, bool>{for (final String e in onAirElements) e: true};
+
+  /// Los que el operador apagó.
+  Set<String> get hiddenElements => <String>{
+        for (final MapEntry<String, bool> e in elementsOnAir.entries)
+          if (!e.value) e.key,
+      };
+
   /// El gol que se celebra (ADR 0032): de quién y cuándo empezó, en el tiempo monótono.
   ({MatchTeam team, int startedMs})? _celebration;
 
@@ -472,6 +483,12 @@ class MatchEngine {
           _fullScreenCard(name.substring('graphics/'.length), body);
         case 'graphics/scoreboard':
           scoreboardOnAir = _onAir(body);
+        case 'graphics/element':
+          final Object? elemento = body['element'];
+          if (elemento is! String || !elementsOnAir.containsKey(elemento)) {
+            throw OrderError(400, 'element tiene que ser uno de: ${onAirElements.join(', ')}');
+          }
+          elementsOnAir[elemento] = _onAir(body);
         case 'match/fixtures':
           try {
             graphics.setFixtures(Fixture.listFromJson(body));
@@ -1149,6 +1166,7 @@ class MatchEngine {
       'interview_on_air': interviewOnAir,
       'interview': graphics.interview.toJson(),
       'scoreboard_on_air': scoreboardOnAir,
+      'elements_on_air': <String, Object?>{...elementsOnAir},
       'goal': switch (goal) {
         null => null,
         (team: final MatchTeam t, elapsedMs: final int lleva) => <String, Object?>{

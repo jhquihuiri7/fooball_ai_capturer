@@ -17,6 +17,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 
+import '../constants.dart';
 import '../generated/overlay_spec.g.dart';
 import 'gala_brand.dart';
 import 'goal_banner_painter.dart';
@@ -43,6 +44,7 @@ class ScoreboardState {
     this.homeCrestRev,
     this.awayCrestRev,
     this.scoreboard = true,
+    this.hidden = const <String>{},
     this.lowerThirdTitle,
     this.lowerThirdSubtitle = '',
     this.goal,
@@ -51,6 +53,11 @@ class ScoreboardState {
   /// La barra, la competición y el reloj (ADR 0032). Sin ellos, EN VIVO sube arriba a la
   /// izquierda: es también el gráfico del espectáculo (ADR 0031).
   final bool scoreboard;
+
+  /// Los de [onAirElements] que el operador apagó (enmienda del ADR 0032 del 2026-10-31):
+  /// no se pintan y lo demás no se mueve, salvo EN VIVO, que sube si no queda nada del
+  /// marcador, y la esquina, que se ciñe a lo que lleva.
+  final Set<String> hidden;
 
   /// El título del rótulo al aire (ADR 0031), o null sin rótulo; y su subtítulo.
   final String? lowerThirdTitle;
@@ -110,6 +117,7 @@ class ScoreboardState {
       other.homeCrestRev == homeCrestRev &&
       other.awayCrestRev == awayCrestRev &&
       other.scoreboard == scoreboard &&
+      setEquals(other.hidden, hidden) &&
       other.lowerThirdTitle == lowerThirdTitle &&
       other.lowerThirdSubtitle == lowerThirdSubtitle &&
       other.goal == goal;
@@ -117,8 +125,15 @@ class ScoreboardState {
   @override
   int get hashCode => Object.hash(competition, home, away, homeGoals, awayGoals, clockS, live, cameraMode,
       stripVisible, stripTitle, stripSubtitle, stripImageRev, iconRev, homeCrestRev, awayCrestRev,
-      scoreboard, lowerThirdTitle, lowerThirdSubtitle, goal);
+      scoreboard, Object.hashAllUnordered(hidden), lowerThirdTitle, lowerThirdSubtitle, goal);
 }
+
+/// Las cajas que mide `_measureScoreboard` de cada elemento del marcador.
+const Map<String, List<String>> _elementBoxes = <String, List<String>>{
+  'competition': <String>['competition'],
+  'bar': <String>['bug', 'home_crest', 'home_name', 'home_score', 'away_score', 'away_name', 'away_crest'],
+  'clock': <String>['clock'],
+};
 
 /// Opacidad del separador del hueco vendible: el `linea` del sistema sobre oscuro.
 const double _lineaAlfa = 0.28;
@@ -164,6 +179,10 @@ class ScoreboardLayout {
 
   /// Cajas por elemento, en píxeles de salida: las mismas claves que boxes.json.
   final Map<String, Rect> boxes = <String, Rect>{};
+
+  /// Los de [onAirElements] que se pintan: los no apagados, sin el marcador si no va, sin EN
+  /// VIVO si no se emite y sin la copa si no hay icono (el `shown` de la referencia).
+  final Set<String> shown = <String>{};
   final Map<String, TextStyle> _fonts = <String, TextStyle>{};
   final Map<String, double> _v = <String, double>{};
 
@@ -218,33 +237,49 @@ class ScoreboardLayout {
           OverlaySpec.fontWeights[e.key]!, px(e.value.toDouble()).toDouble());
     }
 
-    // La esquina de arriba a la derecha: el icono de la copa y el logo de la casa. Sale
-    // siempre, con marcador o sin él.
+    shown
+      ..addAll(onAirElements)
+      ..removeAll(state.hidden);
+    if (!state.scoreboard) shown.removeAll(scoreboardElements);
+    if (!state.live) shown.remove('live');
+    if (state.iconRev == null) shown.remove('championship');
+
+    // La esquina de arriba a la derecha: el icono de la copa y el logo de la casa, pegados al
+    // margen. Sale con marcador o sin él; si el operador apaga los dos, no hay chip.
     final double yEstado = sb('top_y'), eh = sb('status_h');
     final double pad = sb('corner_pad');
     final int alto = px(_sb('corner_logo_h').toDouble());
-    final int casaW = math.max(1, pyRound(_st('logo_src_w') * alto / _st('logo_src_h')));
     final double derecha = width - sb('margin') - pad;
-    boxes['broadcaster'] = Rect.fromLTRB(derecha - casaW, yEstado + pad, derecha, yEstado + pad + alto);
-    double izquierda = derecha - casaW;
-    if (state.iconRev != null) {
-      final double copaX1 = izquierda - sb('corner_gap');
+    double izquierda = derecha;
+    if (shown.contains('broadcaster')) {
+      final int casaW = math.max(1, pyRound(_st('logo_src_w') * alto / _st('logo_src_h')));
+      boxes['broadcaster'] = Rect.fromLTRB(derecha - casaW, yEstado + pad, derecha, yEstado + pad + alto);
+      izquierda = derecha - casaW;
+    }
+    if (shown.contains('championship')) {
+      final double copaX1 = shown.contains('broadcaster') ? izquierda - sb('corner_gap') : izquierda;
       boxes['championship'] = Rect.fromLTRB(copaX1 - alto, yEstado + pad, copaX1, yEstado + pad + alto);
       izquierda = copaX1 - alto;
     }
-    boxes['corner'] = Rect.fromLTRB(izquierda - pad, yEstado, width - sb('margin'), yEstado + alto + 2 * pad);
+    if (izquierda < derecha) {
+      boxes['corner'] = Rect.fromLTRB(izquierda - pad, yEstado, width - sb('margin'), yEstado + alto + 2 * pad);
+    }
 
     final double liveW = sb('live_pad_l') +
         sb('live_dot') +
         sb('live_gap') +
         sb('live_pad_r') +
         textWidth(OverlaySpec.scoreboardTexts['live']!, 'live');
-    if (state.scoreboard) {
-      _measureScoreboard(liveW);
-    } else if (state.live) {
+    if (shown.intersection(scoreboardElements).isNotEmpty) {
+      // Lo que el operador apaga se queda sin caja; lo demás no se mueve.
+      _measureScoreboard(liveW, live: shown.contains('live'));
+      for (final String elemento in scoreboardElements.difference(shown)) {
+        _elementBoxes[elemento]!.forEach(boxes.remove);
+      }
+    } else if (shown.contains('live')) {
       // Sin marcador (el espectáculo, o el marcador apagado), EN VIVO sube arriba a la
-      // izquierda, centrado con la esquina (ADR 0031 y 0032).
-      final double cy = boxes['corner']!.center.dy;
+      // izquierda, centrado con la esquina aunque no se vea (ADR 0031 y 0032).
+      final double cy = yEstado + pad + alto / 2;
       final double x = px(OverlaySpec.margin.toDouble()).toDouble();
       boxes['live'] = Rect.fromLTRB(x, cy - eh / 2, x + liveW, cy + eh / 2);
     }
@@ -310,8 +345,8 @@ class ScoreboardLayout {
     }
   }
 
-  /// El marcador: el `Scoreboard` del sistema.
-  void _measureScoreboard(double liveW) {
+  /// El marcador: el `Scoreboard` del sistema. Con `live`, EN VIVO debajo.
+  void _measureScoreboard(double liveW, {required bool live}) {
     final double homeW = textWidth(home, 'team'), awayW = textWidth(away, 'team');
     final double glW = math.max(
         sb('goal_min_w'), textWidth('${state.homeGoals}', 'score') + 2 * sb('goal_pad_x'));
@@ -344,7 +379,7 @@ class ScoreboardLayout {
     boxes['competition'] = Rect.fromLTRB(ex, yEstado, ex + compW, yEstado + eh);
     final double relojX = x0 + barW + sb('clock_gap');
     boxes['clock'] = Rect.fromLTRB(relojX - sesgo, yBarra, relojX + clockW + sesgo, yBarra + bh);
-    if (state.live) {
+    if (live) {
       final double yVivo = yBarra + bh + sb('live_below');
       boxes['live'] = Rect.fromLTRB(ex, yVivo, ex + liveW, yVivo + eh);
     }
@@ -490,7 +525,7 @@ class ScoreboardPainter extends CustomPainter {
           : null,
     );
     _paintStatus(canvas, l);
-    if (state.scoreboard) {
+    if (l.shown.contains('bar') || l.shown.contains('clock')) {
       _paintBar(canvas, l);
     }
     _paintCorner(canvas, l);
@@ -554,28 +589,33 @@ class ScoreboardPainter extends CustomPainter {
     final double radio = l.sb('radius');
     final double alfa = _sb('shadow_alpha_pct') / 100;
     final Color velo = _palette('chrome_soft');
-    final Rect? comp = state.scoreboard ? l.boxes['competition'] : null;
+    // Cada pieza solo si tiene caja: lo apagado no la tiene.
+    final Rect? comp = l.boxes['competition'];
     final RRect? compR = comp == null ? null : _rrect(comp, radio);
-    final RRect esquinaR = _rrect(l.boxes['corner']!, radio);
-    final RRect? liveR = state.live ? _rrect(l.boxes['live']!, radio) : null;
+    final Rect? esquina = l.boxes['corner'];
+    final RRect? esquinaR = esquina == null ? null : _rrect(esquina, radio);
+    final Rect? vivo = l.boxes['live'];
+    final RRect? liveR = vivo == null ? null : _rrect(vivo, radio);
 
     // La sombra va bajo la silueta de cada pieza, a la opacidad de su relleno, como el
     // alfa de la capa que desenfoca la referencia.
-    final Path fichas = Path()..addRRect(esquinaR);
-    if (compR != null) fichas.addRRect(compR);
-    GalaBrand.shadow(c, fichas, alfa * velo.a, l.s);
+    if (esquinaR != null || compR != null) {
+      final Path fichas = Path();
+      if (esquinaR != null) fichas.addRRect(esquinaR);
+      if (compR != null) fichas.addRRect(compR);
+      GalaBrand.shadow(c, fichas, alfa * velo.a, l.s);
+    }
     if (liveR != null) GalaBrand.shadow(c, Path()..addRRect(liveR), alfa, l.s);
 
     if (compR != null) c.drawRRect(compR, _fill(velo));
-    c.drawRRect(esquinaR, _fill(velo));
+    if (esquinaR != null) c.drawRRect(esquinaR, _fill(velo));
     if (liveR != null) c.drawRRect(liveR, _fill(_palette('live')));
 
     if (comp != null) {
       _text(c, l, l.competition, 'comp', GalaBrand.token('gris-claro'),
           Offset(comp.left + l.sb('chip_pad_x'), l.v('cy_estado')));
     }
-    if (state.live) {
-      final Rect vivo = l.boxes['live']!;
+    if (vivo != null) {
       final double punto = l.sb('live_dot');
       final double px0 = vivo.left + l.sb('live_pad_l');
       c.drawCircle(Offset(px0 + punto / 2, vivo.center.dy), punto / 2, _fill(_palette('white')));
@@ -596,70 +636,103 @@ class ScoreboardPainter extends CustomPainter {
       );
     }
 
-    final Rect casa = l.boxes['broadcaster']!;
-    imagen(isotipo, casa);
+    final Rect? casa = l.boxes['broadcaster'];
+    if (casa != null) {
+      imagen(isotipo, casa);
+    }
     final Rect? copa = l.boxes['championship'];
     final ui.Image? icono = championship;
     if (copa != null && icono != null) {
       imagen(icono, copa);
     }
-    if (copa != null) {
+    if (copa != null && casa != null) {
       final double x = (copa.right + casa.left) / 2;
       _line(c, Offset(x, copa.top), Offset(x, copa.bottom), GalaBrand.token('gris-oceanico').withValues(alpha: _lineaAlfa), math.max(1, l.s));
     }
   }
 
-  // ---------------- la barra ----------------
+  // ---------------- la barra y el reloj, cada uno si no está apagado ----------------
   void _paintBar(Canvas c, ScoreboardLayout l) {
+    final bool barra = l.shown.contains('bar'), reloj = l.shown.contains('clock');
     final double x0 = l.v('x0'), yb = l.v('y_barra'), bh = l.v('bh'), cy = l.v('cy_barra');
     final double cuerpoX = x0 + l.v('tip_in'), cuerpoW = l.v('body_w');
     final double punta = l.sb('tip_w');
-    final Color teal = GalaBrand.token('teal-electrico'), azul = GalaBrand.token('azul-deportivo');
+    final Color azul = GalaBrand.token('azul-deportivo');
     final Rect alto = Rect.fromLTRB(0, yb, 1, yb + bh); // los degradados van a lo alto
+    final double relojX = l.v('clock_x'), relojW = l.v('clock_w');
 
     final Path puntaIzq = GalaBrand.skewed(x0, yb, punta, bh);
     final Path cuerpo = GalaBrand.skewed(cuerpoX, yb, cuerpoW, bh);
     final Path puntaDer = GalaBrand.skewed(x0 + l.v('bar_w') - punta, yb, punta, bh);
-    final Rect escudoL = l.boxes['home_crest']!, escudoV = l.boxes['away_crest']!;
-    // La sombra sigue lo que se pinta: un escudo de verdad no tiene la silueta del genérico.
-    final Path silueta = Path()
-      ..addPath(puntaIzq, Offset.zero)
-      ..addPath(cuerpo, Offset.zero)
-      ..addPath(puntaDer, Offset.zero)
-      ..addPath(GalaBrand.skewed(l.v('clock_x'), yb, l.v('clock_w'), bh), Offset.zero);
-    for (final (String lado, Rect caja) in <(String, Rect)>[('home', escudoL), ('away', escudoV)]) {
-      if (crests[lado] == null) {
-        silueta.addPath(GalaBrand.crestPath(caja), Offset.zero);
+    // La sombra sigue lo que se pinta: un escudo de verdad no tiene la silueta del genérico,
+    // y lo apagado no tiene ninguna.
+    final Path silueta = Path();
+    if (barra) {
+      silueta
+        ..addPath(puntaIzq, Offset.zero)
+        ..addPath(cuerpo, Offset.zero)
+        ..addPath(puntaDer, Offset.zero);
+    }
+    if (reloj) {
+      silueta.addPath(GalaBrand.skewed(relojX, yb, relojW, bh), Offset.zero);
+    }
+    if (barra) {
+      for (final String lado in <String>['home', 'away']) {
+        if (crests[lado] == null) {
+          silueta.addPath(GalaBrand.crestPath(l.boxes['${lado}_crest']!), Offset.zero);
+        }
       }
     }
     GalaBrand.shadow(c, silueta, _sb('bar_shadow_alpha_pct') / 100, l.s);
 
+    final double filete = l.sb('body_edge_h');
+    final (bool, bool) genericos =
+        barra ? _paintBarBody(c, l, puntaIzq, cuerpo, puntaDer, alto, filete) : (false, false);
+    if (reloj) {
+      // El reloj: una caja como el cuerpo de la barra, a su derecha y a su altura, con cifras
+      // tabulares (cada dígito centrado en su celda).
+      c.drawPath(GalaBrand.skewed(relojX, yb, relojW, bh),
+          GalaBrand.fill(_palette('chrome'), bottom: GalaBrand.token('azul-profundo'), box: alto));
+      c.drawPath(GalaBrand.skewed(relojX, yb + bh - filete, relojW, filete, centerY: cy), _fill(azul));
+      final double celda = l.digitCell('clock');
+      double x = relojX + l.sb('clock_pad_x');
+      for (final String ch in state.clockText.split('')) {
+        final double a = _digito.hasMatch(ch) ? celda : l.textWidth(ch, 'clock');
+        _text(c, l, ch, 'clock', _palette('white'), Offset(x + a / 2, cy), centred: true);
+        x += a;
+      }
+    }
+    if (barra) {
+      _paintBarTexts(c, l, genericos);
+    }
+  }
+
+  /// Las puntas, el cuerpo, las cajas de los goles y los escudos. Devuelve si cada escudo,
+  /// local y visitante, es el genérico, que lleva las siglas encima.
+  (bool, bool) _paintBarBody(
+      Canvas c, ScoreboardLayout l, Path puntaIzq, Path cuerpo, Path puntaDer, Rect alto, double filete) {
+    final double yb = l.v('y_barra'), bh = l.v('bh'), cy = l.v('cy_barra');
+    final double cuerpoX = l.v('x0') + l.v('tip_in'), cuerpoW = l.v('body_w');
+    final Color teal = GalaBrand.token('teal-electrico'), azul = GalaBrand.token('azul-deportivo');
     c.drawPath(puntaIzq, GalaBrand.fill(teal, bottom: azul, box: alto));
     c.drawPath(cuerpo,
         GalaBrand.fill(_palette('chrome'), bottom: GalaBrand.token('azul-profundo'), box: alto));
-    final double filete = l.sb('body_edge_h');
     c.drawPath(
         GalaBrand.skewed(cuerpoX, yb + bh - filete, cuerpoW, filete, centerY: cy), _fill(azul));
     c.drawPath(GalaBrand.skewed(l.v('gl_x'), yb, l.v('gl_w'), bh),
         GalaBrand.fill(_palette('home'), bottom: GalaBrand.token('verde-oceano'), box: alto));
     c.drawPath(GalaBrand.skewed(l.v('gv_x'), yb, l.v('gv_w'), bh), _fill(_palette('away')));
-    final bool genericoL = GalaBrand.paintTeamCrest(c, escudoL, _palette('home'), crests['home']);
-    final bool genericoV = GalaBrand.paintTeamCrest(c, escudoV, _palette('away'), crests['away']);
+    final bool genericoL = GalaBrand.paintTeamCrest(c, l.boxes['home_crest']!, _palette('home'), crests['home']);
+    final bool genericoV = GalaBrand.paintTeamCrest(c, l.boxes['away_crest']!, _palette('away'), crests['away']);
     c.drawPath(puntaDer, GalaBrand.fill(teal, bottom: azul, box: alto));
-    // El reloj: una caja como el cuerpo de la barra, a su derecha y a su altura, con cifras
-    // tabulares (cada dígito centrado en su celda).
-    final double relojX = l.v('clock_x'), relojW = l.v('clock_w');
-    c.drawPath(GalaBrand.skewed(relojX, yb, relojW, bh),
-        GalaBrand.fill(_palette('chrome'), bottom: GalaBrand.token('azul-profundo'), box: alto));
-    c.drawPath(GalaBrand.skewed(relojX, yb + bh - filete, relojW, filete, centerY: cy), _fill(azul));
-    final double celda = l.digitCell('clock');
-    double x = relojX + l.sb('clock_pad_x');
-    for (final String ch in state.clockText.split('')) {
-      final double a = _digito.hasMatch(ch) ? celda : l.textWidth(ch, 'clock');
-      _text(c, l, ch, 'clock', _palette('white'), Offset(x + a / 2, cy), centred: true);
-      x += a;
-    }
+    return (genericoL, genericoV);
+  }
 
+  /// Las siglas de los escudos genéricos, los nombres y los goles.
+  void _paintBarTexts(Canvas c, ScoreboardLayout l, (bool, bool) genericos) {
+    final double cy = l.v('cy_barra');
+    final Rect escudoL = l.boxes['home_crest']!, escudoV = l.boxes['away_crest']!;
+    final (bool genericoL, bool genericoV) = genericos;
     for (final (Rect caja, String nombre, String color, bool generico) in <(Rect, String, String, bool)>[
       (escudoL, l.home, 'home', genericoL),
       (escudoV, l.away, 'away', genericoV),

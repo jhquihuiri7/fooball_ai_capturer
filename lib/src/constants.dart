@@ -322,6 +322,16 @@ const int captionShowDefaultS = 10;
 /// Lo que se muestra como `caption_remaining_ms` de un rótulo fijo: no se va solo.
 const int captionHoldRemainingMs = -1;
 
+/// Lo que el operador apaga uno a uno con `graphics/element` (enmienda del ADR 0032 del
+/// 2026-10-31), en el orden de `elements_on_air`: la competición, la barra (escudos, nombres
+/// y goles), el reloj, EN VIVO, el logo de la casa y el icono de la copa. Es
+/// `ON_AIR_ELEMENTS` de `tools/control_api.py`.
+const List<String> onAirElements = <String>['competition', 'bar', 'clock', 'live', 'broadcaster', 'championship'];
+
+/// Los que se van con el marcador entero (`graphics/scoreboard`). Si no queda ninguno, EN
+/// VIVO sube arriba a la izquierda.
+const Set<String> scoreboardElements = <String>{'competition', 'bar', 'clock'};
+
 /// Los escudos de los equipos (ADR 0028): bajo `/api/v1/`, `assets/crest/home` y
 /// `assets/crest/away`; `PUT` sube el del equipo que juega de ese lado, `GET` lo da y
 /// `DELETE` lo quita.

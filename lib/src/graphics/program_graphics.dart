@@ -169,6 +169,7 @@ class ProgramGraphics {
       awayCrestRev: engine.graphics.crestFor(engine.away)?.rev,
       // El marcador solo en el fútbol, y si el operador no lo quitó (ADR 0031 y 0032).
       scoreboard: futbol && engine.scoreboardOnAir,
+      hidden: engine.hiddenElements,
       lowerThirdTitle: rotulo?.title,
       lowerThirdSubtitle: rotulo?.subtitle ?? '',
       goal: futbol ? _goalBanner() : null,
