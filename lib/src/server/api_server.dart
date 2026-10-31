@@ -12,6 +12,8 @@
 /// - `POST /api/v1/<orden>`: las órdenes de MatchEngine, con `Idempotency-Key`.
 /// - `stream/*` es del VPS, que tiene el relé: se manda como `relay_command` y se espera
 ///   la respuesta [apiCommandTimeout] (504 si vence); sin túnel, 503.
+/// - `camera/*` (ADR 0033): el encuadre a mano de «Una cámara», que va al nativo; y en la
+///   LAN, `GET /api/v1/rig/live/{overview|program}`, la vista en vivo en MJPEG.
 /// - Errores en RFC 7807. `Authorization: Bearer` con el token de mando (ámbitos `match`
 ///   y, si se marcó, `stream`, nunca `rig`) o con el PIN del operador (los tres). Por el
 ///   túnel, `principal: operator` (el panel remoto) también tiene los tres.
@@ -24,6 +26,7 @@ import 'dart:typed_data';
 
 import 'package:football_ai_capture/src/constants.dart';
 import 'package:football_ai_capture/src/match_state.dart' show MatchTeam;
+import 'package:football_ai_capture/src/server/camera_control.dart';
 import 'package:football_ai_capture/src/server/control_token.dart';
 import 'package:football_ai_capture/src/server/lineups.dart';
 import 'package:football_ai_capture/src/server/idempotency.dart';
@@ -171,6 +174,8 @@ class MasterApi {
     this.panelHtml,
     this.thumbnail,
     this.rigStatus,
+    this.camera,
+    this.live,
   }) : _idempotency = IdempotencyCache(nowMs: monotonicMs);
 
   final MatchEngine engine;
@@ -208,6 +213,12 @@ class MasterApi {
   /// El estado del soporte para el panel: enlace, térmica, escalera, fps…
   final Map<String, Object?> Function()? rigStatus;
 
+  /// La orden nativa del encuadre a mano (ADR 0033); sin ella, `camera/*` es un 409.
+  final CameraBridge? camera;
+
+  /// La vista en vivo de la LAN (ADR 0033); la sirve [MasterApiServer].
+  final LiveViews? live;
+
   int _longPolls = 0;
 
   /// Esperas largas abiertas ahora mismo.
@@ -224,7 +235,8 @@ class MasterApi {
       ..sort((ControlDevice a, ControlDevice b) => b.lastMs.compareTo(a.lastMs));
   }
 
-  static const List<String> _thumbNames = <String>['left', 'right', 'program'];
+  /// `overview` es la vista general de «Una cámara» (ADR 0033).
+  static const List<String> _thumbNames = <String>['left', 'right', 'program', 'overview'];
 
   Future<ApiResponse> handle(ApiRequest request) async {
     final String? html = panelHtml;
@@ -364,6 +376,20 @@ class MasterApi {
   /// que hay que contestar antes de leer un solo byte del cuerpo.
   (Set<String>?, ApiResponse?) uploadAccess(Map<String, String> headers) =>
       _access(ApiRequest(method: 'PUT', path: '', headers: headers), panelScopeMatch);
+
+  /// La puerta de la vista en vivo (ADR 0033): cualquier mando que pueda leer el partido.
+  (Set<String>?, ApiResponse?) liveAccess(Map<String, String> headers) =>
+      _access(ApiRequest(method: 'GET', path: '', headers: headers), null);
+
+  /// La fuente de una ruta `/api/v1/rig/live/<fuente>`; null si no es de la vista en vivo.
+  static String? liveSource(String path) {
+    for (final String fuente in LiveViews.sources) {
+      if (path == '$panelApiPrefix$cameraLiveRoute/$fuente') {
+        return fuente;
+      }
+    }
+    return null;
+  }
 
   /// La ranura de una ruta `/api/v1/assets/crest/<ranura>`: `home` y `away` (ADR 0028),
   /// `next_home` y `next_away` (ADR 0029); null si la ruta no es de un escudo.
@@ -558,6 +584,14 @@ class MasterApi {
     'clips/mark',
     'stream/start',
     'stream/stop',
+    // ADR 0033: el encuadre a mano de «Una cámara».
+    'camera/frame',
+    'camera/zoom',
+    'camera/pan',
+    'camera/reset',
+    'camera/preset',
+    'camera/preset_save',
+    'camera/preset_delete',
   };
 
   /// Emitir o parar es `stream`; las plantillas, `rig` (ADR 0017 enmienda §2: el QR
@@ -606,6 +640,9 @@ class MasterApi {
     if (name == 'match/roster') {
       return _roster(body, ambitos);
     }
+    if (name.startsWith('camera/')) {
+      return _camera(name, body, ambitos);
+    }
     try {
       final Map<String, Object?> partido = engine.apply(name, body);
       return ApiResponse.json(<String, Object?>{...partido, 'scopes': ambitos});
@@ -635,6 +672,44 @@ class MasterApi {
       return ApiResponse.problem(HttpStatus.badRequest, error.message);
     }
     return ApiResponse.json(<String, Object?>{...engine.toJson(), 'scopes': ambitos});
+  }
+
+  /// `camera/*` (ADR 0033): la orden va al nativo, que pone la geometría (16:9, la lente, el
+  /// tope de 3×), y lo que vuelve pasa al estado. Los encuadres guardados son del maestro y
+  /// van con el evento. Sin «Una cámara», 409.
+  Future<ApiResponse> _camera(String name, Map<String, Object?> body, List<String> ambitos) async {
+    ApiResponse partido() => ApiResponse.json(<String, Object?>{...engine.toJson(), 'scopes': ambitos});
+    try {
+      if (name == 'camera/preset_delete') {
+        engine.deleteCameraPreset(cameraPresetName(body));
+        return partido();
+      }
+      final CameraBridge? puente = camera;
+      if (puente == null) {
+        throw OrderError(HttpStatus.conflict, cameraWithoutSingle);
+      }
+      final String? guardar = name == 'camera/preset_save' ? cameraPresetName(body) : null;
+      final CameraNativeOrder orden = guardar != null
+          ? (kind: 'status', values: const <double>[], cut: false)
+          : cameraNativeOrder(name, body, engine.graphics.cameraPreset);
+      final CameraReply? r = await puente(orden.kind, orden.values, orden.cut).timeout(commandTimeout);
+      if (r == null) {
+        engine.setCamera(null);
+        throw OrderError(HttpStatus.conflict, cameraWithoutSingle);
+      }
+      engine.setCamera(r.state);
+      if (r.error.isNotEmpty) {
+        throw OrderError(HttpStatus.badRequest, r.error);
+      }
+      if (guardar != null) {
+        engine.saveCameraPreset(guardar);
+      }
+      return partido();
+    } on OrderError catch (error) {
+      return ApiResponse.problem(error.status, error.message);
+    } on TimeoutException {
+      return ApiResponse.problem(HttpStatus.gatewayTimeout, 'el móvil no contestó a tiempo a la cámara');
+    }
   }
 
   /// `stream/*` desde la LAN: el relé está en el VPS (ADR 0022). El maestro no cambia
@@ -786,6 +861,11 @@ class MasterApiServer {
         await _reply(request, respuesta);
         return;
       }
+      final String? vivo = MasterApi.liveSource(request.uri.path);
+      if (request.method == 'GET' && vivo != null) {
+        await _live(request, vivo);
+        return;
+      }
       final String? video = MasterApi.videoName(request.uri.path);
       if (request.method == 'PUT' && video != null) {
         respuesta = await _putVideo(request, video);
@@ -918,6 +998,37 @@ class MasterApiServer {
       return ApiResponse.json(store.adopt(nombre).toJson());
     } on VideoError catch (error) {
       return ApiResponse.problem(error.status, error.message);
+    }
+  }
+
+  /// La vista en vivo (ADR 0033): MJPEG de una fuente mientras el mando mire, con su tope de
+  /// mandos por fuente.
+  Future<void> _live(HttpRequest request, String fuente) async {
+    final (Set<String>?, ApiResponse?) acceso = api.liveAccess(_headers(request));
+    final LiveViews? vistas = api.live;
+    if (acceso.$2 != null || vistas == null) {
+      await _reply(request, acceso.$2 ?? ApiResponse.problem(HttpStatus.notFound, 'este móvil no da la vista en vivo'));
+      return;
+    }
+    if (!vistas.open(fuente)) {
+      await _reply(
+        request,
+        ApiResponse.problem(HttpStatus.serviceUnavailable, 'ya hay ${vistas.maxViewers} mandos mirando $fuente en vivo'),
+      );
+      return;
+    }
+    try {
+      request.response
+        ..statusCode = HttpStatus.ok
+        ..headers.set(HttpHeaders.contentTypeHeader, LiveViews.contentType)
+        ..headers.set(HttpHeaders.cacheControlHeader, 'no-store')
+        ..bufferOutput = false;
+      await request.response.addStream(vistas.frames(fuente, until: request.response.done));
+      await request.response.close();
+    } on Exception {
+      // El mando cerró la vista: no hay a quién contestar.
+    } finally {
+      vistas.close(fuente);
     }
   }
 

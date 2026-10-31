@@ -332,6 +332,37 @@ const List<String> onAirElements = <String>['competition', 'bar', 'clock', 'live
 /// VIVO sube arriba a la izquierda.
 const Set<String> scoreboardElements = <String>{'competition', 'bar', 'clock'};
 
+// --------------------------------------------------------------------------- //
+// El encuadre a mano de «Una cámara» y la vista en vivo del mando (ADR 0033)
+// --------------------------------------------------------------------------- //
+
+/// Encuadres guardados como mucho: los atajos 1–9 del teclado del mando.
+const int cameraPresetsMax = 9;
+
+/// Caracteres como mucho del nombre de un encuadre guardado: los de una franja.
+const int cameraPresetNameMaxChars = stripPresetNameMaxChars;
+
+/// Cada cuánto pregunta el maestro al nativo cómo está el encuadre: así el estado ve cuándo
+/// arranca y para «Una cámara» y cuándo el encuadre llega a su destino (dura 1 s).
+const Duration cameraStatusInterval = Duration(milliseconds: 500);
+
+/// Cada cuánto la vista en vivo pide una miniatura al nativo: 10 fps, que es a lo que el
+/// nativo las hace mientras alguien mira (2 fps con el móvil caliente).
+const Duration cameraLiveFrameInterval = Duration(milliseconds: 100);
+
+/// Mandos que pueden mirar a la vez cada fuente en vivo; el siguiente recibe un 503.
+const int cameraLiveMaxViewers = 2;
+
+/// Lo que se antepone al nombre de la miniatura cuando la pide la vista en vivo
+/// (`ThumbHub.livePrefix` en nativo): solo esas peticiones suben su ritmo a 10 por segundo.
+const String cameraLiveThumbPrefix = 'live:';
+
+/// La frontera entre imágenes del MJPEG de la vista en vivo.
+const String cameraLiveBoundary = 'zeroframe';
+
+/// Donde vive la vista en vivo bajo `/api/v1/`: `rig/live/overview` y `rig/live/program`.
+const String cameraLiveRoute = 'rig/live';
+
 /// Los escudos de los equipos (ADR 0028): bajo `/api/v1/`, `assets/crest/home` y
 /// `assets/crest/away`; `PUT` sube el del equipo que juega de ese lado, `GET` lo da y
 /// `DELETE` lo quita.

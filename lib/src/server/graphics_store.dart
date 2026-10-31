@@ -1,7 +1,8 @@
 /// Lo que el operador cambia del gráfico desde el mando y es del campeonato, no de un
 /// partido (ADR 0027): los textos de la franja y el icono del campeonato; los escudos de los
 /// equipos, por su nombre (ADR 0028); la jornada con sus resultados y el partido que se juega
-/// (ADR 0030 y 0032), y los rótulos del espectáculo (ADR 0031).
+/// (ADR 0030 y 0032), los rótulos del espectáculo (ADR 0031) y los encuadres guardados de
+/// «Una cámara» (ADR 0033).
 ///
 /// Vive en la carpeta del partido, en `grafico.json`, `campeonato.img` y `escudos/`, pero no
 /// se aparta con el partido viejo: el partido siguiente del mismo campeonato los conserva.
@@ -13,6 +14,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:football_ai_capture/src/constants.dart';
 import 'package:football_ai_capture/src/generated/overlay_spec.g.dart';
+import 'package:football_ai_capture/src/server/camera_control.dart';
 
 /// Un cambio del gráfico que no se acepta, con el código HTTP y el porqué para el mando.
 class GraphicsError implements Exception {
@@ -334,6 +336,13 @@ class GraphicsStore {
       }
       final Object? puesta = json['strip_preset'];
       stripPreset = puesta is String && _preset(puesta) != null ? puesta : null;
+      final Object? encuadres = json['camera_presets'];
+      if (encuadres is List<Object?>) {
+        cameraPresets = <CameraPreset>[
+          for (final Object? e in encuadres)
+            if (_parte(() => CameraPreset.fromJson(e)) case final CameraPreset c) c,
+        ];
+      }
       for (final (String clave, Map<String, TeamCrest> destino, File Function(String) fichero, bool franja)
           in <(String, Map<String, TeamCrest>, File Function(String), bool)>[
             ('crests', _crests, _crestFile, false),
@@ -687,7 +696,47 @@ class GraphicsStore {
       'interview': interview.toJson(),
       'strip_presets': <Map<String, Object?>>[for (final StripPreset p in stripPresets) p.toJson()],
       'strip_preset': stripPreset,
+      'camera_presets': <Map<String, Object?>>[for (final CameraPreset c in cameraPresets) c.toJson()],
     }));
     tmp.renameSync(_file.path);
+  }
+
+  // ---------------- los encuadres guardados de «Una cámara» (ADR 0033) ----------------
+
+  /// Los encuadres guardados, en el orden del mando: el primero es el atajo 1.
+  List<CameraPreset> cameraPresets = <CameraPreset>[];
+
+  /// El encuadre `name`, sin mirar mayúsculas; null si no hay.
+  CameraPreset? cameraPreset(String name) {
+    final String clave = name.trim().toUpperCase();
+    for (final CameraPreset c in cameraPresets) {
+      if (c.name.toUpperCase() == clave) {
+        return c;
+      }
+    }
+    return null;
+  }
+
+  /// Guarda un encuadre: sustituye al del mismo nombre, en su sitio, o lo añade al final.
+  void saveCameraPreset(CameraPreset preset) {
+    final CameraPreset? viejo = cameraPreset(preset.name);
+    if (viejo == null && cameraPresets.length >= cameraPresetsMax) {
+      throw GraphicsError('caben $cameraPresetsMax encuadres: borra uno antes', status: 409);
+    }
+    cameraPresets = viejo == null
+        ? <CameraPreset>[...cameraPresets, preset]
+        : <CameraPreset>[for (final CameraPreset c in cameraPresets) c == viejo ? preset : c];
+    _save();
+  }
+
+  /// Borra el encuadre `name`; false si no existía.
+  bool deleteCameraPreset(String name) {
+    final CameraPreset? viejo = cameraPreset(name);
+    if (viejo == null) {
+      return false;
+    }
+    cameraPresets = <CameraPreset>[for (final CameraPreset c in cameraPresets) if (c != viejo) c];
+    _save();
+    return true;
   }
 }

@@ -17,6 +17,7 @@ import 'package:football_ai_capture/src/constants.dart';
 import 'package:football_ai_capture/src/event_kind.dart';
 import 'package:football_ai_capture/src/generated/overlay_spec.g.dart';
 import 'package:football_ai_capture/src/match_state.dart';
+import 'package:football_ai_capture/src/server/camera_control.dart';
 import 'package:football_ai_capture/src/server/graphics_store.dart';
 import 'package:football_ai_capture/src/server/lineups.dart';
 import 'package:football_ai_capture/src/server/match_record.dart';
@@ -224,6 +225,44 @@ class MatchEngine {
   /// 0032 del 2026-10-31). No se guarda, como [scoreboardOnAir], pero empezar un partido de
   /// la jornada no los enciende: son del evento, no de un momento.
   final Map<String, bool> elementsOnAir = <String, bool>{for (final String e in onAirElements) e: true};
+
+  /// El encuadre a mano de «Una cámara» (ADR 0033), como lo dice el nativo; null con dos
+  /// móviles o sin emitir. No se guarda: lo lleva el nativo, y tras reiniciar vuelve el de
+  /// partida.
+  CameraState? camera;
+
+  /// Lo que dice el nativo del encuadre; sube `rev` si cambió.
+  void setCamera(CameraState? estado) {
+    if (estado == camera) {
+      return;
+    }
+    camera = estado;
+    _changed();
+  }
+
+  /// Guarda el encuadre de destino con `name` (ADR 0033): su centro y su zoom.
+  void saveCameraPreset(String name) {
+    final CameraState? ahora = camera;
+    if (ahora == null) {
+      throw OrderError(409, cameraWithoutSingle);
+    }
+    try {
+      graphics.saveCameraPreset(
+        CameraPreset(name: name, centerU: ahora.centerU, centerV: ahora.centerV, zoom: ahora.zoom),
+      );
+    } on GraphicsError catch (error) {
+      throw OrderError(error.status, error.message);
+    }
+    _changed();
+  }
+
+  /// Borra el encuadre `name`; 404 si no había.
+  void deleteCameraPreset(String name) {
+    if (!graphics.deleteCameraPreset(name)) {
+      throw OrderError(404, 'no hay ningún encuadre que se llame $name');
+    }
+    _changed();
+  }
 
   /// Los que el operador apagó.
   Set<String> get hiddenElements => <String>{
@@ -1167,8 +1206,14 @@ class MatchEngine {
       'interview': graphics.interview.toJson(),
       'scoreboard_on_air': scoreboardOnAir,
       'elements_on_air': <String, Object?>{...elementsOnAir},
-      // ADR 0033: el encuadre a mano de «Una cámara»; lo rellena IOS-116.
-      'camera': null,
+      // ADR 0033: el encuadre a mano de «Una cámara», con los encuadres guardados.
+      'camera': switch (camera) {
+        null => null,
+        final CameraState c => <String, Object?>{
+          ...c.toJson(),
+          'presets': <Map<String, Object?>>[for (final CameraPreset p in graphics.cameraPresets) p.toJson()],
+        },
+      },
       'goal': switch (goal) {
         null => null,
         (team: final MatchTeam t, elapsedMs: final int lleva) => <String, Object?>{

@@ -3203,13 +3203,53 @@ final class ThumbHub {
     /// Cada cuántos fotogramas del programa se hace su miniatura (1 Hz a 30 fps).
     static let programEvery = 30
 
+    // La vista en vivo del mando (ADR 0033): mientras alguien la mira, la vista general y el
+    // programa van a 10 por segundo, y a 2 con el móvil caliente (`serious` o peor); el
+    // programa manda. El resto sigue a 1 Hz, y al esclavo solo le cuesta lo de siempre.
+
+    /// Lo que antepone el maestro al nombre cuando pide para la vista en vivo
+    /// (`cameraLiveThumbPrefix` de Dart): solo esas peticiones suben el ritmo.
+    static let livePrefix = "live:"
+    /// Segundos que dura el interés de la vista en vivo desde su última petición.
+    static let liveDemandS = 2.0
+    /// El tic del temporizador, en s: 10 por segundo.
+    static let tickS = 0.1
+    /// Tics entre miniaturas: sin nadie en vivo (1 Hz) y en vivo con el móvil caliente (2 fps).
+    static let idleTicks = 10
+    static let hotTicks = 5
+    /// Fotogramas del programa entre miniaturas en vivo (10 fps a 30) y en caliente (2 fps).
+    static let liveProgramEvery = 3
+    static let hotProgramEvery = 15
+
+    /// Hasta cuándo (uptime en ns) quiere cada fuente la vista en vivo.
+    private var liveUntilNs: [String: UInt64] = [:]
+    private var ticks = 0
+    /// La miniatura del programa se hace fuera del camino del programa; si la anterior aún
+    /// se está haciendo, la nueva se descarta.
+    private let programQueue = DispatchQueue(label: "io.footballai.zero.thumbs.program", qos: .utility)
+    private var programBusy = false
+
     func jpeg(_ name: String) -> Data? {
         lock.lock(); defer { lock.unlock() }
-        return latest[name]
+        guard name.hasPrefix(Self.livePrefix) else { return latest[name] }
+        let fuente = String(name.dropFirst(Self.livePrefix.count))
+        liveUntilNs[fuente] = DispatchTime.now().uptimeNanoseconds + UInt64(Self.liveDemandS * 1e9)
+        return latest[fuente]
     }
 
     private func store(_ name: String, _ data: Data) {
         lock.lock(); latest[name] = data; lock.unlock()
+    }
+
+    /// Si la vista en vivo mira `name` ahora.
+    private func live(_ name: String) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        return (liveUntilNs[name] ?? 0) > DispatchTime.now().uptimeNanoseconds
+    }
+
+    private static var hot: Bool {
+        let t = ProcessInfo.processInfo.thermalState
+        return t == .serious || t == .critical
     }
 
     /// Arranca la de la cámara propia; si hay enlace, la manda (esclavo) o recibe la del
@@ -3222,16 +3262,22 @@ final class ThumbHub {
         let mandar = environment["RIG_SPLIT_NO_THUMBS"] != "1"
         session?.onThumb = { [weak self] d in self?.store(otro, d) }
         let t = DispatchSource.makeTimerSource(queue: DispatchQueue(label: "io.footballai.zero.thumbs", qos: .utility))
-        t.schedule(deadline: .now() + 1, repeating: 1)
+        t.schedule(deadline: .now() + 1, repeating: Self.tickS)
         t.setEventHandler { [weak self] in
-            guard let self, let ring = pipeline()?.ring, let ultimo = ring.availableRigMs().last,
+            guard let self else { return }
+            ticks += 1
+            // La propia, a 1 Hz; la vista general, a 1 Hz o a lo que pida la vista en vivo.
+            let propia = ticks % Self.idleTicks == 0
+            let cadaGeneral = live(FramingHub.overviewName) ? (Self.hot ? Self.hotTicks : 1) : Self.idleTicks
+            let general = ticks % cadaGeneral == 0
+            guard propia || general, let ring = pipeline()?.ring, let ultimo = ring.availableRigMs().last,
                   let lease = ring.acquire(nearest: ultimo, maxDistanceMs: 0)
             else { return }
-            let jpeg = thumbnailer?.jpeg(from: lease.buffer)
+            let jpeg = propia ? thumbnailer?.jpeg(from: lease.buffer) : nil
             // Con «Una cámara», la vista general del mismo fotograma (ADR 0033).
-            let general = FramingHub.shared.overviewJpeg(from: lease.buffer)
+            let vista = general ? FramingHub.shared.overviewJpeg(from: lease.buffer) : nil
             ring.release(lease)
-            if let general { store(FramingHub.overviewName, general) }
+            if let vista { store(FramingHub.overviewName, vista) }
             guard let jpeg else { return }
             store(side.rawValue, jpeg)
             if mandar, let session, !session.isMaster { session.send(thumb: jpeg) }
@@ -3245,11 +3291,25 @@ final class ThumbHub {
         timer = nil
     }
 
-    /// Un fotograma del programa: uno de cada `programEvery` se vuelve miniatura.
+    /// Un fotograma del programa: uno de cada `programEvery` se vuelve miniatura, o más si la
+    /// vista en vivo lo mira. El JPEG se hace en su cola, no en la del programa.
     func program(_ buffer: CVPixelBuffer) {
         programFrames += 1
-        guard programFrames % Self.programEvery == 0, let jpeg = programThumbnailer?.jpeg(from: buffer) else { return }
-        store("program", jpeg)
+        let cada = live("program") ? (Self.hot ? Self.hotProgramEvery : Self.liveProgramEvery) : Self.programEvery
+        guard programFrames % cada == 0 else { return }
+        lock.lock()
+        let ocupado = programBusy
+        programBusy = true
+        lock.unlock()
+        guard !ocupado else { return }
+        programQueue.async { [weak self] in
+            guard let self else { return }
+            let jpeg = programThumbnailer?.jpeg(from: buffer)
+            lock.lock()
+            programBusy = false
+            if let jpeg { latest["program"] = jpeg }
+            lock.unlock()
+        }
     }
 }
 

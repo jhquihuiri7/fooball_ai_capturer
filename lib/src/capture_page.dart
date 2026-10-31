@@ -34,6 +34,7 @@ import 'package:football_ai_capture/src/generated/rig_api.g.dart';
 import 'package:football_ai_capture/src/graphics/rig_overlay_sink.dart';
 import 'package:football_ai_capture/src/mando_qr_sheet.dart';
 import 'package:football_ai_capture/src/match_state.dart' show matchStateKey;
+import 'package:football_ai_capture/src/server/camera_control.dart';
 import 'package:football_ai_capture/src/server/master_host.dart';
 import 'package:football_ai_capture/src/server/program_video.dart';
 import 'package:football_ai_capture/src/server/replica.dart';
@@ -143,6 +144,8 @@ class _CapturePageState extends State<CapturePage> {
               overlaySink: RigOverlaySink(),
               panelHtml: () => rootBundle.loadString(panelAssetPath),
               thumbnail: RigHostApi().thumbnail,
+              // El encuadre a mano de «Una cámara» (ADR 0033).
+              camera: _cameraOrder,
               rigStatus: () => _rigStatus(),
               legacyMatch: () async => (await SharedPreferences.getInstance()).getString(matchStateKey),
               replicaSink: _api.sendReplica,
@@ -1042,4 +1045,22 @@ class _TroubleCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// El encuadre a mano de «Una cámara» por Pigeon (ADR 0033): la orden al nativo y lo que
+/// contesta, en los tipos del maestro.
+Future<CameraReply?> _cameraOrder(String kind, List<double> values, bool cut) async {
+  final CameraFraming? f = await RigHostApi().cameraOrder(CameraOrder(kind: kind, values: values, cut: cut));
+  if (f == null) {
+    return null;
+  }
+  final CameraState estado = CameraState(
+    centerU: f.centerU,
+    centerV: f.centerV,
+    zoom: f.zoom,
+    outline: f.outline,
+    moving: f.moving,
+    soft: f.soft,
+  );
+  return CameraReply(estado, f.error);
 }

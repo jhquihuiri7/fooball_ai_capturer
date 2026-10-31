@@ -12,6 +12,42 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-31 · IOS-116 — las órdenes de la cámara y la vista en vivo en el maestro · 🚧 hecho; falta la medida térmica en el 17
+
+ADR 0033.
+- **Las órdenes** `camera/frame`, `camera/zoom`, `camera/pan`, `camera/reset`,
+  `camera/preset`, `camera/preset_save` y `camera/preset_delete` (`camera_control.dart`):
+  - Dart solo mira los tipos (400) y lleva cada una al nativo por el `CameraBridge`
+    (`cameraOrder` de Pigeon). Los topes los pone `FramingSpace`, y su error vuelve como 400.
+  - Sin «Una cámara», 409.
+  - Funcionan igual por la LAN y por el túnel.
+- **El estado** lleva `camera`, o null: centro, zoom, contorno, `moving`, `soft` y los
+  encuadres guardados.
+  - El maestro pregunta al nativo cada 0,5 s (`cameraStatusInterval`), una pregunta a la vez.
+    Así ve cuándo arranca y para «Una cámara» y cuándo el encuadre llega a su destino.
+    `setCamera` solo sube `rev` si algo cambió.
+- **Los encuadres guardados** van con el evento en `grafico.json`, por centro y zoom:
+  - caben 9 (atajos 1–9); el décimo da 409;
+  - uno con el mismo nombre sustituye al anterior, sin mirar mayúsculas.
+- **La vista en vivo** (LAN): `GET /api/v1/rig/live/{overview|program}` en MJPEG.
+  - Pide una miniatura cada 100 ms y manda solo las que cambian.
+  - Dos mandos por fuente; el tercero, 503.
+  - Si el mando lee despacio, el flujo se pausa y lo de mientras se descarta.
+  - Se cierra con la respuesta.
+- **Las miniaturas nativas** (`ThumbHub`, sin compilar): la vista en vivo las pide con
+  `live:`, y solo esas suben el ritmo durante 2 s a 10 fps (2 fps desde `serious`). El
+  panel de siempre y el esclavo siguen a 1 Hz. El JPEG del programa sale de la cola del
+  programa; si el anterior aún se está haciendo, este se descarta.
+- La miniatura `overview` también por `rig/thumb/overview`.
+- **Probado**: `flutter analyze` limpio; `flutter test`, 558 pasan y 9 fallan (los de
+  siempre). 11 tests nuevos en `camera_control_test.dart`: las órdenes, sus errores, el
+  nativo falso, los encuadres guardados y el MJPEG de verdad por HTTP con su tope de mandos.
+
+**Falta**: la aceptación de la tarjeta, 90 min emitiendo con las dos vistas abiertas sin pasar
+de `fair` en el 17. Y compilar en el Mac lo de `ThumbHub`.
+
+**Siguiente**: IOS-117, la tarjeta Cámara del mando web.
+
 ## 2026-10-31 · IOS-115 — el encuadre a mano de «Una cámara», en nativo · 🚧 escrito, SIN COMPILAR y sin probar en el iPhone
 
 ADR 0033 del repo football-ai; la referencia es REF-68 (football-ai 27f5e5d y df49507). **Se

@@ -21,6 +21,7 @@ import 'package:football_ai_capture/src/graphics/overlay_bridge.dart';
 import 'package:football_ai_capture/src/graphics/program_graphics.dart';
 import 'package:football_ai_capture/src/panel_pairing.dart';
 import 'package:football_ai_capture/src/server/api_server.dart';
+import 'package:football_ai_capture/src/server/camera_control.dart';
 import 'package:football_ai_capture/src/server/control_token.dart';
 import 'package:football_ai_capture/src/server/match_engine.dart';
 import 'package:football_ai_capture/src/server/match_record.dart';
@@ -118,6 +119,7 @@ class MasterHost extends ChangeNotifier {
     this.videoSink,
     this.freeDiskBytes,
     this.localRecording,
+    this.camera,
     this.reportState,
     this.eventKind = EventKind.football,
   }) : wallS = wallS ?? _wallClockS,
@@ -197,6 +199,12 @@ class MasterHost extends ChangeNotifier {
   /// Si el operador quiere la 4K local («Guardar vídeo»): solo entonces los vídeos dejan
   /// su reserva entera.
   final bool Function()? localRecording;
+
+  /// La orden nativa del encuadre a mano de «Una cámara» (ADR 0033); sin ella, `camera/*`
+  /// es un 409 y no hay vista en vivo que lo necesite.
+  final CameraBridge? camera;
+  Timer? _cameraTick;
+  bool _askingCamera = false;
   ProgramVideo? _video;
   StreamSubscription<void>? _videoChanges;
   Timer? _videoTick;
@@ -340,6 +348,10 @@ class MasterHost extends ChangeNotifier {
         panelHtml: panelHtml == null ? null : await panelHtml!(),
         thumbnail: thumbnail,
         rigStatus: rigStatus,
+        camera: camera,
+        live: thumbnail == null
+            ? null
+            : LiveViews(thumbnail: (String fuente) => thumbnail!('$cameraLiveThumbPrefix$fuente')),
       );
       final MasterApiServer servidor = await MasterApiServer.start(api, port: port);
       if (_disposed) {
@@ -351,6 +363,7 @@ class MasterHost extends ChangeNotifier {
       _engine = engine;
       _api = api;
       _engineTick = Timer.periodic(const Duration(seconds: 1), (_) => engine.tick());
+      _startCamera(engine);
       _startGraphics(engine);
       _startVideo(engine);
       _startReplica(engine);
@@ -405,6 +418,29 @@ class MasterHost extends ChangeNotifier {
   }
 
   /// El marcador y la alineación del programa: con cada cambio y cada segundo.
+  /// Pregunta al nativo cómo está el encuadre (ADR 0033): así el estado ve cuándo arranca y
+  /// para «Una cámara» y cuándo el encuadre llega a su destino. Una pregunta a la vez.
+  void _startCamera(MatchEngine engine) {
+    final CameraBridge? puente = camera;
+    if (puente == null) {
+      return;
+    }
+    _cameraTick = Timer.periodic(cameraStatusInterval, (_) async {
+      if (_askingCamera) {
+        return;
+      }
+      _askingCamera = true;
+      try {
+        final CameraReply? r = await puente('status', const <double>[], false);
+        engine.setCamera(r?.state);
+      } on Exception {
+        // El canal no contestó: se pregunta en el siguiente tic.
+      } finally {
+        _askingCamera = false;
+      }
+    });
+  }
+
   void _startGraphics(MatchEngine engine) {
     final OverlaySink? sink = overlaySink;
     if (sink == null) {
@@ -532,6 +568,8 @@ class MasterHost extends ChangeNotifier {
     _animTick = null;
     _engineTick?.cancel();
     _engineTick = null;
+    _cameraTick?.cancel();
+    _cameraTick = null;
     _graphics = null;
   }
 
