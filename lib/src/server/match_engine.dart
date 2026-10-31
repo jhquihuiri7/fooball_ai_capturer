@@ -1167,6 +1167,8 @@ class MatchEngine {
       'interview': graphics.interview.toJson(),
       'scoreboard_on_air': scoreboardOnAir,
       'elements_on_air': <String, Object?>{...elementsOnAir},
+      // ADR 0033: el encuadre a mano de «Una cámara»; lo rellena IOS-116.
+      'camera': null,
       'goal': switch (goal) {
         null => null,
         (team: final MatchTeam t, elapsedMs: final int lleva) => <String, Object?>{

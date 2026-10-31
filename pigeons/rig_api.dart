@@ -97,6 +97,51 @@ enum ProgramResolution {
   p720,
 }
 
+/// Una orden del encuadre a mano de «Una cámara» (ADR 0033), ya validada por el mando.
+///
+/// `kind` y sus `values`: `frame` (x0, y0, x1, y1 sobre la vista general, 0–1), `zoom`
+/// (el factor), `pan` (dx, dy en fracciones del encuadre), `reset` (0 el de partida, 1 la
+/// lente entera), `goto` (u, v del centro y el zoom de un encuadre guardado) o `status` (nada:
+/// solo pregunta). Con `cut`, salta de golpe en vez de pasar en un segundo.
+class CameraOrder {
+  CameraOrder({required this.kind, required this.values, required this.cut});
+
+  String kind;
+  List<double> values;
+  bool cut;
+}
+
+/// Cómo queda el encuadre a mano (ADR 0033): el destino, si va de camino.
+class CameraFraming {
+  CameraFraming({
+    required this.centerU,
+    required this.centerV,
+    required this.zoom,
+    required this.outline,
+    required this.moving,
+    required this.soft,
+    required this.error,
+  });
+
+  /// Dónde cae el centro del destino en la vista general (0–1).
+  double centerU;
+  double centerV;
+
+  /// En la escala de la app Cámara: 1 es la cámara principal.
+  double zoom;
+
+  /// Las cuatro esquinas del contorno en la vista general, u y v alternos: desde arriba a la
+  /// izquierda, en el sentido del reloj.
+  List<double> outline;
+  bool moving;
+
+  /// Pasado el 2×: el mando avisa «se verá borroso».
+  bool soft;
+
+  /// "" o por qué no se aplicó la orden; el encuadre es entonces el que había.
+  String error;
+}
+
 @HostApi()
 abstract class RigHostApi {
   /// EMITIR en la arquitectura B (IOS-58): pone en marcha el programa de este móvil con el
@@ -146,9 +191,13 @@ abstract class RigHostApi {
   /// este instante. Devuelve "" o el error.
   String setAdPlaylist(String json);
 
-  /// La última miniatura JPEG de 640×360 (IOS-64): `left`, `right` o `program`. Vacía si
-  /// todavía no hay.
+  /// La última miniatura JPEG de 640×360 (IOS-64): `left`, `right` o `program`; con «Una
+  /// cámara», también `overview`, la vista general (ADR 0033). Vacía si todavía no hay.
   Uint8List thumbnail(String name);
+
+  /// El encuadre a mano de «Una cámara» (ADR 0033): aplica `order` y devuelve cómo queda;
+  /// null si este móvil no emite con «Una cámara».
+  CameraFraming? cameraOrder(CameraOrder order);
 
   /// Un anuncio ya cargado que se cuela desde ahora `loops` vueltas; nombre vacío lo quita.
   void setAdOverride(String name, int loops);

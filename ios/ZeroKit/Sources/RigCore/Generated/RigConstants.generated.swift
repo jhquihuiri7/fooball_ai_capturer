@@ -682,4 +682,60 @@ public enum RigConstants {
     /// Después de un gol lo que se quiere ver es la celebración y el campo, no el balón.
     /// (Python: `SHOT_SITUATION_S`.)
     public static let shotSituationS: Double = 4.0
+
+    /// mm equivalentes de 35 mm del 1× del iPhone: la cámara principal.
+    /// (Python: `MAIN_CAMERA_EQUIVALENT_FOCAL_MM`.)
+    public static let mainCameraEquivalentFocalMm: Double = 26.0
+
+    /// mm. La mitad del ancho del fotograma de 35 mm (36 / 2).
+    /// (Python: `FULL_FRAME_HALF_WIDTH_MM`.)
+    public static let fullFrameHalfWidthMm: Double = 18.0
+
+    /// El zoom de «la lente entera»: el 0,5× de la ultra gran angular.
+    /// (Python: `FULL_LENS_ZOOM`.)
+    public static let fullLensZoom: Double = 0.5
+
+    /// Fracción del campo de la lente que usa la vista general: un pelo menos que entero, para
+    /// que el muestreo bilineal no lea fuera de la imagen y el borde no salga negro.
+    /// (Python: `FULL_LENS_FILL_FRACTION`.)
+    public static let fullLensFillFraction: Double = 0.99
+
+    /// El zoom más cerrado que se deja pedir. A 3× la vista usa ~900 px del sensor para un
+    /// programa de 1 920: se ve borrosa, y más allá no sirve (decisión del propietario).
+    /// (Python: `CAMERA_ZOOM_MAX`.)
+    public static let cameraZoomMax: Double = 3.0
+
+    /// A partir de este zoom el mando avisa «se verá borroso» (~1 350 px del sensor para 1 920).
+    /// (Python: `CAMERA_ZOOM_SOFT`.)
+    public static let cameraZoomSoft: Double = 2.0
+
+    /// ms. Lo que tarda el paso suave a un encuadre nuevo, con aceleración y frenada.
+    /// (Python: `CAMERA_MOVE_MS`.)
+    public static let cameraMoveMs: Double = 1000.0
+
+    /// Fracción del ancho de la vista general. Un recuadro más pequeño es un toque, no un recuadro.
+    /// (Python: `CAMERA_FRAME_MIN_SIZE`.)
+    public static let cameraFrameMinSize: Double = 0.01
+
+    /// Lo menos que puede pedir `camera/zoom` de una vez: el mando manda 0,8 para alejar.
+    /// (Python: `CAMERA_ZOOM_FACTOR_MIN`.)
+    public static let cameraZoomFactorMin: Double = 0.1
+
+    /// Lo más que puede pedir `camera/zoom` de una vez: el mando manda 1,25 para acercar.
+    /// (Python: `CAMERA_ZOOM_FACTOR_MAX`.)
+    public static let cameraZoomFactorMax: Double = 10.0
+
+    /// Fracción del encuadre actual que puede mover `camera/pan` de una vez, por eje.
+    /// (Python: `CAMERA_PAN_MAX`.)
+    public static let cameraPanMax: Double = 1.0
+
+    /// Pasos de la bisección que mete el encuadre en la lente: 2⁻⁵⁰ del recorrido, por debajo de
+    /// cualquier redondeo que se vea.
+    /// (Python: `FRAMING_FIT_ITERATIONS`.)
+    public static let framingFitIterations: Int = 50
+
+    /// Holgura, en fracción de la vista general, con la que una esquina cuenta como dentro: la
+    /// lente entera tiene que caber en sí misma pese al redondeo.
+    /// (Python: `FRAMING_FIT_EPS`.)
+    public static let framingFitEps: Double = 1e-09
 }

@@ -1406,6 +1406,7 @@ final class SplitBench {
         timer?.cancel()
         timer = nil
         queue.sync { finish() }
+        if config.singleCamera { FramingHub.shared.unmount() }
     }
 
     static func nowMs() -> Int64 { RigLink.hostNowNs() / 1_000_000 }
@@ -1537,6 +1538,12 @@ final class SplitBench {
         do {
             let (modelo, fuente) = try Self.loadRig(width: ring.width, height: ring.height, env: env)
             guard let ctx = MetalContext() else { return false }
+            // «Una cámara»: el encuadre a mano del mando (ADR 0033), que arranca en el zoom que
+            // eligió el operador, y la vista general para las miniaturas.
+            if config.singleCamera {
+                FramingHub.shared.mount(rig: modelo, side: side, context: ctx, zoom: config.singleZoom,
+                                        width: Self.programWidth, height: Self.programHeight)
+            }
             rig = modelo
             rigSource = fuente
             context = ctx
@@ -1751,13 +1758,21 @@ final class SplitBench {
         }
         let lados: [CameraSide]
         if config.singleCamera {
-            // «Una cámara» tal cual (enmienda del ADR 0025): quieta, por el eje de su lente y
-            // con todo lo que ve; sin barrido que cruce a la otra lente.
-            yaw = rig.camera(side).pose.yawRad
-            pitch = rig.camera(side).pose.pitchRad
-            // 2026-10-30: con el zoom que eligió el operador (0,5× es la lente entera).
-            hfov = FullLensView.hfovRad(of: rig.camera(side), width: Self.programWidth, height: Self.programHeight,
-                                        zoom: config.singleZoom)
+            if let vista = FramingHub.shared.current?.view() {
+                // El encuadre a mano del mando (ADR 0033): de partida, el zoom que eligió el
+                // operador por el eje de la lente; después, a donde lo lleve el recuadro.
+                yaw = vista.yawRad
+                pitch = vista.pitchRad
+                hfov = vista.hfovRad
+            } else {
+                // «Una cámara» tal cual (enmienda del ADR 0025): quieta, por el eje de su lente
+                // y con todo lo que ve; sin barrido que cruce a la otra lente.
+                yaw = rig.camera(side).pose.yawRad
+                pitch = rig.camera(side).pose.pitchRad
+                // 2026-10-30: con el zoom que eligió el operador (0,5× es la lente entera).
+                hfov = FullLensView.hfovRad(of: rig.camera(side), width: Self.programWidth,
+                                            height: Self.programHeight, zoom: config.singleZoom)
+            }
             lados = [side]
         } else if let v = try? RectilinearView(yawRad: yaw, pitchRad: pitch, hfovRad: hfov,
                                                width: Self.programWidth, height: Self.programHeight) {
@@ -3213,7 +3228,10 @@ final class ThumbHub {
                   let lease = ring.acquire(nearest: ultimo, maxDistanceMs: 0)
             else { return }
             let jpeg = thumbnailer?.jpeg(from: lease.buffer)
+            // Con «Una cámara», la vista general del mismo fotograma (ADR 0033).
+            let general = FramingHub.shared.overviewJpeg(from: lease.buffer)
             ring.release(lease)
+            if let general { store(FramingHub.overviewName, general) }
             guard let jpeg else { return }
             store(side.rawValue, jpeg)
             if mandar, let session, !session.isMaster { session.send(thumb: jpeg) }
@@ -3232,6 +3250,144 @@ final class ThumbHub {
         programFrames += 1
         guard programFrames % Self.programEvery == 0, let jpeg = programThumbnailer?.jpeg(from: buffer) else { return }
         store("program", jpeg)
+    }
+}
+
+// MARK: - El encuadre a mano de «Una cámara» (ADR 0033, IOS-115)
+
+// La pasada de «Una cámara» lo monta al arrancar (sabe el soporte, su lado y el zoom de
+// partida) y lo desmonta al parar. El programa lee la vista en cada fotograma
+// (`scriptedView`), las órdenes del mando llegan por Pigeon (`cameraOrder`) y la vista general
+// —la lente entera enderezada a 640×360— se pinta aquí, del mismo fotograma de la cámara que
+// la miniatura, con el kernel de reproyección del programa.
+
+final class FramingHub {
+    static let shared = FramingHub()
+
+    /// El nombre de la vista general entre las miniaturas (`thumbnail`).
+    static let overviewName = "overview"
+
+    private let lock = NSLock()
+    private var controller: FramingController?
+    private var overviewRenderer: MetalPartRenderer?
+    private var overviewPool: CVPixelBufferPool?
+    private var overviewView: ViewCommand?
+    private let overviewThumbnailer = Thumbnailer()
+
+    /// El encuadre de la pasada en marcha; nil sin «Una cámara».
+    var current: FramingController? {
+        lock.lock(); defer { lock.unlock() }
+        return controller
+    }
+
+    func mount(rig: RigModel, side: CameraSide, context: MetalContext, zoom: Double, width: Int, height: Int) {
+        do {
+            let espacio = try FramingSpace(camera: rig.camera(side), width: width, height: height)
+            let ancho = ThumbnailConstants.width, alto = ThumbnailConstants.height
+            let renderer = try MetalPartRenderer(context: context, rig: rig, side: side, width: ancho, height: alto)
+            var pool: CVPixelBufferPool?
+            CVPixelBufferPoolCreate(nil, nil, [
+                kCVPixelBufferPixelFormatTypeKey: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+                kCVPixelBufferWidthKey: ancho, kCVPixelBufferHeightKey: alto,
+                kCVPixelBufferIOSurfacePropertiesKey: [:] as CFDictionary,
+                kCVPixelBufferMetalCompatibilityKey: true,
+            ] as CFDictionary, &pool)
+            // La vista general: la lente entera por su eje, al tamaño de la miniatura (el
+            // mismo campo que a 1080p, porque la relación de aspecto es la misma).
+            let general = espacio.overview
+            let vista = ViewCommand(
+                targetRigMs: 0, viewId: 0, yawRad: general.yawRad, pitchRad: general.pitchRad,
+                hfovRad: general.hfovRad, sides: [side], seamYawRad: general.yawRad,
+                featherRad: RigConstants.panoramaFeatherRad, gains: .unity
+            )
+            let c = FramingController(space: espacio, zoom: zoom)
+            lock.lock()
+            controller = c
+            overviewRenderer = renderer
+            overviewPool = pool
+            overviewView = vista
+            lock.unlock()
+        } catch {
+            NSLog("[encuadre] sin encuadre a mano: %@", "\(error)")
+        }
+    }
+
+    func unmount() {
+        lock.lock()
+        controller = nil
+        overviewRenderer = nil
+        overviewPool = nil
+        overviewView = nil
+        lock.unlock()
+    }
+
+    /// La vista general de `source` (un fotograma de la cámara) en JPEG; nil sin «Una cámara».
+    func overviewJpeg(from source: CVPixelBuffer) -> Data? {
+        lock.lock()
+        let renderer = overviewRenderer, pool = overviewPool, vista = overviewView
+        lock.unlock()
+        guard let renderer, let pool, let vista else { return nil }
+        var destino: CVPixelBuffer?
+        guard CVPixelBufferPoolCreatePixelBuffer(nil, pool, &destino) == kCVReturnSuccess, let destino else {
+            return nil
+        }
+        do {
+            try renderer.render(source: source, view: vista, into: destino)
+        } catch {
+            return nil
+        }
+        return overviewThumbnailer?.jpeg(from: destino)
+    }
+
+    /// Una orden del mando (ADR 0033) y cómo queda el encuadre; nil sin «Una cámara». Una
+    /// orden que no se puede aplicar deja el encuadre como estaba y lo dice en `error`.
+    func apply(kind: String, values: [Double], cut: Bool) -> CameraFraming? {
+        guard let c = current else { return nil }
+        var fallo = ""
+        do {
+            if let destino = try Self.target(kind: kind, values: values, controller: c) {
+                c.go(to: destino, cut: cut)
+            }
+        } catch let e as FramingError {
+            fallo = e.description
+        } catch {
+            fallo = "\(error)"
+        }
+        let s = c.status()
+        return CameraFraming(
+            centerU: s.target.centerU, centerV: s.target.centerV, zoom: s.zoom, outline: s.outline,
+            moving: s.moving, soft: s.soft, error: fallo
+        )
+    }
+
+    /// El destino de una orden; nil si solo pregunta (`status`).
+    private static func target(kind: String, values v: [Double], controller c: FramingController) throws -> Framing? {
+        let e = c.space
+        func pide(_ n: Int) throws {
+            guard v.count == n else { throw FramingError.invalid("\(kind) lleva \(n) números y llegaron \(v.count)") }
+        }
+        switch kind {
+        case "status":
+            return nil
+        case "frame":
+            try pide(4)
+            return try e.frameRect(x0: v[0], y0: v[1], x1: v[2], y1: v[3])
+        case "zoom":
+            try pide(1)
+            return try e.zoomBy(c.target, factor: v[0])
+        case "pan":
+            try pide(2)
+            return try e.panBy(c.target, dx: v[0], dy: v[1])
+        case "reset":
+            try pide(1)
+            return v[0] == 0 ? c.startFraming : e.full()
+        case "goto":
+            try pide(3)
+            guard v.allSatisfy(\.isFinite) else { throw FramingError.invalid("goto lleva números: \(v)") }
+            return e.fit(Framing(centerU: v[0], centerV: v[1], hfovRad: FullLensView.hfovRad(zoom: v[2])))
+        default:
+            throw FramingError.invalid("orden de cámara desconocida: \(kind)")
+        }
     }
 }
 

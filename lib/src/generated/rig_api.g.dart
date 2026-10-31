@@ -260,6 +260,149 @@ class ProgramStatus {
   }
 }
 
+/// Una orden del encuadre a mano de «Una cámara» (ADR 0033), ya validada por el mando.
+///
+/// `kind` y sus `values`: `frame` (x0, y0, x1, y1 sobre la vista general, 0–1), `zoom`
+/// (el factor), `pan` (dx, dy en fracciones del encuadre), `reset` (0 el de partida, 1 la
+/// lente entera), `goto` (u, v del centro y el zoom de un encuadre guardado) o `status` (nada:
+/// solo pregunta). Con `cut`, salta de golpe en vez de pasar en un segundo.
+class CameraOrder {
+  CameraOrder({
+    required this.kind,
+    required this.values,
+    required this.cut,
+  });
+
+  String kind;
+
+  List<double> values;
+
+  bool cut;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      kind,
+      values,
+      cut,
+    ];
+  }
+
+  Object encode() {
+    return _toList();  }
+
+  static CameraOrder decode(Object result) {
+    result as List<Object?>;
+    return CameraOrder(
+      kind: result[0]! as String,
+      values: (result[1]! as List<Object?>).cast<double>(),
+      cut: result[2]! as bool,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! CameraOrder || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(kind, other.kind) && _deepEquals(values, other.values) && _deepEquals(cut, other.cut);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+
+  @override
+  String toString() {
+    return 'CameraOrder(kind: $kind, values: $values, cut: $cut)';
+  }
+}
+
+/// Cómo queda el encuadre a mano (ADR 0033): el destino, si va de camino.
+class CameraFraming {
+  CameraFraming({
+    required this.centerU,
+    required this.centerV,
+    required this.zoom,
+    required this.outline,
+    required this.moving,
+    required this.soft,
+    required this.error,
+  });
+
+  /// Dónde cae el centro del destino en la vista general (0–1).
+  double centerU;
+
+  double centerV;
+
+  /// En la escala de la app Cámara: 1 es la cámara principal.
+  double zoom;
+
+  /// Las cuatro esquinas del contorno en la vista general, u y v alternos: desde arriba a la
+  /// izquierda, en el sentido del reloj.
+  List<double> outline;
+
+  bool moving;
+
+  /// Pasado el 2×: el mando avisa «se verá borroso».
+  bool soft;
+
+  /// "" o por qué no se aplicó la orden; el encuadre es entonces el que había.
+  String error;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      centerU,
+      centerV,
+      zoom,
+      outline,
+      moving,
+      soft,
+      error,
+    ];
+  }
+
+  Object encode() {
+    return _toList();  }
+
+  static CameraFraming decode(Object result) {
+    result as List<Object?>;
+    return CameraFraming(
+      centerU: result[0]! as double,
+      centerV: result[1]! as double,
+      zoom: result[2]! as double,
+      outline: (result[3]! as List<Object?>).cast<double>(),
+      moving: result[4]! as bool,
+      soft: result[5]! as bool,
+      error: result[6]! as String,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! CameraFraming || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(centerU, other.centerU) && _deepEquals(centerV, other.centerV) && _deepEquals(zoom, other.zoom) && _deepEquals(outline, other.outline) && _deepEquals(moving, other.moving) && _deepEquals(soft, other.soft) && _deepEquals(error, other.error);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+
+  @override
+  String toString() {
+    return 'CameraFraming(centerU: $centerU, centerV: $centerV, zoom: $zoom, outline: $outline, moving: $moving, soft: $soft, error: $error)';
+  }
+}
+
 
 class _PigeonCodec extends StandardMessageCodec {
   const _PigeonCodec();
@@ -274,6 +417,12 @@ class _PigeonCodec extends StandardMessageCodec {
     }    else if (value is ProgramStatus) {
       buffer.putUint8(130);
       writeValue(buffer, value.encode());
+    }    else if (value is CameraOrder) {
+      buffer.putUint8(131);
+      writeValue(buffer, value.encode());
+    }    else if (value is CameraFraming) {
+      buffer.putUint8(132);
+      writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
     }
@@ -287,6 +436,10 @@ class _PigeonCodec extends StandardMessageCodec {
         return value == null ? null : ProgramResolution.values[value];
       case 130:
         return ProgramStatus.decode(readValue(buffer)!);
+      case 131:
+        return CameraOrder.decode(readValue(buffer)!);
+      case 132:
+        return CameraFraming.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
     }
@@ -488,8 +641,8 @@ class RigHostApi {
     return pigeonVar_replyValue! as String;
   }
 
-  /// La última miniatura JPEG de 640×360 (IOS-64): `left`, `right` o `program`. Vacía si
-  /// todavía no hay.
+  /// La última miniatura JPEG de 640×360 (IOS-64): `left`, `right` o `program`; con «Una
+  /// cámara», también `overview`, la vista general (ADR 0033). Vacía si todavía no hay.
   Future<Uint8List> thumbnail(String name) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.RigHostApi.thumbnail$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
@@ -507,6 +660,27 @@ class RigHostApi {
     )
     ;
     return pigeonVar_replyValue! as Uint8List;
+  }
+
+  /// El encuadre a mano de «Una cámara» (ADR 0033): aplica `order` y devuelve cómo queda;
+  /// null si este móvil no emite con «Una cámara».
+  Future<CameraFraming?> cameraOrder(CameraOrder order) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.RigHostApi.cameraOrder$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[order]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+    return pigeonVar_replyValue as CameraFraming?;
   }
 
   /// Un anuncio ya cargado que se cuela desde ahora `loops` vueltas; nombre vacío lo quita.

@@ -137,6 +137,12 @@ final class RigHostApiImpl: NSObject, RigHostApi {
         FlutterStandardTypedData(bytes: ThumbHub.shared.jpeg(name) ?? Data())
     }
 
+    // ADR 0033: el encuadre a mano de «Una cámara». La orden ya viene validada por el mando;
+    // la geometría (16:9, la lente, el tope de 3×) la pone FramingSpace.
+    func cameraOrder(order: CameraOrder) throws -> CameraFraming? {
+        FramingHub.shared.apply(kind: order.kind, values: order.values, cut: order.cut)
+    }
+
     func setAdOverride(name: String, loops: Int64) throws {
         let clip = name.isEmpty ? nil : AdHub.store?.clip(named: name)
         AdHub.rotation?.set(override: clip, loops: max(1, Int(loops)), atRigMs: AdHub.nowRigMs())

@@ -12,6 +12,40 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-31 · IOS-115 — el encuadre a mano de «Una cámara», en nativo · 🚧 escrito, SIN COMPILAR y sin probar en el iPhone
+
+ADR 0033 del repo football-ai; la referencia es REF-68 (football-ai 27f5e5d y df49507). **Se
+escribió en Windows, sin toolchain de Swift: no se ha compilado.** Lo primero en el Mac es
+`swift test` en `ios/ZeroKit` y compilar el Runner.
+- **RigCore, `Direction/Framing.swift`**:
+  - `Framing` y `FramingSpace`, porte línea a línea de `libs/vision/framing.py`: el recuadro
+    a 16:9 y la cámara que gira hacia él, metida entre 3× y la lente entera y dentro de ella;
+    acercar, alejar, mover, el aviso pasado el 2×, el contorno y el paso suave de 1 s.
+  - `FramingController`: a dónde va la cámara y por dónde va, bajo un candado y con el reloj
+    monótono del host (inyectable en los tests).
+  - Ningún número tecleado: las constantes llegan en `RigConstants.generated.swift`
+    (`CAMERA_*`, `FRAMING_*`…).
+- **`FramingTests`**: el dorado `framing.json` (36 casos), el paso suave con un reloj falso, una
+  orden a medio camino que sale de donde va, y las órdenes malas.
+- **Pigeon**: `cameraOrder(CameraOrder) → CameraFraming?`. La orden es `frame`, `zoom`, `pan`,
+  `reset`, `goto` o `status`; vuelve el destino, el zoom, el contorno, `moving`, `soft` y
+  `error`.
+- **Runner** (`RigLinkNW.swift`):
+  - `FramingHub` lo monta la pasada de «Una cámara» al arrancar y lo desmonta al parar.
+  - `scriptedView` toma la vista del encuadre en cada fotograma.
+  - `ThumbHub` pinta la vista general (`overview`, la lente entera enderezada a 640×360) con
+    el `MetalPartRenderer` del mismo fotograma que la miniatura de la cámara, a 1 Hz.
+- **Dorados**: `framing.json`, `tunnel.json` (con `camera`) y `manifest.json` copiados de
+  football-ai df49507 a los dos destinos, con sus sha. También `RigConstants.generated.swift`.
+  El maestro de Dart ya manda `camera: null`, que rellena IOS-116.
+- **Probado aquí**: `flutter analyze` limpio; `flutter test`, 545 pasan y 11 fallan. Son los 9
+  de siempre más dos de tiempo (≤50 ms de la alineación y ≤100 ms de la espera larga, que
+  pasa sola).
+
+**Siguiente**: IOS-116, las órdenes `camera/*` en el maestro y la vista en vivo. En el Mac:
+compilar, `swift test` y ver en el iPhone que el programa de «Una cámara» sigue igual sin
+tocar nada.
+
 ## 2026-10-31 · IOS-114 — cada elemento del gráfico a demanda · 🚧 hecho, sin probar en el iPhone
 
 Lo pidió Jhonatan: un interruptor en el mando por cada cosa que sale en pantalla. Enmienda del

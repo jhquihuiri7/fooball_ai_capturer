@@ -11,6 +11,7 @@
     "control_token.json": "a09a199ff67062158cc69a252529b4c633061b06eb27d6103a8f3456948dd809",
     "detectors.json": "89af99fe14e0b2720ccfd15ad193e10f1099927a8f11246b0d6ad037e910e580",
     "director.json": "a469e93f18928e1768d83b267cc6fa02b2e7ffe61161c0a1479ccca9e7bef74b",
+    "framing.json": "7f98fe0a2bc3e66f045874ac2485b2ad83d652817ca2f2ab97a4138946213ddb",
     "lineups.json": "6c9b8c6a5d305590b59c4589306af48d9f8c9a4721dd47f303bbf9e483b7dc74",
     "match.json": "eb5c46eea88696f5e7050ec9a08f880e9d6abc4f1d6decfe8c1c4440aaeb91f6",
     "match_clock.json": "52608e4278498a5293b115a215d3b76c5e18cb2047a2da721cce5b7859ed7efc",
@@ -22,6 +23,6 @@
     "shot.json": "0fa1aba7d685bceb9b53255dc2cde637c391f0a7898b60623a42fe7312d6ef40",
     "stabilizer.json": "b87a64e6e976f9e3928b991e8b06052e96160fba126526c0cb2ca04272b0e712",
     "sync.json": "2ab69537569f540ec8de07efd6f53655dcede84b85b3628287af5d313c19f73c",
-    "tunnel.json": "7bd1a6ee83388a9975f9cad57be7cd2b35bd2b1d2b5ff5612a5db3384d9e9fae"
+    "tunnel.json": "c7e787ccabd839ddc398bc16aaa4bcf64a9912ac2301516778bcdfe916b44a78"
   }
 }

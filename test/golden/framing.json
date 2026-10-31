@@ -1,0 +1,2818 @@
+{
+  "schema": 1,
+  "module": "framing",
+  "conventions": {
+    "axes": "Ejes del soporte: X a la derecha, Y hacia abajo, Z hacia delante (rig.py).",
+    "rotation": "R = R_yaw · R_pitch · R_roll, de cámara a soporte; ortonormal (CameraPose.matrix), así que la inversa es la traspuesta.",
+    "angles": "Radianes. Yaw positivo gira la cámara a la derecha; pitch positivo, hacia arriba.",
+    "pixel_center": "El convenio de rig.py: el píxel i cubre [i, i+1) y su centro continuo está en i+0,5; CameraIntrinsics.scaled reescala pasando por ese centro.",
+    "homography": "Las homografías de vista van del programa a la cámara (view_homography).",
+    "scalars": "Float con el repr de Python: ida y vuelta exacta a Double en Swift.",
+    "tensors": "{dtype: f64|f32|u8|i32, shape, b64}, little-endian y orden C; en Swift, Data(base64Encoded:)."
+  },
+  "cases": [
+    {
+      "name": "right_1080p_lente_entera_hfov",
+      "fn": "full_lens_hfov_rad",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        },
+        "side": "right",
+        "width": 1920,
+        "height": 1080
+      },
+      "expected": {
+        "hfov_rad": 1.7544858827
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "right_1080p_lente_entera",
+      "fn": "FramingSpace.full",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        },
+        "side": "right",
+        "width": 1920,
+        "height": 1080
+      },
+      "expected": {
+        "center_u": 0.5,
+        "center_v": 0.5,
+        "hfov_rad": 1.7544858827,
+        "yaw_rad": 0.6981317008,
+        "pitch_rad": -0.1396263402,
+        "zoom": 0.5755344794,
+        "soft": false,
+        "outline": [
+          [
+            0.0,
+            0.0
+          ],
+          [
+            1.0,
+            -0.0
+          ],
+          [
+            1.0,
+            1.0
+          ],
+          [
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "right_1080p_partida_1x",
+      "fn": "FramingSpace.start",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        },
+        "side": "right",
+        "width": 1920,
+        "height": 1080,
+        "zoom": 1.0
+      },
+      "expected": {
+        "center_u": 0.5,
+        "center_v": 0.5,
+        "hfov_rad": 1.2110893272,
+        "yaw_rad": 0.6981317008,
+        "pitch_rad": -0.1396263402,
+        "zoom": 1.0,
+        "soft": false,
+        "outline": [
+          [
+            0.2122327603,
+            0.2122327603
+          ],
+          [
+            0.7877672397,
+            0.2122327603
+          ],
+          [
+            0.7877672397,
+            0.7877672397
+          ],
+          [
+            0.2122327603,
+            0.7877672397
+          ]
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "right_1080p_partida_2x",
+      "fn": "FramingSpace.start",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        },
+        "side": "right",
+        "width": 1920,
+        "height": 1080,
+        "zoom": 2.0
+      },
+      "expected": {
+        "center_u": 0.5,
+        "center_v": 0.5,
+        "hfov_rad": 0.6664886022,
+        "yaw_rad": 0.6981317008,
+        "pitch_rad": -0.1396263402,
+        "zoom": 2.0,
+        "soft": false,
+        "outline": [
+          [
+            0.3561163802,
+            0.3561163802
+          ],
+          [
+            0.6438836198,
+            0.3561163802
+          ],
+          [
+            0.6438836198,
+            0.6438836198
+          ],
+          [
+            0.3561163802,
+            0.6438836198
+          ]
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "right_1080p_recuadro_centrado",
+      "fn": "FramingSpace.frame_rect",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        },
+        "side": "right",
+        "width": 1920,
+        "height": 1080,
+        "rect": [
+          0.35,
+          0.35,
+          0.65,
+          0.65
+        ]
+      },
+      "expected": {
+        "center_u": 0.5,
+        "center_v": 0.5,
+        "hfov_rad": 0.6926485813,
+        "yaw_rad": 0.6981317008,
+        "pitch_rad": -0.1396263402,
+        "zoom": 1.9184482646,
+        "soft": false,
+        "outline": [
+          [
+            0.35,
+            0.35
+          ],
+          [
+            0.65,
+            0.35
+          ],
+          [
+            0.65,
+            0.65
+          ],
+          [
+            0.35,
+            0.65
+          ]
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "right_1080p_recuadro_fuera_del_centro",
+      "fn": "FramingSpace.frame_rect",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        },
+        "side": "right",
+        "width": 1920,
+        "height": 1080,
+        "rect": [
+          0.55,
+          0.25,
+          0.85,
+          0.5
+        ]
+      },
+      "expected": {
+        "center_u": 0.7,
+        "center_v": 0.375,
+        "hfov_rad": 0.7131803003,
+        "yaw_rad": 1.141256668,
+        "pitch_rad": 0.025246742,
+        "zoom": 1.8584699395,
+        "soft": false,
+        "outline": [
+          [
+            0.5367809528,
+            0.2236024934
+          ],
+          [
+            0.9538067471,
+            0.1454922386
+          ],
+          [
+            0.9161452233,
+            0.5754903742
+          ],
+          [
+            0.5362202207,
+            0.523099808
+          ]
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "right_1080p_recuadro_pegado_a_la_derecha",
+      "fn": "FramingSpace.frame_rect",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        },
+        "side": "right",
+        "width": 1920,
+        "height": 1080,
+        "rect": [
+          0.9,
+          0.45,
+          1.0,
+          0.55
+        ]
+      },
+      "expected": {
+        "center_u": 0.8100712492,
+        "center_v": 0.5,
+        "hfov_rad": 0.4535976961,
+        "yaw_rad": 1.3437398753,
+        "pitch_rad": -0.1117867622,
+        "zoom": 3.0,
+        "soft": true,
+        "outline": [
+          [
+            0.6882394268,
+            0.3821881472
+          ],
+          [
+            1.000000001,
+            0.3763506549
+          ],
+          [
+            0.9795055482,
+            0.6638436354
+          ],
+          [
+            0.6779913658,
+            0.5859879872
+          ]
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "right_1080p_recuadro_en_la_esquina",
+      "fn": "FramingSpace.frame_rect",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        },
+        "side": "right",
+        "width": 1920,
+        "height": 1080,
+        "rect": [
+          0.85,
+          0.05,
+          0.99,
+          0.2
+        ]
+      },
+      "expected": {
+        "center_u": 0.5,
+        "center_v": 0.1285476633,
+        "hfov_rad": 0.4535976961,
+        "yaw_rad": 0.6981317008,
+        "pitch_rad": 0.3261554126,
+        "zoom": 3.0,
+        "soft": true,
+        "outline": [
+          [
+            0.3851464237,
+            -1e-09
+          ],
+          [
+            0.6148535763,
+            -1e-09
+          ],
+          [
+            0.6007831703,
+            0.2413472953
+          ],
+          [
+            0.3992168297,
+            0.2413472953
+          ]
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "right_1080p_recuadro_diminuto",
+      "fn": "FramingSpace.frame_rect",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        },
+        "side": "right",
+        "width": 1920,
+        "height": 1080,
+        "rect": [
+          0.5,
+          0.5,
+          0.52,
+          0.51
+        ]
+      },
+      "expected": {
+        "center_u": 0.51,
+        "center_v": 0.505,
+        "hfov_rad": 0.4535976961,
+        "yaw_rad": 0.7224443695,
+        "pitch_rad": -0.1463498733,
+        "zoom": 3.0,
+        "soft": true,
+        "outline": [
+          [
+            0.4148146253,
+            0.409057522
+          ],
+          [
+            0.6066153424,
+            0.4092016993
+          ],
+          [
+            0.6064163567,
+            0.6021832512
+          ],
+          [
+            0.4142866236,
+            0.5999039623
+          ]
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "right_1080p_recuadro_alto_y_estrecho",
+      "fn": "FramingSpace.frame_rect",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        },
+        "side": "right",
+        "width": 1920,
+        "height": 1080,
+        "rect": [
+          0.45,
+          0.3,
+          0.55,
+          0.7
+        ]
+      },
+      "expected": {
+        "center_u": 0.5,
+        "center_v": 0.5,
+        "hfov_rad": 0.8969215779,
+        "yaw_rad": 0.6981317008,
+        "pitch_rad": -0.1396263402,
+        "zoom": 1.4388361985,
+        "soft": false,
+        "outline": [
+          [
+            0.3,
+            0.3
+          ],
+          [
+            0.7,
+            0.3
+          ],
+          [
+            0.7,
+            0.7
+          ],
+          [
+            0.3,
+            0.7
+          ]
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "right_1080p_recuadro_al_reves",
+      "fn": "FramingSpace.frame_rect",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        },
+        "side": "right",
+        "width": 1920,
+        "height": 1080,
+        "rect": [
+          0.85,
+          0.5,
+          0.55,
+          0.25
+        ]
+      },
+      "expected": {
+        "center_u": 0.7,
+        "center_v": 0.375,
+        "hfov_rad": 0.7131803003,
+        "yaw_rad": 1.141256668,
+        "pitch_rad": 0.025246742,
+        "zoom": 1.8584699395,
+        "soft": false,
+        "outline": [
+          [
+            0.5367809528,
+            0.2236024934
+          ],
+          [
+            0.9538067471,
+            0.1454922386
+          ],
+          [
+            0.9161452233,
+            0.5754903742
+          ],
+          [
+            0.5362202207,
+            0.523099808
+          ]
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "left_720p_lente_entera_hfov",
+      "fn": "full_lens_hfov_rad",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        },
+        "side": "left",
+        "width": 1280,
+        "height": 720
+      },
+      "expected": {
+        "hfov_rad": 1.8399283879
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "left_720p_lente_entera",
+      "fn": "FramingSpace.full",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        },
+        "side": "left",
+        "width": 1280,
+        "height": 720
+      },
+      "expected": {
+        "center_u": 0.5,
+        "center_v": 0.5,
+        "hfov_rad": 1.8399283879,
+        "yaw_rad": -0.6981317008,
+        "pitch_rad": -0.1396263402,
+        "zoom": 0.5272049506,
+        "soft": false,
+        "outline": [
+          [
+            0.0,
+            0.0
+          ],
+          [
+            1.0,
+            0.0
+          ],
+          [
+            1.0,
+            1.0
+          ],
+          [
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "left_720p_partida_1x",
+      "fn": "FramingSpace.start",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        },
+        "side": "left",
+        "width": 1280,
+        "height": 720,
+        "zoom": 1.0
+      },
+      "expected": {
+        "center_u": 0.5,
+        "center_v": 0.5,
+        "hfov_rad": 1.2110893272,
+        "yaw_rad": -0.6981317008,
+        "pitch_rad": -0.1396263402,
+        "zoom": 1.0,
+        "soft": false,
+        "outline": [
+          [
+            0.2363975247,
+            0.2363975247
+          ],
+          [
+            0.7636024753,
+            0.2363975247
+          ],
+          [
+            0.7636024753,
+            0.7636024753
+          ],
+          [
+            0.2363975247,
+            0.7636024753
+          ]
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "left_720p_partida_2x",
+      "fn": "FramingSpace.start",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        },
+        "side": "left",
+        "width": 1280,
+        "height": 720,
+        "zoom": 2.0
+      },
+      "expected": {
+        "center_u": 0.5,
+        "center_v": 0.5,
+        "hfov_rad": 0.6664886022,
+        "yaw_rad": -0.6981317008,
+        "pitch_rad": -0.1396263402,
+        "zoom": 2.0,
+        "soft": false,
+        "outline": [
+          [
+            0.3681987624,
+            0.3681987624
+          ],
+          [
+            0.6318012376,
+            0.3681987624
+          ],
+          [
+            0.6318012376,
+            0.6318012376
+          ],
+          [
+            0.3681987624,
+            0.6318012376
+          ]
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "left_720p_recuadro_centrado",
+      "fn": "FramingSpace.frame_rect",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        },
+        "side": "left",
+        "width": 1280,
+        "height": 720,
+        "rect": [
+          0.35,
+          0.35,
+          0.65,
+          0.65
+        ]
+      },
+      "expected": {
+        "center_u": 0.5,
+        "center_v": 0.5,
+        "hfov_rad": 0.7505597369,
+        "yaw_rad": -0.6981317008,
+        "pitch_rad": -0.1396263402,
+        "zoom": 1.7573498352,
+        "soft": false,
+        "outline": [
+          [
+            0.35,
+            0.35
+          ],
+          [
+            0.65,
+            0.35
+          ],
+          [
+            0.65,
+            0.65
+          ],
+          [
+            0.35,
+            0.65
+          ]
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "left_720p_recuadro_fuera_del_centro",
+      "fn": "FramingSpace.frame_rect",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        },
+        "side": "left",
+        "width": 1280,
+        "height": 720,
+        "rect": [
+          0.55,
+          0.25,
+          0.85,
+          0.5
+        ]
+      },
+      "expected": {
+        "center_u": 0.7,
+        "center_v": 0.375,
+        "hfov_rad": 0.7693410352,
+        "yaw_rad": -0.2209683558,
+        "pitch_rad": 0.0381846037,
+        "zoom": 1.7100836731,
+        "soft": false,
+        "outline": [
+          [
+            0.5356329035,
+            0.2265245958
+          ],
+          [
+            0.976954421,
+            0.1255326106
+          ],
+          [
+            0.9296719812,
+            0.582466342
+          ],
+          [
+            0.5358502263,
+            0.5228583204
+          ]
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "left_720p_recuadro_pegado_a_la_derecha",
+      "fn": "FramingSpace.frame_rect",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        },
+        "side": "left",
+        "width": 1280,
+        "height": 720,
+        "rect": [
+          0.9,
+          0.45,
+          1.0,
+          0.55
+        ]
+      },
+      "expected": {
+        "center_u": 0.8098972212,
+        "center_v": 0.5,
+        "hfov_rad": 0.4535976961,
+        "yaw_rad": -0.0101839878,
+        "pitch_rad": -0.1081512737,
+        "zoom": 3.0,
+        "soft": true,
+        "outline": [
+          [
+            0.6925204919,
+            0.3890709388
+          ],
+          [
+            1.000000001,
+            0.3817156575
+          ],
+          [
+            0.9780220227,
+            0.6588894707
+          ],
+          [
+            0.682214711,
+            0.579445665
+          ]
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "left_720p_recuadro_en_la_esquina",
+      "fn": "FramingSpace.frame_rect",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        },
+        "side": "left",
+        "width": 1280,
+        "height": 720,
+        "rect": [
+          0.85,
+          0.05,
+          0.99,
+          0.2
+        ]
+      },
+      "expected": {
+        "center_u": 0.5045006816,
+        "center_v": 0.125,
+        "hfov_rad": 0.4535976961,
+        "yaw_rad": -0.687057926,
+        "pitch_rad": 0.3662560511,
+        "zoom": 3.0,
+        "soft": true,
+        "outline": [
+          [
+            0.3966975847,
+            0.0025163083
+          ],
+          [
+            0.6131931997,
+            -1e-09
+          ],
+          [
+            0.5983839358,
+            0.2316682488
+          ],
+          [
+            0.4109375856,
+            0.2326006638
+          ]
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "left_720p_recuadro_diminuto",
+      "fn": "FramingSpace.frame_rect",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        },
+        "side": "left",
+        "width": 1280,
+        "height": 720,
+        "rect": [
+          0.5,
+          0.5,
+          0.52,
+          0.51
+        ]
+      },
+      "expected": {
+        "center_u": 0.51,
+        "center_v": 0.505,
+        "hfov_rad": 0.4535976961,
+        "yaw_rad": -0.6715889474,
+        "pitch_rad": -0.1469617244,
+        "zoom": 3.0,
+        "soft": true,
+        "outline": [
+          [
+            0.4228638904,
+            0.417106957
+          ],
+          [
+            0.5985661629,
+            0.4172562434
+          ],
+          [
+            0.5983669276,
+            0.5941345529
+          ],
+          [
+            0.4223363597,
+            0.5918496146
+          ]
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "left_720p_recuadro_alto_y_estrecho",
+      "fn": "FramingSpace.frame_rect",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        },
+        "side": "left",
+        "width": 1280,
+        "height": 720,
+        "rect": [
+          0.45,
+          0.3,
+          0.55,
+          0.7
+        ]
+      },
+      "expected": {
+        "center_u": 0.5,
+        "center_v": 0.5,
+        "hfov_rad": 0.9673117256,
+        "yaw_rad": -0.6981317008,
+        "pitch_rad": -0.1396263402,
+        "zoom": 1.3180123764,
+        "soft": false,
+        "outline": [
+          [
+            0.3,
+            0.3
+          ],
+          [
+            0.7,
+            0.3
+          ],
+          [
+            0.7,
+            0.7
+          ],
+          [
+            0.3,
+            0.7
+          ]
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "left_720p_recuadro_al_reves",
+      "fn": "FramingSpace.frame_rect",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        },
+        "side": "left",
+        "width": 1280,
+        "height": 720,
+        "rect": [
+          0.85,
+          0.5,
+          0.55,
+          0.25
+        ]
+      },
+      "expected": {
+        "center_u": 0.7,
+        "center_v": 0.375,
+        "hfov_rad": 0.7693410352,
+        "yaw_rad": -0.2209683558,
+        "pitch_rad": 0.0381846037,
+        "zoom": 1.7100836731,
+        "soft": false,
+        "outline": [
+          [
+            0.5356329035,
+            0.2265245958
+          ],
+          [
+            0.976954421,
+            0.1255326106
+          ],
+          [
+            0.9296719812,
+            0.582466342
+          ],
+          [
+            0.5358502263,
+            0.5228583204
+          ]
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "acercar",
+      "fn": "FramingSpace.zoom_by",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        },
+        "side": "right",
+        "width": 1920,
+        "height": 1080,
+        "framing": {
+          "center_u": 0.5,
+          "center_v": 0.5,
+          "hfov_rad": 1.7544858827
+        },
+        "factor": 1.25
+      },
+      "expected": {
+        "center_u": 0.5,
+        "center_v": 0.5,
+        "hfov_rad": 1.5323935786,
+        "yaw_rad": 0.6981317008,
+        "pitch_rad": -0.1396263402,
+        "zoom": 0.7194180992,
+        "soft": false,
+        "outline": [
+          [
+            0.1,
+            0.1
+          ],
+          [
+            0.9,
+            0.1
+          ],
+          [
+            0.9,
+            0.9
+          ],
+          [
+            0.1,
+            0.9
+          ]
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "alejar_mas_alla_de_la_lente",
+      "fn": "FramingSpace.zoom_by",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        },
+        "side": "right",
+        "width": 1920,
+        "height": 1080,
+        "framing": {
+          "center_u": 0.5,
+          "center_v": 0.5,
+          "hfov_rad": 1.7544858827
+        },
+        "factor": 0.8
+      },
+      "expected": {
+        "center_u": 0.5,
+        "center_v": 0.5,
+        "hfov_rad": 1.7544858827,
+        "yaw_rad": 0.6981317008,
+        "pitch_rad": -0.1396263402,
+        "zoom": 0.5755344794,
+        "soft": false,
+        "outline": [
+          [
+            0.0,
+            0.0
+          ],
+          [
+            1.0,
+            -0.0
+          ],
+          [
+            1.0,
+            1.0
+          ],
+          [
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "acercar_fuera_del_centro",
+      "fn": "FramingSpace.zoom_by",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        },
+        "side": "right",
+        "width": 1920,
+        "height": 1080,
+        "framing": {
+          "center_u": 0.7,
+          "center_v": 0.375,
+          "hfov_rad": 0.7131803003
+        },
+        "factor": 1.25
+      },
+      "expected": {
+        "center_u": 0.7,
+        "center_v": 0.375,
+        "hfov_rad": 0.5792637021,
+        "yaw_rad": 1.141256668,
+        "pitch_rad": 0.025246742,
+        "zoom": 2.3230874243,
+        "soft": true,
+        "outline": [
+          [
+            0.5661471892,
+            0.2508418081
+          ],
+          [
+            0.8924658749,
+            0.2009604499
+          ],
+          [
+            0.867485224,
+            0.530354695
+          ],
+          [
+            0.5641577605,
+            0.4978369562
+          ]
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "mover_a_la_derecha",
+      "fn": "FramingSpace.pan_by",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        },
+        "side": "right",
+        "width": 1920,
+        "height": 1080,
+        "framing": {
+          "center_u": 0.7,
+          "center_v": 0.375,
+          "hfov_rad": 0.7131803003
+        },
+        "dx": 0.1,
+        "dy": 0.0
+      },
+      "expected": {
+        "center_u": 0.7248831045,
+        "center_v": 0.3742214469,
+        "hfov_rad": 0.7131803003,
+        "yaw_rad": 1.1882768691,
+        "pitch_rad": 0.0255595685,
+        "zoom": 1.8584699395,
+        "soft": false,
+        "outline": [
+          [
+            0.5573983952,
+            0.2224418387
+          ],
+          [
+            1.000000001,
+            0.1313573046
+          ],
+          [
+            0.9565271269,
+            0.5841441264
+          ],
+          [
+            0.5557387317,
+            0.5235365327
+          ]
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "mover_arriba",
+      "fn": "FramingSpace.pan_by",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        },
+        "side": "right",
+        "width": 1920,
+        "height": 1080,
+        "framing": {
+          "center_u": 0.7,
+          "center_v": 0.375,
+          "hfov_rad": 0.7131803003
+        },
+        "dx": 0.0,
+        "dy": -0.1
+      },
+      "expected": {
+        "center_u": 0.7013199079,
+        "center_v": 0.3394749535,
+        "hfov_rad": 0.7131803003,
+        "yaw_rad": 1.141256668,
+        "pitch_rad": 0.067130157,
+        "zoom": 1.8584699395,
+        "soft": false,
+        "outline": [
+          [
+            0.5354378413,
+            0.1900319188
+          ],
+          [
+            0.961201332,
+            0.0946302086
+          ],
+          [
+            0.9176064429,
+            0.5343273377
+          ],
+          [
+            0.5373366714,
+            0.4939701579
+          ]
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "mover_hasta_el_borde",
+      "fn": "FramingSpace.pan_by",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        },
+        "side": "right",
+        "width": 1920,
+        "height": 1080,
+        "framing": {
+          "center_u": 0.7,
+          "center_v": 0.375,
+          "hfov_rad": 0.7131803003
+        },
+        "dx": 1.0,
+        "dy": 1.0
+      },
+      "expected": {
+        "center_u": 0.5,
+        "center_v": 0.8022989614,
+        "hfov_rad": 0.7131803003,
+        "yaw_rad": 0.6981317008,
+        "pitch_rad": -0.5279427662,
+        "zoom": 1.8584699395,
+        "soft": false,
+        "outline": [
+          [
+            0.3459119243,
+            0.6358158563
+          ],
+          [
+            0.6540880757,
+            0.6358158563
+          ],
+          [
+            0.682981767,
+            1.000000001
+          ],
+          [
+            0.317018233,
+            1.000000001
+          ]
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "paso_suave_0ms",
+      "fn": "FramingSpace.between",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        },
+        "side": "right",
+        "width": 1920,
+        "height": 1080,
+        "a": {
+          "center_u": 0.5,
+          "center_v": 0.5,
+          "hfov_rad": 1.7544858827
+        },
+        "b": {
+          "center_u": 0.7894231753,
+          "center_v": 0.7,
+          "hfov_rad": 0.5182377863
+        },
+        "elapsed_ms": 0.0,
+        "duration_ms": 1000.0
+      },
+      "expected": {
+        "center_u": 0.5,
+        "center_v": 0.5,
+        "hfov_rad": 1.7544858827,
+        "yaw_rad": 0.6981317008,
+        "pitch_rad": -0.1396263402,
+        "zoom": 0.5755344794,
+        "soft": false,
+        "outline": [
+          [
+            0.0,
+            0.0
+          ],
+          [
+            1.0,
+            0.0
+          ],
+          [
+            1.0,
+            1.0
+          ],
+          [
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "paso_suave_100ms",
+      "fn": "FramingSpace.between",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        },
+        "side": "right",
+        "width": 1920,
+        "height": 1080,
+        "a": {
+          "center_u": 0.5,
+          "center_v": 0.5,
+          "hfov_rad": 1.7544858827
+        },
+        "b": {
+          "center_u": 0.7894231753,
+          "center_v": 0.7,
+          "hfov_rad": 0.5182377863
+        },
+        "elapsed_ms": 100.0,
+        "duration_ms": 1000.0
+      },
+      "expected": {
+        "center_u": 0.5072698744,
+        "center_v": 0.5040030482,
+        "hfov_rad": 1.6955886296,
+        "yaw_rad": 0.7158049943,
+        "pitch_rad": -0.1450211059,
+        "zoom": 0.6108876286,
+        "soft": false,
+        "outline": [
+          [
+            0.0474052487,
+            0.041474254
+          ],
+          [
+            0.9870084251,
+            0.0271688068
+          ],
+          [
+            0.9890383041,
+            0.9885625434
+          ],
+          [
+            0.0430229501,
+            0.9654394487
+          ]
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "paso_suave_250ms",
+      "fn": "FramingSpace.between",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        },
+        "side": "right",
+        "width": 1920,
+        "height": 1080,
+        "a": {
+          "center_u": 0.5,
+          "center_v": 0.5,
+          "hfov_rad": 1.7544858827
+        },
+        "b": {
+          "center_u": 0.7894231753,
+          "center_v": 0.7,
+          "hfov_rad": 0.5182377863
+        },
+        "elapsed_ms": 250.0,
+        "duration_ms": 1000.0
+      },
+      "expected": {
+        "center_u": 0.5405502854,
+        "center_v": 0.5228540763,
+        "hfov_rad": 1.4500955763,
+        "yaw_rad": 0.7967549903,
+        "pitch_rad": -0.1697310596,
+        "zoom": 0.7813517217,
+        "soft": false,
+        "outline": [
+          [
+            0.2054928035,
+            0.176652654
+          ],
+          [
+            0.9445139818,
+            0.1355634912
+          ],
+          [
+            0.9513226197,
+            0.9472886109
+          ],
+          [
+            0.1909710618,
+            0.8580048418
+          ]
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "paso_suave_500ms",
+      "fn": "FramingSpace.between",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        },
+        "side": "right",
+        "width": 1920,
+        "height": 1080,
+        "a": {
+          "center_u": 0.5,
+          "center_v": 0.5,
+          "hfov_rad": 1.7544858827
+        },
+        "b": {
+          "center_u": 0.7894231753,
+          "center_v": 0.7,
+          "hfov_rad": 0.5182377863
+        },
+        "elapsed_ms": 500.0,
+        "duration_ms": 1000.0
+      },
+      "expected": {
+        "center_u": 0.63234644,
+        "center_v": 0.5802016111,
+        "hfov_rad": 0.9535412314,
+        "yaw_rad": 1.0137262271,
+        "pitch_rad": -0.2359614423,
+        "zoom": 1.3403488706,
+        "soft": false,
+        "outline": [
+          [
+            0.4382154955,
+            0.3640134912
+          ],
+          [
+            0.9157593015,
+            0.3514747209
+          ],
+          [
+            0.9196177924,
+            0.9001127605
+          ],
+          [
+            0.41920483,
+            0.7522164497
+          ]
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "paso_suave_750ms",
+      "fn": "FramingSpace.between",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        },
+        "side": "right",
+        "width": 1920,
+        "height": 1080,
+        "a": {
+          "center_u": 0.5,
+          "center_v": 0.5,
+          "hfov_rad": 1.7544858827
+        },
+        "b": {
+          "center_u": 0.7894231753,
+          "center_v": 0.7,
+          "hfov_rad": 0.5182377863
+        },
+        "elapsed_ms": 750.0,
+        "duration_ms": 1000.0
+      },
+      "expected": {
+        "center_u": 0.7354147541,
+        "center_v": 0.6556263741,
+        "hfov_rad": 0.6270213459,
+        "yaw_rad": 1.2306974639,
+        "pitch_rad": -0.302191825,
+        "zoom": 2.1354156493,
+        "soft": true,
+        "outline": [
+          [
+            0.5930349445,
+            0.4846867713
+          ],
+          [
+            0.9602283064,
+            0.5250619096
+          ],
+          [
+            0.9563633485,
+            0.9208947789
+          ],
+          [
+            0.5741728033,
+            0.7492705017
+          ]
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "paso_suave_900ms",
+      "fn": "FramingSpace.between",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        },
+        "side": "right",
+        "width": 1920,
+        "height": 1080,
+        "a": {
+          "center_u": 0.5,
+          "center_v": 0.5,
+          "hfov_rad": 1.7544858827
+        },
+        "b": {
+          "center_u": 0.7894231753,
+          "center_v": 0.7,
+          "hfov_rad": 0.5182377863
+        },
+        "elapsed_ms": 900.0,
+        "duration_ms": 1000.0
+      },
+      "expected": {
+        "center_u": 0.779294616,
+        "center_v": 0.6914316081,
+        "hfov_rad": 0.536239076,
+        "yaw_rad": 1.3116474599,
+        "pitch_rad": -0.3269017787,
+        "zoom": 2.5199136346,
+        "soft": true,
+        "outline": [
+          [
+            0.6469207827,
+            0.5281459145
+          ],
+          [
+            0.9919393955,
+            0.5894398759
+          ],
+          [
+            0.9852302703,
+            0.945457236
+          ],
+          [
+            0.6280129612,
+            0.7639914803
+          ]
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "paso_suave_1000ms",
+      "fn": "FramingSpace.between",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        },
+        "side": "right",
+        "width": 1920,
+        "height": 1080,
+        "a": {
+          "center_u": 0.5,
+          "center_v": 0.5,
+          "hfov_rad": 1.7544858827
+        },
+        "b": {
+          "center_u": 0.7894231753,
+          "center_v": 0.7,
+          "hfov_rad": 0.5182377863
+        },
+        "elapsed_ms": 1000.0,
+        "duration_ms": 1000.0
+      },
+      "expected": {
+        "center_u": 0.7894231753,
+        "center_v": 0.7,
+        "hfov_rad": 0.5182377863,
+        "yaw_rad": 1.3293207534,
+        "pitch_rad": -0.3322965444,
+        "zoom": 2.6117101514,
+        "soft": true,
+        "outline": [
+          [
+            0.6587642914,
+            0.5378948324
+          ],
+          [
+            1.0000000009,
+            0.6038812196
+          ],
+          [
+            0.9926768626,
+            0.9521717012
+          ],
+          [
+            0.6398237925,
+            0.7682853405
+          ]
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "corte",
+      "fn": "FramingSpace.between",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        },
+        "side": "right",
+        "width": 1920,
+        "height": 1080,
+        "a": {
+          "center_u": 0.5,
+          "center_v": 0.5,
+          "hfov_rad": 1.7544858827
+        },
+        "b": {
+          "center_u": 0.7894231753,
+          "center_v": 0.7,
+          "hfov_rad": 0.5182377863
+        },
+        "elapsed_ms": 0.0,
+        "duration_ms": 0.0
+      },
+      "expected": {
+        "center_u": 0.7894231753,
+        "center_v": 0.7,
+        "hfov_rad": 0.5182377863,
+        "yaw_rad": 1.3293207534,
+        "pitch_rad": -0.3322965444,
+        "zoom": 2.6117101514,
+        "soft": true,
+        "outline": [
+          [
+            0.6587642914,
+            0.5378948324
+          ],
+          [
+            1.0000000009,
+            0.6038812196
+          ],
+          [
+            0.9926768626,
+            0.9521717012
+          ],
+          [
+            0.6398237925,
+            0.7682853405
+          ]
+        ]
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    }
+  ]
+}

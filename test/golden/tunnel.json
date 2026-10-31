@@ -115,7 +115,7 @@
       "fn": "tunnel.parse",
       "inputs": {
         "sender": "master",
-        "text": "{\"v\":1,\"type\":\"state\",\"id\":\"k3v9q2m7x1:2\",\"rig_ms\":5400002,\"data\":{\"match_id\":\"m_20260703_2030_a1b2\",\"boot\":\"k3v9q2m7x1\",\"rev\":12,\"event_kind\":\"football\",\"home\":{\"name\":\"Atlético Norte\",\"goals\":1,\"formation\":\"4-4-2\",\"players\":18,\"crest\":3},\"away\":{\"name\":\"Deportivo Sur\",\"goals\":0,\"formation\":null,\"players\":0,\"crest\":null},\"clock_ms\":1754000,\"clock_running\":true,\"clock_restored\":false,\"lineup_on_air\":null,\"halftime_on_air\":false,\"strip_remaining_ms\":0,\"strip_texts\":{\"title\":\"EL DEPORTE TAMBIÉN CONSERVA\",\"subtitle\":\"Transmisión automática con IA\"},\"strip_image\":2,\"championship_icon\":null,\"video\":null,\"fulltime_on_air\":false,\"next_match_on_air\":false,\"next_match\":{\"home\":\"Deportivo Sur\",\"away\":\"Atlético Norte\",\"when\":\"SÁBADO 25 OCT · 16:00\",\"venue\":\"\",\"home_crest\":null,\"away_crest\":3},\"strip_presets\":[{\"name\":\"PRINCIPAL\",\"title\":\"EL DEPORTE TAMBIÉN CONSERVA\",\"subtitle\":\"Transmisión automática con IA\",\"image\":2},{\"name\":\"Radio Mar\",\"title\":\"RADIO MAR 99.1 FM\",\"subtitle\":\"\",\"image\":null}],\"strip_preset\":\"PRINCIPAL\",\"fixtures_on_air\":false,\"fixtures\":[{\"home\":\"Atlético Norte\",\"away\":\"Deportivo Sur\",\"time\":\"16:00\",\"subtitle\":\"FINAL\",\"home_goals\":null,\"away_goals\":null,\"home_crest\":3,\"away_crest\":null},{\"home\":\"Santa Cruz\",\"away\":\"Progreso\",\"time\":\"14:00\",\"subtitle\":\"\",\"home_goals\":2,\"away_goals\":1,\"home_crest\":null,\"away_crest\":null}],\"current_fixture\":0,\"results_on_air\":false,\"interview_on_air\":false,\"interview\":{\"name\":\"\",\"role\":\"\"},\"scoreboard_on_air\":true,\"elements_on_air\":{\"competition\":true,\"bar\":true,\"clock\":false,\"live\":true,\"broadcaster\":true,\"championship\":true},\"goal\":{\"team\":\"home\",\"remaining_ms\":3200},\"strip_queue\":[\"Radio Mar\"],\"video_queue\":[],\"captions\":[{\"name\":\"Ángeles\",\"title\":\"PRESENTACIÓN ARTÍSTICA: LOS ÁNGELES DEL CIELO\",\"subtitle\":\"Cantado por Jonathan Quiwi\"}],\"caption\":null,\"caption_remaining_ms\":0,\"caption_queue\":[],\"streaming\":true,\"can_stream\":true,\"formations\":[\"4-4-2\",\"4-3-3\"],\"save_error\":null}}"
+        "text": "{\"v\":1,\"type\":\"state\",\"id\":\"k3v9q2m7x1:2\",\"rig_ms\":5400002,\"data\":{\"match_id\":\"m_20260703_2030_a1b2\",\"boot\":\"k3v9q2m7x1\",\"rev\":12,\"event_kind\":\"football\",\"home\":{\"name\":\"Atlético Norte\",\"goals\":1,\"formation\":\"4-4-2\",\"players\":18,\"crest\":3},\"away\":{\"name\":\"Deportivo Sur\",\"goals\":0,\"formation\":null,\"players\":0,\"crest\":null},\"clock_ms\":1754000,\"clock_running\":true,\"clock_restored\":false,\"lineup_on_air\":null,\"halftime_on_air\":false,\"strip_remaining_ms\":0,\"strip_texts\":{\"title\":\"EL DEPORTE TAMBIÉN CONSERVA\",\"subtitle\":\"Transmisión automática con IA\"},\"strip_image\":2,\"championship_icon\":null,\"video\":null,\"fulltime_on_air\":false,\"next_match_on_air\":false,\"next_match\":{\"home\":\"Deportivo Sur\",\"away\":\"Atlético Norte\",\"when\":\"SÁBADO 25 OCT · 16:00\",\"venue\":\"\",\"home_crest\":null,\"away_crest\":3},\"strip_presets\":[{\"name\":\"PRINCIPAL\",\"title\":\"EL DEPORTE TAMBIÉN CONSERVA\",\"subtitle\":\"Transmisión automática con IA\",\"image\":2},{\"name\":\"Radio Mar\",\"title\":\"RADIO MAR 99.1 FM\",\"subtitle\":\"\",\"image\":null}],\"strip_preset\":\"PRINCIPAL\",\"fixtures_on_air\":false,\"fixtures\":[{\"home\":\"Atlético Norte\",\"away\":\"Deportivo Sur\",\"time\":\"16:00\",\"subtitle\":\"FINAL\",\"home_goals\":null,\"away_goals\":null,\"home_crest\":3,\"away_crest\":null},{\"home\":\"Santa Cruz\",\"away\":\"Progreso\",\"time\":\"14:00\",\"subtitle\":\"\",\"home_goals\":2,\"away_goals\":1,\"home_crest\":null,\"away_crest\":null}],\"current_fixture\":0,\"results_on_air\":false,\"interview_on_air\":false,\"interview\":{\"name\":\"\",\"role\":\"\"},\"scoreboard_on_air\":true,\"elements_on_air\":{\"competition\":true,\"bar\":true,\"clock\":false,\"live\":true,\"broadcaster\":true,\"championship\":true},\"camera\":{\"center\":[0.62,0.48],\"zoom\":1.6,\"outline\":[[0.5,0.4],[0.74,0.39],[0.75,0.57],[0.5,0.56]],\"moving\":false,\"soft\":false,\"presets\":[{\"name\":\"Escenario\",\"center\":[0.5,0.35],\"zoom\":2.2}]},\"goal\":{\"team\":\"home\",\"remaining_ms\":3200},\"strip_queue\":[\"Radio Mar\"],\"video_queue\":[],\"captions\":[{\"name\":\"Ángeles\",\"title\":\"PRESENTACIÓN ARTÍSTICA: LOS ÁNGELES DEL CIELO\",\"subtitle\":\"Cantado por Jonathan Quiwi\"}],\"caption\":null,\"caption_remaining_ms\":0,\"caption_queue\":[],\"streaming\":true,\"can_stream\":true,\"formations\":[\"4-4-2\",\"4-3-3\"],\"save_error\":null}}"
       },
       "expected": {
         "message": {
@@ -218,6 +218,43 @@
               "live": true,
               "broadcaster": true,
               "championship": true
+            },
+            "camera": {
+              "center": [
+                0.62,
+                0.48
+              ],
+              "zoom": 1.6,
+              "outline": [
+                [
+                  0.5,
+                  0.4
+                ],
+                [
+                  0.74,
+                  0.39
+                ],
+                [
+                  0.75,
+                  0.57
+                ],
+                [
+                  0.5,
+                  0.56
+                ]
+              ],
+              "moving": false,
+              "soft": false,
+              "presets": [
+                {
+                  "name": "Escenario",
+                  "center": [
+                    0.5,
+                    0.35
+                  ],
+                  "zoom": 2.2
+                }
+              ]
             },
             "goal": {
               "team": "home",
@@ -492,7 +529,7 @@
       "fn": "tunnel.parse",
       "inputs": {
         "sender": "master",
-        "text": "{\"v\":1,\"type\":\"response\",\"id\":\"k3v9q2m7x1:9\",\"reply_to\":\"h:2\",\"rig_ms\":5400009,\"data\":{\"status\":200,\"headers\":{\"content-type\":\"application/json\"},\"body\":{\"match_id\":\"m_20260703_2030_a1b2\",\"boot\":\"k3v9q2m7x1\",\"rev\":12,\"event_kind\":\"football\",\"home\":{\"name\":\"Atlético Norte\",\"goals\":1,\"formation\":\"4-4-2\",\"players\":18,\"crest\":3},\"away\":{\"name\":\"Deportivo Sur\",\"goals\":0,\"formation\":null,\"players\":0,\"crest\":null},\"clock_ms\":1754000,\"clock_running\":true,\"clock_restored\":false,\"lineup_on_air\":null,\"halftime_on_air\":false,\"strip_remaining_ms\":0,\"strip_texts\":{\"title\":\"EL DEPORTE TAMBIÉN CONSERVA\",\"subtitle\":\"Transmisión automática con IA\"},\"strip_image\":2,\"championship_icon\":null,\"video\":null,\"fulltime_on_air\":false,\"next_match_on_air\":false,\"next_match\":{\"home\":\"Deportivo Sur\",\"away\":\"Atlético Norte\",\"when\":\"SÁBADO 25 OCT · 16:00\",\"venue\":\"\",\"home_crest\":null,\"away_crest\":3},\"strip_presets\":[{\"name\":\"PRINCIPAL\",\"title\":\"EL DEPORTE TAMBIÉN CONSERVA\",\"subtitle\":\"Transmisión automática con IA\",\"image\":2},{\"name\":\"Radio Mar\",\"title\":\"RADIO MAR 99.1 FM\",\"subtitle\":\"\",\"image\":null}],\"strip_preset\":\"PRINCIPAL\",\"fixtures_on_air\":false,\"fixtures\":[{\"home\":\"Atlético Norte\",\"away\":\"Deportivo Sur\",\"time\":\"16:00\",\"subtitle\":\"FINAL\",\"home_goals\":null,\"away_goals\":null,\"home_crest\":3,\"away_crest\":null},{\"home\":\"Santa Cruz\",\"away\":\"Progreso\",\"time\":\"14:00\",\"subtitle\":\"\",\"home_goals\":2,\"away_goals\":1,\"home_crest\":null,\"away_crest\":null}],\"current_fixture\":0,\"results_on_air\":false,\"interview_on_air\":false,\"interview\":{\"name\":\"\",\"role\":\"\"},\"scoreboard_on_air\":true,\"elements_on_air\":{\"competition\":true,\"bar\":true,\"clock\":false,\"live\":true,\"broadcaster\":true,\"championship\":true},\"goal\":{\"team\":\"home\",\"remaining_ms\":3200},\"strip_queue\":[\"Radio Mar\"],\"video_queue\":[],\"captions\":[{\"name\":\"Ángeles\",\"title\":\"PRESENTACIÓN ARTÍSTICA: LOS ÁNGELES DEL CIELO\",\"subtitle\":\"Cantado por Jonathan Quiwi\"}],\"caption\":null,\"caption_remaining_ms\":0,\"caption_queue\":[],\"streaming\":true,\"can_stream\":true,\"formations\":[\"4-4-2\",\"4-3-3\"],\"save_error\":null,\"scopes\":[\"match\",\"stream\"]}}}"
+        "text": "{\"v\":1,\"type\":\"response\",\"id\":\"k3v9q2m7x1:9\",\"reply_to\":\"h:2\",\"rig_ms\":5400009,\"data\":{\"status\":200,\"headers\":{\"content-type\":\"application/json\"},\"body\":{\"match_id\":\"m_20260703_2030_a1b2\",\"boot\":\"k3v9q2m7x1\",\"rev\":12,\"event_kind\":\"football\",\"home\":{\"name\":\"Atlético Norte\",\"goals\":1,\"formation\":\"4-4-2\",\"players\":18,\"crest\":3},\"away\":{\"name\":\"Deportivo Sur\",\"goals\":0,\"formation\":null,\"players\":0,\"crest\":null},\"clock_ms\":1754000,\"clock_running\":true,\"clock_restored\":false,\"lineup_on_air\":null,\"halftime_on_air\":false,\"strip_remaining_ms\":0,\"strip_texts\":{\"title\":\"EL DEPORTE TAMBIÉN CONSERVA\",\"subtitle\":\"Transmisión automática con IA\"},\"strip_image\":2,\"championship_icon\":null,\"video\":null,\"fulltime_on_air\":false,\"next_match_on_air\":false,\"next_match\":{\"home\":\"Deportivo Sur\",\"away\":\"Atlético Norte\",\"when\":\"SÁBADO 25 OCT · 16:00\",\"venue\":\"\",\"home_crest\":null,\"away_crest\":3},\"strip_presets\":[{\"name\":\"PRINCIPAL\",\"title\":\"EL DEPORTE TAMBIÉN CONSERVA\",\"subtitle\":\"Transmisión automática con IA\",\"image\":2},{\"name\":\"Radio Mar\",\"title\":\"RADIO MAR 99.1 FM\",\"subtitle\":\"\",\"image\":null}],\"strip_preset\":\"PRINCIPAL\",\"fixtures_on_air\":false,\"fixtures\":[{\"home\":\"Atlético Norte\",\"away\":\"Deportivo Sur\",\"time\":\"16:00\",\"subtitle\":\"FINAL\",\"home_goals\":null,\"away_goals\":null,\"home_crest\":3,\"away_crest\":null},{\"home\":\"Santa Cruz\",\"away\":\"Progreso\",\"time\":\"14:00\",\"subtitle\":\"\",\"home_goals\":2,\"away_goals\":1,\"home_crest\":null,\"away_crest\":null}],\"current_fixture\":0,\"results_on_air\":false,\"interview_on_air\":false,\"interview\":{\"name\":\"\",\"role\":\"\"},\"scoreboard_on_air\":true,\"elements_on_air\":{\"competition\":true,\"bar\":true,\"clock\":false,\"live\":true,\"broadcaster\":true,\"championship\":true},\"camera\":{\"center\":[0.62,0.48],\"zoom\":1.6,\"outline\":[[0.5,0.4],[0.74,0.39],[0.75,0.57],[0.5,0.56]],\"moving\":false,\"soft\":false,\"presets\":[{\"name\":\"Escenario\",\"center\":[0.5,0.35],\"zoom\":2.2}]},\"goal\":{\"team\":\"home\",\"remaining_ms\":3200},\"strip_queue\":[\"Radio Mar\"],\"video_queue\":[],\"captions\":[{\"name\":\"Ángeles\",\"title\":\"PRESENTACIÓN ARTÍSTICA: LOS ÁNGELES DEL CIELO\",\"subtitle\":\"Cantado por Jonathan Quiwi\"}],\"caption\":null,\"caption_remaining_ms\":0,\"caption_queue\":[],\"streaming\":true,\"can_stream\":true,\"formations\":[\"4-4-2\",\"4-3-3\"],\"save_error\":null,\"scopes\":[\"match\",\"stream\"]}}}"
       },
       "expected": {
         "message": {
@@ -601,6 +638,43 @@
                 "live": true,
                 "broadcaster": true,
                 "championship": true
+              },
+              "camera": {
+                "center": [
+                  0.62,
+                  0.48
+                ],
+                "zoom": 1.6,
+                "outline": [
+                  [
+                    0.5,
+                    0.4
+                  ],
+                  [
+                    0.74,
+                    0.39
+                  ],
+                  [
+                    0.75,
+                    0.57
+                  ],
+                  [
+                    0.5,
+                    0.56
+                  ]
+                ],
+                "moving": false,
+                "soft": false,
+                "presets": [
+                  {
+                    "name": "Escenario",
+                    "center": [
+                      0.5,
+                      0.35
+                    ],
+                    "zoom": 2.2
+                  }
+                ]
               },
               "goal": {
                 "team": "home",
@@ -1154,7 +1228,7 @@
       "fn": "tunnel.parse",
       "inputs": {
         "sender": "slave",
-        "text": "{\"v\":1,\"type\":\"state\",\"id\":\"k3v9q2m7x1:2\",\"rig_ms\":5400002,\"data\":{\"match_id\":\"m_20260703_2030_a1b2\",\"boot\":\"k3v9q2m7x1\",\"rev\":12,\"event_kind\":\"football\",\"home\":{\"name\":\"Atlético Norte\",\"goals\":1,\"formation\":\"4-4-2\",\"players\":18,\"crest\":3},\"away\":{\"name\":\"Deportivo Sur\",\"goals\":0,\"formation\":null,\"players\":0,\"crest\":null},\"clock_ms\":1754000,\"clock_running\":true,\"clock_restored\":false,\"lineup_on_air\":null,\"halftime_on_air\":false,\"strip_remaining_ms\":0,\"strip_texts\":{\"title\":\"EL DEPORTE TAMBIÉN CONSERVA\",\"subtitle\":\"Transmisión automática con IA\"},\"strip_image\":2,\"championship_icon\":null,\"video\":null,\"fulltime_on_air\":false,\"next_match_on_air\":false,\"next_match\":{\"home\":\"Deportivo Sur\",\"away\":\"Atlético Norte\",\"when\":\"SÁBADO 25 OCT · 16:00\",\"venue\":\"\",\"home_crest\":null,\"away_crest\":3},\"strip_presets\":[{\"name\":\"PRINCIPAL\",\"title\":\"EL DEPORTE TAMBIÉN CONSERVA\",\"subtitle\":\"Transmisión automática con IA\",\"image\":2},{\"name\":\"Radio Mar\",\"title\":\"RADIO MAR 99.1 FM\",\"subtitle\":\"\",\"image\":null}],\"strip_preset\":\"PRINCIPAL\",\"fixtures_on_air\":false,\"fixtures\":[{\"home\":\"Atlético Norte\",\"away\":\"Deportivo Sur\",\"time\":\"16:00\",\"subtitle\":\"FINAL\",\"home_goals\":null,\"away_goals\":null,\"home_crest\":3,\"away_crest\":null},{\"home\":\"Santa Cruz\",\"away\":\"Progreso\",\"time\":\"14:00\",\"subtitle\":\"\",\"home_goals\":2,\"away_goals\":1,\"home_crest\":null,\"away_crest\":null}],\"current_fixture\":0,\"results_on_air\":false,\"interview_on_air\":false,\"interview\":{\"name\":\"\",\"role\":\"\"},\"scoreboard_on_air\":true,\"elements_on_air\":{\"competition\":true,\"bar\":true,\"clock\":false,\"live\":true,\"broadcaster\":true,\"championship\":true},\"goal\":{\"team\":\"home\",\"remaining_ms\":3200},\"strip_queue\":[\"Radio Mar\"],\"video_queue\":[],\"captions\":[{\"name\":\"Ángeles\",\"title\":\"PRESENTACIÓN ARTÍSTICA: LOS ÁNGELES DEL CIELO\",\"subtitle\":\"Cantado por Jonathan Quiwi\"}],\"caption\":null,\"caption_remaining_ms\":0,\"caption_queue\":[],\"streaming\":true,\"can_stream\":true,\"formations\":[\"4-4-2\",\"4-3-3\"],\"save_error\":null}}"
+        "text": "{\"v\":1,\"type\":\"state\",\"id\":\"k3v9q2m7x1:2\",\"rig_ms\":5400002,\"data\":{\"match_id\":\"m_20260703_2030_a1b2\",\"boot\":\"k3v9q2m7x1\",\"rev\":12,\"event_kind\":\"football\",\"home\":{\"name\":\"Atlético Norte\",\"goals\":1,\"formation\":\"4-4-2\",\"players\":18,\"crest\":3},\"away\":{\"name\":\"Deportivo Sur\",\"goals\":0,\"formation\":null,\"players\":0,\"crest\":null},\"clock_ms\":1754000,\"clock_running\":true,\"clock_restored\":false,\"lineup_on_air\":null,\"halftime_on_air\":false,\"strip_remaining_ms\":0,\"strip_texts\":{\"title\":\"EL DEPORTE TAMBIÉN CONSERVA\",\"subtitle\":\"Transmisión automática con IA\"},\"strip_image\":2,\"championship_icon\":null,\"video\":null,\"fulltime_on_air\":false,\"next_match_on_air\":false,\"next_match\":{\"home\":\"Deportivo Sur\",\"away\":\"Atlético Norte\",\"when\":\"SÁBADO 25 OCT · 16:00\",\"venue\":\"\",\"home_crest\":null,\"away_crest\":3},\"strip_presets\":[{\"name\":\"PRINCIPAL\",\"title\":\"EL DEPORTE TAMBIÉN CONSERVA\",\"subtitle\":\"Transmisión automática con IA\",\"image\":2},{\"name\":\"Radio Mar\",\"title\":\"RADIO MAR 99.1 FM\",\"subtitle\":\"\",\"image\":null}],\"strip_preset\":\"PRINCIPAL\",\"fixtures_on_air\":false,\"fixtures\":[{\"home\":\"Atlético Norte\",\"away\":\"Deportivo Sur\",\"time\":\"16:00\",\"subtitle\":\"FINAL\",\"home_goals\":null,\"away_goals\":null,\"home_crest\":3,\"away_crest\":null},{\"home\":\"Santa Cruz\",\"away\":\"Progreso\",\"time\":\"14:00\",\"subtitle\":\"\",\"home_goals\":2,\"away_goals\":1,\"home_crest\":null,\"away_crest\":null}],\"current_fixture\":0,\"results_on_air\":false,\"interview_on_air\":false,\"interview\":{\"name\":\"\",\"role\":\"\"},\"scoreboard_on_air\":true,\"elements_on_air\":{\"competition\":true,\"bar\":true,\"clock\":false,\"live\":true,\"broadcaster\":true,\"championship\":true},\"camera\":{\"center\":[0.62,0.48],\"zoom\":1.6,\"outline\":[[0.5,0.4],[0.74,0.39],[0.75,0.57],[0.5,0.56]],\"moving\":false,\"soft\":false,\"presets\":[{\"name\":\"Escenario\",\"center\":[0.5,0.35],\"zoom\":2.2}]},\"goal\":{\"team\":\"home\",\"remaining_ms\":3200},\"strip_queue\":[\"Radio Mar\"],\"video_queue\":[],\"captions\":[{\"name\":\"Ángeles\",\"title\":\"PRESENTACIÓN ARTÍSTICA: LOS ÁNGELES DEL CIELO\",\"subtitle\":\"Cantado por Jonathan Quiwi\"}],\"caption\":null,\"caption_remaining_ms\":0,\"caption_queue\":[],\"streaming\":true,\"can_stream\":true,\"formations\":[\"4-4-2\",\"4-3-3\"],\"save_error\":null}}"
       },
       "expected": {
         "error": {
@@ -1591,7 +1665,7 @@
       "fn": "tunnel.parse",
       "inputs": {
         "sender": "master",
-        "text": "{\"v\":1,\"type\":\"state\",\"id\":\"k3v9q2m7x1:2\",\"rig_ms\":5400002,\"data\":{\"match_id\":\"m_20260703_2030_a1b2\",\"boot\":\"k3v9q2m7x1\",\"rev\":12,\"event_kind\":\"football\",\"home\":{\"name\":\"Atlético Norte\",\"goals\":1,\"formation\":\"4-4-2\",\"players\":18,\"crest\":3},\"away\":{\"name\":\"Deportivo Sur\",\"goals\":0,\"formation\":null,\"players\":0,\"crest\":null},\"clock_ms\":1754000,\"clock_running\":true,\"clock_restored\":false,\"lineup_on_air\":null,\"halftime_on_air\":false,\"strip_remaining_ms\":0,\"strip_texts\":{\"title\":\"EL DEPORTE TAMBIÉN CONSERVA\",\"subtitle\":\"Transmisión automática con IA\"},\"strip_image\":2,\"championship_icon\":null,\"video\":null,\"fulltime_on_air\":false,\"next_match_on_air\":false,\"next_match\":{\"home\":\"Deportivo Sur\",\"away\":\"Atlético Norte\",\"when\":\"SÁBADO 25 OCT · 16:00\",\"venue\":\"\",\"home_crest\":null,\"away_crest\":3},\"strip_presets\":[{\"name\":\"PRINCIPAL\",\"title\":\"EL DEPORTE TAMBIÉN CONSERVA\",\"subtitle\":\"Transmisión automática con IA\",\"image\":2},{\"name\":\"Radio Mar\",\"title\":\"RADIO MAR 99.1 FM\",\"subtitle\":\"\",\"image\":null}],\"strip_preset\":\"PRINCIPAL\",\"fixtures_on_air\":false,\"fixtures\":[{\"home\":\"Atlético Norte\",\"away\":\"Deportivo Sur\",\"time\":\"16:00\",\"subtitle\":\"FINAL\",\"home_goals\":null,\"away_goals\":null,\"home_crest\":3,\"away_crest\":null},{\"home\":\"Santa Cruz\",\"away\":\"Progreso\",\"time\":\"14:00\",\"subtitle\":\"\",\"home_goals\":2,\"away_goals\":1,\"home_crest\":null,\"away_crest\":null}],\"current_fixture\":0,\"results_on_air\":false,\"interview_on_air\":false,\"interview\":{\"name\":\"\",\"role\":\"\"},\"scoreboard_on_air\":true,\"elements_on_air\":{\"competition\":true,\"bar\":true,\"clock\":false,\"live\":true,\"broadcaster\":true,\"championship\":true},\"goal\":{\"team\":\"home\",\"remaining_ms\":3200},\"strip_queue\":[\"Radio Mar\"],\"video_queue\":[],\"captions\":[{\"name\":\"Ángeles\",\"title\":\"PRESENTACIÓN ARTÍSTICA: LOS ÁNGELES DEL CIELO\",\"subtitle\":\"Cantado por Jonathan Quiwi\"}],\"caption\":null,\"caption_remaining_ms\":0,\"caption_queue\":[],\"streaming\":true,\"can_stream\":true,\"formations\":[\"4-4-2\",\"4-3-3\"],\"save_error\":null,\"scopes\":[\"match\"]}}"
+        "text": "{\"v\":1,\"type\":\"state\",\"id\":\"k3v9q2m7x1:2\",\"rig_ms\":5400002,\"data\":{\"match_id\":\"m_20260703_2030_a1b2\",\"boot\":\"k3v9q2m7x1\",\"rev\":12,\"event_kind\":\"football\",\"home\":{\"name\":\"Atlético Norte\",\"goals\":1,\"formation\":\"4-4-2\",\"players\":18,\"crest\":3},\"away\":{\"name\":\"Deportivo Sur\",\"goals\":0,\"formation\":null,\"players\":0,\"crest\":null},\"clock_ms\":1754000,\"clock_running\":true,\"clock_restored\":false,\"lineup_on_air\":null,\"halftime_on_air\":false,\"strip_remaining_ms\":0,\"strip_texts\":{\"title\":\"EL DEPORTE TAMBIÉN CONSERVA\",\"subtitle\":\"Transmisión automática con IA\"},\"strip_image\":2,\"championship_icon\":null,\"video\":null,\"fulltime_on_air\":false,\"next_match_on_air\":false,\"next_match\":{\"home\":\"Deportivo Sur\",\"away\":\"Atlético Norte\",\"when\":\"SÁBADO 25 OCT · 16:00\",\"venue\":\"\",\"home_crest\":null,\"away_crest\":3},\"strip_presets\":[{\"name\":\"PRINCIPAL\",\"title\":\"EL DEPORTE TAMBIÉN CONSERVA\",\"subtitle\":\"Transmisión automática con IA\",\"image\":2},{\"name\":\"Radio Mar\",\"title\":\"RADIO MAR 99.1 FM\",\"subtitle\":\"\",\"image\":null}],\"strip_preset\":\"PRINCIPAL\",\"fixtures_on_air\":false,\"fixtures\":[{\"home\":\"Atlético Norte\",\"away\":\"Deportivo Sur\",\"time\":\"16:00\",\"subtitle\":\"FINAL\",\"home_goals\":null,\"away_goals\":null,\"home_crest\":3,\"away_crest\":null},{\"home\":\"Santa Cruz\",\"away\":\"Progreso\",\"time\":\"14:00\",\"subtitle\":\"\",\"home_goals\":2,\"away_goals\":1,\"home_crest\":null,\"away_crest\":null}],\"current_fixture\":0,\"results_on_air\":false,\"interview_on_air\":false,\"interview\":{\"name\":\"\",\"role\":\"\"},\"scoreboard_on_air\":true,\"elements_on_air\":{\"competition\":true,\"bar\":true,\"clock\":false,\"live\":true,\"broadcaster\":true,\"championship\":true},\"camera\":{\"center\":[0.62,0.48],\"zoom\":1.6,\"outline\":[[0.5,0.4],[0.74,0.39],[0.75,0.57],[0.5,0.56]],\"moving\":false,\"soft\":false,\"presets\":[{\"name\":\"Escenario\",\"center\":[0.5,0.35],\"zoom\":2.2}]},\"goal\":{\"team\":\"home\",\"remaining_ms\":3200},\"strip_queue\":[\"Radio Mar\"],\"video_queue\":[],\"captions\":[{\"name\":\"Ángeles\",\"title\":\"PRESENTACIÓN ARTÍSTICA: LOS ÁNGELES DEL CIELO\",\"subtitle\":\"Cantado por Jonathan Quiwi\"}],\"caption\":null,\"caption_remaining_ms\":0,\"caption_queue\":[],\"streaming\":true,\"can_stream\":true,\"formations\":[\"4-4-2\",\"4-3-3\"],\"save_error\":null,\"scopes\":[\"match\"]}}"
       },
       "expected": {
         "error": {

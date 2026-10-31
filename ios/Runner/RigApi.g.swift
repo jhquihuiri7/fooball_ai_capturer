@@ -314,6 +314,131 @@ struct ProgramStatus: Hashable, CustomStringConvertible {
   }
 }
 
+/// Una orden del encuadre a mano de «Una cámara» (ADR 0033), ya validada por el mando.
+///
+/// `kind` y sus `values`: `frame` (x0, y0, x1, y1 sobre la vista general, 0–1), `zoom`
+/// (el factor), `pan` (dx, dy en fracciones del encuadre), `reset` (0 el de partida, 1 la
+/// lente entera), `goto` (u, v del centro y el zoom de un encuadre guardado) o `status` (nada:
+/// solo pregunta). Con `cut`, salta de golpe en vez de pasar en un segundo.
+///
+/// Generated class from Pigeon that represents data sent in messages.
+struct CameraOrder: Hashable, CustomStringConvertible {
+  var kind: String
+  var values: [Double]
+  var cut: Bool
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> CameraOrder? {
+    let kind = pigeonVar_list[0] as! String
+    let values = pigeonVar_list[1] as! [Double]
+    let cut = pigeonVar_list[2] as! Bool
+
+    return CameraOrder(
+      kind: kind,
+      values: values,
+      cut: cut
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      kind,
+      values,
+      cut,
+    ]
+  }
+  static func == (lhs: CameraOrder, rhs: CameraOrder) -> Bool {
+    if Swift.type(of: lhs) != Swift.type(of: rhs) {
+      return false
+    }
+    return RigApiPigeonInternal.deepEquals(lhs.kind, rhs.kind) && RigApiPigeonInternal.deepEquals(lhs.values, rhs.values) && RigApiPigeonInternal.deepEquals(lhs.cut, rhs.cut)
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine("CameraOrder")
+    RigApiPigeonInternal.deepHash(value: kind, hasher: &hasher)
+    RigApiPigeonInternal.deepHash(value: values, hasher: &hasher)
+    RigApiPigeonInternal.deepHash(value: cut, hasher: &hasher)
+  }
+
+  public var description: String {
+    return "CameraOrder(kind: \(String(describing: kind)), values: \(String(describing: values)), cut: \(String(describing: cut)))"
+  }
+}
+
+/// Cómo queda el encuadre a mano (ADR 0033): el destino, si va de camino.
+///
+/// Generated class from Pigeon that represents data sent in messages.
+struct CameraFraming: Hashable, CustomStringConvertible {
+  /// Dónde cae el centro del destino en la vista general (0–1).
+  var centerU: Double
+  var centerV: Double
+  /// En la escala de la app Cámara: 1 es la cámara principal.
+  var zoom: Double
+  /// Las cuatro esquinas del contorno en la vista general, u y v alternos: desde arriba a la
+  /// izquierda, en el sentido del reloj.
+  var outline: [Double]
+  var moving: Bool
+  /// Pasado el 2×: el mando avisa «se verá borroso».
+  var soft: Bool
+  /// "" o por qué no se aplicó la orden; el encuadre es entonces el que había.
+  var error: String
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> CameraFraming? {
+    let centerU = pigeonVar_list[0] as! Double
+    let centerV = pigeonVar_list[1] as! Double
+    let zoom = pigeonVar_list[2] as! Double
+    let outline = pigeonVar_list[3] as! [Double]
+    let moving = pigeonVar_list[4] as! Bool
+    let soft = pigeonVar_list[5] as! Bool
+    let error = pigeonVar_list[6] as! String
+
+    return CameraFraming(
+      centerU: centerU,
+      centerV: centerV,
+      zoom: zoom,
+      outline: outline,
+      moving: moving,
+      soft: soft,
+      error: error
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      centerU,
+      centerV,
+      zoom,
+      outline,
+      moving,
+      soft,
+      error,
+    ]
+  }
+  static func == (lhs: CameraFraming, rhs: CameraFraming) -> Bool {
+    if Swift.type(of: lhs) != Swift.type(of: rhs) {
+      return false
+    }
+    return RigApiPigeonInternal.deepEquals(lhs.centerU, rhs.centerU) && RigApiPigeonInternal.deepEquals(lhs.centerV, rhs.centerV) && RigApiPigeonInternal.deepEquals(lhs.zoom, rhs.zoom) && RigApiPigeonInternal.deepEquals(lhs.outline, rhs.outline) && RigApiPigeonInternal.deepEquals(lhs.moving, rhs.moving) && RigApiPigeonInternal.deepEquals(lhs.soft, rhs.soft) && RigApiPigeonInternal.deepEquals(lhs.error, rhs.error)
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine("CameraFraming")
+    RigApiPigeonInternal.deepHash(value: centerU, hasher: &hasher)
+    RigApiPigeonInternal.deepHash(value: centerV, hasher: &hasher)
+    RigApiPigeonInternal.deepHash(value: zoom, hasher: &hasher)
+    RigApiPigeonInternal.deepHash(value: outline, hasher: &hasher)
+    RigApiPigeonInternal.deepHash(value: moving, hasher: &hasher)
+    RigApiPigeonInternal.deepHash(value: soft, hasher: &hasher)
+    RigApiPigeonInternal.deepHash(value: error, hasher: &hasher)
+  }
+
+  public var description: String {
+    return "CameraFraming(centerU: \(String(describing: centerU)), centerV: \(String(describing: centerV)), zoom: \(String(describing: zoom)), outline: \(String(describing: outline)), moving: \(String(describing: moving)), soft: \(String(describing: soft)), error: \(String(describing: error)))"
+  }
+}
+
 private class RigApiPigeonCodecReader: FlutterStandardReader {
   override func readValue(ofType type: UInt8) -> Any? {
     switch type {
@@ -325,6 +450,10 @@ private class RigApiPigeonCodecReader: FlutterStandardReader {
       return nil
     case 130:
       return ProgramStatus.fromList(self.readValue() as! [Any?])
+    case 131:
+      return CameraOrder.fromList(self.readValue() as! [Any?])
+    case 132:
+      return CameraFraming.fromList(self.readValue() as! [Any?])
     default:
       return super.readValue(ofType: type)
     }
@@ -338,6 +467,12 @@ private class RigApiPigeonCodecWriter: FlutterStandardWriter {
       super.writeValue(value.rawValue)
     } else if let value = value as? ProgramStatus {
       super.writeByte(130)
+      super.writeValue(value.toList())
+    } else if let value = value as? CameraOrder {
+      super.writeByte(131)
+      super.writeValue(value.toList())
+    } else if let value = value as? CameraFraming {
+      super.writeByte(132)
       super.writeValue(value.toList())
     } else {
       super.writeValue(value)
@@ -400,9 +535,12 @@ protocol RigHostApi {
   /// Los anuncios que no están en `slots` se cargan para `setAdOverride`. Arranca en
   /// este instante. Devuelve "" o el error.
   func setAdPlaylist(json: String) throws -> String
-  /// La última miniatura JPEG de 640×360 (IOS-64): `left`, `right` o `program`. Vacía si
-  /// todavía no hay.
+  /// La última miniatura JPEG de 640×360 (IOS-64): `left`, `right` o `program`; con «Una
+  /// cámara», también `overview`, la vista general (ADR 0033). Vacía si todavía no hay.
   func thumbnail(name: String) throws -> FlutterStandardTypedData
+  /// El encuadre a mano de «Una cámara» (ADR 0033): aplica `order` y devuelve cómo queda;
+  /// null si este móvil no emite con «Una cámara».
+  func cameraOrder(order: CameraOrder) throws -> CameraFraming?
   /// Un anuncio ya cargado que se cuela desde ahora `loops` vueltas; nombre vacío lo quita.
   func setAdOverride(name: String, loops: Int64) throws
   /// Pasa el MP4 de `path` en el programa (ADR 0027, decisión 4): a pantalla completa por
@@ -576,8 +714,8 @@ class RigHostApiSetup {
     } else {
       setAdPlaylistChannel.setMessageHandler(nil)
     }
-    /// La última miniatura JPEG de 640×360 (IOS-64): `left`, `right` o `program`. Vacía si
-    /// todavía no hay.
+    /// La última miniatura JPEG de 640×360 (IOS-64): `left`, `right` o `program`; con «Una
+    /// cámara», también `overview`, la vista general (ADR 0033). Vacía si todavía no hay.
     let thumbnailChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.RigHostApi.thumbnail\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       thumbnailChannel.setMessageHandler { message, reply in
@@ -592,6 +730,23 @@ class RigHostApiSetup {
       }
     } else {
       thumbnailChannel.setMessageHandler(nil)
+    }
+    /// El encuadre a mano de «Una cámara» (ADR 0033): aplica `order` y devuelve cómo queda;
+    /// null si este móvil no emite con «Una cámara».
+    let cameraOrderChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.RigHostApi.cameraOrder\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      cameraOrderChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let orderArg = args[0] as! CameraOrder
+        do {
+          let result = try api.cameraOrder(order: orderArg)
+          reply(wrapResult(result))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      cameraOrderChannel.setMessageHandler(nil)
     }
     /// Un anuncio ya cargado que se cuela desde ahora `loops` vueltas; nombre vacío lo quita.
     let setAdOverrideChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.RigHostApi.setAdOverride\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
