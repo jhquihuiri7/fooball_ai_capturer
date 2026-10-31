@@ -157,6 +157,27 @@
   .interruptor input:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--profundo), 0 0 0 4px var(--teal); }
   .interruptor input:disabled, .interruptor.ocupado input { opacity: .5; cursor: default; }
   .interruptor.ocupado { pointer-events: none; }
+
+  /* La tarjeta Cámara de «Una cámara» (ADR 0033). */
+  .camara-vistas { display: grid; gap: 10px; }
+  @media (min-width: 900px) { .camara-vistas { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+  .camara-vistas figure { margin: 0; min-width: 0; }
+  .camara-vistas canvas, .camara-vistas video { width: 100%; aspect-ratio: 16 / 9; display: block; border-radius: 8px; background: #000; }
+  #cam-general { touch-action: none; cursor: crosshair; }
+  .camara-estado { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0; }
+  .camara-estado .zoom { font: 800 22px/1 var(--display); letter-spacing: .02em; }
+  .camara-estado .chip { margin: 0; }
+  .camara-botones { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .camara-botones .ancha { grid-column: span 2; }
+  .camara-botones .btn { min-height: 48px; padding: 0 8px; }
+  .camara-botones .alin { min-height: 48px; }
+  .encuadres { list-style: none; margin: 12px 0 10px; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+  .encuadres li { display: flex; gap: 2px; }
+  .encuadres .btn { min-height: 44px; padding: 0 12px; }
+  .encuadres .btn small { margin-left: 6px; font: 600 11px/1 var(--sans); color: var(--oceanico); }
+  .encuadres .quitar { min-height: 44px; padding: 0 10px; }
+  .encuadres .vacio { color: var(--oceanico); font-size: 13px; }
+  .fila-encuadre { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; }
   .interruptor:has(input:disabled) { cursor: default; }
 
   /* ---------------- cámaras y soporte ---------------- */
@@ -299,6 +320,44 @@
       <span class="estado-reloj" id="estado-reloj">parado</span>
     </div>
     <div class="chips" id="chips" aria-live="polite"></div>
+  </section>
+
+  <!-- ADR 0033: el encuadre a mano, solo si el maestro emite con «Una cámara». -->
+  <section class="card ancho" id="camara" aria-labelledby="t-camara" hidden>
+    <h2 id="t-camara">Cámara</h2>
+    <div class="camara-vistas">
+      <figure>
+        <canvas id="cam-general" width="640" height="360" aria-label="Vista general: arrastra para encuadrar"></canvas>
+        <figcaption id="cam-general-pie">Vista general · arrastra un recuadro</figcaption>
+      </figure>
+      <figure>
+        <canvas id="cam-programa" width="640" height="360" aria-label="Programa en vivo"></canvas>
+        <video id="cam-video" muted playsinline autoplay hidden></video>
+        <figcaption id="cam-programa-pie">Programa en vivo</figcaption>
+      </figure>
+    </div>
+    <div class="camara-estado" aria-live="polite">
+      <span class="zoom" id="cam-zoom">—</span>
+      <span class="chip aviso" id="cam-borroso" hidden>se verá borroso</span>
+      <span class="chip" id="cam-moviendo" hidden>moviendo…</span>
+    </div>
+    <div class="camara-botones">
+      <button type="button" class="btn ancha" id="cam-reset" data-propio>Restablecer</button>
+      <button type="button" class="btn ancha" id="cam-entera" data-propio>Lente entera</button>
+      <button type="button" class="btn" id="cam-menos" data-propio aria-label="Alejar">−</button>
+      <button type="button" class="btn" id="cam-mas" data-propio aria-label="Acercar">+</button>
+      <button type="button" class="btn alin ancha" id="cam-corte" data-propio aria-pressed="false"><span>Corte</span><small id="cam-corte-estado">la próxima, de golpe</small></button>
+      <button type="button" class="btn" data-pan="-1,0" data-propio aria-label="Mover a la izquierda">←</button>
+      <button type="button" class="btn" data-pan="0,-1" data-propio aria-label="Mover arriba">↑</button>
+      <button type="button" class="btn" data-pan="0,1" data-propio aria-label="Mover abajo">↓</button>
+      <button type="button" class="btn" data-pan="1,0" data-propio aria-label="Mover a la derecha">→</button>
+    </div>
+    <ul class="encuadres" id="cam-encuadres"></ul>
+    <form class="campos fila-encuadre" id="form-encuadre">
+      <label>Guardar este encuadre<input type="text" id="cam-nombre" maxlength="24" autocomplete="off" placeholder="Escenario" required></label>
+      <button class="btn" type="submit">Guardar</button>
+    </form>
+    <p class="nota">Teclado: 1–9 los encuadres guardados, R restablece, + y − acercan y alejan, las flechas mueven.</p>
   </section>
 
   <div class="col">
@@ -536,7 +595,7 @@
     </section>
   </div>
 
-  <details class="card ancho" open>
+  <details class="card ancho" id="camaras-programa" open>
     <summary><h2>Cámaras y programa · 1 fps</h2></summary>
     <div class="thumbs">
       <figure class="programa"><img id="t-program" alt="Programa"><figcaption>Programa</figcaption></figure>
@@ -661,6 +720,7 @@ function pinta(p) {
   $('resultados-aire').disabled = !partidos.length && !conResultados;
   $('resultados-estado').textContent = conResultados ? 'al aire · quitar' : (partidos.length ? 'mostrar' : 'sin jornada');
   pintaChips(p);
+  pintaCamara(p);
   pintaPartidos(p);
   pintaProximoDesdeJornada(partidos);
   pintaRotulos(p);
@@ -823,6 +883,281 @@ document.querySelectorAll('input[data-elemento]').forEach(i => i.addEventListene
   const ok = await orden('graphics/element', { element: caja.dataset.elemento, on_air: caja.checked }, caja.closest('label'));
   if (!ok && partido) pintaElementos(partido); // vuelve a lo que tiene el maestro
 }));
+
+// ---------------- la cámara de «Una cámara» (ADR 0033) ----------------
+const ZOOM_PASO = 1.25;          // lo que acerca «+»; «−» aleja su inverso
+const PAN_PASO = 0.1;            // lo que mueve cada flecha, en fracción del encuadre
+const RECUADRO_MIN = 0.02;       // un arrastre más corto (fracción de la vista general) es un toque
+const VIVO_REINTENTO_MS = 2000;  // cuándo se vuelve a abrir la vista en vivo si se corta
+const GENERAL_REMOTO_MS = 333;   // la vista general por el VPS: 3 por segundo (NUBE-24)
+const PROGRAMA_REMOTO_MS = 1000; // el programa por el VPS sin WebRTC: 1 por segundo
+const WHEP_PROGRAMA = '/whep/programa'; // el programa por WebRTC desde el VPS (NUBE-24)
+const FLECHAS = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+let corte = false;
+let arrastre = null;            // el recuadro que se dibuja, {x0, y0, x1, y1} de 0 a 1
+let generalBitmap = null;       // la última vista general
+let vivoAbierto = null;                // la vista en vivo abierta: {parar()}
+const color = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+function camaraActiva() { return !!(partido && partido.camera); }
+
+// Toda orden de la cámara lleva el «Corte» puesto, y lo gasta.
+function ordenCamara(ruta, cuerpo, boton) {
+  const c = corte;
+  corte = false; pintaCorte();
+  return orden('camera/' + ruta, { ...cuerpo, cut: c }, boton);
+}
+function pintaCorte() {
+  $('cam-corte').setAttribute('aria-pressed', corte ? 'true' : 'false');
+  $('cam-corte-estado').textContent = corte ? 'la próxima va de golpe' : 'la próxima, de golpe';
+}
+const zoomTexto = z => z.toFixed(1).replace('.', ',') + '×';
+
+function pintaCamara(p) {
+  const cam = p.camera, tipo = p.event_kind || 'football';
+  const ver = !!cam && (tipo === 'football' || tipo === 'show');
+  $('camara').hidden = !ver;
+  $('camaras-programa').hidden = ver; // la vista en vivo sustituye a las miniaturas de 1 fps
+  if (!ver) { paraVivo(); return; }
+  $('cam-zoom').textContent = zoomTexto(cam.zoom);
+  $('cam-borroso').hidden = !cam.soft;
+  $('cam-moviendo').hidden = !cam.moving;
+  pintaEncuadres(cam.presets || []);
+  dibujaGeneral();
+  if (!vivoAbierto && !document.hidden) arrancaVivo();
+}
+
+function pintaEncuadres(lista) {
+  const ul = $('cam-encuadres');
+  if (!lista.length) {
+    const li = document.createElement('li'); li.className = 'vacio'; li.textContent = 'Sin encuadres guardados';
+    ul.replaceChildren(li); return;
+  }
+  ul.replaceChildren(...lista.map((e, i) => {
+    const li = document.createElement('li');
+    const ir = document.createElement('button');
+    ir.type = 'button'; ir.className = 'btn'; ir.dataset.propio = ''; ir.dataset.encuadre = e.name;
+    ir.textContent = (i < 9 ? (i + 1) + ' · ' : '') + e.name;
+    const z = document.createElement('small'); z.textContent = zoomTexto(e.zoom); ir.append(z);
+    const x = document.createElement('button');
+    x.type = 'button'; x.className = 'btn quitar'; x.dataset.propio = ''; x.dataset.quitaEncuadre = e.name;
+    x.setAttribute('aria-label', 'Borrar ' + e.name); x.textContent = '✕';
+    li.append(ir, x); return li;
+  }));
+}
+
+// El recuadro sale en 16:9: en la vista general (que tiene la forma del programa) es un
+// cuadrado en coordenadas de 0 a 1, anclado en la esquina donde empezó el arrastre.
+function cuadrado(a) {
+  const lado = Math.max(Math.abs(a.x1 - a.x0), Math.abs(a.y1 - a.y0));
+  const xb = a.x0 + (a.x1 >= a.x0 ? lado : -lado), yb = a.y0 + (a.y1 >= a.y0 ? lado : -lado);
+  return { x0: Math.min(a.x0, xb), y0: Math.min(a.y0, yb), x1: Math.max(a.x0, xb), y1: Math.max(a.y0, yb) };
+}
+
+function dibujaGeneral() {
+  const c = $('cam-general'), g = c.getContext('2d');
+  g.fillStyle = '#000'; g.fillRect(0, 0, c.width, c.height);
+  if (generalBitmap) g.drawImage(generalBitmap, 0, 0, c.width, c.height);
+  const cam = partido && partido.camera;
+  if (cam && cam.outline) {
+    // El contorno del destino: casi un rectángulo, lo tuerce la perspectiva. Punteado mientras va.
+    g.save(); g.lineWidth = 3; g.strokeStyle = color('--teal'); if (cam.moving) g.setLineDash([10, 6]);
+    g.beginPath();
+    cam.outline.forEach(([u, v], i) => { const x = u * c.width, y = v * c.height; if (i) g.lineTo(x, y); else g.moveTo(x, y); });
+    g.closePath(); g.stroke(); g.restore();
+  }
+  if (arrastre) {
+    const r = cuadrado(arrastre);
+    g.save(); g.lineWidth = 2; g.strokeStyle = color('--amarillo'); g.setLineDash([6, 4]);
+    g.strokeRect(r.x0 * c.width, r.y0 * c.height, (r.x1 - r.x0) * c.width, (r.y1 - r.y0) * c.height);
+    g.restore();
+  }
+}
+
+function puntoGeneral(e) {
+  const r = $('cam-general').getBoundingClientRect();
+  return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height];
+}
+$('cam-general').addEventListener('pointerdown', e => {
+  if (!camaraActiva()) return;
+  const [x, y] = puntoGeneral(e);
+  arrastre = { x0: x, y0: y, x1: x, y1: y };
+  e.currentTarget.setPointerCapture(e.pointerId);
+  dibujaGeneral();
+});
+$('cam-general').addEventListener('pointermove', e => {
+  if (!arrastre) return;
+  [arrastre.x1, arrastre.y1] = puntoGeneral(e);
+  dibujaGeneral();
+});
+$('cam-general').addEventListener('pointerup', () => {
+  if (!arrastre) return;
+  const r = cuadrado(arrastre);
+  arrastre = null; dibujaGeneral();
+  if (r.x1 - r.x0 < RECUADRO_MIN) return; // un toque, no un recuadro
+  if (navigator.vibrate) navigator.vibrate(12);
+  ordenCamara('frame', r, null);
+});
+$('cam-general').addEventListener('pointercancel', () => { arrastre = null; dibujaGeneral(); });
+
+$('cam-reset').addEventListener('click', e => ordenCamara('reset', { to: 'start' }, e.currentTarget));
+$('cam-entera').addEventListener('click', e => ordenCamara('reset', { to: 'full' }, e.currentTarget));
+$('cam-mas').addEventListener('click', e => ordenCamara('zoom', { factor: ZOOM_PASO }, e.currentTarget));
+$('cam-menos').addEventListener('click', e => ordenCamara('zoom', { factor: 1 / ZOOM_PASO }, e.currentTarget));
+$('cam-corte').addEventListener('click', () => { corte = !corte; pintaCorte(); });
+document.querySelectorAll('[data-pan]').forEach(b => b.addEventListener('click', e => {
+  const [dx, dy] = b.dataset.pan.split(',').map(Number);
+  ordenCamara('pan', { dx: dx * PAN_PASO, dy: dy * PAN_PASO }, e.currentTarget);
+}));
+$('cam-encuadres').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.encuadre) ordenCamara('preset', { name: b.dataset.encuadre }, b);
+  if (b.dataset.quitaEncuadre && confirm('¿Borrar el encuadre ' + b.dataset.quitaEncuadre + '?')) {
+    orden('camera/preset_delete', { name: b.dataset.quitaEncuadre }, b);
+  }
+});
+$('form-encuadre').addEventListener('submit', async e => {
+  e.preventDefault();
+  const nombre = $('cam-nombre').value.trim(); if (!nombre) return;
+  if (await orden('camera/preset_save', { name: nombre }, e.submitter)) $('cam-nombre').value = '';
+});
+
+// Los atajos de teclado, con el mando en un ordenador: 1–9, R, + y −, y las flechas.
+document.addEventListener('keydown', e => {
+  if (!camaraActiva() || $('camara').hidden || e.ctrlKey || e.metaKey || e.altKey) return;
+  const foco = document.activeElement;
+  if (foco && (['INPUT', 'TEXTAREA', 'SELECT'].includes(foco.tagName) || foco.isContentEditable)) return;
+  const lista = partido.camera.presets || [];
+  let hecho = true;
+  if (/^[1-9]$/.test(e.key) && lista[+e.key - 1]) ordenCamara('preset', { name: lista[+e.key - 1].name }, null);
+  else if (e.key === 'r' || e.key === 'R') ordenCamara('reset', { to: 'start' }, null);
+  else if (e.key === '+' || e.key === '=') ordenCamara('zoom', { factor: ZOOM_PASO }, null);
+  else if (e.key === '-' || e.key === '_') ordenCamara('zoom', { factor: 1 / ZOOM_PASO }, null);
+  else if (FLECHAS[e.key]) ordenCamara('pan', { dx: FLECHAS[e.key][0] * PAN_PASO, dy: FLECHAS[e.key][1] * PAN_PASO }, null);
+  else hecho = false;
+  if (hecho) e.preventDefault();
+});
+
+// ---------------- la vista en vivo (ADR 0033) ----------------
+async function aBitmap(jpeg) {
+  try { return await createImageBitmap(new Blob([jpeg], { type: 'image/jpeg' })); } catch { return null; }
+}
+function pintaGeneralBitmap(b) {
+  if (!b) return;
+  if (generalBitmap) generalBitmap.close();
+  generalBitmap = b; dibujaGeneral();
+}
+function pintaPrograma(b) {
+  if (!b) return;
+  const c = $('cam-programa'); c.getContext('2d').drawImage(b, 0, 0, c.width, c.height); b.close();
+}
+
+const CRLF2 = [13, 10, 13, 10];
+function busca(buf, patron, desde) {
+  fuera: for (let i = desde; i + patron.length <= buf.length; i++) {
+    for (let k = 0; k < patron.length; k++) if (buf[i + k] !== patron[k]) continue fuera;
+    return i;
+  }
+  return -1;
+}
+// El MJPEG de `/api/v1/rig/live/<fuente>` por fetch (un <img> no lleva el token). De lo que
+// llegó junto solo se pinta la última imagen: lo atrasado se descarta. Devuelve el estado HTTP.
+async function mjpeg(fuente, pintar, senal) {
+  const r = await fetch('/api/v1/rig/live/' + fuente, { headers: cab, signal: senal });
+  if (!r.ok || !r.body) return r.status;
+  const lector = r.body.getReader();
+  let buf = new Uint8Array(0);
+  for (;;) {
+    const { value, done } = await lector.read();
+    if (done) return 200;
+    const junto = new Uint8Array(buf.length + value.length); junto.set(buf); junto.set(value, buf.length); buf = junto;
+    let ultima = null;
+    for (;;) {
+      const fin = busca(buf, CRLF2, 0); if (fin < 0) break;
+      const m = /content-length:\s*(\d+)/i.exec(new TextDecoder().decode(buf.subarray(0, fin)));
+      if (!m) { buf = buf.slice(fin + 4); continue; }
+      const n = +m[1];
+      if (buf.length < fin + 4 + n) break;
+      ultima = buf.slice(fin + 4, fin + 4 + n); buf = buf.slice(fin + 4 + n);
+    }
+    if (ultima) pintar(await aBitmap(ultima));
+  }
+}
+
+// Una imagen por petición, para el mando servido por el VPS: una a la vez.
+function sondeo(ruta, cada, pintar, tareas) {
+  let ocupado = false;
+  tareas.relojes.push(setInterval(async () => {
+    if (ocupado || document.hidden) return;
+    ocupado = true;
+    try { const r = await fetch(ruta, { headers: cab }); if (r.ok) pintar(await aBitmap(new Uint8Array(await r.arrayBuffer()))); } catch {}
+    ocupado = false;
+  }, cada));
+}
+
+// El programa por WebRTC (WHEP) desde el MediaMTX del VPS: solo vídeo, ~2 s detrás del campo.
+async function whep(url, video) {
+  const pc = new RTCPeerConnection();
+  pc.addTransceiver('video', { direction: 'recvonly' });
+  pc.ontrack = e => { video.srcObject = e.streams[0] || new MediaStream([e.track]); };
+  await pc.setLocalDescription(await pc.createOffer());
+  await new Promise(listo => {
+    if (pc.iceGatheringState === 'complete') return listo();
+    const tope = setTimeout(listo, 2000);
+    pc.addEventListener('icegatheringstatechange', () => { if (pc.iceGatheringState === 'complete') { clearTimeout(tope); listo(); } });
+  });
+  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/sdp' }, body: pc.localDescription.sdp });
+  if (!r.ok) { pc.close(); throw new Error('WHEP ' + r.status); }
+  await pc.setRemoteDescription({ type: 'answer', sdp: await r.text() });
+  return pc;
+}
+
+function paraVivo() {
+  if (vivoAbierto) { vivoAbierto.parar(); vivoAbierto = null; }
+}
+// En la cancha, el MJPEG del móvil (~0,3 s). Si el móvil no lo da (el mando lo sirve el VPS),
+// la vista general a 3 por segundo y el programa por WebRTC, o a 1 por segundo sin él.
+function arrancaVivo() {
+  const control = new AbortController();
+  const tareas = { relojes: [], pc: null, activo: true };
+  vivoAbierto = { parar() {
+    tareas.activo = false; control.abort(); tareas.relojes.forEach(clearInterval);
+    if (tareas.pc) tareas.pc.close();
+    $('cam-video').srcObject = null; $('cam-video').hidden = true; $('cam-programa').hidden = false;
+  } };
+  const una = async (fuente, pintar) => {
+    while (tareas.activo) {
+      let estado = 0;
+      try { estado = await mjpeg(fuente, pintar, control.signal); } catch {}
+      if (!tareas.activo) return '';
+      if (estado === 404) return 'remoto';
+      await new Promise(r => setTimeout(r, VIVO_REINTENTO_MS));
+    }
+    return '';
+  };
+  una('overview', pintaGeneralBitmap).then(modo => {
+    if (modo !== 'remoto' || !tareas.activo) return;
+    $('cam-general-pie').textContent = 'Vista general · por el VPS, 3 por segundo · arrastra un recuadro';
+    sondeo('/api/v1/rig/thumb/overview', GENERAL_REMOTO_MS, pintaGeneralBitmap, tareas);
+  });
+  una('program', pintaPrograma).then(async modo => {
+    if (modo !== 'remoto' || !tareas.activo) return;
+    try {
+      tareas.pc = await whep(WHEP_PROGRAMA, $('cam-video'));
+      if (!tareas.activo) { tareas.pc.close(); return; }
+      $('cam-video').hidden = false; $('cam-programa').hidden = true;
+      $('cam-programa-pie').textContent = 'Programa en vivo · por el VPS, ~2 s detrás';
+    } catch {
+      $('cam-programa-pie').textContent = 'Programa · 1 por segundo';
+      sondeo('/api/v1/rig/thumb/program', PROGRAMA_REMOTO_MS, pintaPrograma, tareas);
+    }
+  });
+}
+document.addEventListener('visibilitychange', () => {
+  // En segundo plano no se gastan datos ni batería.
+  if (document.hidden) paraVivo();
+  else if (camaraActiva() && !$('camara').hidden && !vivoAbierto) arrancaVivo();
+});
 
 // ---------------- lo que pasa en el programa (ADR 0032) ----------------
 function pintaChips(p) {
@@ -1344,7 +1679,8 @@ function pintaEstado(s) {
 }
 async function miniaturas() {
   if (document.hidden) return; // en segundo plano no se gastan datos ni batería
-  for (const n of ['left', 'right', 'program']) {
+  // Con «Una cámara» las sustituye la vista en vivo de la tarjeta Cámara (ADR 0033).
+  for (const n of camaraActiva() ? [] : ['left', 'right', 'program']) {
     try {
       const r = await fetch('/api/v1/rig/thumb/' + n, { headers: cab });
       if (!r.ok) continue;

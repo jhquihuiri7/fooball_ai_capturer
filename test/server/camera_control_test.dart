@@ -118,6 +118,24 @@ void main() {
     });
   });
 
+  test('la tarjeta Cámara del mando web (IOS-117): las órdenes, la vista en vivo y los atajos', () {
+    final String html = File('assets/panel/index.html').readAsStringSync();
+    expect(html, contains('id="camara"'));
+    for (final String orden in <String>['frame', 'zoom', 'pan', 'reset', 'preset']) {
+      expect(html, contains("ordenCamara('$orden'"), reason: orden);
+    }
+    expect(html, contains("orden('camera/preset_save'"));
+    expect(html, contains("orden('camera/preset_delete'"));
+    expect(html, contains("orden('camera/' + ruta"));
+    expect(html, contains("'/api/v1/rig/live/' + fuente"), reason: 'en la cancha, el MJPEG');
+    expect(html, contains("'/api/v1/rig/thumb/overview'"), reason: 'por el VPS, la vista general a pocos fps');
+    expect(html, contains("WHEP_PROGRAMA = '/whep/programa'"), reason: 'por el VPS, el programa por WebRTC');
+    expect(html, contains('ArrowLeft'));
+    expect(html, contains('Restablecer'));
+    expect(html, contains('Lente entera'));
+    expect(html, contains('setPointerCapture'), reason: 'el recuadro se dibuja con el dedo o el ratón');
+  });
+
   group('en el maestro', () {
     late Directory dir;
     late _Reloj reloj;

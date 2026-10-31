@@ -12,6 +12,37 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-10-31 · IOS-117 — la tarjeta Cámara del mando web · 🚧 hecho; falta verlo emitido en el iPhone
+
+ADR 0033. En `assets/panel/index.html`, solo si el maestro emite con «Una cámara» (`camera` no
+es null), en fútbol y en espectáculo. Sustituye a «Cámaras y programa · 1 fps», que entonces
+deja de pedir miniaturas.
+- **La vista general** en un `<canvas>`:
+  - el contorno del destino en teal, punteado mientras va;
+  - se arrastra con el dedo o el ratón (`setPointerCapture`) y el recuadro sale en 16:9,
+    anclado en la esquina donde empezó; uno de menos del 2 % es un toque y no se manda.
+- **El programa en vivo**, al lado o debajo.
+- **Botones**: Restablecer, Lente entera, «+» (×1,25) y «−», las cuatro flechas (0,1 del
+  encuadre) y «Corte», que gasta la orden siguiente.
+- **El estado**: el zoom («1,6×»), «se verá borroso» y «moviendo…».
+- **Encuadres guardados**: uno por botón, con su número y su zoom, y ✕ para borrarlo;
+  «Guardar este encuadre» con un nombre.
+- **Atajos**: 1–9, R, «+» y «−», y las flechas, salvo escribiendo en un campo.
+- **La vista en vivo**:
+  - Lee `rig/live/*` por `fetch`, porque un `<img>` no lleva el token, y de lo que llega
+    junto pinta solo la última imagen.
+  - Si el móvil no la da (404: el mando lo sirve el VPS), la vista general va a 3 fps por
+    `rig/thumb/overview` y el programa por WHEP en `/whep/programa` (NUBE-24), o a 1 fps
+    sin WebRTC.
+  - Se para en segundo plano y vuelve al volver.
+- **La guía de cancha** dice cómo se usa.
+- **Probado**: `node --check` del script. En Node, el lector de MJPEG con trozos que parten
+  cabeceras e imágenes, varias imágenes juntas (pinta la última) y el 404, y el recuadro
+  anclado. `flutter test`: el test de la página y la batería, sin fallos nuevos.
+
+**Siguiente**: NUBE-24 en football-ai (WebRTC del programa en el VPS). En el iPhone: dibujar un
+recuadro desde el móvil del operador en la cancha y ver que el programa va ahí en 1 s.
+
 ## 2026-10-31 · IOS-116 — las órdenes de la cámara y la vista en vivo en el maestro · 🚧 hecho; falta la medida térmica en el 17
 
 ADR 0033.

@@ -37,6 +37,18 @@ Al acabar, **Finalizar partido**: el marcador queda guardado. Al final de la noc
 **Resultados**. El gol sale solo en pantalla con cada «+ Gol»; si fue un error, «− 1» lo quita.
 Para una premiación, en Al aire, **Ocultar marcador y reloj**.
 
+**Hacer zoom con una sola cámara** (fútbol o espectáculo con «Una cámara»): en el mando web
+sale la tarjeta **Cámara**.
+- **La vista general** enseña la lente entera con el encuadre de ahora. Arrastra un recuadro
+  sobre ella y el programa va ahí en un segundo; con **Corte** puesto, salta de golpe.
+- **Restablecer** vuelve al zoom que elegiste en el móvil; **Lente entera**, a todo el plano.
+- **+** y **−** acercan y alejan; las flechas mueven.
+- Pasado el 2× avisa **se verá borroso**; más allá de 3× no deja.
+- **Guarda los encuadres** que uses («Escenario», «Portería izquierda») y vuelve a ellos con
+  un toque o con las teclas 1–9.
+- En la cancha, con el Wi-Fi del móvil, la vista va casi sin retraso; desde fuera, por el VPS,
+  unos 2 s detrás.
+
 **Quitar una sola cosa de la pantalla**: en el mando web, la tarjeta **En pantalla** tiene un
 interruptor por cada elemento: competición, marcador, tiempo, en vivo, logo de la casa e icono
 de la copa. Apagado, no sale; lo demás no se mueve. Si se reinicia el maestro vuelven todos.
