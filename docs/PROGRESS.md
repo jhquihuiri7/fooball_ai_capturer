@@ -12,6 +12,52 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-11-03 · IOS-118 — el anillo del programa y la repetición en nativo · 🚧 escrito sin toolchain de Swift: falta compilarlo y probarlo en el Mac y en el iPhone
+
+ADR 0034 de football-ai. Adelanta y sustituye a IOS-59. La repetición sale del programa ya
+codificado, así que vale igual con una y con dos cámaras y en los tres tipos de evento.
+- **El anillo** (`RigMedia/Video/ProgramRing.swift`): los `EncodedFrame` que salen del
+  codificador del programa, sin copiarlos.
+  - Guarda `replay.ring_s` (90 s) y como mucho `replay.ring_max_mb` (96 MB).
+  - Empieza siempre en un IDR. Se vacía si cambia el formato y al empezar y acabar cada pasada.
+  - `clip(from, to, minimum)` da el tramo desde el IDR anterior a la marca, recortado a lo
+    guardado, y lanza `empty`, `notInMemory` o `tooShort`.
+- **La repetición** (`RigMedia/Video/ProgramReplay.swift`):
+  - el tramo va a un `.mov` temporal en passthrough y sin tiempo real (no se descarta nada);
+  - lo pasa el `ProgramVideoPlayer` de los vídeos, que gana `fromMs`: el lector empieza en
+    el instante exacto, no en el IDR;
+  - `ProgramReplayHub` fija el corte de entrada al tenerla preparada (`now + leadMs`) y sirve el
+    fotograma de cada instante del programa hasta el de vuelta;
+  - `stop` adelanta la vuelta; si aún se prepara, no sale.
+- **La composición**:
+  - en esos instantes, `MasterProgramStage` compone el fotograma de la repetición como única
+    lente, sin el gráfico de ahora, sin franja y sin desenfoque (lleva el de entonces dentro);
+  - el kernel `compose_program` gana la textura `top` (índice 9), mezclada después de la
+    franja: la cortinilla y el rótulo van encima de todo;
+  - `TopLayerStore` es su almacén: una sola capa que pega los parches de Dart por filas y los
+    sube, sin el apilado píxel a píxel del gráfico, que no da para una cortinilla a 20 fps.
+- **Pigeon**: `prepareReplay` (JSON con lo que se repite y el corte, o el error), `stopReplay`,
+  `replayBuffer`, y la capa 3 en `setOverlay` y `clearOverlay`.
+- **El Runner** (`RigHostApiImpl.swift`, `RigLinkNW.swift`): cada fotograma del programa al
+  anillo, `replayFrame` en la etapa, `top` en el compositor y `replay_frames` en el informe.
+- Los dorados y el `OverlaySpec` de Swift, sincronizados desde football-ai e59ef87 (REF-69).
+  `compose.json` trae tres casos `compose.nv12_top`.
+- **Tests** (sin correr: no hay Swift aquí):
+  - `ProgramRingTests`;
+  - `TopLayerStoreTests`;
+  - `ProgramReplayHubTests`, con H.264 de verdad: el corte, la vuelta, cortarla antes, una a la
+    vez y sin programa;
+  - `ComposeProgramTests` con los casos `compose.nv12_top`.
+
+**En el Mac**:
+- `swift test` en `ios/ZeroKit`. Ojo con el shader: `ComposeProgram.metal` cambió, y si no
+  compila no hay programa.
+- `tools/sync_golden.sh`.
+
+**En el iPhone**: la aceptación de la tarjeta. La repetición sale en ≤2 s desde el mando, el
+programa sigue a p5 ≥29,5 fps, el SRT no se corta, y `footprint_mb` sube unos 70 MB con el
+anillo lleno y 48 MB más mientras suena.
+
 ## 2026-10-31 · IOS-117 — la tarjeta Cámara del mando web · 🚧 hecho; falta verlo emitido en el iPhone
 
 ADR 0033. En `assets/panel/index.html`, solo si el maestro emite con «Una cámara» (`camera` no

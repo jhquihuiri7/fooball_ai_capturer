@@ -1608,6 +1608,7 @@ final class SplitBench {
                                                      width: Self.programWidth, height: Self.programHeight)
                     c.overlay = OverlayHub.shared  // el marcador de Dart (IOS-47)
                     c.ads = AdHub.rotation         // la franja (IOS-48)
+                    c.top = ReplayHub.top          // la cortinilla y el rótulo (ADR 0034)
                     return c
                 }(),
                 masterPool: pool,
@@ -1659,6 +1660,10 @@ final class SplitBench {
                 director = d
             }
             m.onProgram = { [weak self] buffer, t in self?.program(buffer, t: t) }
+            // ADR 0034: la repetición tapa las cámaras en sus instantes. El anillo empieza vacío
+            // en cada pasada: lo de otra no es de este programa.
+            ReplayHub.shared.reset()
+            m.replayFrame = { t in ReplayHub.shared.frame(atRigMs: t) }
             master = m
             if let docs = try? FileManager.default.url(for: .documentDirectory, in: .userDomainMask,
                                                        appropriateFor: nil, create: true) {
@@ -2205,6 +2210,8 @@ final class SplitBench {
         }
         while let f = enc.pop() {
             rollFailedRecorder(enc)
+            // ADR 0034: lo mismo que sale, al anillo de la repetición (sin copiarlo).
+            ReplayHub.shared.ring.append(f)
             // RIG_SPLIT_NO_MOV=1 / RIG_SPLIT_NO_TS=1: sin la copia .mov o sin el .ts, para
             // separar de dónde crece la memoria del maestro.
             if recorder == nil, env["RIG_SPLIT_NO_MOV"] != "1", movOpenAttempts < Self.movMaxSegments,
@@ -2713,6 +2720,7 @@ final class SplitBench {
         programEncoder?.flush()
         drainProgram()
         stopPublisher()
+        ReplayHub.shared.reset()
         e0?.flush()
         flushViews()
         if rec4kStarted { stopLocal4K?() }
@@ -2830,6 +2838,8 @@ final class SplitBench {
             "program_frames": programFrames,
             "two_lens_frames": ms.twoLensFrames,
             "one_lens_frames": ms.oneLensFrames,
+            // ADR 0034: los instantes que fueron de la repetición.
+            "replay_frames": ms.replayFrames,
             "parts_received": ms.partsReceived,
             "parts_decoded": ms.partsDecoded,
             // IOS-43: la edad de la parte al llegar; IOS-52: lo que tarda en cerrarse un hueco.

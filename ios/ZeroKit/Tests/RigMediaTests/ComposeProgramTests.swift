@@ -1,7 +1,8 @@
 // La composición del programa en el maestro contra compose.json de REF-18 (IOS-41).
 //
 // compose.nv12 da el programa (BGR), el gráfico RGBA y, a veces, el anuncio; espera
-// los planos Y, U y V. Aquí el programa entra como la parte NV12 del maestro (camino
+// los planos Y, U y V. compose.nv12_top, además, la capa de encima de la repetición (ADR
+// 0034), que va sobre el anuncio. Aquí el programa entra como la parte NV12 del maestro (camino
 // de una lente), así que su croma ya viene submuestreada. Dos comprobaciones:
 // - la MATEMÁTICA: compose_reference, portada aquí, aplicada a la entrada tal como el
 //   kernel la ve (decodificada del NV12), tiene que dar los mismos planos a ±1;
@@ -21,20 +22,27 @@ final class ComposeProgramTests: XCTestCase {
     func testLosProgramasDoradosConGraficoYAnuncio() throws {
         let contexto = try XCTUnwrap(MetalContext())
         let kernel = try ComposeProgramKernel(context: contexto)
-        var (corridos, medidos) = (0, 0)
-        for caso in try Self.casos() where caso.fn == "compose.nv12" {
+        var (corridos, medidos, conEncima) = (0, 0, 0)
+        for caso in try Self.casos() where caso.fn == "compose.nv12" || caso.fn == "compose.nv12_top" {
             corridos += 1
             let e = caso.inputs
             let (alto, ancho) = (e.forma["bgr"]![0], e.forma["bgr"]![1])
             let parte = try nv12(bgr: e.bytes["bgr"]!, ancho: ancho, alto: alto)
             let grafico = try XCTUnwrap(UploadTexture(device: contexto.device, width: ancho, height: alto))
             grafico.upload(rgba: e.bytes["rgba"]!, generation: 0)
+            var encima: UploadTexture?
+            if let capa = e.bytes["top"] {
+                conEncima += 1
+                encima = try XCTUnwrap(UploadTexture(device: contexto.device, width: ancho, height: alto))
+                encima?.upload(rgba: capa, generation: 0)
+            }
             let destino = try nv12(bgr: [UInt8](repeating: 0, count: ancho * alto * 3), ancho: ancho, alto: alto)
             try ejecutar(contexto) {
                 try kernel.encode(
                     master: parte, masterSide: .left, slave: nil, view: Self.vista(ancho, alto),
                     seamYawRad: 0, graphic: grafico.texture,
-                    strip: try Self.franja(e, contexto: contexto), destination: destino, commandBuffer: $0
+                    strip: try Self.franja(e, contexto: contexto), top: encima?.texture,
+                    destination: destino, commandBuffer: $0
                 )
             }
             let (y, u, v) = planes(nv12: destino)
@@ -42,7 +50,7 @@ final class ComposeProgramTests: XCTestCase {
             let visto = bgr(nv12: parte)
             let ref = Self.composeReference(
                 bgr: visto, rgba: e.bytes["rgba"]!, premul: e.bytes["premul"], inv: e.bytes["inv"],
-                ancho: ancho, alto: alto
+                top: e.bytes["top"], ancho: ancho, alto: alto
             )
             for (nombre, actual, esperado) in [("y", y, ref.y), ("u", u, ref.u), ("v", v, ref.v)] {
                 let peor = zip(actual, esperado).map { abs(Int($0) - Int($1)) }.max() ?? 0
@@ -57,12 +65,13 @@ final class ComposeProgramTests: XCTestCase {
             }
         }
         XCTAssertGreaterThanOrEqual(corridos, 9)
+        XCTAssertGreaterThanOrEqual(conEncima, 3, "los casos de la capa de encima")
         XCTAssertGreaterThanOrEqual(medidos, 2, "los programas representables en NV12")
     }
 
     /// compose_reference de tools/golden/evaluate_compose.py, en Double.
     private static func composeReference(
-        bgr: [UInt8], rgba: [UInt8], premul: [UInt8]?, inv: [UInt8]?, ancho: Int, alto: Int
+        bgr: [UInt8], rgba: [UInt8], premul: [UInt8]?, inv: [UInt8]?, top: [UInt8]? = nil, ancho: Int, alto: Int
     ) -> (y: [UInt8], u: [UInt8], v: [UInt8]) {
         var mezcla = [Double](repeating: 0, count: ancho * alto * 3)  // RGB
         for i in 0..<(ancho * alto) {
@@ -83,6 +92,15 @@ final class ComposeProgramTests: XCTestCase {
                         let v = (mezcla[i * 3 + c] * Double(inv[j * 3 + k]) / 255).rounded(.toNearestOrEven)
                         mezcla[i * 3 + c] = min(v + Double(premul[j * 3 + k]), 255)
                     }
+                }
+            }
+        }
+        if let top {
+            for i in 0..<(ancho * alto) {
+                let a = Double(top[i * 4 + 3]) / 255
+                for c in 0..<3 {
+                    mezcla[i * 3 + c] = (Double(top[i * 4 + c]) * a + mezcla[i * 3 + c] * (1 - a))
+                        .rounded(.toNearestOrEven)
                 }
             }
         }

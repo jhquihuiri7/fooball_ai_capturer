@@ -76,6 +76,33 @@ enum VideoHub {
     static let shared = ProgramVideoHub()
 }
 
+/// La repetición al aire (ADR 0034): el anillo del programa del maestro (lo llena RigLinkNW con
+/// lo que sale del codificador), la repetición que tapa las cámaras y la capa de encima donde
+/// Dart pinta la cortinilla y el rótulo. Una por proceso, como el gráfico.
+enum ReplayHub {
+    static let shared = ProgramReplayHub(width: OverlayHub.programWidth, height: OverlayHub.programHeight)
+    static let top: TopLayerStore? = MTLCreateSystemDefaultDevice().flatMap {
+        TopLayerStore(device: $0, width: OverlayHub.programWidth, height: OverlayHub.programHeight)
+    }
+
+    /// Por qué no sale una repetición, en palabras del mando.
+    static func reason(_ error: Error) -> String {
+        switch error as? ProgramReplayHub.ReplayError {
+        case .busy?: "ya hay una repetición en marcha"
+        case .cancelled?: "se volvió al directo antes de que saliera"
+        case .ring(.empty)?: "sin programa no hay repetición: el maestro tiene que estar emitiendo"
+        case .ring(.notInMemory)?: "esa jugada ya no está en la memoria del maestro"
+        case .ring(.tooShort)?: "de esa jugada queda demasiado poco en la memoria del maestro"
+        case let .clip(porque)?: "no se pudo preparar la repetición: \(porque)"
+        case nil: "\(error)"
+        }
+    }
+
+    static func json(_ d: [String: Any]) -> String {
+        (try? JSONSerialization.data(withJSONObject: d)).flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+    }
+}
+
 final class RigHostApiImpl: NSObject, RigHostApi {
     private let flutter: RigFlutterApi
 
@@ -110,6 +137,15 @@ final class RigHostApiImpl: NSObject, RigHostApi {
         rgba: FlutterStandardTypedData, width: Int64, height: Int64, x: Int64, y: Int64,
         layer: Int64, generation: Int64
     ) throws {
+        // ADR 0034: la capa de encima va aparte, sin el apilado del gráfico.
+        if Int(layer) == TopLayerStore.layerId {
+            ReplayHub.top?.set(
+                rgba: [UInt8](rgba.data),
+                rect: .init(x: Int(x), y: Int(y), width: Int(width), height: Int(height)),
+                generation: Int(generation)
+            )
+            return
+        }
         guard let capa = OverlayLayer(rawValue: Int(layer)) else {
             throw PigeonError(code: "overlay", message: "capa desconocida: \(layer)", details: nil)
         }
@@ -169,6 +205,29 @@ final class RigHostApiImpl: NSObject, RigHostApi {
         VideoHub.shared.stop()
     }
 
+    // ADR 0034: la repetición al aire. Los instantes son los del programa: el reloj del soporte
+    // del maestro, el mismo de los vídeos.
+    func prepareReplay(id: Int64, fromRigMs: Int64, toRigMs: Int64, leadMs: Int64) async throws -> String {
+        do {
+            let a = try await ReplayHub.shared.prepare(
+                id: id, fromRigMs: fromRigMs, toRigMs: toRigMs, leadMs: leadMs, now: { AdHub.nowRigMs() }
+            )
+            return ReplayHub.json(["from_rig_ms": a.fromRigMs, "to_rig_ms": a.toRigMs, "cut_rig_ms": a.cutRigMs])
+        } catch {
+            NSLog("[repeticion] %lld no sale: %@", id, "\(error)")
+            return ReplayHub.json(["error": ReplayHub.reason(error)])
+        }
+    }
+
+    func stopReplay(id: Int64, cutRigMs: Int64) throws {
+        ReplayHub.shared.stop(id: id, atRigMs: cutRigMs)
+    }
+
+    func replayBuffer() throws -> String {
+        guard let s = ReplayHub.shared.ring.span else { return "{}" }
+        return ReplayHub.json(["oldest_rig_ms": s.oldestRigMs, "newest_rig_ms": s.newestRigMs])
+    }
+
     // IOS-58: EMITIR en la arquitectura B. La pasada vive con la cámara y el enlace.
 
     func startProgram(resolution: ProgramResolution, zoom: Double) throws -> String {
@@ -189,6 +248,10 @@ final class RigHostApiImpl: NSObject, RigHostApi {
     }
 
     func clearOverlay(layer: Int64) throws {
+        if Int(layer) == TopLayerStore.layerId {
+            ReplayHub.top?.clear()
+            return
+        }
         guard let capa = OverlayLayer(rawValue: Int(layer)) else { return }
         OverlayHub.shared?.clear(capa)
     }

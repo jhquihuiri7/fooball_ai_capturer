@@ -1,9 +1,10 @@
 // El programa del maestro (IOS-41): codifica compose_program.
 //
 // Mezcla la parte propia (reproyectada por ReprojectKernel) y la del esclavo con la
-// costura recalculada desde la vista, pone encima el gráfico y el anuncio, y escribe
-// NV12 en un buffer del pool del codificador. Caminos de una lente: solo la parte
-// propia, o solo la del esclavo, más el gráfico.
+// costura recalculada desde la vista, pone encima el gráfico y el anuncio, y encima de todo
+// la capa de la repetición (ADR 0034), y escribe NV12 en un buffer del pool del
+// codificador. Caminos de una lente: solo la parte propia, o solo la del esclavo, más el
+// gráfico.
 
 import CoreVideo
 import Foundation
@@ -47,7 +48,7 @@ public final class ComposeProgramKernel {
     private let vaciaLuma: MTLTexture
     private let vaciaCroma: MTLTexture
 
-    private static let paramCount = 16
+    private static let paramCount = 17
 
     public init(context: MetalContext) throws {
         self.context = context
@@ -87,6 +88,7 @@ public final class ComposeProgramKernel {
     /// - `master`/`slave`: las partes NV12; `nil` es el camino de una lente.
     /// - `masterSide`: de qué lado es la cámara del maestro, para el peso de la costura.
     /// - `graphic`: el gráfico RGBA SIN premultiplicar del tamaño del programa.
+    /// - `top`: la capa de encima (ADR 0034), igual que el gráfico pero sobre la franja.
     public func encode(
         master: CVPixelBuffer?,
         masterSide: CameraSide,
@@ -96,13 +98,14 @@ public final class ComposeProgramKernel {
         featherRad: Double = RigConstants.panoramaFeatherRad,
         graphic: MTLTexture?,
         strip: Strip?,
+        top: MTLTexture? = nil,
         destination: CVPixelBuffer,
         commandBuffer: MTLCommandBuffer
     ) throws {
         try encode(
             masterPlanes: try master.map(planes(of:)), masterSide: masterSide,
             slavePlanes: try slave.map(planes(of:)), view: view,
-            seamYawRad: seamYawRad, featherRad: featherRad, graphic: graphic, strip: strip,
+            seamYawRad: seamYawRad, featherRad: featherRad, graphic: graphic, strip: strip, top: top,
             destinationPlanes: try planes(of: destination), commandBuffer: commandBuffer
         )
     }
@@ -128,6 +131,7 @@ public final class ComposeProgramKernel {
         featherRad: Double = RigConstants.panoramaFeatherRad,
         graphic: MTLTexture?,
         strip: Strip?,
+        top: MTLTexture? = nil,
         destinationPlanes: (MTLTexture, MTLTexture),
         commandBuffer: MTLCommandBuffer
     ) throws {
@@ -152,6 +156,7 @@ public final class ComposeProgramKernel {
             Float(Double(view.height) / 2 - 0.5),
             Float(seamYawRad),
             Float(featherRad),
+            top == nil ? 0 : 1,
         ]
         precondition(params.count == Self.paramCount)
 
@@ -168,6 +173,7 @@ public final class ComposeProgramKernel {
         encoder.setTexture(strip?.inverse ?? vacia, index: 6)
         encoder.setTexture(dstLuma, index: 7)
         encoder.setTexture(dstCroma, index: 8)
+        encoder.setTexture(top ?? vacia, index: 9)
         params.withUnsafeBytes { encoder.setBytes($0.baseAddress!, length: $0.count, index: 0) }
         let ancho = pipeline.threadExecutionWidth
         let alto = max(1, pipeline.maxTotalThreadsPerThreadgroup / ancho)

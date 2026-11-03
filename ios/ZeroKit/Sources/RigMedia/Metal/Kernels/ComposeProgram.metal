@@ -5,8 +5,9 @@
 // la del esclavo (decodificada), las dos NV12 1920×1080 con negro donde su cámara no
 // llega. Por cada píxel: la costura con el peso recalculado desde la vista; encima,
 // el gráfico RGBA SIN premultiplicar (Image.alpha_composite); en la franja, el
-// anuncio premultiplicado con su alfa inversa (StripBlender); y NV12 BT.709 de rango
-// limitado con los coeficientes exactos de compose_reference. Cada hilo, un 2×2.
+// anuncio premultiplicado con su alfa inversa (StripBlender); encima de todo, la capa de
+// la repetición (ADR 0034), mezclada como el gráfico; y NV12 BT.709 de rango limitado con
+// los coeficientes exactos de compose_reference. Cada hilo, un 2×2.
 
 #include <metal_stdlib>
 using namespace metal;
@@ -33,6 +34,7 @@ struct ComposeParams {
     float cy;
     float seamYaw;
     float feather;
+    float hasTop;        // la capa de encima: la cortinilla y el rótulo de la repetición
 };
 
 static float sat8(float v) { return clamp(rint(v), 0.0f, 255.0f); }
@@ -64,6 +66,7 @@ static float3 program_pixel(texture2d<float, access::read> mLuma,
                             texture2d<float, access::read> graphic,
                             texture2d<float, access::read> stripPremul,
                             texture2d<float, access::read> stripInv,
+                            texture2d<float, access::read> top,
                             constant ComposeParams& p, uint2 px) {
     float3 rgb = float3(0.0f);
     const bool master = p.useMaster > 0.5f, slave = p.useSlave > 0.5f;
@@ -94,6 +97,13 @@ static float3 program_pixel(texture2d<float, access::read> mLuma,
         rgb = min(float3(rint(rgb.x * inv.x / 255.0f), rint(rgb.y * inv.y / 255.0f),
                          rint(rgb.z * inv.z / 255.0f)) + premul, 255.0f);
     }
+    if (p.hasTop > 0.5f) {
+        const float4 e = top.read(px);
+        const float3 ergb = e.rgb * 255.0f;
+        rgb = float3(rint(ergb.x * e.a + rgb.x * (1.0f - e.a)),
+                     rint(ergb.y * e.a + rgb.y * (1.0f - e.a)),
+                     rint(ergb.z * e.a + rgb.z * (1.0f - e.a)));
+    }
     return rgb;
 }
 
@@ -108,6 +118,7 @@ kernel void compose_program(texture2d<float, access::read> mLuma [[texture(0)]],
                             texture2d<float, access::read> stripInv [[texture(6)]],
                             texture2d<float, access::write> dstLuma [[texture(7)]],
                             texture2d<float, access::write> dstChroma [[texture(8)]],
+                            texture2d<float, access::read> top [[texture(9)]],
                             constant compose::ComposeParams& params [[buffer(0)]],
                             uint2 gid [[thread_position_in_grid]]) {
     if (gid.x >= dstChroma.get_width() || gid.y >= dstChroma.get_height()) return;
@@ -116,7 +127,7 @@ kernel void compose_program(texture2d<float, access::read> mLuma [[texture(0)]],
         for (uint dx = 0; dx < 2; ++dx) {
             const uint2 px = uint2(gid.x * 2 + dx, gid.y * 2 + dy);
             const float3 rgb = compose::program_pixel(mLuma, mChroma, sLuma, sChroma, graphic,
-                                             stripPremul, stripInv, params, px);
+                                             stripPremul, stripInv, top, params, px);
             const float y = clamp(rint(16.0f + compose::kYr * rgb.x + compose::kYg * rgb.y + compose::kYb * rgb.z), 0.0f, 255.0f);
             dstLuma.write(float4(y / 255.0f), px);
             suma += rgb;

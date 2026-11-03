@@ -518,8 +518,9 @@ protocol RigHostApi {
   func runBench(name: String, paramsJson: String) async throws -> String
   /// Una capa del gráfico del programa (IOS-47): RGBA sin premultiplicar de
   /// `width × height`, ya recortada a su caja con contenido, en (`x`, `y`) del programa.
-  /// `layer`: 0 marcador, 1 alineación, 2 SIN SEÑAL. Una `generation` que no sube se
-  /// ignora en nativo.
+  /// `layer`: 0 marcador, 1 alineación, 2 SIN SEÑAL y 3 la capa de encima (la cortinilla y
+  /// el rótulo de la repetición, ADR 0034), que va sobre la franja. Una `generation` que no
+  /// sube se ignora en nativo.
   func setOverlay(rgba: FlutterStandardTypedData, width: Int64, height: Int64, x: Int64, y: Int64, layer: Int64, generation: Int64) throws
   /// Quita una capa del gráfico.
   func clearOverlay(layer: Int64) throws
@@ -550,6 +551,19 @@ protocol RigHostApi {
   func playVideo(id: Int64, path: String, leadMs: Int64) async throws -> String
   /// Quita el vídeo que suena, si suena: vuelven el programa y el micro.
   func stopVideo() throws
+  /// La repetición al aire (ADR 0034): prepara `[fromRigMs, toRigMs)` del programa ya emitido,
+  /// recortado a lo que guarda el anillo del maestro, y la deja lista para entrar en el
+  /// programa a los `leadMs` de ahora. Devuelve en JSON `{"from_rig_ms", "to_rig_ms",
+  /// "cut_rig_ms"}`: lo que se repite y el instante del programa en que entra (el directo
+  /// vuelve en `cut_rig_ms + to_rig_ms − from_rig_ms`); o `{"error"}` si no se puede: sin
+  /// programa, el tramo ya no está u otra repetición en marcha.
+  func prepareReplay(id: Int64, fromRigMs: Int64, toRigMs: Int64, leadMs: Int64) async throws -> String
+  /// Vuelve al directo en el instante `cutRigMs` del programa (o en cuanto entre la
+  /// repetición, si es antes). Si `id` aún se prepara, no saldrá.
+  func stopReplay(id: Int64, cutRigMs: Int64) throws
+  /// Lo que guarda el anillo del programa, en JSON: `{"oldest_rig_ms", "newest_rig_ms"}`, o
+  /// `{}` sin programa.
+  func replayBuffer() throws -> String
 }
 
 /// Generated setup class from Pigeon to handle messages through the `binaryMessenger`.
@@ -635,8 +649,9 @@ class RigHostApiSetup {
     }
     /// Una capa del gráfico del programa (IOS-47): RGBA sin premultiplicar de
     /// `width × height`, ya recortada a su caja con contenido, en (`x`, `y`) del programa.
-    /// `layer`: 0 marcador, 1 alineación, 2 SIN SEÑAL. Una `generation` que no sube se
-    /// ignora en nativo.
+    /// `layer`: 0 marcador, 1 alineación, 2 SIN SEÑAL y 3 la capa de encima (la cortinilla y
+    /// el rótulo de la repetición, ADR 0034), que va sobre la franja. Una `generation` que no
+    /// sube se ignora en nativo.
     let setOverlayChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.RigHostApi.setOverlay\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       setOverlayChannel.setMessageHandler { message, reply in
@@ -801,6 +816,65 @@ class RigHostApiSetup {
       }
     } else {
       stopVideoChannel.setMessageHandler(nil)
+    }
+    /// La repetición al aire (ADR 0034): prepara `[fromRigMs, toRigMs)` del programa ya emitido,
+    /// recortado a lo que guarda el anillo del maestro, y la deja lista para entrar en el
+    /// programa a los `leadMs` de ahora. Devuelve en JSON `{"from_rig_ms", "to_rig_ms",
+    /// "cut_rig_ms"}`: lo que se repite y el instante del programa en que entra (el directo
+    /// vuelve en `cut_rig_ms + to_rig_ms − from_rig_ms`); o `{"error"}` si no se puede: sin
+    /// programa, el tramo ya no está u otra repetición en marcha.
+    let prepareReplayChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.RigHostApi.prepareReplay\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      prepareReplayChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let idArg = args[0] as! Int64
+        let fromRigMsArg = args[1] as! Int64
+        let toRigMsArg = args[2] as! Int64
+        let leadMsArg = args[3] as! Int64
+        Task { @MainActor in
+          do {
+            let result = try await api.prepareReplay(id: idArg, fromRigMs: fromRigMsArg, toRigMs: toRigMsArg, leadMs: leadMsArg)
+            reply(wrapResult(result))
+          } catch {
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      prepareReplayChannel.setMessageHandler(nil)
+    }
+    /// Vuelve al directo en el instante `cutRigMs` del programa (o en cuanto entre la
+    /// repetición, si es antes). Si `id` aún se prepara, no saldrá.
+    let stopReplayChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.RigHostApi.stopReplay\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      stopReplayChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let idArg = args[0] as! Int64
+        let cutRigMsArg = args[1] as! Int64
+        do {
+          try api.stopReplay(id: idArg, cutRigMs: cutRigMsArg)
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      stopReplayChannel.setMessageHandler(nil)
+    }
+    /// Lo que guarda el anillo del programa, en JSON: `{"oldest_rig_ms", "newest_rig_ms"}`, o
+    /// `{}` sin programa.
+    let replayBufferChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.RigHostApi.replayBuffer\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      replayBufferChannel.setMessageHandler { _, reply in
+        do {
+          let result = try api.replayBuffer()
+          reply(wrapResult(result))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      replayBufferChannel.setMessageHandler(nil)
     }
   }
 }

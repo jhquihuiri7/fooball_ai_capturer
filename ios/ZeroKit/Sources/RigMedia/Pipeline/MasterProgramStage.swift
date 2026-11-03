@@ -29,10 +29,18 @@ public protocol ProgramComposing: AnyObject {
     ) throws
     /// SPK-04: la GPU de la última composición, en ms; nil si no lo sabe.
     var lastGpuMs: Double? { get }
+    /// La repetición (ADR 0034): `frame` ya es un programa entero, con el gráfico de entonces.
+    /// Se compone como única lente, sin el gráfico de ahora, sin franja ni desenfoque, y con la
+    /// capa de encima (la cortinilla y el rótulo).
+    func composeReplay(frame: CVPixelBuffer, atRigMs: Int64, into destination: CVPixelBuffer) throws
 }
 
 extension ProgramComposing {
     public var lastGpuMs: Double? { nil }
+
+    public func composeReplay(frame _: CVPixelBuffer, atRigMs _: Int64, into _: CVPixelBuffer) throws {
+        throw ReprojectKernelError.pipeline("este compositor no compone repeticiones")
+    }
 }
 
 /// Lo que se pintó en un instante del programa (SPK-04): la vista de verdad, los
@@ -60,6 +68,8 @@ public final class MetalProgramComposer: ProgramComposing {
     public var overlay: OverlayStore?
     /// La franja de anuncios (IOS-48).
     public var ads: AdRotation?
+    /// La capa de encima (ADR 0034): la cortinilla y el rótulo de la repetición.
+    public var top: TopLayerStore?
 
     private let context: MetalContext
     private let kernel: ComposeProgramKernel
@@ -69,6 +79,8 @@ public final class MetalProgramComposer: ProgramComposing {
     /// La cancha desenfocada detrás de la tarjeta de entretiempo (ADR 0027): sus texturas se
     /// reservan aquí, no en el bucle. Sin memoria para ellas, la tarjeta sale sin desenfoque.
     private let backdrop: BackdropBlur?
+    /// Una vista cualquiera para el kernel en la repetición: con una sola lente no la mira.
+    private let replayView: RectilinearView
     public private(set) var lastGpuMs: Double?
 
     public init(context: MetalContext, masterSide: CameraSide, width: Int, height: Int) throws {
@@ -80,6 +92,7 @@ public final class MetalProgramComposer: ProgramComposing {
         backdrop = try? BackdropBlur(
             device: context.device, width: width, height: height, sigmaPx: BackdropBlur.sigma(forWidth: width)
         )
+        replayView = try RectilinearView(yawRad: 0, pitchRad: 0, hfovRad: .pi / 2, width: width, height: height)
     }
 
     public func compose(
@@ -95,19 +108,21 @@ public final class MetalProgramComposer: ProgramComposing {
         }
         let grafico = overlay?.beginFrame()
         defer { if grafico != nil { overlay?.endFrame() } }
+        let encima = top?.beginFrame()
+        defer { if encima != nil { top?.endFrame() } }
         if overlay?.backdropBlur == true, let backdrop {
             // El entretiempo tapa la pantalla entera, franja incluida: la cancha desenfocada
             // detrás de su velo y sin anuncios (ADR 0027, enmienda del 2026-10-16).
             try backdrop.encode(
                 kernel: kernel, master: master, masterSide: masterSide, slave: slave, view: vista,
                 seamYawRad: view.seamYawRad, featherRad: view.featherRad,
-                graphic: grafico, destination: destination, commandBuffer: buffer
+                graphic: grafico, top: encima, destination: destination, commandBuffer: buffer
             )
         } else {
             try kernel.encode(
                 master: master, masterSide: masterSide, slave: slave, view: vista,
                 seamYawRad: view.seamYawRad, featherRad: view.featherRad,
-                graphic: grafico, strip: ads?.strip(atRigMs: atRigMs)?.0,
+                graphic: grafico, strip: ads?.strip(atRigMs: atRigMs)?.0, top: encima,
                 destination: destination, commandBuffer: buffer
             )
         }
@@ -115,6 +130,22 @@ public final class MetalProgramComposer: ProgramComposing {
         buffer.waitUntilCompleted()
         lastGpuMs = GpuTiming.milliseconds(buffer)
         // La GPU ya soltó las texturas de este fotograma: fuera las entradas muertas.
+        context.flushTextureCache()
+    }
+
+    public func composeReplay(frame: CVPixelBuffer, atRigMs _: Int64, into destination: CVPixelBuffer) throws {
+        guard let buffer = context.queue.makeCommandBuffer() else {
+            throw ReprojectKernelError.pipeline("no hay command buffer")
+        }
+        let encima = top?.beginFrame()
+        defer { if encima != nil { top?.endFrame() } }
+        try kernel.encode(
+            master: frame, masterSide: masterSide, slave: nil, view: replayView, seamYawRad: 0,
+            graphic: nil, strip: nil, top: encima, destination: destination, commandBuffer: buffer
+        )
+        buffer.commit()
+        buffer.waitUntilCompleted()
+        lastGpuMs = GpuTiming.milliseconds(buffer)
         context.flushTextureCache()
     }
 }
@@ -135,6 +166,8 @@ public final class MasterProgramStage {
         /// Dos lentes con la vista extrapolada por el esclavo (no es desgarro: las dos
         /// mitades la usan; es una vista que el director no dio).
         public var extrapolatedViewFrames = 0
+        /// Instantes que fueron de la repetición (ADR 0034): no se pintó ninguna cámara.
+        public var replayFrames = 0
 
         public init() {}
     }
@@ -209,6 +242,10 @@ public final class MasterProgramStage {
 
     /// El programa de un instante, listo para el codificador del programa.
     public var onProgram: ((CVPixelBuffer, Int64) -> Void)?
+
+    /// La repetición al aire (ADR 0034): el fotograma que tapa las cámaras en cada instante del
+    /// programa, o nil si va el directo. Lo pone el Runner (ProgramReplayHub).
+    public var replayFrame: ((Int64) -> CVPixelBuffer?)?
 
     /// Cada cambio de fuente del programa (IOS-84): quien tiene el gráfico enseña SIN
     /// SEÑAL al llegar a `.noSignal`.
@@ -349,6 +386,13 @@ public final class MasterProgramStage {
         lock.unlock()
         if fuente != anterior { onSourceChange?(fuente) }
 
+        // La repetición tapa las cámaras, también sin señal: la parte y el fotograma propio de
+        // este instante se sueltan sin pintar.
+        if let repeticion = replayFrame?(t) {
+            composeReplay(repeticion, t: t, source: fuente, view: vista)
+            return decision
+        }
+
         if fuente == .hold, let ultimo = lastProgram {
             onComposed?(ComposedFrame(programRigMs: t, source: fuente, view: vista, masterFrameRigMs: nil,
                                       partFrameRigMs: nil, extrapolated: false, torn: false, gpuMs: nil))
@@ -387,6 +431,30 @@ public final class MasterProgramStage {
             lock.unlock()
         }
         return decision
+    }
+
+    /// Un instante de la repetición: su fotograma con la capa de encima, en un búfer del pool.
+    private func composeReplay(_ frame: CVPixelBuffer, t: Int64, source: ProgramSource, view: ViewCommand) {
+        var programa: CVPixelBuffer?
+        CVPixelBufferPoolCreatePixelBuffer(nil, masterPool, &programa)
+        do {
+            guard let programa else {
+                throw ReprojectKernelError.pipeline("el pool del programa no da búferes")
+            }
+            try composer.composeReplay(frame: frame, atRigMs: t, into: programa)
+            lock.lock()
+            stats.replayFrames += 1
+            if let c = composer.lastGpuMs { composeGpuMs.record(ms: c) }
+            lock.unlock()
+            onComposed?(ComposedFrame(programRigMs: t, source: source, view: view, masterFrameRigMs: nil,
+                                      partFrameRigMs: nil, extrapolated: false, torn: false,
+                                      gpuMs: composer.lastGpuMs))
+            onProgram?(programa, t)
+        } catch {
+            lock.lock()
+            stats.composeFailures += 1
+            lock.unlock()
+        }
     }
 
     /// Las cuentas de SPK-04 de un instante pintado: GPU, desgarro y fase entre mitades.

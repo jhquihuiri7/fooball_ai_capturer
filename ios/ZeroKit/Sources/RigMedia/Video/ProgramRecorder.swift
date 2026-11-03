@@ -133,7 +133,9 @@ public final class ProgramRecorder {
     /// La escala de los instantes del fragmento, en tics por segundo.
     private static let timescale: CMTimeScale = 600
 
-    private static func sample(
+    /// Una muestra de `data` con su instante y su duración (nil: la deduce el escritor). La usa
+    /// también el tramo de la repetición (ReplayClipWriter).
+    static func sample(
         _ data: Data, format: CMFormatDescription, ptsNs: Int64, durationNs: Int64?, sync: Bool,
         audioPacket: Bool = false
     ) throws -> CMSampleBuffer {

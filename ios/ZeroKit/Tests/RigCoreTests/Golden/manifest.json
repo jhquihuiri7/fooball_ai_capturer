@@ -7,7 +7,7 @@
     "ball_detector.json": "40c0da5c59aca686b391bbe286b3d38d45cbd0ec200e0eb2d61fe4a9fc3f90c9",
     "band.json": "6169c08b04bc0865b7e45a77fb944916b2aa8ab3af8b223a9154ffc2d37a2101",
     "color.json": "d63f477ea19d1be6bc24e990347600ff5138638b10e3aa702cd5335ba0653f8e",
-    "compose.json": "4ec729c8f8446e067badd57574ffdfd7261bae58a1ec54c8fe82ea4d8b8ffcb0",
+    "compose.json": "7d63b68200aa5d8ba06ba8528253d684a643d76fd999abcccccebe1c942e8ff5",
     "control_token.json": "a09a199ff67062158cc69a252529b4c633061b06eb27d6103a8f3456948dd809",
     "detectors.json": "89af99fe14e0b2720ccfd15ad193e10f1099927a8f11246b0d6ad037e910e580",
     "director.json": "a469e93f18928e1768d83b267cc6fa02b2e7ffe61161c0a1479ccca9e7bef74b",
@@ -23,6 +23,6 @@
     "shot.json": "0fa1aba7d685bceb9b53255dc2cde637c391f0a7898b60623a42fe7312d6ef40",
     "stabilizer.json": "b87a64e6e976f9e3928b991e8b06052e96160fba126526c0cb2ca04272b0e712",
     "sync.json": "2ab69537569f540ec8de07efd6f53655dcede84b85b3628287af5d313c19f73c",
-    "tunnel.json": "c7e787ccabd839ddc398bc16aaa4bcf64a9912ac2301516778bcdfe916b44a78"
+    "tunnel.json": "f75b6401a539975a44b8713e5f221248b060592d76fb804bf983e83ef1ca7c52"
   }
 }

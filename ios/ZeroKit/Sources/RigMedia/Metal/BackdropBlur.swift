@@ -60,6 +60,7 @@ public final class BackdropBlur {
         seamYawRad: Double,
         featherRad: Double,
         graphic: MTLTexture?,
+        top: MTLTexture? = nil,
         destination: CVPixelBuffer,
         commandBuffer: MTLCommandBuffer
     ) throws {
@@ -75,7 +76,7 @@ public final class BackdropBlur {
         // y pone el gráfico encima.
         try kernel.encode(
             masterPlanes: borrosa, masterSide: masterSide, slavePlanes: nil, view: view,
-            seamYawRad: seamYawRad, featherRad: featherRad, graphic: graphic, strip: nil,
+            seamYawRad: seamYawRad, featherRad: featherRad, graphic: graphic, strip: nil, top: top,
             destinationPlanes: try kernel.planes(of: destination), commandBuffer: commandBuffer
         )
     }

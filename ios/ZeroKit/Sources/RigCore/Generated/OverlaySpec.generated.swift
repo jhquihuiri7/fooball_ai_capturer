@@ -177,6 +177,40 @@ public enum OverlaySpec {
         "anim_fps": 20,
     ]
 
+    /// La repetición (replay_card.py).
+    public static let replay: [String: Int] = [
+        "wipe_ms": 500,
+        "cover_ms": 400,
+        "anim_fps": 20,
+        "lead_ms": 100,
+        "min_s": 3,
+        "max_s": 30,
+        "default_s": 15,
+        "marks_max": 10,
+        "ring_s": 90,
+        "ring_max_mb": 96,
+        "band_teal_w": 140,
+        "band_blue_w": 100,
+        "chip_logo_h": 192,
+        "chip_pad": 36,
+        "chip_gap": 72,
+        "chip_radius": 18,
+        "chip_cy": 455,
+        "chip_line_w": 3,
+        "title_size": 96,
+        "title_cy": 675,
+        "rule_w": 360,
+        "rule_h": 10,
+        "rule_y": 745,
+        "chip_from_pct": 40,
+        "chip_scale_from_pct": 60,
+        "chip_scale_to_pct": 115,
+        "chip_out_pct": 50,
+        "bug_h": 64,
+        "bug_text_size": 38,
+        "bug_pad_x": 28,
+    ]
+
     /// El entretiempo (halftime_card.py).
     public static let halftime: [String: Int] = [
         "title_y": 118,

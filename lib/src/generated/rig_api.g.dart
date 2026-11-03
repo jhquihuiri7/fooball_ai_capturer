@@ -555,8 +555,9 @@ class RigHostApi {
 
   /// Una capa del gráfico del programa (IOS-47): RGBA sin premultiplicar de
   /// `width × height`, ya recortada a su caja con contenido, en (`x`, `y`) del programa.
-  /// `layer`: 0 marcador, 1 alineación, 2 SIN SEÑAL. Una `generation` que no sube se
-  /// ignora en nativo.
+  /// `layer`: 0 marcador, 1 alineación, 2 SIN SEÑAL y 3 la capa de encima (la cortinilla y
+  /// el rótulo de la repetición, ADR 0034), que va sobre la franja. Una `generation` que no
+  /// sube se ignora en nativo.
   Future<void> setOverlay(Uint8List rgba, int width, int height, int x, int y, int layer, int generation) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.RigHostApi.setOverlay$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
@@ -742,6 +743,72 @@ class RigHostApi {
         isNullValid: true,
     )
     ;
+  }
+
+  /// La repetición al aire (ADR 0034): prepara `[fromRigMs, toRigMs)` del programa ya emitido,
+  /// recortado a lo que guarda el anillo del maestro, y la deja lista para entrar en el
+  /// programa a los `leadMs` de ahora. Devuelve en JSON `{"from_rig_ms", "to_rig_ms",
+  /// "cut_rig_ms"}`: lo que se repite y el instante del programa en que entra (el directo
+  /// vuelve en `cut_rig_ms + to_rig_ms − from_rig_ms`); o `{"error"}` si no se puede: sin
+  /// programa, el tramo ya no está u otra repetición en marcha.
+  Future<String> prepareReplay(int id, int fromRigMs, int toRigMs, int leadMs) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.RigHostApi.prepareReplay$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[id, fromRigMs, toRigMs, leadMs]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as String;
+  }
+
+  /// Vuelve al directo en el instante `cutRigMs` del programa (o en cuanto entre la
+  /// repetición, si es antes). Si `id` aún se prepara, no saldrá.
+  Future<void> stopReplay(int id, int cutRigMs) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.RigHostApi.stopReplay$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[id, cutRigMs]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
+  /// Lo que guarda el anillo del programa, en JSON: `{"oldest_rig_ms", "newest_rig_ms"}`, o
+  /// `{}` sin programa.
+  Future<String> replayBuffer() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.RigHostApi.replayBuffer$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as String;
   }
 }
 

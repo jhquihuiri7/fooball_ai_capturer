@@ -37,6 +37,9 @@ public enum ProgramVideoConstants {
     /// Muestras ya servidas que se dejan en la cola de audio antes de compactarla: un
     /// segundo, para no mover memoria en cada trozo.
     static let audioCompactSamples = AudioConstants.sampleRate
+    /// La escala de los instantes con los que se le pide al lector un punto del fichero, en tics
+    /// por segundo: la de los .mov del programa.
+    static let timescale: CMTimeScale = 600
     /// NV12 de rango de vídeo: el negro de las bandas y del fotograma que aún no llegó.
     static let blackLuma: UInt8 = 16
     static let neutralChroma: UInt8 = 128
@@ -88,8 +91,12 @@ public final class ProgramVideoPlayer: ProgramAudioSubstitute {
 
     /// Abre `url` y prepara los lectores; no lee hasta `start`. Lanza si no hay pista de
     /// vídeo, si el lector no arranca (un códec que no se decodifica) o sin memoria.
+    ///
+    /// `fromMs`: el instante del fichero desde el que se lee (la repetición del ADR 0034 empieza
+    /// en el IDR anterior a la marca, y el lector decodifica desde él pero no da lo de antes).
+    /// En el programa, el instante m del fichero se sigue viendo en `startRigMs + m`.
     public static func open(
-        url: URL, id: Int64, startRigMs: Double, width: Int, height: Int
+        url: URL, id: Int64, startRigMs: Double, width: Int, height: Int, fromMs: Double = 0
     ) async throws -> ProgramVideoPlayer {
         let asset = AVURLAsset(url: url)
         guard let pista = try await asset.loadTracks(withMediaType: .video).first else {
@@ -120,6 +127,12 @@ public final class ProgramVideoPlayer: ProgramAudioSubstitute {
         }
         guard lectorVideo.canAdd(salidaVideo) else { throw PlayerError.reader("la pista de vídeo no se puede leer") }
         lectorVideo.add(salidaVideo)
+        if fromMs > 0 {
+            lectorVideo.timeRange = CMTimeRange(
+                start: CMTime(seconds: fromMs / 1000, preferredTimescale: ProgramVideoConstants.timescale),
+                duration: .positiveInfinity
+            )
+        }
 
         var lectorAudio: AVAssetReader?
         var salidaAudio: AVAssetReaderOutput?
