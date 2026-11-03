@@ -28,7 +28,7 @@ La app ya no abre en la pantalla de lado: pregunta **«¿Qué vas a transmitir?�
   Soporte y «Abrir cámara». Desde el mando web (QR «Mando»), la tarjeta **Rótulos**: guarda
   cada número con su título y su subtítulo («Presentación artística: Los Ángeles del Cielo» /
   «Cantado por …») y sácalo 10 s o «Fijo». EN VIVO sale solo arriba a la izquierda.
-- **Vóleibol**: un solo móvil y la cámara tal cual, sin gráficos por ahora.
+- **Vóleibol**: un solo móvil y la cámara tal cual, sin gráficos por ahora (salvo la repetición).
 
 **Una noche con varios partidos** (fútbol): antes del primero, carga en el mando web la
 tarjeta **Jornada** con todos los partidos y sus escudos. Al empezar cada uno, «Partido de la
@@ -48,6 +48,21 @@ sale la tarjeta **Cámara**.
   un toque o con las teclas 1–9.
 - En la cancha, con el Wi-Fi del móvil, la vista va casi sin retraso; desde fuera, por el VPS,
   unos 2 s detrás.
+
+**Repetir una jugada** (cualquier evento, con una o dos cámaras): la tarjeta **Repetición** del
+mando web, debajo de los goles.
+- Cuando pase algo, **Marcar jugada**. Sale en la lista con su número (y el minuto, en el
+  fútbol).
+- Elige **hacia atrás**: 5, 10, 15, 20 o 30 s (15 por defecto; el navegador lo recuerda).
+- **Repetir** en la marca: sale la cortinilla con la copa y la casa en grande, los segundos
+  de antes de la marca y otra vez el directo. **Repetir lo último** hace lo mismo hasta ahora,
+  sin marcar.
+- **Volver al directo** la corta antes.
+- La repetición es el programa tal como salió (con el marcador de entonces) y a velocidad
+  normal; el sonido sigue en directo. Abajo a la derecha sale **REPETICIÓN**.
+- El maestro guarda el último minuto y medio: una marca más vieja sale apagada, «ya no está
+  en la memoria». Sin emitir no hay nada que repetir.
+- Mientras suena un vídeo del mando no se repite, ni al revés.
 
 **Quitar una sola cosa de la pantalla**: en el mando web, la tarjeta **En pantalla** tiene un
 interruptor por cada elemento: competición, marcador, tiempo, en vivo, logo de la casa e icono

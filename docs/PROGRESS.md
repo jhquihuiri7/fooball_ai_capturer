@@ -12,6 +12,64 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-11-03 · IOS-119 — la repetición desde el mando, con la cortinilla de la copa y la casa · 🚧 hecho; falta verlo emitido en el iPhone
+
+ADR 0034 de football-ai. Sobre IOS-118.
+- **El maestro** (`lib/src/server/replay.dart`, `program_replay.dart`):
+  - `replay/mark`: apunta el instante del soporte y el cronómetro; guarda las 10 últimas y
+    olvida las que ya no caben en el anillo. Llama además al gancho de `clips/mark`, si lo hay
+    (el clip del VPS).
+  - `replay/play` (`mark`, `seconds` de 3 a 30): `MasterApi` lo valida en el motor, espera al
+    nativo con `replayPrepareTimeout` (3 s) y contesta con lo que dijo. Los errores:
+    - 400 y 404 si la orden está mal o la marca no existe;
+    - 409 si no hay programa, si hay otra repetición o suena un vídeo, o con lo que diga el
+      nativo («esa jugada ya no está en la memoria del maestro»);
+    - 504 si el nativo no contesta, y se le dice que no salga.
+  - `replay/stop`: la vuelta, en cuanto pase la cortinilla; la repetición dura al menos lo que
+    dos cortinillas.
+  - `video/play` y `video/play_all` dan 409 con una repetición en marcha.
+  - El estado lleva `replay` (`marks`, `buffer_ms`, `on_air` con su fase y lo que le queda).
+    Las fases suben `rev` con el tic de 1 s.
+  - `ReplayBufferWatch` pregunta cada segundo hasta dónde llega el anillo; solo sube `rev` al
+    empezar y acabar el programa.
+- **El gráfico** (`replay_painter.dart`, portado de `tools/replay_card.py`):
+  - `stingerAt` da el punto de la cortinilla, igual que Python a centésimas: las bandas a -30°,
+    el azul que tapa, y el chip de la copa y la casa a tres veces su tamaño con «REPETICIÓN»
+    debajo a la entrada;
+  - el rótulo va abajo a la derecha;
+  - `ProgramGraphics` los publica en la capa 3 en los tres tipos de evento, también en el vóley,
+    y quita la capa una vez al empezar (la de un maestro anterior no vale);
+  - a 20 fps solo mientras la cortinilla se mueve.
+- **El mando web**: la tarjeta Repetición, debajo de los goles, en fútbol, espectáculo y vóley.
+  - «Marcar jugada», hacia atrás (5, 10, 15, 20 o 30 s; el navegador lo recuerda) y «Repetir
+    lo último».
+  - La lista de marcas con su número, el minuto (en el fútbol), hace cuánto y «Repetir». Las
+    que ya no caben en la memoria del maestro se apagan.
+  - Al aire: la fase, lo que queda y «Volver al directo».
+- **La guía de cancha** lo cuenta.
+- Los dorados de Dart, el `overlay_spec.g.dart` y los renders de referencia, sincronizados
+  desde football-ai e59ef87 (REF-69).
+- **Probado**:
+  - `flutter analyze` limpio;
+  - `flutter test`: 583 pasan y 10 fallan. Son los de siempre de esta máquina: 8 dorados de
+    imagen del Mac, «se pinta en ≤50 ms» y el de `master_host_test` que separa la ruta con «/»,
+    que también falla en el HEAD;
+  - nuevos: `replay_test.dart` (las órdenes, sus errores y la línea de tiempo con un reloj
+    falso), `replay_api_test.dart` (la API con un nativo falso: preparada, error, sin respuesta
+    y vuelta) y `replay_painter_test.dart` (el punto de Python, la geometría de `boxes.json`,
+    ≤3 % de píxeles distintos de `repeticion.png`, `repeticion_entrada.png` y
+    `repeticion_rotulo.png`, y la capa 3 en el vóley);
+  - `node --check` del script de la página;
+  - la página de verdad contra el maestro de verdad (motor y API, con un nativo falso), cargada
+    en Edge sin cabeza: pinta las marcas, el minuto, la repetición al aire y los botones apagados
+    mientras dura, en el fútbol y en el vóley. Es un arnés de una vez y no se commitea.
+
+**En el iPhone**, con una y con dos cámaras:
+1. Marcar.
+2. Esperar unos segundos y repetir 15 s.
+3. Comprobar que sale la cortinilla con la copa y la casa, la jugada con REPETICIÓN abajo a la
+   derecha y la vuelta al directo, y que el sonido sigue en directo.
+
 ## 2026-11-03 · IOS-118 — el anillo del programa y la repetición en nativo · 🚧 escrito sin toolchain de Swift: falta compilarlo y probarlo en el Mac y en el iPhone
 
 ADR 0034 de football-ai. Adelanta y sustituye a IOS-59. La repetición sale del programa ya

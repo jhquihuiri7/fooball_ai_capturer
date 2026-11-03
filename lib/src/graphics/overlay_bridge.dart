@@ -13,8 +13,9 @@ import 'dart:typed_data';
 import 'package:football_ai_capture/src/graphics/overlay_raster.dart';
 
 /// Las capas, en el orden en que se apilan (el mismo número que `OverlayLayer` en
-/// RigMedia).
-enum OverlayLayerId { scoreboard, lineup, slate }
+/// RigMedia). `replay` es la capa de encima (ADR 0034): la cortinilla y el rótulo de la
+/// repetición, que el nativo guarda aparte (`TopLayerStore.layerId`) y mezcla sobre la franja.
+enum OverlayLayerId { scoreboard, lineup, slate, replay }
 
 /// Una capa recortada: sus bytes y dónde va en el programa.
 class CroppedOverlay {

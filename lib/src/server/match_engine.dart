@@ -16,11 +16,13 @@ import 'dart:math';
 import 'package:football_ai_capture/src/constants.dart';
 import 'package:football_ai_capture/src/event_kind.dart';
 import 'package:football_ai_capture/src/generated/overlay_spec.g.dart';
+import 'package:football_ai_capture/src/graphics/replay_painter.dart' show ReplayGraphic;
 import 'package:football_ai_capture/src/match_state.dart';
 import 'package:football_ai_capture/src/server/camera_control.dart';
 import 'package:football_ai_capture/src/server/graphics_store.dart';
 import 'package:football_ai_capture/src/server/lineups.dart';
 import 'package:football_ai_capture/src/server/match_record.dart';
+import 'package:football_ai_capture/src/server/replay.dart';
 import 'package:football_ai_capture/src/server/video_store.dart';
 
 /// Tiempo monótono en ms y el reloj al que pertenece (ADR 0023 §4).
@@ -439,6 +441,53 @@ class MatchEngine {
     _changed();
   }
 
+  /// La repetición al aire (ADR 0034): las marcas, la que se prepara y la que está al aire. No
+  /// se guarda: el anillo del programa vive en memoria y tras reiniciar está vacío.
+  late final ReplayDesk replay = ReplayDesk(_time);
+
+  /// `replay/play`: comprueba la orden y aparta su número; la prepara el nativo (`MasterApi`).
+  ReplayRequest replayRequest(Map<String, Object?> body) {
+    try {
+      return replay.request(body, videoPlaying: video != null);
+    } on OrderError catch (error) {
+      if (error.status == HttpStatus.conflict) {
+        error.current = toJson();
+      }
+      rethrow;
+    }
+  }
+
+  /// El nativo la preparó: sale la cortinilla.
+  void replayArmed(ReplayArmed armada) {
+    replay.armed(armada);
+    _changed();
+  }
+
+  /// El nativo no la preparó.
+  void replayFailed(int id) => replay.failed(id);
+
+  /// `replay/stop`: el instante del programa en que vuelve el directo. 409 sin repetición.
+  ({int id, int cutRigMs}) replayStop() {
+    try {
+      final ({int id, int cutRigMs}) corte = replay.stop();
+      _changed();
+      return corte;
+    } on OrderError catch (error) {
+      error.current = toJson();
+      rethrow;
+    }
+  }
+
+  /// Lo que dice el nativo del anillo del programa; sube `rev` solo al empezar o acabar.
+  void setReplayBuffer(ReplayBuffer? buffer) {
+    if (replay.setBuffer(buffer)) {
+      _changed();
+    }
+  }
+
+  /// Lo que va ahora en la capa de la repetición, con el icono del campeonato, o null.
+  ReplayGraphic? get replayGraphic => replay.graphic(iconRev: graphics.hasIcon ? graphics.iconRev : null);
+
   /// Pasa `info` desde ya, con una `id` nueva.
   void _playVideo(VideoInfo info) {
     _videoIds += 1;
@@ -625,6 +674,9 @@ class MatchEngine {
             throw OrderError(400, error.message);
           }
         case 'video/play':
+          if (replay.busy) {
+            throw OrderError(HttpStatus.conflict, replayBlocksVideo);
+          }
           final Object? nombre = body['name'];
           final VideoInfo? info = nombre is String ? videos.find(nombre) : null;
           if (info == null) {
@@ -633,6 +685,9 @@ class MatchEngine {
           _videoQueue = const <String>[];
           _playVideo(info);
         case 'video/play_all':
+          if (replay.busy) {
+            throw OrderError(HttpStatus.conflict, replayBlocksVideo);
+          }
           // Todos, en el orden de la lista, uno detrás de otro (ADR 0032).
           final List<VideoInfo> todos = videos.list();
           if (todos.isEmpty) {
@@ -643,6 +698,10 @@ class MatchEngine {
         case 'video/stop':
           _video = null;
           _videoQueue = const <String>[];
+        case 'replay/mark':
+          // ADR 0034: la marca de la repetición corta también el clip del VPS, si hay con qué.
+          replay.mark(clock.elapsedMs);
+          onClipMark?.call();
         case 'clips/mark':
           final void Function()? marca = onClipMark;
           if (marca == null) {
@@ -856,9 +915,9 @@ class MatchEngine {
     _captionSeq = _captionSeq?.without(nombre, _time.nowMs());
   }
 
-  /// Lo que cambia solo con el tiempo (ADR 0031 y 0032): el paso de una franja o un rótulo de
-  /// su tanda al siguiente, el final de una tanda, de un rótulo o del gol, y el vídeo que acabó
-  /// sin aviso del programa. Si algo de eso cambió, sube `rev` para que los mandos lo vean.
+  /// Lo que cambia solo con el tiempo (ADR 0031, 0032 y 0034): el paso de una franja o un
+  /// rótulo de su tanda al siguiente, el final de una tanda, de un rótulo o del gol, el vídeo que
+  /// acabó sin aviso del programa, las fases de la repetición y las marcas que ya no caben. Si algo de eso cambió, sube `rev` para que los mandos lo vean.
   /// Lo llama el maestro una vez por segundo; devuelve si hubo cambio.
   bool tick() {
     final int ahora = _time.nowMs();
@@ -879,6 +938,7 @@ class MatchEngine {
     if (_celebration != null && goal == null) {
       _celebration = null;
     }
+    replay.tick();
     if (_timedState(ahora) == _tickSeen) {
       return false;
     }
@@ -893,6 +953,7 @@ class MatchEngine {
     _caption?.name,
     _celebration?.startedMs,
     _video?.id,
+    replay.timedState(ahora),
   );
 
   void _score(Map<String, Object?> body) {
@@ -1226,6 +1287,8 @@ class MatchEngine {
       'caption_remaining_ms': captionRemainingMs,
       'caption_queue': captionQueue,
       'video_queue': videoQueue,
+      // ADR 0034: las marcas, hasta dónde llega la memoria y la repetición al aire.
+      'replay': replay.toJson(),
       'strip_remaining_ms': stripRemainingMs,
       'strip_texts': stripTexts.toJson(),
       'strip_image': stripImage?.rev,

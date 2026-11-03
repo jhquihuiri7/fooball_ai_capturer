@@ -274,6 +274,11 @@
   .videos .nombre small { display: block; font: 500 12px/1.3 var(--sans); letter-spacing: 0; color: var(--oceanico); }
   .videos .btn { min-height: 44px; padding: 0 12px; }
   .videos .vacio { display: block; padding: 12px; text-align: center; color: var(--oceanico); font-size: 13px; background: none; box-shadow: none; }
+  /* ADR 0034: cuántos segundos hacia atrás repetir. */
+  .atras { display: grid; grid-template-columns: auto repeat(5, 1fr); align-items: center; gap: 6px; margin: 10px 0; }
+  .atras > span { font: 600 10px/1.2 var(--sans); letter-spacing: .1em; text-transform: uppercase; color: var(--oceanico); padding-right: 4px; }
+  .atras .btn { min-height: 40px; padding: 0 4px; }
+  .atras .btn[aria-pressed="true"] { background: var(--teal); color: var(--profundo); box-shadow: none; }
   .progreso { position: relative; height: 34px; margin-bottom: 10px; border-radius: 10px; background: var(--profundo); box-shadow: inset 0 0 0 1px var(--linea); overflow: hidden; }
   .progreso[hidden] { display: none; }
   .progreso i { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--teal); opacity: .55; transition: width .2s; }
@@ -303,7 +308,7 @@
 <main>
   <section class="card ancho" data-tipos="volleyball" aria-labelledby="t-voley" hidden>
     <h2 id="t-voley">Vóleibol</h2>
-    <p class="nota">El vóley sale, por ahora, con la cámara tal cual: sin marcador ni gráficos. Desde aquí se ven las cámaras y el soporte.</p>
+    <p class="nota">El vóley sale, por ahora, con la cámara tal cual: sin marcador ni gráficos, salvo la repetición. Desde aquí se repiten las jugadas y se ven las cámaras y el soporte.</p>
   </section>
 
   <section class="marcador ancho" aria-label="Marcador" data-tipos="football">
@@ -382,6 +387,31 @@
           <button type="button" class="btn quitar" data-gol="away,-1" aria-label="Quitar un gol al visitante">− 1</button>
         </div>
       </div>
+    </section>
+
+    <!-- ADR 0034: la repetición al aire, en los tres tipos de evento y con una o dos cámaras. -->
+    <section class="card" aria-labelledby="t-jugada" data-tipos="football show volleyball">
+      <h2 id="t-jugada">Repetición</h2>
+      <div class="sonando" id="repe-sonando" hidden>
+        <div><small id="repe-fase">Al aire</small><b id="repe-nombre">Repetición</b></div>
+        <span class="cuenta" id="repe-cuenta">0:00</span>
+        <button class="btn quitar" id="repe-parar" type="button" data-propio>Volver al directo</button>
+      </div>
+      <button type="button" class="btn acento grande" style="width:100%" id="repe-marcar" data-propio>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/></g><circle cx="12" cy="12" r="1.8" fill="currentColor"/></svg>
+        <span>Marcar jugada</span>
+      </button>
+      <div class="atras" role="group" aria-label="Segundos hacia atrás" id="repe-atras">
+        <span>Hacia atrás</span>
+        <button type="button" class="btn" data-propio data-atras="5" aria-pressed="false">5 s</button>
+        <button type="button" class="btn" data-propio data-atras="10" aria-pressed="false">10 s</button>
+        <button type="button" class="btn" data-propio data-atras="15" aria-pressed="true">15 s</button>
+        <button type="button" class="btn" data-propio data-atras="20" aria-pressed="false">20 s</button>
+        <button type="button" class="btn" data-propio data-atras="30" aria-pressed="false">30 s</button>
+      </div>
+      <button type="button" class="btn" style="width:100%; margin-bottom:10px" id="repe-ultimo" data-propio>Repetir lo último · 15 s</button>
+      <ul class="videos" id="repe-marcas"><li class="vacio">Sin marcas: pulsa «Marcar jugada» cuando pase algo.</li></ul>
+      <p class="nota">Sale la cortinilla con la copa y la casa, la jugada tal como se emitió (con el gráfico de entonces) y otra vez el directo. El sonido sigue en directo. El maestro guarda el último minuto y medio.</p>
     </section>
 
     <section class="card" aria-labelledby="t-reloj" data-tipos="football">
@@ -586,13 +616,6 @@
       </div>
     </section>
 
-    <section class="card" aria-labelledby="t-jugada" data-tipos="football">
-      <h2 id="t-jugada">Repetición</h2>
-      <button type="button" class="btn acento grande" style="width:100%" data-orden="clips/mark">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/></g><circle cx="12" cy="12" r="1.8" fill="currentColor"/></svg>
-        <span>Marcar jugada</span>
-      </button>
-    </section>
   </div>
 
   <details class="card ancho" id="camaras-programa" open>
@@ -647,6 +670,7 @@ function tic() {
   if (partido.caption) {
     $('rotulo-cuenta').textContent = rotuloFijo ? 'fijo' : Math.max(0, Math.ceil((rotuloHasta - performance.now()) / 1000)) + ' s';
   }
+  ticRepeticion();
 }
 
 const PLAY = 'M8 5.2v13.6a.8.8 0 0 0 1.23.67l10.4-6.8a.8.8 0 0 0 0-1.34L9.23 4.53A.8.8 0 0 0 8 5.2z';
@@ -740,6 +764,7 @@ function pinta(p) {
   const cola = (p.video_queue || []).length;
   $('video-al-aire').textContent = cola ? 'Al aire · faltan ' + cola : 'Al aire';
   document.querySelectorAll('#videos li[data-nombre]').forEach(li => li.classList.toggle('suena', !!p.video && li.dataset.nombre === p.video.name));
+  pintaRepeticion(p.replay || { marks: [], buffer_ms: 0, on_air: null });
   if (p.save_error) aviso('El maestro no pudo guardar el partido: ' + p.save_error);
   tic();
 }
@@ -1594,6 +1619,89 @@ $('in-video').addEventListener('change', e => {
   x.send(archivo);
 });
 $('video-parar').addEventListener('click', e => orden('video/stop', {}, e.currentTarget));
+
+// La repetición (ADR 0034). Los segundos hacia atrás los recuerda este navegador.
+const ATRAS = [5, 10, 15, 20, 30];
+// Lo que tiene que quedar de una jugada en la memoria del maestro para repetirla
+// (OverlaySpec.replay.min_s): con menos, el maestro contesta 409.
+const REPE_MIN_MS = 3000;
+const FASES = { in: 'Entrando', replay: 'Al aire', out: 'Volviendo al directo' };
+let atras = 15;
+try { const g = +localStorage.getItem('zero.repeticion.atras'); if (ATRAS.includes(g)) atras = g; } catch {}
+let repeHasta = 0;
+let marcasVistas = '';
+
+// Una marca cabe si de [marca − atrás, marca] quedan al menos REPE_MIN_MS en la memoria.
+const cabe = edad => !!(partido && partido.replay) && partido.replay.buffer_ms - edad >= REPE_MIN_MS;
+
+function pintaAtras() {
+  document.querySelectorAll('#repe-atras [data-atras]').forEach(b => b.setAttribute('aria-pressed', +b.dataset.atras === atras ? 'true' : 'false'));
+  $('repe-ultimo').textContent = 'Repetir lo último · ' + atras + ' s';
+}
+
+function pintaRepeticion(r) {
+  const alAire = r.on_air;
+  $('repe-sonando').hidden = !alAire;
+  if (alAire) {
+    repeHasta = performance.now() + alAire.remaining_ms;
+    $('repe-fase').textContent = FASES[alAire.phase] || 'Al aire';
+    $('repe-nombre').textContent = (alAire.mark ? 'Jugada ' + alAire.mark : 'Lo último') + ' · ' + alAire.seconds + ' s';
+  }
+  $('repe-parar').disabled = !alAire || alAire.phase === 'out';
+  $('repe-ultimo').disabled = !!alAire || !r.buffer_ms;
+  // La lista se rehace solo si cambian las marcas; la edad y si caben las lleva el tic.
+  const futbol = (partido && partido.event_kind || 'football') === 'football';
+  const huella = JSON.stringify(r.marks.map(m => m.id)) + (alAire ? alAire.mark : '') + futbol;
+  if (huella !== marcasVistas) {
+    marcasVistas = huella;
+    const ul = $('repe-marcas');
+    if (!r.marks.length) {
+      ul.innerHTML = '<li class="vacio">Sin marcas: pulsa «Marcar jugada» cuando pase algo.</li>';
+    } else {
+      ul.replaceChildren(...r.marks.map(m => {
+        const li = document.createElement('li');
+        li.dataset.marca = m.id;
+        li.classList.toggle('suena', !!alAire && alAire.mark === m.id);
+        const nombre = document.createElement('div');
+        nombre.className = 'nombre';
+        // En el fútbol, el minuto del partido; en lo demás, el cronómetro no dice nada.
+        nombre.textContent = 'Jugada ' + m.id + (futbol ? ' · ' + mmss(m.clock_ms) : '');
+        nombre.append(document.createElement('small'));
+        const repetir = document.createElement('button');
+        repetir.className = 'btn acento'; repetir.type = 'button'; repetir.dataset.propio = ''; repetir.textContent = 'Repetir';
+        repetir.addEventListener('click', () => orden('replay/play', { mark: m.id, seconds: atras }, repetir));
+        li.append(nombre, repetir);
+        return li;
+      }));
+    }
+  }
+  document.querySelectorAll('#repe-marcas li[data-marca]').forEach(li => {
+    li.dataset.edad = (r.marks.find(m => String(m.id) === li.dataset.marca) || { age_ms: 0 }).age_ms;
+  });
+  ticRepeticion();
+}
+
+function ticRepeticion() {
+  const r = partido && partido.replay;
+  if (!r) return;
+  if (r.on_air) $('repe-cuenta').textContent = mmss(Math.max(0, repeHasta - performance.now()) + 999);
+  const pasado = performance.now() - recibido;
+  document.querySelectorAll('#repe-marcas li[data-marca]').forEach(li => {
+    const edad = +li.dataset.edad + pasado;
+    li.querySelector('small').textContent = cabe(edad) ? 'hace ' + mmss(edad) : 'hace ' + mmss(edad) + ' · ya no está en la memoria';
+    li.querySelector('button').disabled = !!r.on_air || !cabe(edad);
+  });
+}
+
+document.querySelectorAll('#repe-atras [data-atras]').forEach(b => b.addEventListener('click', () => {
+  atras = +b.dataset.atras;
+  try { localStorage.setItem('zero.repeticion.atras', String(atras)); } catch {}
+  pintaAtras();
+}));
+$('repe-marcar').addEventListener('click', e => { if (navigator.vibrate) navigator.vibrate(12); orden('replay/mark', {}, e.currentTarget); });
+$('repe-ultimo').addEventListener('click', e => orden('replay/play', { mark: null, seconds: atras }, e.currentTarget));
+$('repe-parar').addEventListener('click', e => orden('replay/stop', {}, e.currentTarget));
+pintaAtras();
 
 $('franja-sacar').addEventListener('click', e => orden('graphics/strip', { show_s: 15 }, e.currentTarget));
 $('franja-todas').addEventListener('click', e => orden('graphics/strip_all', { show_s: 15 }, e.currentTarget));

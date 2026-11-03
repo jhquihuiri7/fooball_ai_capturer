@@ -8,7 +8,8 @@
 /// `anim_fps`.
 ///
 /// Lo que se pinta depende del tipo de evento (ADR 0031): el fútbol con todo; el espectáculo
-/// sin marcador ni tarjetas, con EN VIVO, el rótulo y la franja; el vóley, nada por ahora.
+/// sin marcador ni tarjetas, con EN VIVO, el rótulo y la franja; el vóley, nada por ahora. La
+/// repetición (ADR 0034), en los tres: su cortinilla y su rótulo van en la capa de encima.
 library;
 
 import 'dart:io';
@@ -23,6 +24,7 @@ import 'package:football_ai_capture/src/graphics/halftime_card_painter.dart';
 import 'package:football_ai_capture/src/graphics/lineup_card_painter.dart';
 import 'package:football_ai_capture/src/graphics/overlay_bridge.dart';
 import 'package:football_ai_capture/src/graphics/overlay_raster.dart';
+import 'package:football_ai_capture/src/graphics/replay_painter.dart';
 import 'package:football_ai_capture/src/graphics/scoreboard_painter.dart';
 import 'package:football_ai_capture/src/match_state.dart';
 import 'package:football_ai_capture/src/server/graphics_store.dart';
@@ -40,14 +42,17 @@ class ProgramGraphics {
     this.competition = '',
     OverlayRaster? scoreboard,
     CardRaster? cards,
+    ReplayRaster? replay,
   }) : _scoreboard = scoreboard ?? OverlayRaster(),
-       _cards = cards ?? CardRaster();
+       _cards = cards ?? CardRaster(),
+       _replay = replay ?? ReplayRaster();
 
   final MatchEngine engine;
   final OverlayBridge bridge;
   String competition;
   final OverlayRaster _scoreboard;
   final CardRaster _cards;
+  final ReplayRaster _replay;
   bool _busy = false;
   bool _again = false;
   bool _slateSent = false;
@@ -200,11 +205,34 @@ class ProgramGraphics {
   /// Si el último raster llevaba el gol: al irse, hace falta uno más que lo quite.
   bool _goalShown = false;
 
-  /// Si el gol está entrando o saliendo, o acaba de irse: entonces el maestro pinta a
-  /// `OverlaySpec.goal['anim_fps']`; quieto, basta el segundo del reloj.
+  /// Si el último raster llevaba algo de la repetición: al acabar, hace falta uno más que lo
+  /// quite.
+  bool _replayShown = false;
+
+  /// La capa de la repetición se quita una vez al empezar: la de un maestro anterior no vale.
+  bool _replayCleared = false;
+
+  /// Si el gol o la cortinilla de la repetición se mueven, o acaban de irse: entonces el maestro
+  /// pinta a `anim_fps` (los dos van a 20); quietos, basta el segundo del reloj.
   bool get animating {
     final ({MatchTeam team, int elapsedMs})? g = engine.goal;
-    return g == null ? _goalShown : goalMoving(g.elapsedMs);
+    final bool gol = g == null ? _goalShown : goalMoving(g.elapsedMs);
+    return gol || engine.replay.moving || (_replayShown && engine.replayGraphic == null);
+  }
+
+  /// La capa de la repetición (ADR 0034): la cortinilla y el rótulo, o nada.
+  Future<void> _publishReplay() async {
+    if (!_replayCleared) {
+      await bridge.sink.clearOverlay(OverlayLayerId.replay.index);
+      _replayCleared = true;
+    }
+    final ReplayGraphic? r = engine.replayGraphic;
+    _replayShown = r != null;
+    if (r == null) {
+      await bridge.clear(OverlayLayerId.replay);
+      return;
+    }
+    await bridge.publish(OverlayLayerId.replay, await _replay.render(r, icon: await _championship()));
   }
 
   /// Pone el gráfico al día. Si se llama mientras pinta, repite una vez al acabar: nunca
@@ -224,6 +252,7 @@ class ProgramGraphics {
       }
       do {
         _again = false;
+        await _publishReplay();
         if (engine.eventKind == EventKind.volleyball) {
           // El vóley, por ahora, sin gráfico: sale la cámara tal cual (ADR 0031).
           _goalShown = false;

@@ -32,6 +32,8 @@ import 'package:football_ai_capture/src/server/lineups.dart';
 import 'package:football_ai_capture/src/server/idempotency.dart';
 import 'package:football_ai_capture/src/server/graphics_store.dart';
 import 'package:football_ai_capture/src/server/match_engine.dart';
+import 'package:football_ai_capture/src/server/program_replay.dart';
+import 'package:football_ai_capture/src/server/replay.dart';
 import 'package:football_ai_capture/src/server/video_store.dart';
 
 /// Tipo de los errores de la API (`PROBLEM_CONTENT_TYPE`, RFC 7807).
@@ -176,6 +178,7 @@ class MasterApi {
     this.rigStatus,
     this.camera,
     this.live,
+    this.replay,
   }) : _idempotency = IdempotencyCache(nowMs: monotonicMs);
 
   final MatchEngine engine;
@@ -218,6 +221,9 @@ class MasterApi {
 
   /// La vista en vivo de la LAN (ADR 0033); la sirve [MasterApiServer].
   final LiveViews? live;
+
+  /// La repetición nativa (ADR 0034); sin ella, `replay/play` y `replay/stop` son un 409.
+  final ReplaySink? replay;
 
   int _longPolls = 0;
 
@@ -582,6 +588,10 @@ class MasterApi {
     'video/play',
     'video/stop',
     'clips/mark',
+    // ADR 0034: la repetición al aire.
+    'replay/mark',
+    'replay/play',
+    'replay/stop',
     'stream/start',
     'stream/stop',
     // ADR 0033: el encuadre a mano de «Una cámara».
@@ -642,6 +652,9 @@ class MasterApi {
     }
     if (name.startsWith('camera/')) {
       return _camera(name, body, ambitos);
+    }
+    if (name == 'replay/play' || name == 'replay/stop') {
+      return _replay(name, body, ambitos);
     }
     try {
       final Map<String, Object?> partido = engine.apply(name, body);
@@ -709,6 +722,49 @@ class MasterApi {
       return ApiResponse.problem(error.status, error.message);
     } on TimeoutException {
       return ApiResponse.problem(HttpStatus.gatewayTimeout, 'el móvil no contestó a tiempo a la cámara');
+    }
+  }
+
+  /// `replay/play` y `replay/stop` (ADR 0034): las prepara y las corta el nativo, que tiene el
+  /// programa. `replay/play` contesta cuando el tramo está listo para salir, o con lo que dijo el
+  /// nativo; la cortinilla no empieza hasta entonces.
+  Future<ApiResponse> _replay(String name, Map<String, Object?> body, List<String> ambitos) async {
+    Map<String, Object?> partido() => <String, Object?>{...engine.toJson(), 'scopes': ambitos};
+    final ReplaySink? nativo = replay;
+    try {
+      if (nativo == null) {
+        throw OrderError(HttpStatus.conflict, replayWithoutProgram);
+      }
+      if (name == 'replay/stop') {
+        final ({int id, int cutRigMs}) corte = engine.replayStop();
+        await nativo.stop(corte.id, corte.cutRigMs).timeout(commandTimeout);
+        return ApiResponse.json(partido());
+      }
+      final ReplayRequest pedida = engine.replayRequest(body);
+      final String respuesta;
+      try {
+        respuesta = await nativo
+            .prepare(pedida.id, pedida.fromRigMs, pedida.toRigMs, replayLeadToCutMs)
+            .timeout(replayPrepareTimeout);
+      } on TimeoutException {
+        // Que no salga más tarde sin cortinilla.
+        engine.replayFailed(pedida.id);
+        unawaited(nativo.stop(pedida.id, 0));
+        return ApiResponse.problem(HttpStatus.gatewayTimeout, 'el maestro no preparó la repetición a tiempo');
+      }
+      final ReplayArmed armada;
+      try {
+        armada = parseReplayArmed(pedida.id, respuesta);
+      } on OrderError {
+        engine.replayFailed(pedida.id);
+        rethrow;
+      }
+      engine.replayArmed(armada);
+      return ApiResponse.json(partido());
+    } on OrderError catch (error) {
+      return ApiResponse.problem(error.status, error.message, error.status == HttpStatus.conflict ? partido() : null);
+    } on TimeoutException {
+      return ApiResponse.problem(HttpStatus.gatewayTimeout, 'el móvil no contestó a tiempo a la repetición');
     }
   }
 

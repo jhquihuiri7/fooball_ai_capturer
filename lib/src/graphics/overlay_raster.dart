@@ -13,6 +13,7 @@ import '../generated/overlay_spec.g.dart';
 import 'fixtures_card_painter.dart';
 import 'halftime_card_painter.dart';
 import 'lineup_card_painter.dart';
+import 'replay_painter.dart';
 import 'scoreboard_painter.dart';
 import 'slate_painter.dart';
 
@@ -88,6 +89,36 @@ class OverlayRaster {
     _lastSlots = sponsorSlots;
     return _last =
         OverlayFrame(rgba: rgba, width: width, height: height, generation: _generation);
+  }
+}
+
+/// La capa de la repetición (ADR 0034): la cortinilla y el rótulo. Se pinta de nuevo solo si
+/// cambia lo que enseña: mientras la cortinilla se mueve, a `anim_fps`; quieta, nunca.
+class ReplayRaster {
+  ReplayRaster({
+    this.width = OverlaySpec.programWidth,
+    this.height = OverlaySpec.programHeight,
+  });
+
+  final int width;
+  final int height;
+  (ReplayGraphic, OverlayFrame)? _last;
+  int _generation = 0;
+
+  int get rasterCount => _generation;
+
+  /// La capa para `graphic`; `icon` es el icono del campeonato ya decodificado (su versión va
+  /// en `graphic`, que es lo que decide si hay que volver a pintar).
+  Future<OverlayFrame> render(ReplayGraphic graphic, {ui.Image? icon}) async {
+    final (ReplayGraphic, OverlayFrame)? previa = _last;
+    if (previa != null && previa.$1 == graphic) {
+      return previa.$2;
+    }
+    final Uint8List rgba = await _rgbaOf(await paintReplayImage(graphic, width, height, icon: icon));
+    _generation += 1;
+    final OverlayFrame frame = OverlayFrame(rgba: rgba, width: width, height: height, generation: _generation);
+    _last = (graphic, frame);
+    return frame;
   }
 }
 

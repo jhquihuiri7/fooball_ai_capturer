@@ -26,6 +26,7 @@ import 'package:football_ai_capture/src/server/control_token.dart';
 import 'package:football_ai_capture/src/server/match_engine.dart';
 import 'package:football_ai_capture/src/server/match_record.dart';
 import 'package:football_ai_capture/src/server/match_migration.dart';
+import 'package:football_ai_capture/src/server/program_replay.dart';
 import 'package:football_ai_capture/src/server/program_video.dart';
 import 'package:football_ai_capture/src/server/replica.dart';
 import 'package:football_ai_capture/src/server/rig_time.dart';
@@ -117,6 +118,7 @@ class MasterHost extends ChangeNotifier {
     this.adSink,
     this.adPacks,
     this.videoSink,
+    this.replaySink,
     this.freeDiskBytes,
     this.localRecording,
     this.camera,
@@ -192,6 +194,10 @@ class MasterHost extends ChangeNotifier {
 
   /// El vídeo nativo del programa (IOS-103); sin él, `video/play` no suena.
   final VideoSink? videoSink;
+
+  /// La repetición nativa (ADR 0034); sin ella, `replay/play` es un 409.
+  final ReplaySink? replaySink;
+  ReplayBufferWatch? _replayWatch;
 
   /// Lo libre del disco del móvil, para la reserva de grabación al subir vídeos.
   final int? Function()? freeDiskBytes;
@@ -349,6 +355,7 @@ class MasterHost extends ChangeNotifier {
         thumbnail: thumbnail,
         rigStatus: rigStatus,
         camera: camera,
+        replay: replaySink,
         live: thumbnail == null
             ? null
             : LiveViews(thumbnail: (String fuente) => thumbnail!('$cameraLiveThumbPrefix$fuente')),
@@ -366,6 +373,7 @@ class MasterHost extends ChangeNotifier {
       _startCamera(engine);
       _startGraphics(engine);
       _startVideo(engine);
+      _startReplay(engine);
       _startReplica(engine);
       await _startAds(engine);
       problem = engine.lineupsError ?? apartado;
@@ -450,8 +458,8 @@ class MasterHost extends ChangeNotifier {
     _graphics = g;
     _changes = engine.changes.listen((_) => unawaited(g.refresh()));
     _clockTick = Timer.periodic(const Duration(seconds: 1), (_) => unawaited(g.refresh()));
-    // Mientras el gol entra o sale, a `anim_fps`; el resto del tiempo el temporizador solo
-    // mira un booleano.
+    // Mientras el gol o la cortinilla de la repetición se mueven, a `anim_fps` (los dos son de
+    // 20); el resto del tiempo el temporizador solo mira un booleano.
     _animTick = Timer.periodic(
       Duration(milliseconds: Duration.millisecondsPerSecond ~/ OverlaySpec.goal['anim_fps']!),
       (_) {
@@ -474,6 +482,20 @@ class MasterHost extends ChangeNotifier {
     _video = v;
     _videoChanges = engine.changes.listen((_) => unawaited(v.refresh()));
     _videoTick = Timer.periodic(const Duration(seconds: 1), (_) => unawaited(v.refresh()));
+  }
+
+  /// La repetición (ADR 0034): el motor sabe cada segundo hasta dónde llega el anillo.
+  void _startReplay(MatchEngine engine) {
+    final ReplaySink? sink = replaySink;
+    if (sink == null) {
+      return;
+    }
+    _replayWatch = ReplayBufferWatch(engine: engine, sink: sink)..start();
+  }
+
+  void _stopReplay() {
+    _replayWatch?.stop();
+    _replayWatch = null;
   }
 
   Future<void> _stopVideo() async {
@@ -581,6 +603,7 @@ class MasterHost extends ChangeNotifier {
 
   Future<void> _stepDown() async {
     _stopGraphics();
+    _stopReplay();
     await _stopVideo();
     _stopReplica();
     _stopAds();

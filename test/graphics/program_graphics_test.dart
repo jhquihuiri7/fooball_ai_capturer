@@ -57,7 +57,8 @@ void main() {
 
       await g.refresh();
       await g.refresh();
-      expect(sink.calls, <String>['set 2', 'set 0'], reason: 'SIN SEÑAL una vez; sin cambios no se repite');
+      expect(sink.calls, <String>['set 2', 'clear 3', 'set 0'],
+          reason: 'SIN SEÑAL una vez, la capa de la repetición se limpia al empezar; sin cambios no se repite');
 
       // El marcador a mano (un gol trae su animación, que se mira aparte).
       m.apply('match/score', <String, Object?>{
@@ -234,7 +235,7 @@ void main() {
       expect(g.scoreboardState().lowerThirdSubtitle, 'Cantado por Jonathan Quiwi');
       m.apply('graphics/halftime', <String, Object?>{'on_air': true});
       await g.refresh();
-      expect(sink.calls, <String>['set 2', 'set 0'], reason: 'ni tarjeta ni desenfoque: el marcador con su rótulo');
+      expect(sink.calls, <String>['set 2', 'clear 3', 'set 0'], reason: 'ni tarjeta ni desenfoque: el marcador con su rótulo');
       reloj.ms = 11000;
       expect(g.scoreboardState().lowerThirdTitle, isNull, reason: 'los 10 s pasaron');
 
@@ -243,7 +244,7 @@ void main() {
       );
       final _Sink otro = _Sink();
       await ProgramGraphics(engine: voley, bridge: OverlayBridge(otro)).refresh();
-      expect(otro.calls, <String>['set 2'], reason: 'solo SIN SEÑAL, que sale cuando no hay cámara');
+      expect(otro.calls, <String>['set 2', 'clear 3'], reason: 'solo SIN SEÑAL, que sale cuando no hay cámara');
       dir.deleteSync(recursive: true);
     });
   });

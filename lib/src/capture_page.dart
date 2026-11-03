@@ -36,6 +36,7 @@ import 'package:football_ai_capture/src/mando_qr_sheet.dart';
 import 'package:football_ai_capture/src/match_state.dart' show matchStateKey;
 import 'package:football_ai_capture/src/server/camera_control.dart';
 import 'package:football_ai_capture/src/server/master_host.dart';
+import 'package:football_ai_capture/src/server/program_replay.dart';
 import 'package:football_ai_capture/src/server/program_video.dart';
 import 'package:football_ai_capture/src/server/replica.dart';
 import 'package:football_ai_capture/src/server/rig_time.dart';
@@ -157,6 +158,8 @@ class _CapturePageState extends State<CapturePage> {
               adPacks: _adPacks,
               // Los vídeos del mando (IOS-103): el lector nativo y el disco que queda.
               videoSink: RigVideoSink(),
+              // La repetición al aire (ADR 0034): el anillo del programa y su reproductor.
+              replaySink: RigReplaySink(),
               freeDiskBytes: () => _session.status?.freeDiskBytes,
               localRecording: () => _session.saveVideo,
               // El estado del mando, al latido y al informe de la emisión (Bug A).

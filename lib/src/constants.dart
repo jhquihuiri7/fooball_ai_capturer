@@ -408,6 +408,14 @@ const int videoStartLeadMs = 300;
 /// él, el vídeo se da por acabado.
 const int videoEndGraceMs = 3000;
 
+/// Lo que espera `replay/play` a que el nativo prepare la repetición (ADR 0034): escribir el
+/// tramo y abrirlo son unos cientos de ms. Pasado esto, se da por perdida y no sale.
+const Duration replayPrepareTimeout = Duration(seconds: 3);
+
+/// Cada cuánto pregunta el maestro al nativo hasta dónde llega el anillo del programa: el
+/// mando apaga con eso las marcas que ya no caben.
+const Duration replayBufferInterval = Duration(seconds: 1);
+
 /// Cada cuánto el maestro manda la réplica aunque nada cambie (REPLICA_INTERVAL_S,
 /// ADR 0023 §11).
 const Duration replicaInterval = Duration(seconds: 5);
