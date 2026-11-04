@@ -27,6 +27,18 @@ final class FieldRobustnessTests: XCTestCase {
     }
 }
 
+/// Las miniaturas del mando (IOS-126): 5 por segundo, y 1 con el móvil caliente.
+final class ThumbRateTests: XCTestCase {
+    func testThumbnailsGoAtFivePerSecondAndOneWhenHot() {
+        XCTAssertEqual(1 / (ThumbHub.tickS * Double(ThumbHub.idleTicks)), 5, accuracy: 1e-9)
+        XCTAssertEqual(1 / (ThumbHub.tickS * Double(ThumbHub.panoramaTicks)), 5, accuracy: 1e-9)
+        XCTAssertEqual(1 / (ThumbHub.tickS * Double(ThumbHub.hotIdleTicks)), 1, accuracy: 1e-9)
+        // El programa va a 30 fps.
+        XCTAssertEqual(30 / ThumbHub.programEvery, 5)
+        XCTAssertEqual(30 / ThumbHub.hotIdleProgramEvery, 1)
+    }
+}
+
 /// Lo que ata a RigLink con el enlace y con el contrato de pigeon.
 final class RigLinkTests: XCTestCase {
     func testServiceTypeFitsMultipeerLimit() {

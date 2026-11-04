@@ -3412,9 +3412,10 @@ final class RigCalibrator: @unchecked Sendable {
 
 // MARK: - Las miniaturas del panel local (IOS-64)
 
-// La última miniatura JPEG de cada cámara y del programa, a 1 Hz: la propia sale del
-// anillo del pipeline; la del otro móvil llega por el enlace (`thumb`, la manda el
-// esclavo); la del programa, del banco program-split. El panel las pide por Pigeon.
+// La última miniatura JPEG de cada cámara y del programa, a 5 por segundo (IOS-126; antes,
+// 1), y a 1 con el móvil caliente: la propia sale del anillo del pipeline; la del otro móvil
+// llega por el enlace (`thumb`, la manda el esclavo); la del programa, del banco
+// program-split. El panel las pide por Pigeon.
 
 final class ThumbHub {
     static let shared = ThumbHub()
@@ -3425,12 +3426,15 @@ final class ThumbHub {
     private let thumbnailer = Thumbnailer()
     private let programThumbnailer = Thumbnailer()
     private var programFrames = 0
-    /// Cada cuántos fotogramas del programa se hace su miniatura (1 Hz a 30 fps).
-    static let programEvery = 30
+    /// Cada cuántos fotogramas del programa se hace su miniatura: 5 por segundo a 30 fps, y 1
+    /// con el móvil caliente (`serious` o peor).
+    static let programEvery = 6
+    static let hotIdleProgramEvery = 30
 
     // La vista en vivo del mando (ADR 0033): mientras alguien la mira, la vista general y el
     // programa van a 10 por segundo, y a 2 con el móvil caliente (`serious` o peor); el
-    // programa manda. El resto sigue a 1 Hz, y al esclavo solo le cuesta lo de siempre.
+    // programa manda. El resto va a 5 por segundo (a 1 en caliente), y al esclavo solo le
+    // cuesta su miniatura.
 
     /// Lo que antepone el maestro al nombre cuando pide para la vista en vivo
     /// (`cameraLiveThumbPrefix` de Dart): solo esas peticiones suben el ritmo.
@@ -3439,12 +3443,15 @@ final class ThumbHub {
     static let liveDemandS = 2.0
     /// El tic del temporizador, en s: 10 por segundo.
     static let tickS = 0.1
-    /// Tics entre miniaturas: sin nadie en vivo (1 Hz) y en vivo con el móvil caliente (2 fps).
-    static let idleTicks = 10
+    /// Tics entre miniaturas: sin nadie en vivo (5 por segundo; IOS-126), sin nadie en vivo y
+    /// con el móvil caliente (1 por segundo) y en vivo con el móvil caliente (2 por segundo).
+    /// A 5 por segundo, la del esclavo son unos 150 KB/s por el enlace (~30 KB cada una).
+    static let idleTicks = 2
+    static let hotIdleTicks = 10
     static let hotTicks = 5
-    /// Tics entre planos de la vista general con dos cámaras: unos 3 por segundo. Cada móvil
-    /// pinta el suyo y el esclavo lo manda por el enlace (ADR 0035).
-    static let panoramaTicks = 3
+    /// Tics entre planos de la vista general con dos cámaras: 5 por segundo (antes, unos 3).
+    /// Cada móvil pinta el suyo y el esclavo lo manda por el enlace (ADR 0035).
+    static let panoramaTicks = 2
     /// Fotogramas del programa entre miniaturas en vivo (10 fps a 30) y en caliente (2 fps).
     static let liveProgramEvery = 3
     static let hotProgramEvery = 15
@@ -3496,7 +3503,7 @@ final class ThumbHub {
             ticks += 1
             // Con dos cámaras, `left` y `right` son los planos de la vista general (ADR 0035).
             if FramingHub.shared.isPanorama {
-                guard ticks % (Self.hot ? Self.idleTicks : Self.panoramaTicks) == 0,
+                guard ticks % (Self.hot ? Self.hotIdleTicks : Self.panoramaTicks) == 0,
                       let ring = pipeline()?.ring, let ultimo = ring.availableRigMs().last,
                       let lease = ring.acquire(nearest: ultimo, maxDistanceMs: 0)
                 else { return }
@@ -3507,9 +3514,11 @@ final class ThumbHub {
                 if mandar, let session, !session.isMaster { session.send(thumb: plano) }
                 return
             }
-            // La propia, a 1 Hz; la vista general, a 1 Hz o a lo que pida la vista en vivo.
-            let propia = ticks % Self.idleTicks == 0
-            let cadaGeneral = live(FramingHub.overviewName) ? (Self.hot ? Self.hotTicks : 1) : Self.idleTicks
+            // La propia, a 5 por segundo (1 en caliente); la vista general, igual o a lo que
+            // pida la vista en vivo.
+            let reposo = Self.hot ? Self.hotIdleTicks : Self.idleTicks
+            let propia = ticks % reposo == 0
+            let cadaGeneral = live(FramingHub.overviewName) ? (Self.hot ? Self.hotTicks : 1) : reposo
             let general = ticks % cadaGeneral == 0
             guard propia || general, let ring = pipeline()?.ring, let ultimo = ring.availableRigMs().last,
                   let lease = ring.acquire(nearest: ultimo, maxDistanceMs: 0)
@@ -3536,7 +3545,8 @@ final class ThumbHub {
     /// vista en vivo lo mira. El JPEG se hace en su cola, no en la del programa.
     func program(_ buffer: CVPixelBuffer) {
         programFrames += 1
-        let cada = live("program") ? (Self.hot ? Self.hotProgramEvery : Self.liveProgramEvery) : Self.programEvery
+        let cada = live("program") ? (Self.hot ? Self.hotProgramEvery : Self.liveProgramEvery)
+            : (Self.hot ? Self.hotIdleProgramEvery : Self.programEvery)
         guard programFrames % cada == 0 else { return }
         lock.lock()
         let ocupado = programBusy

@@ -218,11 +218,23 @@ void main() {
     // La vista en vivo, las miniaturas y los atajos, solo con Cámara delante.
     expect(html, contains("if (pestana === 'camara' && !vivoAbierto && !document.hidden) arrancaVivo();"));
     expect(html, contains("if (document.hidden || pestana !== 'camara') return;"));
+    expect(html, contains("if (document.hidden || pestana !== 'camara' || miniaturasEnCurso) return;"));
     expect(html, contains("if (pestana !== 'camara' || !camaraActiva()"));
     expect(html, contains("if (nombre !== 'camara') { paraVivo(); return; }"));
     // Se abre en Partido, y cada navegador recuerda la suya.
     expect(html, contains("PESTANA_INICIAL = 'partido'"));
     expect(html, contains("localStorage.setItem(PESTANA_CLAVE, nombre)"));
+  });
+
+  test('las miniaturas del mando a 5 por segundo (IOS-126), y por el VPS como antes', () {
+    final String html = File('assets/panel/index.html').readAsStringSync();
+    expect(html, contains('const MINIATURAS_MS = 200;'));
+    expect(html, contains('setInterval(miniaturas, MINIATURAS_MS)'));
+    expect(html, contains('Cámaras y programa · 5 fps'));
+    expect(html, contains('const ESTADO_SOPORTE_MS = 1000;'), reason: 'la tarjeta Soporte no necesita más');
+    // La subida del maestro lleva el programa: por el VPS, lo de antes.
+    expect(html, contains('const GENERAL_REMOTO_MS = 333;'));
+    expect(html, contains('const PROGRAMA_REMOTO_MS = 1000;'));
   });
 
   group('en el maestro', () {

@@ -40,7 +40,7 @@ La app ya no abre en la pantalla de lado: pregunta **«¿Qué vas a transmitir?�
   marcador y reloj» (− 1 gol, ±1 min, a cero) y En pantalla; en el espectáculo, los Rótulos.
   Abajo, plegado, **Preparar el partido**: equipos y escudos, jornada, próximo partido,
   entrevistas e icono.
-- **Cámara**: el encuadre, la repetición, las cámaras a 1 fps y el soporte. La vista en vivo
+- **Cámara**: el encuadre, la repetición, las cámaras a 5 fps y el soporte. La vista en vivo
   solo corre con esta pestaña abierta: al salir se para y el maestro se calienta menos.
 - **Anuncios**: la franja inferior y los vídeos.
 - Junto al nombre de cada pestaña, una marca dice lo que tiene al aire: «al aire»,

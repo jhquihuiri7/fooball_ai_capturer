@@ -12,6 +12,36 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-11-04 · IOS-126 — las miniaturas de la cancha a 5 por segundo · 🚧 hecho; el Swift sin compilar y falta verlo en los iPhone
+
+Enmienda del ADR 0033 de football-ai, del 2026-11-04. El propietario: «no quiero que estén a un
+fps sino a 5 fps para ver más fluido».
+- **En nativo** (`ThumbHub`), las miniaturas de cada cámara y del programa, y los planos de la
+  vista general con dos cámaras: a 5 por segundo; con el móvil en `serious` o peor, a 1.
+  - `idleTicks` 2, `panoramaTicks` 2, `programEvery` 6;
+  - nuevos: `hotIdleTicks` 10 y `hotIdleProgramEvery` 30.
+  - La vista en vivo no cambia: 10 fps, y 2 en caliente.
+- **En el mando web**:
+  - «Cámaras y programa · 5 fps»: las tres a la vez cada 200 ms (`MINIATURAS_MS`); si una tanda
+    no ha vuelto, se salta el tic;
+  - la tarjeta Soporte, aparte, a 1 por segundo (`estadoSoporte`);
+  - las dos, solo con la pestaña Cámara.
+- **Por el VPS, como estaba**: lo que llega por el túnel lo sube el maestro por la subida móvil
+  del programa.
+- **Lo que cuesta**: la miniatura del esclavo por el enlace pasa de ~30 a ~150 KB/s.
+- **Tests**:
+  - `ThumbRateTests` en `RunnerTests` (sin correr: no hay Swift en Windows);
+  - `camera_control_test.dart`: el ritmo del mando y lo de por el VPS;
+  - en Edge, la página de verdad contra el maestro: 4,8 peticiones por segundo de cada fuente y
+    1 del estado.
+
+**En el Mac**: compilar y `RunnerTests`.
+
+**En los iPhone**, con la +21:
+- sin emitir, «Cámaras y programa · 5 fps» fluido;
+- con dos cámaras y emitiendo, la vista general también;
+- sin partes perdidas en el enlace (`[enlace]` en el registro).
+
 ## 2026-11-04 · IOS-125 — el mando web en pestañas, con la barra de directo · 🚧 hecho y visto en Edge; falta verlo en el móvil con la app nueva
 
 ADR 0036 de football-ai (db6830c). Solo cambia `assets/panel/index.html`; el maestro, las

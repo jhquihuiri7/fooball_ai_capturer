@@ -639,7 +639,7 @@
   </div>
   <div class="col">
   <details class="card ancho" id="camaras-programa" open>
-    <summary><h2>Cámaras y programa · 1 fps</h2></summary>
+    <summary><h2>Cámaras y programa · 5 fps</h2></summary>
     <div class="thumbs">
       <figure class="programa"><img id="t-program" alt="Programa"><figcaption>Programa</figcaption></figure>
       <figure><img id="t-left" alt="Cámara izquierda"><figcaption>Izquierda</figcaption></figure>
@@ -789,7 +789,7 @@ function muestraPestana(nombre, guardar) {
   if (guardar) window.scrollTo(0, 0);
   if (nombre !== 'camara') { paraVivo(); return; }
   if (camaraActiva() && !$('camara').hidden && !vivoAbierto && !document.hidden) arrancaVivo();
-  miniaturas();
+  miniaturas(); estadoSoporte();
 }
 $('pestanas').addEventListener('click', e => {
   const b = e.target.closest('[data-pestana]');
@@ -1043,6 +1043,10 @@ const ZOOM_PASO = 1.25;          // lo que acerca «+»; «−» aleja su invers
 const PAN_PASO = 0.1;            // lo que mueve cada flecha, en fracción del encuadre
 const RECUADRO_MIN = 0.02;       // un arrastre más corto (fracción de la vista general) es un toque
 const VIVO_REINTENTO_MS = 2000;  // cuándo se vuelve a abrir la vista en vivo si se corta
+const MINIATURAS_MS = 200;       // las cámaras y el programa sin la vista en vivo: 5 por segundo (IOS-126)
+const ESTADO_SOPORTE_MS = 1000;  // la tarjeta Soporte, una vez por segundo
+// Por el VPS, como estaba (IOS-126): lo que llega por el túnel lo sube el maestro por su subida
+// móvil, la misma que lleva el programa, y pedirlo más seguido no lo trae más seguido.
 const GENERAL_REMOTO_MS = 333;   // la vista general por el VPS: 3 por segundo (NUBE-24)
 const GENERAL_ALTO = 360, PANORAMA_ALTO = 320; // px del lienzo de la vista general: 16:9 con una cámara, 2:1 con dos (ADR 0035)
 const PROGRAMA_REMOTO_MS = 1000; // el programa por el VPS sin WebRTC: 1 por segundo
@@ -1074,7 +1078,7 @@ function pintaCamara(p) {
   // El vóley va como el fútbol (enmienda del ADR 0031 del 2026-11-03): también lleva la cámara.
   const ver = !!cam && (tipo === 'football' || tipo === 'show' || tipo === 'volleyball');
   $('camara').hidden = !ver;
-  $('camaras-programa').hidden = ver; // la vista en vivo sustituye a las miniaturas de 1 fps
+  $('camaras-programa').hidden = ver; // la vista en vivo sustituye a las miniaturas
   if (!ver) { paraVivo(); return; }
   // Con dos cámaras (ADR 0035): el panorama, y el director o el operador.
   const pano = !!cam.panorama, lienzo = $('cam-general'), alto = pano ? PANORAMA_ALTO : GENERAL_ALTO;
@@ -1964,23 +1968,31 @@ function pintaEstado(s) {
     d.append(dt, dd); return d;
   }));
 }
+// Las tres a la vez y una tanda detrás de otra: si el maestro tarda, se salta un tic.
+let miniaturasEnCurso = false;
 async function miniaturas() {
   // En segundo plano, o en otra pestaña (ADR 0036), no se gastan datos ni batería.
-  if (document.hidden || pestana !== 'camara') return;
+  if (document.hidden || pestana !== 'camara' || miniaturasEnCurso) return;
+  miniaturasEnCurso = true;
   // Con «Una cámara» las sustituye la vista en vivo de la tarjeta Cámara (ADR 0033).
-  for (const n of camaraActiva() ? [] : ['left', 'right', 'program']) {
+  await Promise.all((camaraActiva() ? [] : ['left', 'right', 'program']).map(async n => {
     try {
       const r = await fetch('/api/v1/rig/thumb/' + n, { headers: cab });
-      if (!r.ok) continue;
+      if (!r.ok) return;
       const u = URL.createObjectURL(await r.blob());
       $('t-' + n).src = u; if (urls[n]) URL.revokeObjectURL(urls[n]); urls[n] = u;
     } catch {}
-  }
+  }));
+  miniaturasEnCurso = false;
+}
+async function estadoSoporte() {
+  if (document.hidden || pestana !== 'camara') return;
   try { const r = await fetch('/api/v1/rig/status', { headers: cab }); if (r.ok) pintaEstado(await r.json()); } catch {}
 }
 
 if (token) {
-  espera(); miniaturas(); cargaVideos(); setInterval(miniaturas, 1000); setInterval(tic, 250);
+  espera(); cargaVideos(); setInterval(miniaturas, MINIATURAS_MS); setInterval(estadoSoporte, ESTADO_SOPORTE_MS);
+  setInterval(tic, 250);
   setInterval(cargaVideos, 30000); // lo que suban otros mandos
 } else {
   conexion(false, 'sin token');

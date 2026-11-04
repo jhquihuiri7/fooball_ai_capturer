@@ -1,9 +1,8 @@
-// Las miniaturas del panel local (IOS-64): 640×360 en JPEG, a 1 fps como mucho.
+// Las miniaturas del panel local (IOS-64): 640×360 en JPEG, a 5 por segundo como mucho (IOS-126).
 //
 // VTPixelTransferSession reduce el NV12 (4K de la cámara o 1080p del programa) a un
 // BGRA de 640×360 en la GPU, sin pasar por CPU; ImageIO lo comprime. Los búferes de
-// destino salen de un pool preasignado: a 1 fps no hace falta más, pero tampoco se
-// reserva nada por llamada.
+// destino salen de un pool preasignado: no se reserva nada por llamada.
 
 import CoreVideo
 import Foundation
