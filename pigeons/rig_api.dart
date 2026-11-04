@@ -121,6 +121,8 @@ class CameraFraming {
     required this.moving,
     required this.soft,
     required this.error,
+    required this.panorama,
+    required this.auto,
   });
 
   /// Dónde cae el centro del destino en la vista general (0–1).
@@ -130,8 +132,8 @@ class CameraFraming {
   /// En la escala de la app Cámara: 1 es la cámara principal.
   double zoom;
 
-  /// Las cuatro esquinas del contorno en la vista general, u y v alternos: desde arriba a la
-  /// izquierda, en el sentido del reloj.
+  /// El contorno en la vista general, u y v alternos, desde arriba a la izquierda y en el
+  /// sentido del reloj: cuatro esquinas con una cámara, 32 puntos en el panorama (ADR 0035).
   List<double> outline;
   bool moving;
 
@@ -140,6 +142,12 @@ class CameraFraming {
 
   /// "" o por qué no se aplicó la orden; el encuadre es entonces el que había.
   String error;
+
+  /// Con dos cámaras: la vista general es el panorama (ADR 0035).
+  bool panorama;
+
+  /// Con dos cámaras: si encuadra el director y no el operador.
+  bool auto;
 }
 
 @HostApi()

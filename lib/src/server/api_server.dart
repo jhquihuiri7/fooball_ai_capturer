@@ -13,7 +13,7 @@
 /// - `stream/*` es del VPS, que tiene el relé: se manda como `relay_command` y se espera
 ///   la respuesta [apiCommandTimeout] (504 si vence); sin túnel, 503.
 /// - `camera/*` (ADR 0033): el encuadre a mano de «Una cámara», que va al nativo; y en la
-///   LAN, `GET /api/v1/rig/live/{overview|program}`, la vista en vivo en MJPEG.
+///   LAN, `GET /api/v1/rig/live/{overview|program|left|right}`, la vista en vivo en MJPEG.
 /// - Errores en RFC 7807. `Authorization: Bearer` con el token de mando (ámbitos `match`
 ///   y, si se marcó, `stream`, nunca `rig`) o con el PIN del operador (los tres). Por el
 ///   túnel, `principal: operator` (el panel remoto) también tiene los tres.
@@ -594,11 +594,12 @@ class MasterApi {
     'replay/stop',
     'stream/start',
     'stream/stop',
-    // ADR 0033: el encuadre a mano de «Una cámara».
+    // ADR 0033 y 0035: el encuadre a mano, con una cámara y con dos.
     'camera/frame',
     'camera/zoom',
     'camera/pan',
     'camera/reset',
+    'camera/auto',
     'camera/preset',
     'camera/preset_save',
     'camera/preset_delete',
@@ -689,7 +690,7 @@ class MasterApi {
 
   /// `camera/*` (ADR 0033): la orden va al nativo, que pone la geometría (16:9, la lente, el
   /// tope de 3×), y lo que vuelve pasa al estado. Los encuadres guardados son del maestro y
-  /// van con el evento. Sin «Una cámara», 409.
+  /// van con el evento. Sin programa, 409.
   Future<ApiResponse> _camera(String name, Map<String, Object?> body, List<String> ambitos) async {
     ApiResponse partido() => ApiResponse.json(<String, Object?>{...engine.toJson(), 'scopes': ambitos});
     try {

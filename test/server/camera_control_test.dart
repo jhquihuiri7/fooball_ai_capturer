@@ -62,6 +62,31 @@ class _Nativo {
 }
 
 void main() {
+  group('con dos cámaras (ADR 0035)', () {
+    test('camera/auto devuelve el encuadre al director', () {
+      _esOrden(cameraNativeOrder('camera/auto', <String, Object?>{}, (String _) => null), 'auto', <double>[]);
+    });
+
+    test('el estado dice panorama y quién encuadra, y con una cámara no cambia nada', () {
+      const CameraState una = CameraState(
+        centerU: 0.5, centerV: 0.5, zoom: 1, outline: <double>[0, 0, 1, 0, 1, 1, 0, 1], moving: false, soft: false,
+      );
+      expect(una.toJson().containsKey('panorama'), isFalse);
+      expect(una.toJson().containsKey('auto'), isFalse);
+      const CameraState dos = CameraState(
+        centerU: 0.5, centerV: 0.6, zoom: 1, outline: <double>[0, 0, 1, 0, 1, 1, 0, 1], moving: false, soft: false,
+        panorama: true, auto: true,
+      );
+      expect(dos.toJson()['panorama'], isTrue);
+      expect(dos.toJson()['auto'], isTrue);
+      expect(dos, isNot(una), reason: 'el cambio de modo sube el estado');
+    });
+
+    test('los planos de la vista general se pueden mirar en vivo', () {
+      expect(LiveViews.sources, containsAll(<String>['left', 'right']));
+    });
+  });
+
   group('lo que pide el mando', () {
     CameraPreset? ninguno(String _) => null;
 

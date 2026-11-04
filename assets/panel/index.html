@@ -162,8 +162,10 @@
   .camara-vistas { display: grid; gap: 10px; }
   @media (min-width: 900px) { .camara-vistas { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
   .camara-vistas figure { margin: 0; min-width: 0; }
+  @media (min-width: 900px) { .camara-vistas.panorama figure:first-child { grid-column: 1 / -1; } }
   .camara-vistas canvas, .camara-vistas video { width: 100%; aspect-ratio: 16 / 9; display: block; border-radius: 8px; background: #000; }
   #cam-general { touch-action: none; cursor: crosshair; }
+  #cam-general.panorama { aspect-ratio: 2 / 1; }
   .camara-estado { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0; }
   .camara-estado .zoom { font: 800 22px/1 var(--display); letter-spacing: .02em; }
   .camara-estado .chip { margin: 0; }
@@ -327,10 +329,10 @@
     <div class="chips" id="chips" aria-live="polite"></div>
   </section>
 
-  <!-- ADR 0033: el encuadre a mano, solo si el maestro emite con «Una cámara». -->
+  <!-- ADR 0033 y 0035: el encuadre a mano, con una cámara y con dos, en cuanto se emite. -->
   <section class="card ancho" id="camara" aria-labelledby="t-camara" hidden>
     <h2 id="t-camara">Cámara</h2>
-    <div class="camara-vistas">
+    <div class="camara-vistas" id="cam-vistas">
       <figure>
         <canvas id="cam-general" width="640" height="360" aria-label="Vista general: arrastra para encuadrar"></canvas>
         <figcaption id="cam-general-pie">Vista general · arrastra un recuadro</figcaption>
@@ -345,10 +347,12 @@
       <span class="zoom" id="cam-zoom">—</span>
       <span class="chip aviso" id="cam-borroso" hidden>se verá borroso</span>
       <span class="chip" id="cam-moviendo" hidden>moviendo…</span>
+      <span class="chip" id="cam-modo" hidden></span>
     </div>
     <div class="camara-botones">
       <button type="button" class="btn ancha" id="cam-reset" data-propio>Restablecer</button>
       <button type="button" class="btn ancha" id="cam-entera" data-propio>Lente entera</button>
+      <button type="button" class="btn ancha" id="cam-auto" data-propio hidden>Automático</button>
       <button type="button" class="btn" id="cam-menos" data-propio aria-label="Alejar">−</button>
       <button type="button" class="btn" id="cam-mas" data-propio aria-label="Acercar">+</button>
       <button type="button" class="btn alin ancha" id="cam-corte" data-propio aria-pressed="false"><span>Corte</span><small id="cam-corte-estado">la próxima, de golpe</small></button>
@@ -915,12 +919,14 @@ const PAN_PASO = 0.1;            // lo que mueve cada flecha, en fracción del e
 const RECUADRO_MIN = 0.02;       // un arrastre más corto (fracción de la vista general) es un toque
 const VIVO_REINTENTO_MS = 2000;  // cuándo se vuelve a abrir la vista en vivo si se corta
 const GENERAL_REMOTO_MS = 333;   // la vista general por el VPS: 3 por segundo (NUBE-24)
+const GENERAL_ALTO = 360, PANORAMA_ALTO = 320; // px del lienzo de la vista general: 16:9 con una cámara, 2:1 con dos (ADR 0035)
 const PROGRAMA_REMOTO_MS = 1000; // el programa por el VPS sin WebRTC: 1 por segundo
 const WHEP_PROGRAMA = '/whep/programa'; // el programa por WebRTC desde el VPS (NUBE-24)
 const FLECHAS = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
 let corte = false;
 let arrastre = null;            // el recuadro que se dibuja, {x0, y0, x1, y1} de 0 a 1
 let generalBitmap = null;       // la última vista general
+const planos = { left: null, right: null }; // con dos cámaras, los dos planos de la vista general
 let vivoAbierto = null;                // la vista en vivo abierta: {parar()}
 const color = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
@@ -944,6 +950,17 @@ function pintaCamara(p) {
   $('camara').hidden = !ver;
   $('camaras-programa').hidden = ver; // la vista en vivo sustituye a las miniaturas de 1 fps
   if (!ver) { paraVivo(); return; }
+  // Con dos cámaras (ADR 0035): el panorama, y el director o el operador.
+  const pano = !!cam.panorama, lienzo = $('cam-general'), alto = pano ? PANORAMA_ALTO : GENERAL_ALTO;
+  if (lienzo.height !== alto) lienzo.height = alto;
+  lienzo.classList.toggle('panorama', pano);
+  $('cam-vistas').classList.toggle('panorama', pano);
+  $('cam-entera').textContent = pano ? 'Lo más abierto' : 'Lente entera';
+  $('cam-auto').hidden = !pano;
+  $('cam-auto').disabled = !!cam.auto;
+  $('cam-modo').hidden = !pano;
+  $('cam-modo').textContent = cam.auto ? 'Encuadra el director' : 'A mano';
+  if (vivoAbierto && vivoAbierto.pano !== pano) paraVivo();
   $('cam-zoom').textContent = zoomTexto(cam.zoom);
   $('cam-borroso').hidden = !cam.soft;
   $('cam-moviendo').hidden = !cam.moving;
@@ -971,19 +988,25 @@ function pintaEncuadres(lista) {
   }));
 }
 
-// El recuadro sale en 16:9: en la vista general (que tiene la forma del programa) es un
-// cuadrado en coordenadas de 0 a 1, anclado en la esquina donde empezó el arrastre.
+// El recuadro sale en 16:9, anclado en la esquina donde empezó el arrastre. En la vista general
+// de una cámara, que tiene la forma del programa, es un cuadrado en coordenadas de 0 a 1; en el
+// panorama, que es de 2:1, es un poco más alto que ancho.
 function cuadrado(a) {
-  const lado = Math.max(Math.abs(a.x1 - a.x0), Math.abs(a.y1 - a.y0));
-  const xb = a.x0 + (a.x1 >= a.x0 ? lado : -lado), yb = a.y0 + (a.y1 >= a.y0 ? lado : -lado);
+  const c = $('cam-general'), forma = (9 / 16) * (c.width / c.height);
+  const ancho = Math.max(Math.abs(a.x1 - a.x0), Math.abs(a.y1 - a.y0) / forma), alto = ancho * forma;
+  const xb = a.x0 + (a.x1 >= a.x0 ? ancho : -ancho), yb = a.y0 + (a.y1 >= a.y0 ? alto : -alto);
   return { x0: Math.min(a.x0, xb), y0: Math.min(a.y0, yb), x1: Math.max(a.x0, xb), y1: Math.max(a.y0, yb) };
 }
 
 function dibujaGeneral() {
   const c = $('cam-general'), g = c.getContext('2d');
   g.fillStyle = '#000'; g.fillRect(0, 0, c.width, c.height);
-  if (generalBitmap) g.drawImage(generalBitmap, 0, 0, c.width, c.height);
   const cam = partido && partido.camera;
+  if (cam && cam.panorama) {
+    // Cada móvil manda el plano de su lado; se tocan en la costura.
+    if (planos.left) g.drawImage(planos.left, 0, 0, c.width / 2, c.height);
+    if (planos.right) g.drawImage(planos.right, c.width / 2, 0, c.width / 2, c.height);
+  } else if (generalBitmap) g.drawImage(generalBitmap, 0, 0, c.width, c.height);
   if (cam && cam.outline) {
     // El contorno del destino: casi un rectángulo, lo tuerce la perspectiva. Punteado mientras va.
     g.save(); g.lineWidth = 3; g.strokeStyle = color('--teal'); if (cam.moving) g.setLineDash([10, 6]);
@@ -1027,6 +1050,7 @@ $('cam-general').addEventListener('pointercancel', () => { arrastre = null; dibu
 
 $('cam-reset').addEventListener('click', e => ordenCamara('reset', { to: 'start' }, e.currentTarget));
 $('cam-entera').addEventListener('click', e => ordenCamara('reset', { to: 'full' }, e.currentTarget));
+$('cam-auto').addEventListener('click', e => ordenCamara('auto', {}, e.currentTarget));
 $('cam-mas').addEventListener('click', e => ordenCamara('zoom', { factor: ZOOM_PASO }, e.currentTarget));
 $('cam-menos').addEventListener('click', e => ordenCamara('zoom', { factor: 1 / ZOOM_PASO }, e.currentTarget));
 $('cam-corte').addEventListener('click', () => { corte = !corte; pintaCorte(); });
@@ -1071,6 +1095,11 @@ function pintaGeneralBitmap(b) {
   if (!b) return;
   if (generalBitmap) generalBitmap.close();
   generalBitmap = b; dibujaGeneral();
+}
+function pintaPlano(lado, b) {
+  if (!b) return;
+  if (planos[lado]) planos[lado].close();
+  planos[lado] = b; dibujaGeneral();
 }
 function pintaPrograma(b) {
   if (!b) return;
@@ -1145,7 +1174,8 @@ function paraVivo() {
 function arrancaVivo() {
   const control = new AbortController();
   const tareas = { relojes: [], pc: null, activo: true };
-  vivoAbierto = { parar() {
+  const pano = !!(partido && partido.camera && partido.camera.panorama);
+  vivoAbierto = { pano, parar() {
     tareas.activo = false; control.abort(); tareas.relojes.forEach(clearInterval);
     if (tareas.pc) tareas.pc.close();
     $('cam-video').srcObject = null; $('cam-video').hidden = true; $('cam-programa').hidden = false;
@@ -1160,7 +1190,13 @@ function arrancaVivo() {
     }
     return '';
   };
-  una('overview', pintaGeneralBitmap).then(modo => {
+  if (pano) {
+    for (const lado of ['left', 'right']) {
+      una(lado, b => pintaPlano(lado, b)).then(modo => {
+        if (modo === 'remoto' && tareas.activo) sondeo('/api/v1/rig/thumb/' + lado, GENERAL_REMOTO_MS, b => pintaPlano(lado, b), tareas);
+      });
+    }
+  } else una('overview', pintaGeneralBitmap).then(modo => {
     if (modo !== 'remoto' || !tareas.activo) return;
     $('cam-general-pie').textContent = 'Vista general · por el VPS, 3 por segundo · arrastra un recuadro';
     sondeo('/api/v1/rig/thumb/overview', GENERAL_REMOTO_MS, pintaGeneralBitmap, tareas);

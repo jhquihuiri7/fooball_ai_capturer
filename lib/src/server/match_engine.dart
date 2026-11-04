@@ -228,9 +228,8 @@ class MatchEngine {
   /// la jornada no los enciende: son del evento, no de un momento.
   final Map<String, bool> elementsOnAir = <String, bool>{for (final String e in onAirElements) e: true};
 
-  /// El encuadre a mano de «Una cámara» (ADR 0033), como lo dice el nativo; null con dos
-  /// móviles o sin emitir. No se guarda: lo lleva el nativo, y tras reiniciar vuelve el de
-  /// partida.
+  /// El encuadre a mano (ADR 0033 y 0035), como lo dice el nativo; null sin emitir. No se
+  /// guarda: lo lleva el nativo, y tras reiniciar vuelve el de partida.
   CameraState? camera;
 
   /// Lo que dice el nativo del encuadre; sube `rev` si cambió.
@@ -1267,7 +1266,7 @@ class MatchEngine {
       'interview': graphics.interview.toJson(),
       'scoreboard_on_air': scoreboardOnAir,
       'elements_on_air': <String, Object?>{...elementsOnAir},
-      // ADR 0033: el encuadre a mano de «Una cámara», con los encuadres guardados.
+      // ADR 0033 y 0035: el encuadre a mano, con los encuadres guardados.
       'camera': switch (camera) {
         null => null,
         final CameraState c => <String, Object?>{

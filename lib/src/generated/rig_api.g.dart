@@ -331,6 +331,8 @@ class CameraFraming {
     required this.moving,
     required this.soft,
     required this.error,
+    required this.panorama,
+    required this.auto,
   });
 
   /// Dónde cae el centro del destino en la vista general (0–1).
@@ -341,8 +343,8 @@ class CameraFraming {
   /// En la escala de la app Cámara: 1 es la cámara principal.
   double zoom;
 
-  /// Las cuatro esquinas del contorno en la vista general, u y v alternos: desde arriba a la
-  /// izquierda, en el sentido del reloj.
+  /// El contorno en la vista general, u y v alternos, desde arriba a la izquierda y en el
+  /// sentido del reloj: cuatro esquinas con una cámara, 32 puntos en el panorama (ADR 0035).
   List<double> outline;
 
   bool moving;
@@ -353,6 +355,12 @@ class CameraFraming {
   /// "" o por qué no se aplicó la orden; el encuadre es entonces el que había.
   String error;
 
+  /// Con dos cámaras: la vista general es el panorama (ADR 0035).
+  bool panorama;
+
+  /// Con dos cámaras: si encuadra el director y no el operador.
+  bool auto;
+
   List<Object?> _toList() {
     return <Object?>[
       centerU,
@@ -362,6 +370,8 @@ class CameraFraming {
       moving,
       soft,
       error,
+      panorama,
+      auto,
     ];
   }
 
@@ -378,6 +388,8 @@ class CameraFraming {
       moving: result[4]! as bool,
       soft: result[5]! as bool,
       error: result[6]! as String,
+      panorama: result[7]! as bool,
+      auto: result[8]! as bool,
     );
   }
 
@@ -390,7 +402,7 @@ class CameraFraming {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(centerU, other.centerU) && _deepEquals(centerV, other.centerV) && _deepEquals(zoom, other.zoom) && _deepEquals(outline, other.outline) && _deepEquals(moving, other.moving) && _deepEquals(soft, other.soft) && _deepEquals(error, other.error);
+    return _deepEquals(centerU, other.centerU) && _deepEquals(centerV, other.centerV) && _deepEquals(zoom, other.zoom) && _deepEquals(outline, other.outline) && _deepEquals(moving, other.moving) && _deepEquals(soft, other.soft) && _deepEquals(error, other.error) && _deepEquals(panorama, other.panorama) && _deepEquals(auto, other.auto);
   }
 
   @override
@@ -399,7 +411,7 @@ class CameraFraming {
 
   @override
   String toString() {
-    return 'CameraFraming(centerU: $centerU, centerV: $centerV, zoom: $zoom, outline: $outline, moving: $moving, soft: $soft, error: $error)';
+    return 'CameraFraming(centerU: $centerU, centerV: $centerV, zoom: $zoom, outline: $outline, moving: $moving, soft: $soft, error: $error, panorama: $panorama, auto: $auto)';
   }
 }
 

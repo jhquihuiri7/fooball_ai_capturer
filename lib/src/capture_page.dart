@@ -1050,7 +1050,7 @@ class _TroubleCard extends StatelessWidget {
   }
 }
 
-/// El encuadre a mano de «Una cámara» por Pigeon (ADR 0033): la orden al nativo y lo que
+/// El encuadre a mano por Pigeon (ADR 0033 y 0035): la orden al nativo y lo que
 /// contesta, en los tipos del maestro.
 Future<CameraReply?> _cameraOrder(String kind, List<double> values, bool cut) async {
   final CameraFraming? f = await RigHostApi().cameraOrder(CameraOrder(kind: kind, values: values, cut: cut));
@@ -1064,6 +1064,8 @@ Future<CameraReply?> _cameraOrder(String kind, List<double> values, bool cut) as
     outline: f.outline,
     moving: f.moving,
     soft: f.soft,
+    panorama: f.panorama,
+    auto: f.auto,
   );
   return CameraReply(estado, f.error);
 }

@@ -1406,7 +1406,7 @@ final class SplitBench {
         timer?.cancel()
         timer = nil
         queue.sync { finish() }
-        if config.singleCamera { FramingHub.shared.unmount() }
+        FramingHub.shared.unmount(owner: self)
     }
 
     static func nowMs() -> Int64 { RigLink.hostNowNs() / 1_000_000 }
@@ -1541,8 +1541,12 @@ final class SplitBench {
             // «Una cámara»: el encuadre a mano del mando (ADR 0033), que arranca en el zoom que
             // eligió el operador, y la vista general para las miniaturas.
             if config.singleCamera {
-                FramingHub.shared.mount(rig: modelo, side: side, context: ctx, zoom: config.singleZoom,
+                FramingHub.shared.mount(owner: self, rig: modelo, side: side, context: ctx, zoom: config.singleZoom,
                                         width: Self.programWidth, height: Self.programHeight)
+            } else {
+                // Con dos cámaras (ADR 0035): el panorama y el plano de este lado de la vista general.
+                FramingHub.shared.mountPanorama(owner: self, rig: modelo, side: side, context: ctx,
+                                                width: Self.programWidth, height: Self.programHeight)
             }
             rig = modelo
             rigSource = fuente
@@ -1779,11 +1783,19 @@ final class SplitBench {
                                             height: Self.programHeight, zoom: config.singleZoom)
             }
             lados = [side]
-        } else if let v = try? RectilinearView(yawRad: yaw, pitchRad: pitch, hfovRad: hfov,
-                                               width: Self.programWidth, height: Self.programHeight) {
-            lados = sidesFor(rig: rig, view: v)
         } else {
-            lados = [.left, .right]
+            // Con dos cámaras y el operador al mando (ADR 0035): a donde lo lleve el recuadro.
+            if let encuadre = FramingHub.shared.current, !encuadre.auto, let vista = encuadre.view() {
+                yaw = vista.yawRad
+                pitch = vista.pitchRad
+                hfov = vista.hfovRad
+            }
+            if let v = try? RectilinearView(yawRad: yaw, pitchRad: pitch, hfovRad: hfov,
+                                            width: Self.programWidth, height: Self.programHeight) {
+                lados = sidesFor(rig: rig, view: v)
+            } else {
+                lados = [.left, .right]
+            }
         }
         return ViewWire.quantized(ViewCommand(
             targetRigMs: t, viewId: UInt32(truncatingIfNeeded: t / 33), yawRad: yaw, pitchRad: pitch,
@@ -1911,12 +1923,22 @@ final class SplitBench {
             // (un relevo), se empieza de nuevo.
             let objetivo = rejilla(now + Self.viewLeadMs)
             if let ultimo = lastDirectorT, objetivo < ultimo { lastDirectorT = nil }
+            // Con el operador al mando (ADR 0035) el director sigue con sus cuentas, para no
+            // arrancar a ciegas cuando vuelva, pero sus vistas no salen.
+            let encuadre = FramingHub.shared.current
+            let aMano = encuadre.map { !$0.auto } ?? false
             for instante in reloj.gridInstants(after: lastDirectorT, through: objetivo,
                                                limit: Self.directorCatchUpInstants) {
-                if let (_, hist) = try? director.tick(targetRigMs: instante) {
+                if let (_, hist) = try? director.tick(targetRigMs: instante), !aMano {
                     hist.forEach { if history.view(at: $0.targetRigMs) == nil { history.append(ViewWire.quantized($0)) } }
+                    if let v = hist.last {
+                        encuadre?.follow(yawRad: v.yawRad, pitchRad: v.pitchRad, hfovRad: v.hfovRad)
+                    }
                 }
                 lastDirectorT = instante
+            }
+            if aMano, history.view(at: objetivo) == nil {
+                history.append(scriptedView(objetivo))
             }
         } else {
             history.append(scriptedView(rejilla(now + Self.viewLeadMs)))
@@ -1967,10 +1989,11 @@ final class SplitBench {
         detectTick()
     }
 
-    /// Quién da las vistas: el guion de SPK-04, el director, la lente tal cual de «Una
-    /// cámara» o el barrido de siempre.
+    /// Quién da las vistas: el guion de SPK-04, el director, el operador con dos cámaras, la
+    /// lente tal cual de «Una cámara» o el barrido de siempre.
     private var scriptName: String {
-        spk04 != nil ? "spk04" : director != nil ? "director" : config.singleCamera ? "lens" : "script"
+        if !config.singleCamera, let encuadre = FramingHub.shared.current, !encuadre.auto { return "manual" }
+        return spk04 != nil ? "spk04" : director != nil ? "director" : config.singleCamera ? "lens" : "script"
     }
 
     // MARK: - SPK-04: las vistas de cada instante y la 4K local
@@ -3227,6 +3250,9 @@ final class ThumbHub {
     /// Tics entre miniaturas: sin nadie en vivo (1 Hz) y en vivo con el móvil caliente (2 fps).
     static let idleTicks = 10
     static let hotTicks = 5
+    /// Tics entre planos de la vista general con dos cámaras: unos 3 por segundo. Cada móvil
+    /// pinta el suyo y el esclavo lo manda por el enlace (ADR 0035).
+    static let panoramaTicks = 3
     /// Fotogramas del programa entre miniaturas en vivo (10 fps a 30) y en caliente (2 fps).
     static let liveProgramEvery = 3
     static let hotProgramEvery = 15
@@ -3276,6 +3302,19 @@ final class ThumbHub {
         t.setEventHandler { [weak self] in
             guard let self else { return }
             ticks += 1
+            // Con dos cámaras, `left` y `right` son los planos de la vista general (ADR 0035).
+            if FramingHub.shared.isPanorama {
+                guard ticks % (Self.hot ? Self.idleTicks : Self.panoramaTicks) == 0,
+                      let ring = pipeline()?.ring, let ultimo = ring.availableRigMs().last,
+                      let lease = ring.acquire(nearest: ultimo, maxDistanceMs: 0)
+                else { return }
+                let plano = FramingHub.shared.overviewJpeg(from: lease.buffer)
+                ring.release(lease)
+                guard let plano else { return }
+                store(side.rawValue, plano)
+                if mandar, let session, !session.isMaster { session.send(thumb: plano) }
+                return
+            }
             // La propia, a 1 Hz; la vista general, a 1 Hz o a lo que pida la vista en vivo.
             let propia = ticks % Self.idleTicks == 0
             let cadaGeneral = live(FramingHub.overviewName) ? (Self.hot ? Self.hotTicks : 1) : Self.idleTicks
@@ -3323,7 +3362,7 @@ final class ThumbHub {
     }
 }
 
-// MARK: - El encuadre a mano de «Una cámara» (ADR 0033, IOS-115)
+// MARK: - El encuadre a mano (ADR 0033, IOS-115; con dos cámaras, ADR 0035, IOS-120)
 
 // La pasada de «Una cámara» lo monta al arrancar (sabe el soporte, su lado y el zoom de
 // partida) y lo desmonta al parar. El programa lee la vista en cada fotograma
@@ -3342,59 +3381,108 @@ final class FramingHub {
     private var overviewRenderer: MetalPartRenderer?
     private var overviewPool: CVPixelBufferPool?
     private var overviewView: ViewCommand?
-    private let overviewThumbnailer = Thumbnailer()
+    private var overviewThumbnailer: Thumbnailer?
+    private var mountOwner: ObjectIdentifier?
+    private var panorama = false
 
-    /// El encuadre de la pasada en marcha; nil sin «Una cámara».
+    /// Con dos cámaras: la vista general son dos planos, y cada móvil pinta el suyo.
+    var isPanorama: Bool {
+        lock.lock(); defer { lock.unlock() }
+        return panorama
+    }
+
+    /// El encuadre de la pasada en marcha; nil sin programa.
     var current: FramingController? {
         lock.lock(); defer { lock.unlock() }
         return controller
     }
 
-    func mount(rig: RigModel, side: CameraSide, context: MetalContext, zoom: Double, width: Int, height: Int) {
+    func mount(owner: AnyObject, rig: RigModel, side: CameraSide, context: MetalContext, zoom: Double,
+               width: Int, height: Int) {
         do {
             let espacio = try FramingSpace(camera: rig.camera(side), width: width, height: height)
-            let ancho = ThumbnailConstants.width, alto = ThumbnailConstants.height
-            let renderer = try MetalPartRenderer(context: context, rig: rig, side: side, width: ancho, height: alto)
-            var pool: CVPixelBufferPool?
-            CVPixelBufferPoolCreate(nil, nil, [
-                kCVPixelBufferPixelFormatTypeKey: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
-                kCVPixelBufferWidthKey: ancho, kCVPixelBufferHeightKey: alto,
-                kCVPixelBufferIOSurfacePropertiesKey: [:] as CFDictionary,
-                kCVPixelBufferMetalCompatibilityKey: true,
-            ] as CFDictionary, &pool)
             // La vista general: la lente entera por su eje, al tamaño de la miniatura (el
             // mismo campo que a 1080p, porque la relación de aspecto es la misma).
             let general = espacio.overview
-            let vista = ViewCommand(
-                targetRigMs: 0, viewId: 0, yawRad: general.yawRad, pitchRad: general.pitchRad,
-                hfovRad: general.hfovRad, sides: [side], seamYawRad: general.yawRad,
-                featherRad: RigConstants.panoramaFeatherRad, gains: .unity
+            try install(
+                owner: owner, controller: FramingController(space: espacio, zoom: zoom), panorama: false,
+                rig: rig, side: side, context: context, yawRad: general.yawRad, pitchRad: general.pitchRad,
+                hfovRad: general.hfovRad, width: ThumbnailConstants.width, height: ThumbnailConstants.height
             )
-            let c = FramingController(space: espacio, zoom: zoom)
-            lock.lock()
-            controller = c
-            overviewRenderer = renderer
-            overviewPool = pool
-            overviewView = vista
-            lock.unlock()
         } catch {
             NSLog("[encuadre] sin encuadre a mano: %@", "\(error)")
         }
     }
 
-    func unmount() {
+    /// Con dos cámaras (ADR 0035). Arranca en automático: encuadra el director. La vista
+    /// general de este móvil es el plano de su lado, que mira a la mitad de ese lado, sin pitch.
+    func mountPanorama(owner: AnyObject, rig: RigModel, side: CameraSide, context: MetalContext,
+                       width: Int, height: Int) {
+        do {
+            let espacio = try FramingSpace(rig: rig, width: width, height: height)
+            guard let planos = espacio.panorama else { return }
+            try install(
+                owner: owner,
+                controller: FramingController(space: espacio, zoom: RigConstants.cameraPanoramaStartZoom, auto: true),
+                panorama: true, rig: rig, side: side, context: context,
+                yawRad: side == .left ? planos.leftPlaneYawRad : planos.rightPlaneYawRad,
+                pitchRad: 0, hfovRad: planos.planeHfovRad,
+                width: RigConstants.cameraPanoramaOverviewWidth / 2,
+                height: RigConstants.cameraPanoramaOverviewHeight
+            )
+        } catch {
+            NSLog("[encuadre] sin panorama: %@", "\(error)")
+        }
+    }
+
+    private func install(owner: AnyObject, controller c: FramingController, panorama enPanorama: Bool, rig: RigModel,
+                         side: CameraSide, context: MetalContext, yawRad: Double, pitchRad: Double, hfovRad: Double,
+                         width ancho: Int, height alto: Int) throws {
+        let renderer = try MetalPartRenderer(context: context, rig: rig, side: side, width: ancho, height: alto)
+        var pool: CVPixelBufferPool?
+        CVPixelBufferPoolCreate(nil, nil, [
+            kCVPixelBufferPixelFormatTypeKey: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+            kCVPixelBufferWidthKey: ancho, kCVPixelBufferHeightKey: alto,
+            kCVPixelBufferIOSurfacePropertiesKey: [:] as CFDictionary,
+            kCVPixelBufferMetalCompatibilityKey: true,
+        ] as CFDictionary, &pool)
+        let vista = ViewCommand(
+            targetRigMs: 0, viewId: 0, yawRad: yawRad, pitchRad: pitchRad,
+            hfovRad: hfovRad, sides: [side], seamYawRad: yawRad,
+            featherRad: RigConstants.panoramaFeatherRad, gains: .unity
+        )
+        let miniatura = Thumbnailer(width: ancho, height: alto)
         lock.lock()
+        controller = c
+        overviewRenderer = renderer
+        overviewPool = pool
+        overviewView = vista
+        overviewThumbnailer = miniatura
+        mountOwner = ObjectIdentifier(owner)
+        panorama = enPanorama
+        lock.unlock()
+    }
+
+    /// Lo desmonta quien lo montó: un PARAR que acaba tarde (el cierre va en otro hilo) no se
+    /// lleva por delante el encuadre de la pasada siguiente.
+    func unmount(owner: AnyObject) {
+        lock.lock(); defer { lock.unlock() }
+        guard mountOwner == ObjectIdentifier(owner) else { return }
         controller = nil
         overviewRenderer = nil
         overviewPool = nil
         overviewView = nil
-        lock.unlock()
+        overviewThumbnailer = nil
+        mountOwner = nil
+        panorama = false
     }
 
-    /// La vista general de `source` (un fotograma de la cámara) en JPEG; nil sin «Una cámara».
+    /// La vista general de `source` (un fotograma de la cámara) en JPEG, o el plano de este lado
+    /// con dos cámaras; nil sin programa.
     func overviewJpeg(from source: CVPixelBuffer) -> Data? {
         lock.lock()
         let renderer = overviewRenderer, pool = overviewPool, vista = overviewView
+        let miniatura = overviewThumbnailer
         lock.unlock()
         guard let renderer, let pool, let vista else { return nil }
         var destino: CVPixelBuffer?
@@ -3406,16 +3494,21 @@ final class FramingHub {
         } catch {
             return nil
         }
-        return overviewThumbnailer?.jpeg(from: destino)
+        return miniatura?.jpeg(from: destino)
     }
 
-    /// Una orden del mando (ADR 0033) y cómo queda el encuadre; nil sin «Una cámara». Una
+    /// Una orden del mando (ADR 0033 y 0035) y cómo queda el encuadre; nil sin programa. Una
     /// orden que no se puede aplicar deja el encuadre como estaba y lo dice en `error`.
     func apply(kind: String, values: [Double], cut: Bool) -> CameraFraming? {
         guard let c = current else { return nil }
         var fallo = ""
         do {
-            if let destino = try Self.target(kind: kind, values: values, controller: c) {
+            if kind == "auto" {
+                guard c.space.panorama != nil else {
+                    throw FramingError.invalid("con una cámara no hay director que encuadre")
+                }
+                c.setAuto()
+            } else if let destino = try Self.target(kind: kind, values: values, controller: c) {
                 c.go(to: destino, cut: cut)
             }
         } catch let e as FramingError {
@@ -3426,7 +3519,7 @@ final class FramingHub {
         let s = c.status()
         return CameraFraming(
             centerU: s.target.centerU, centerV: s.target.centerV, zoom: s.zoom, outline: s.outline,
-            moving: s.moving, soft: s.soft, error: fallo
+            moving: s.moving, soft: s.soft, error: fallo, panorama: c.space.panorama != nil, auto: s.auto
         )
     }
 

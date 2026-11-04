@@ -375,14 +375,18 @@ struct CameraFraming: Hashable, CustomStringConvertible {
   var centerV: Double
   /// En la escala de la app Cámara: 1 es la cámara principal.
   var zoom: Double
-  /// Las cuatro esquinas del contorno en la vista general, u y v alternos: desde arriba a la
-  /// izquierda, en el sentido del reloj.
+  /// El contorno en la vista general, u y v alternos, desde arriba a la izquierda y en el
+  /// sentido del reloj: cuatro esquinas con una cámara, 32 puntos en el panorama (ADR 0035).
   var outline: [Double]
   var moving: Bool
   /// Pasado el 2×: el mando avisa «se verá borroso».
   var soft: Bool
   /// "" o por qué no se aplicó la orden; el encuadre es entonces el que había.
   var error: String
+  /// Con dos cámaras: la vista general es el panorama (ADR 0035).
+  var panorama: Bool
+  /// Con dos cámaras: si encuadra el director y no el operador.
+  var auto: Bool
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
@@ -394,6 +398,8 @@ struct CameraFraming: Hashable, CustomStringConvertible {
     let moving = pigeonVar_list[4] as! Bool
     let soft = pigeonVar_list[5] as! Bool
     let error = pigeonVar_list[6] as! String
+    let panorama = pigeonVar_list[7] as! Bool
+    let auto = pigeonVar_list[8] as! Bool
 
     return CameraFraming(
       centerU: centerU,
@@ -402,7 +408,9 @@ struct CameraFraming: Hashable, CustomStringConvertible {
       outline: outline,
       moving: moving,
       soft: soft,
-      error: error
+      error: error,
+      panorama: panorama,
+      auto: auto
     )
   }
   func toList() -> [Any?] {
@@ -414,13 +422,15 @@ struct CameraFraming: Hashable, CustomStringConvertible {
       moving,
       soft,
       error,
+      panorama,
+      auto,
     ]
   }
   static func == (lhs: CameraFraming, rhs: CameraFraming) -> Bool {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return RigApiPigeonInternal.deepEquals(lhs.centerU, rhs.centerU) && RigApiPigeonInternal.deepEquals(lhs.centerV, rhs.centerV) && RigApiPigeonInternal.deepEquals(lhs.zoom, rhs.zoom) && RigApiPigeonInternal.deepEquals(lhs.outline, rhs.outline) && RigApiPigeonInternal.deepEquals(lhs.moving, rhs.moving) && RigApiPigeonInternal.deepEquals(lhs.soft, rhs.soft) && RigApiPigeonInternal.deepEquals(lhs.error, rhs.error)
+    return RigApiPigeonInternal.deepEquals(lhs.centerU, rhs.centerU) && RigApiPigeonInternal.deepEquals(lhs.centerV, rhs.centerV) && RigApiPigeonInternal.deepEquals(lhs.zoom, rhs.zoom) && RigApiPigeonInternal.deepEquals(lhs.outline, rhs.outline) && RigApiPigeonInternal.deepEquals(lhs.moving, rhs.moving) && RigApiPigeonInternal.deepEquals(lhs.soft, rhs.soft) && RigApiPigeonInternal.deepEquals(lhs.error, rhs.error) && RigApiPigeonInternal.deepEquals(lhs.panorama, rhs.panorama) && RigApiPigeonInternal.deepEquals(lhs.auto, rhs.auto)
   }
 
   func hash(into hasher: inout Hasher) {
@@ -432,10 +442,12 @@ struct CameraFraming: Hashable, CustomStringConvertible {
     RigApiPigeonInternal.deepHash(value: moving, hasher: &hasher)
     RigApiPigeonInternal.deepHash(value: soft, hasher: &hasher)
     RigApiPigeonInternal.deepHash(value: error, hasher: &hasher)
+    RigApiPigeonInternal.deepHash(value: panorama, hasher: &hasher)
+    RigApiPigeonInternal.deepHash(value: auto, hasher: &hasher)
   }
 
   public var description: String {
-    return "CameraFraming(centerU: \(String(describing: centerU)), centerV: \(String(describing: centerV)), zoom: \(String(describing: zoom)), outline: \(String(describing: outline)), moving: \(String(describing: moving)), soft: \(String(describing: soft)), error: \(String(describing: error)))"
+    return "CameraFraming(centerU: \(String(describing: centerU)), centerV: \(String(describing: centerV)), zoom: \(String(describing: zoom)), outline: \(String(describing: outline)), moving: \(String(describing: moving)), soft: \(String(describing: soft)), error: \(String(describing: error)), panorama: \(String(describing: panorama)), auto: \(String(describing: auto)))"
   }
 }
 

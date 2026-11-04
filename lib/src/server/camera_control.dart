@@ -1,4 +1,4 @@
-/// El encuadre a mano de «Una cámara» en el maestro (ADR 0033, IOS-116).
+/// El encuadre a mano en el maestro (ADR 0033, IOS-116; con dos cámaras, ADR 0035, IOS-120).
 ///
 /// La geometría vive en nativo (`FramingSpace` de RigCore, porte de libs/vision/framing.py):
 /// aquí solo se lee el cuerpo de cada `camera/*`, se lleva a una orden nativa por el
@@ -18,7 +18,7 @@ import 'package:football_ai_capture/src/constants.dart';
 import 'package:football_ai_capture/src/server/match_engine.dart' show OrderError;
 
 /// Lo que contesta `camera/*` en un móvil que no emite con «Una cámara».
-const String cameraWithoutSingle = 'este móvil no emite con «Una cámara»: con dos móviles encuadra el director';
+const String cameraWithoutSingle = 'este móvil no está emitiendo: pulsa EMITIR para encuadrar';
 
 /// Cómo está el encuadre, como lo dice el nativo: el destino, si va de camino.
 @immutable
@@ -30,6 +30,8 @@ class CameraState {
     required this.outline,
     required this.moving,
     required this.soft,
+    this.panorama = false,
+    this.auto = false,
   });
 
   /// Dónde cae el centro del destino en la vista general (0–1).
@@ -39,12 +41,19 @@ class CameraState {
   /// En la escala de la app Cámara: 1 es la cámara principal; 0,5, la lente entera.
   final double zoom;
 
-  /// Las cuatro esquinas del contorno en la vista general, u y v alternos.
+  /// El contorno en la vista general, u y v alternos: cuatro esquinas con una cámara y 32
+  /// puntos en el panorama, porque se dobla al cruzar la costura.
   final List<double> outline;
   final bool moving;
 
   /// Pasado el 2×: el mando avisa «se verá borroso».
   final bool soft;
+
+  /// Con dos cámaras: la vista general es el panorama (ADR 0035).
+  final bool panorama;
+
+  /// Con dos cámaras: si encuadra el director y no el operador.
+  final bool auto;
 
   Map<String, Object?> toJson() => <String, Object?>{
         'center': <double>[centerU, centerV],
@@ -54,6 +63,8 @@ class CameraState {
         ],
         'moving': moving,
         'soft': soft,
+        if (panorama) 'panorama': true,
+        if (panorama) 'auto': auto,
       };
 
   @override
@@ -64,10 +75,12 @@ class CameraState {
       other.zoom == zoom &&
       listEquals(other.outline, outline) &&
       other.moving == moving &&
-      other.soft == soft;
+      other.soft == soft &&
+      other.panorama == panorama &&
+      other.auto == auto;
 
   @override
-  int get hashCode => Object.hash(centerU, centerV, zoom, Object.hashAll(outline), moving, soft);
+  int get hashCode => Object.hash(centerU, centerV, zoom, Object.hashAll(outline), moving, soft, panorama, auto);
 }
 
 /// Lo que contesta el nativo a una orden: el encuadre como queda y, si no se aplicó, por qué.
@@ -79,7 +92,7 @@ class CameraReply {
   final String error;
 }
 
-/// La orden nativa (`cameraOrder` de Pigeon). null si este móvil no emite con «Una cámara».
+/// La orden nativa (`cameraOrder` de Pigeon). null si este móvil no está emitiendo.
 typedef CameraBridge = Future<CameraReply?> Function(String kind, List<double> values, bool cut);
 
 /// Un encuadre guardado (ADR 0033): su nombre, su centro en la vista general y su zoom. Va
@@ -136,7 +149,7 @@ String cameraPresetName(Map<String, Object?> body) {
 typedef CameraNativeOrder = ({String kind, List<double> values, bool cut});
 
 /// El cuerpo de `camera/frame`, `camera/zoom`, `camera/pan`, `camera/reset` o
-/// `camera/preset`, llevado a la orden nativa. Aquí solo se miran los tipos: los topes (el
+/// `camera/preset` o `camera/auto`, llevado a la orden nativa. Aquí solo se miran los tipos: los topes (el
 /// tamaño del recuadro, el factor, el paso) los pone `FramingSpace`, que contesta con su
 /// error. `preset` busca un encuadre guardado por nombre.
 CameraNativeOrder cameraNativeOrder(
@@ -172,6 +185,8 @@ CameraNativeOrder cameraNativeOrder(
         throw OrderError(400, 'to tiene que ser start o full');
       }
       return (kind: 'reset', values: <double>[a == 'start' ? 0 : 1], cut: corte);
+    case 'camera/auto':
+      return (kind: 'auto', values: const <double>[], cut: corte);
     case 'camera/preset':
       final String nombre = cameraPresetName(body);
       final CameraPreset? p = preset(nombre);
@@ -204,7 +219,7 @@ class LiveViews {
   final int maxViewers;
 
   /// Las fuentes que se pueden mirar en vivo.
-  static const List<String> sources = <String>['overview', 'program'];
+  static const List<String> sources = <String>['overview', 'program', 'left', 'right'];
 
   final Map<String, int> _viewers = <String, int>{};
 
