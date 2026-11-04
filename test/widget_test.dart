@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:football_ai_capture/main.dart';
+import 'package:football_ai_capture/src/event_kind.dart';
 import 'package:football_ai_capture/src/capture_page.dart';
 import 'package:football_ai_capture/src/capture_session.dart';
 import 'package:football_ai_capture/src/constants.dart';
@@ -110,24 +111,40 @@ void main() {
       expect(find.text('Solo mando, sin cámara'), findsOneWidget);
     });
 
-    testWidgets('el espectáculo y el vóley van con una cámara: sin lado ni pareja', (WidgetTester tester) async {
+    testWidgets('el espectáculo va con una cámara: sin lado ni pareja', (WidgetTester tester) async {
       usePhone(tester);
-      for (final String evento in <String>['ESPECTÁCULO', 'VÓLEIBOL']) {
-        await tester.pumpWidget(CaptureApp(api: FakeCaptureApi()));
-        await tester.pump();
-        await tester.tap(find.text(evento));
-        await tester.pumpAndSettle();
+      await tester.pumpWidget(CaptureApp(api: FakeCaptureApi()));
+      await tester.pump();
+      await tester.tap(find.text('ESPECTÁCULO'));
+      await tester.pumpAndSettle();
 
-        expect(find.text('Una cámara'), findsOneWidget, reason: evento);
-        expect(find.text(evento), findsOneWidget, reason: 'la esquina dice el evento');
-        expect(find.text('1080p'), findsOneWidget);
-        expect(find.text('720p'), findsOneWidget);
-        expect(find.text('Abrir cámara'), findsOneWidget);
-        for (final String fuera in <String>['IZQUIERDA', 'Este móvil dirige', 'Emparejar sin cable', 'Solo mando, sin cámara']) {
-          expect(find.text(fuera), findsNothing, reason: '$evento: $fuera');
-        }
-        await tester.pumpWidget(const SizedBox());
+      expect(find.text('Una cámara'), findsOneWidget);
+      expect(find.text('ESPECTÁCULO'), findsOneWidget, reason: 'la esquina dice el evento');
+      expect(find.text('1080p'), findsOneWidget);
+      expect(find.text('720p'), findsOneWidget);
+      expect(find.text('Abrir cámara'), findsOneWidget);
+      for (final String fuera in <String>['IZQUIERDA', 'Este móvil dirige', 'Emparejar sin cable', 'Solo mando, sin cámara']) {
+        expect(find.text(fuera), findsNothing, reason: fuera);
       }
+    });
+
+    testWidgets('el vóley va como el fútbol: los dos lados o una cámara, sin «Solo mando» (enmienda del ADR 0031)',
+        (WidgetTester tester) async {
+      usePhone(tester);
+      await tester.pumpWidget(CaptureApp(api: FakeCaptureApi()));
+      await tester.pump();
+      expect(find.text('UNO O DOS MÓVILES · SIN GRÁFICOS POR AHORA'), findsOneWidget);
+      await tester.tap(find.text('VÓLEIBOL'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('VÓLEIBOL · CAPTURA'), findsOneWidget, reason: 'la esquina dice el evento');
+      for (final String dentro in <String>['IZQUIERDA', 'DERECHA', 'Este móvil dirige', 'Emparejar sin cable', 'Una cámara (sin pareja)']) {
+        expect(find.text(dentro), findsOneWidget, reason: dentro);
+      }
+      expect(find.text('Solo mando, sin cámara'), findsNothing, reason: 'el mando nativo es del marcador del fútbol');
+      expect((EventKind.volleyball.usesRig, EventKind.volleyball.isFootball), (true, false),
+          reason: 'el soporte como el fútbol, pero sin su marcador ni su pestaña Partido');
+      expect(EventKind.show.usesRig, isFalse);
     });
 
     testWidgets('lo primero que se pide es el lado', (WidgetTester tester) async {

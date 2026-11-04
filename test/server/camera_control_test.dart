@@ -160,6 +160,7 @@ void main() {
   test('la tarjeta Cámara del mando web (IOS-117): las órdenes, la vista en vivo y los atajos', () {
     final String html = File('assets/panel/index.html').readAsStringSync();
     expect(html, contains('id="camara"'));
+    expect(html, contains("tipo === 'volleyball'"), reason: 'el vóley va como el fútbol: también lleva la cámara');
     for (final String orden in <String>['frame', 'zoom', 'pan', 'reset', 'preset']) {
       expect(html, contains("ordenCamara('$orden'"), reason: orden);
     }

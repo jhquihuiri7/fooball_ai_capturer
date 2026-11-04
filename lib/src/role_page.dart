@@ -7,8 +7,9 @@
 /// espera a tener reloj común (ADR 0012, decisión 2). Eso hasta hoy solo estaba en el
 /// ADR, y quien monta el soporte no lee el ADR en la banda.
 ///
-/// Es la pantalla del fútbol. El espectáculo y el vóleibol (ADR 0031) van con una cámara:
-/// con ellos la misma pantalla solo pide la calidad y el VPS, y el móvil dirige siempre.
+/// Es la pantalla del soporte: la del fútbol y, desde la enmienda del ADR 0031 del 2026-11-03,
+/// la del vóleibol, con uno o dos móviles. El espectáculo va con una cámara: con él la misma
+/// pantalla solo pide la calidad y el VPS, y el móvil dirige siempre.
 library;
 
 import 'dart:async';
@@ -100,13 +101,14 @@ class _RolePageState extends State<RolePage> {
   VpsPairing? _vps;
   String? _vpsProblem;
 
-  bool get _football => widget.eventKind.isFootball;
+  /// El fútbol y el vóley van con el soporte (uno o dos móviles); el espectáculo, con una cámara.
+  bool get _rig => widget.eventKind.usesRig;
 
   @override
   void initState() {
     super.initState();
-    // El servidor del pod (y su búsqueda por Bonjour) es de los dos móviles del fútbol.
-    if (_football) {
+    // El servidor del pod (y su búsqueda por Bonjour) es de los dos móviles del soporte.
+    if (_rig) {
       unawaited(_loadServer());
     }
     unawaited(_loadPreference());
@@ -381,7 +383,7 @@ class _RolePageState extends State<RolePage> {
   void _open() {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => _football
+        builder: (_) => _rig
             ? ZeroShell(
                 role: _role,
                 standalone: _standalone,
@@ -391,8 +393,9 @@ class _RolePageState extends State<RolePage> {
                 linkMode: _linkMode,
                 resolution: _resolution,
                 zoom: _zoom,
+                eventKind: widget.eventKind,
               )
-            // El espectáculo y el vóley (ADR 0031): «Una cámara (sin pareja)», que dirige.
+            // El espectáculo (ADR 0031): «Una cámara (sin pareja)», que dirige.
             : ZeroShell(
                 role: CameraRole.left,
                 prefersMaster: true,
@@ -489,7 +492,7 @@ class _RolePageState extends State<RolePage> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_football) {
+    if (!_rig) {
       return _buildOneCamera(context);
     }
     return Scaffold(
@@ -507,7 +510,7 @@ class _RolePageState extends State<RolePage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
-                    const _TopBar(kicker: 'FÚTBOL · CAPTURA'),
+                    _TopBar(kicker: '${widget.eventKind.label.toUpperCase()} · CAPTURA'),
                     Text(
                       '¿Qué mitad cubre este móvil?',
                       style: ZeroType.archivo(
@@ -638,11 +641,12 @@ class _RolePageState extends State<RolePage> {
                     ),
                     const SizedBox(height: 10),
                     // Aparte de los dos lados: este móvil no va en el soporte y no abre la
-                    // cámara. Lleva el marcador del panel desde la banda.
-                    ZeroButton.secondary(
-                      label: 'Solo mando, sin cámara',
-                      onPressed: () => unawaited(_openMando()),
-                    ),
+                    // cámara. Lleva el marcador del panel desde la banda: es del fútbol.
+                    if (widget.eventKind.isFootball)
+                      ZeroButton.secondary(
+                        label: 'Solo mando, sin cámara',
+                        onPressed: () => unawaited(_openMando()),
+                      ),
                     if (_mandoProblem case final String problem)
                       Padding(
                         padding: const EdgeInsets.only(top: 10),
@@ -669,14 +673,11 @@ class _RolePageState extends State<RolePage> {
 }
 
 extension on _RolePageState {
-  /// La pantalla del espectáculo y del vóleibol (ADR 0031): una cámara, sin lado ni pareja.
-  /// Solo la calidad y el VPS, que es a donde sale el programa.
+  /// La pantalla del espectáculo (ADR 0031): una cámara, sin lado ni pareja. Solo la calidad y
+  /// el VPS, que es a donde sale el programa.
   Widget _buildOneCamera(BuildContext context) {
-    final String nota = widget.eventKind == EventKind.show
-        ? 'Este móvil emite solo, con EN VIVO. Los rótulos, las franjas y los vídeos se sacan '
-              'desde el mando web: el QR «Mando» de la pantalla de captura.'
-        : 'Este móvil emite solo, con la cámara tal cual. Los gráficos del vóley llegan más '
-              'adelante.';
+    const String nota = 'Este móvil emite solo, con EN VIVO. Los rótulos, las franjas y los vídeos '
+        'se sacan desde el mando web: el QR «Mando» de la pantalla de captura.';
     return Scaffold(
       body: SafeArea(
         minimum: const EdgeInsets.only(bottom: 34),

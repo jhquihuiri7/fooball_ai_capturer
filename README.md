@@ -64,15 +64,16 @@ EventPage  (¿qué se transmite?)
   │                                               ├── Captura   el móvil del soporte
   │                                               └── Partido   marcador, cronómetro y posiciones
   │                   (solo mando)            →  MandoPage   Partido sobre el marcador del panel
+  ├── Vóleibol     →  RolePage (elegir lado)  →  ZeroShell: solo Captura
   └── Espectáculo  →  RolePage (una cámara: calidad y VPS)  →  ZeroShell: solo Captura
-      Vóleibol
 ```
 
 **El tipo de evento** (ADR 0031 de football-ai) es lo primero que se elige. El fútbol es todo
 lo de abajo. El espectáculo (festivales, presentaciones) va con un solo móvil, «Una cámara (sin
 pareja)», y su gráfico es EN VIVO, la esquina de la casa, las franjas, los vídeos y los rótulos
-de noticiero, que se llevan desde el mando web. El vóleibol, por ahora, con una cámara y sin
-gráfico.
+de noticiero, que se llevan desde el mando web. El vóleibol va como el fútbol, con uno o dos
+móviles y la tarjeta Cámara del mando (enmienda del ADR 0031 del 2026-11-03), pero por ahora sin
+gráfico, sin pestaña Partido y sin «Solo mando».
 
 **El mando** (ADR 0017 del repo `football-ai`) es un tercer móvil que no va en el
 soporte: escanea el QR «Mando» del panel, lo guarda en el Keychain y lleva el marcador

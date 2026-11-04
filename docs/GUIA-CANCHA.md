@@ -28,7 +28,9 @@ La app ya no abre en la pantalla de lado: pregunta **«¿Qué vas a transmitir?�
   Soporte y «Abrir cámara». Desde el mando web (QR «Mando»), la tarjeta **Rótulos**: guarda
   cada número con su título y su subtítulo («Presentación artística: Los Ángeles del Cielo» /
   «Cantado por …») y sácalo 10 s o «Fijo». EN VIVO sale solo arriba a la izquierda.
-- **Vóleibol**: un solo móvil y la cámara tal cual, sin gráficos por ahora (salvo la repetición).
+- **Vóleibol** (2026-11-03): como el fútbol, con uno o dos móviles (la misma pantalla de lado,
+  enlace y VPS) y la tarjeta Cámara del mando web; sin gráficos por ahora (salvo la repetición).
+  No tiene pestaña Partido ni «Solo mando».
 
 **Una noche con varios partidos** (fútbol): antes del primero, carga en el mando web la
 tarjeta **Jornada** con todos los partidos y sus escudos. Al empezar cada uno, «Partido de la
@@ -37,7 +39,7 @@ Al acabar, **Finalizar partido**: el marcador queda guardado. Al final de la noc
 **Resultados**. El gol sale solo en pantalla con cada «+ Gol»; si fue un error, «− 1» lo quita.
 Para una premiación, en Al aire, **Ocultar marcador y reloj**.
 
-**Hacer zoom con una sola cámara** (fútbol o espectáculo con «Una cámara»): en el mando web
+**Hacer zoom con una sola cámara** (fútbol, vóley o espectáculo con «Una cámara»): en el mando web
 sale la tarjeta **Cámara**.
 - **La vista general** enseña la lente entera con el encuadre de ahora. Arrastra un recuadro
   sobre ella y el programa va ahí en un segundo; con **Corte** puesto, salta de golpe.

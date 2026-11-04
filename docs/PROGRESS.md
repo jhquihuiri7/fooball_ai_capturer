@@ -12,6 +12,32 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-11-03 · IOS-123 — el vóley como el fútbol: uno o dos móviles y la tarjeta Cámara · 🚧 hecho; falta verlo en el iPhone
+
+Enmienda del ADR 0031 de football-ai, del 2026-11-03. La pidió el propietario: «el voleibol va
+a ser lo mismo que el fútbol, en donde tiene igual una opción de una cámara y la opción de dos
+cámaras».
+- **`EventKind.usesRig`**: el fútbol y el vóley van con el soporte. `isFootball` queda para lo
+  que es solo del fútbol: el marcador, la pestaña Partido y el mando nativo.
+- **`RolePage`**: Vóleibol abre la pantalla del soporte, con «VÓLEIBOL · CAPTURA», los dos
+  lados o «Una cámara (sin pareja)», el enlace, el VPS y «Este móvil dirige».
+  - Sin «Solo mando», que es el marcador del fútbol.
+  - Emite como `volleyball`: sin gráfico ni pestaña Partido, como hasta ahora.
+  - Con dos móviles dirige el director, como en el fútbol.
+  - La pantalla de una cámara queda solo para el espectáculo.
+- **La primera pantalla** dice del vóley «UNO O DOS MÓVILES · SIN GRÁFICOS POR AHORA».
+- **El mando web** enseña la tarjeta Cámara también en el vóley: con una cámara, la lente
+  elegida (ADR 0033); con dos, el panorama de los dos planos (ADR 0035).
+- El README y la guía de cancha lo cuentan.
+- **Probado**:
+  - `flutter analyze` limpio;
+  - `widget_test.dart`: el espectáculo sigue con una cámara, y el vóley abre el soporte sin
+    «Solo mando»;
+  - `camera_control_test.dart`: la tarjeta en el vóley.
+
+**En el iPhone**: elegir Vóleibol con una cámara y con dos, ver la tarjeta Cámara en el mando y
+la cámara tal cual, sin gráfico.
+
 ## 2026-11-03 · IOS-120, IOS-121 e IOS-122: el zoom con dos cámaras, la lente real y calibrar desde el mando · 🚧 hecho y sin probar en el iPhone
 
 ADR 0035 de football-ai. Lo pidió Alexander tras la prueba del 3-nov con dos iPhone, donde el cosido

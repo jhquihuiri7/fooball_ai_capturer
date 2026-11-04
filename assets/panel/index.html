@@ -313,7 +313,7 @@
 <main>
   <section class="card ancho" data-tipos="volleyball" aria-labelledby="t-voley" hidden>
     <h2 id="t-voley">Vóleibol</h2>
-    <p class="nota">El vóley sale, por ahora, con la cámara tal cual: sin marcador ni gráficos, salvo la repetición. Desde aquí se repiten las jugadas y se ven las cámaras y el soporte.</p>
+    <p class="nota">El vóley sale, por ahora, sin marcador ni gráficos, salvo la repetición. Desde aquí se encuadra la cámara (con una o con dos), se repiten las jugadas y se ve el soporte.</p>
   </section>
 
   <section class="marcador ancho" aria-label="Marcador" data-tipos="football">
@@ -953,7 +953,8 @@ const zoomTexto = z => z.toFixed(1).replace('.', ',') + '×';
 
 function pintaCamara(p) {
   const cam = p.camera, tipo = p.event_kind || 'football';
-  const ver = !!cam && (tipo === 'football' || tipo === 'show');
+  // El vóley va como el fútbol (enmienda del ADR 0031 del 2026-11-03): también lleva la cámara.
+  const ver = !!cam && (tipo === 'football' || tipo === 'show' || tipo === 'volleyball');
   $('camara').hidden = !ver;
   $('camaras-programa').hidden = ver; // la vista en vivo sustituye a las miniaturas de 1 fps
   if (!ver) { paraVivo(); return; }

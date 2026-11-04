@@ -30,7 +30,7 @@ class EventPage extends StatelessWidget {
   static const Map<EventKind, String> notes = <EventKind, String>{
     EventKind.football: 'UNO O DOS MÓVILES · MARCADOR, RELOJ, JORNADA Y RESULTADOS',
     EventKind.show: 'UNA CÁMARA · EN VIVO, RÓTULOS, FRANJAS Y VÍDEOS',
-    EventKind.volleyball: 'UNA CÁMARA · SIN GRÁFICOS POR AHORA',
+    EventKind.volleyball: 'UNO O DOS MÓVILES · SIN GRÁFICOS POR AHORA',
   };
 
   void _open(BuildContext context, EventKind kind) {
