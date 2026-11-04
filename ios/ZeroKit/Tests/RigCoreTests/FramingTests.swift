@@ -63,6 +63,47 @@ final class FramingTests: XCTestCase {
         XCTAssertEqual(try espacio.zoomBy(espacio.full(), factor: 0.8), espacio.full(), "más lejos no hay")
     }
 
+    func testConDosCamarasArrancaEnAutomaticoYLaPrimeraOrdenPasaAMano() throws {
+        let inputs = try Golden.loadDocument(named: "framing.json").cases
+            .first { $0.name == "panorama_campo_partida" }!.inputs
+        let espacio = try Self.space(from: inputs)
+        var ahora = 0.0
+        let c = FramingController(space: espacio, zoom: 1, auto: true, nowMs: { ahora })
+        XCTAssertTrue(c.auto)
+        XCTAssertTrue(c.status().auto)
+
+        // Mientras encuadra el director, el contorno lo sigue y no hay movimiento.
+        c.follow(yawRad: 0.2, pitchRad: -0.15, hfovRad: 1.0)
+        XCTAssertEqual(try espacio.view(c.framing()).yawRad, 0.2, accuracy: 1e-9)
+        XCTAssertFalse(c.status().moving)
+        XCTAssertEqual(c.status().outline.count, 64, "32 puntos: se dobla al cruzar la costura")
+
+        // La primera orden sale de donde va el director.
+        let donde = c.framing()
+        c.go(to: try espacio.frameRect(x0: 0.05, y0: 0.45, x1: 0.2, y1: 0.62), cut: false)
+        XCTAssertFalse(c.auto)
+        XCTAssertEqual(c.framing().centerU, donde.centerU, accuracy: 1e-12, "sin salto")
+
+        // A mano, el director ya no mueve nada; `camera/auto` se lo devuelve.
+        let aMano = c.target
+        c.follow(yawRad: -0.5, pitchRad: 0, hfovRad: 0.9)
+        XCTAssertEqual(c.target, aMano)
+        c.setAuto()
+        XCTAssertTrue(c.auto)
+        c.follow(yawRad: -0.5, pitchRad: 0, hfovRad: 0.9)
+        XCTAssertEqual(try espacio.view(c.framing()).yawRad, -0.5, accuracy: 1e-9)
+    }
+
+    func testUnPanoramaImposibleNoSeMonta() throws {
+        let rig = try RectilinearViewTests.rig(from: Golden.loadDocument(named: "framing.json").cases[0].inputs)
+        let intr = rig.camera(.left).intrinsics
+        let imposible = RigModel(
+            left: RigCamera(intrinsics: intr, pose: CameraPose(yawRad: -2.45, pitchRad: 0)),
+            right: RigCamera(intrinsics: intr, pose: CameraPose(yawRad: 2.45, pitchRad: 0))
+        )
+        XCTAssertThrowsError(try FramingSpace(rig: imposible, width: 1920, height: 1080))
+    }
+
     // MARK: - El runner
 
     /// El espacio del primer caso del dorado: la cámara derecha del soporte nominal a 1080p.
@@ -72,10 +113,15 @@ final class FramingTests: XCTestCase {
 
     static func space(from inputs: GoldenValue) throws -> FramingSpace {
         let rig = try RectilinearViewTests.rig(from: inputs)
-        let lado = try RectilinearViewTests.side(from: inputs)
-        return try FramingSpace(
-            camera: rig.camera(lado), width: Int(inputs.number("width")), height: Int(inputs.number("height"))
-        )
+        let ancho = try Int(inputs.number("width")), alto = try Int(inputs.number("height"))
+        // Sin `side`, el panorama de los dos lados (ADR 0035).
+        guard let lado = try? RectilinearViewTests.side(from: inputs) else {
+            return try FramingSpace(rig: rig, width: ancho, height: alto)
+        }
+        if let lente = try? inputs.number("lens_zoom") {
+            return try FramingSpace(camera: rig.camera(lado), width: ancho, height: alto, lensZoom: lente)
+        }
+        return try FramingSpace(camera: rig.camera(lado), width: ancho, height: alto)
     }
 
     static func framing(_ crudo: GoldenValue) throws -> Framing {
@@ -132,6 +178,24 @@ final class FramingTests: XCTestCase {
             let e = try space(from: inputs)
             let f = try e.panBy(framing(inputs.field("framing")), dx: inputs.number("dx"), dy: inputs.number("dy"))
             return try fields(e, f)
+        case "FramingSpace.framing_of":
+            let e = try space(from: inputs)
+            let f = try e.framing(
+                yawRad: inputs.number("yaw_rad"), pitchRad: inputs.number("pitch_rad"),
+                hfovRad: inputs.number("hfov_rad")
+            )
+            return try fields(e, f)
+        case "PanoramaSpace.geometry":
+            let e = try space(from: inputs)
+            guard let p = e.panorama else { throw GoldenError.message("el caso no lleva un panorama") }
+            return .object([
+                "seam_yaw_rad": .number(p.seamYawRad),
+                "plane_hfov_rad": .number(p.planeHfovRad),
+                "left_plane_yaw_rad": .number(p.leftPlaneYawRad),
+                "right_plane_yaw_rad": .number(p.rightPlaneYawRad),
+                "hfov_min": .number(e.hfovMin),
+                "hfov_max": .number(e.hfovMax),
+            ])
         case "FramingSpace.between":
             let e = try space(from: inputs)
             let f = try e.between(

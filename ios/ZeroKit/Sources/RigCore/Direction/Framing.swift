@@ -12,6 +12,10 @@
 // El paso suave interpola el yaw, el pitch y el logaritmo del campo con aceleración y
 // frenada, y vuelve a meter cada punto del camino en la lente. Ningún número se teclea
 // aquí: salen de RigConstants (CAMERA_*, FRAMING_*, de libs/vision/constants.py).
+//
+// Con dos cámaras (ADR 0035, REF-70) las mismas órdenes valen sobre todo el panorama. Su vista
+// general son dos planos que se tocan en la costura (`PanoramaSpace` de framing.py): aquí es
+// `FramingSpace(rig:width:height:)`, porque el resto de las cuentas es el mismo.
 
 import Foundation
 
@@ -26,6 +30,14 @@ public struct Framing: Equatable, Sendable {
         self.centerV = centerV
         self.hfovRad = hfovRad
     }
+}
+
+/// Los dos planos de la vista general con dos cámaras (ADR 0035): dónde mira cada uno.
+public struct PanoramaPlanes: Equatable, Sendable {
+    public let seamYawRad: Double
+    public let planeHfovRad: Double
+    public let leftPlaneYawRad: Double
+    public let rightPlaneYawRad: Double
 }
 
 /// Una orden del mando que no se puede aplicar: el texto va tal cual al operador.
@@ -75,13 +87,26 @@ public struct FramingSpace: Sendable {
     public let width: Int
     public let height: Int
     public let overview: RectilinearView
-    public let hfovMax: Double
+    public private(set) var hfovMax: Double
     public let hfovMin: Double
+    /// Los dos planos de la vista general con dos cámaras; nil con una.
+    public let panorama: PanoramaPlanes?
     private let r0: FramingRotation
     private let tanX: Double
     private let tanY: Double
+    /// Dónde cae el centro de la vista en la vista general, en vertical.
+    private var homeV: Double
+    /// El alto de un recuadro de 16:9 sobre su ancho, en coordenadas normalizadas.
+    private let rectAspect: Double
+    private let zoomSoft: Double
+    private let rig: RigModel?
+    private let rLeft: FramingRotation
+    private let rRight: FramingRotation
 
-    public init(camera: RigCamera, width: Int, height: Int) throws {
+    /// `lensZoom`: la lente física elegida (ADR 0035). Los topes del zoom son relativos a ella: con
+    /// la ultra (0,5×) son los 3× y 2× del ADR 0033.
+    public init(camera: RigCamera, width: Int, height: Int,
+                lensZoom: Double = FullLensView.fullLensZoom) throws {
         self.width = width
         self.height = height
         overview = try RectilinearView(
@@ -93,7 +118,63 @@ public struct FramingSpace: Sendable {
         tanX = tan(overview.hfovRad / 2)
         tanY = tanX * Double(height) / Double(width)
         hfovMax = overview.hfovRad
-        hfovMin = min(FullLensView.hfovRad(zoom: RigConstants.cameraZoomMax), hfovMax)
+        let lentes = lensZoom / FullLensView.fullLensZoom
+        hfovMin = min(FullLensView.hfovRad(zoom: RigConstants.cameraZoomMax * lentes), hfovMax)
+        zoomSoft = RigConstants.cameraZoomSoft * lentes
+        homeV = 0.5
+        rectAspect = 1
+        panorama = nil
+        rig = nil
+        rLeft = r0
+        rRight = r0
+    }
+
+    /// El panorama de los dos lados (ADR 0035): dos planos que se tocan en la costura, sin pitch.
+    /// La mitad izquierda de la vista (u < 0,5) es el plano izquierdo.
+    public init(rig: RigModel, width: Int, height: Int) throws {
+        self.width = width
+        self.height = height
+        self.rig = rig
+        let izq = rig.camera(.left), der = rig.camera(.right)
+        let costura = (izq.pose.yawRad + der.pose.yawRad) / 2
+        func alcance(_ c: RigCamera, _ desdeCostura: Double) -> Double {
+            desdeCostura + atan(Double(c.intrinsics.width) / 2 / c.intrinsics.fx)
+        }
+        let plano = max(alcance(izq, costura - izq.pose.yawRad), alcance(der, der.pose.yawRad - costura))
+        guard plano < .pi else {
+            throw FramingError.invalid("las lentes abarcan demasiado para un plano: \(plano) rad")
+        }
+        let planos = PanoramaPlanes(
+            seamYawRad: costura, planeHfovRad: plano,
+            leftPlaneYawRad: costura - plano / 2, rightPlaneYawRad: costura + plano / 2
+        )
+        panorama = planos
+        rLeft = FramingRotation(yawRad: planos.leftPlaneYawRad, pitchRad: 0)
+        rRight = FramingRotation(yawRad: planos.rightPlaneYawRad, pitchRad: 0)
+        r0 = rLeft
+        tanX = tan(plano / 2)
+        // Cada plano ocupa media vista: su lado ancho es la mitad del ancho de la vista.
+        let anchoPlano = Double(RigConstants.cameraPanoramaOverviewWidth) / 2
+        tanY = tanX * Double(RigConstants.cameraPanoramaOverviewHeight) / anchoPlano
+        rectAspect = Double(height) / Double(width)
+            * Double(RigConstants.cameraPanoramaOverviewWidth) / Double(RigConstants.cameraPanoramaOverviewHeight)
+        zoomSoft = RigConstants.cameraZoomSoft
+        hfovMin = FullLensView.hfovRad(zoom: RigConstants.cameraZoomMax)
+        // De aquí abajo hacen falta las cuentas del propio espacio: primero, valores de paso.
+        homeV = 0.5
+        hfovMax = hfovMin
+        overview = try RectilinearView(yawRad: costura, pitchRad: 0, hfovRad: hfovMin, width: width, height: height)
+        let pitch = (izq.pose.pitchRad + der.pose.pitchRad) / 2
+        let cp = cos(pitch)
+        let hogar = toOverview((cp * sin(costura), -sin(pitch), cp * cos(costura))).v
+        homeV = hogar
+        let ancho = FullLensView.hfovRad(zoom: FullLensView.fullLensZoom)
+        if fits(0.5, hogar, ancho) {
+            hfovMax = ancho
+        } else {
+            let copia = self
+            hfovMax = Self.bisect(inside: hfovMin, outside: ancho) { copia.fits(0.5, hogar, $0) }
+        }
     }
 
     /// El zoom de la app Cámara que corresponde a ese campo horizontal.
@@ -105,14 +186,58 @@ public struct FramingSpace: Sendable {
 
     /// La dirección, en ejes del soporte, del punto (u, v) de la vista general.
     private func ray(_ u: Double, _ v: Double) -> (Double, Double, Double) {
-        r0.apply(((2 * u - 1) * tanX, (2 * v - 1) * tanY, 1))
+        guard panorama != nil else {
+            return r0.apply(((2 * u - 1) * tanX, (2 * v - 1) * tanY, 1))
+        }
+        let a = u < 0.5 ? u * 2 : (u - 0.5) * 2
+        return (u < 0.5 ? rLeft : rRight).apply(((2 * a - 1) * tanX, (2 * v - 1) * tanY, 1))
     }
 
     /// (u, v, z) de una dirección en la vista general; z ≤ 0 si queda detrás.
     private func toOverview(_ d: (Double, Double, Double)) -> (u: Double, v: Double, z: Double) {
-        let c = r0.applyT(d)
+        guard let planos = panorama else {
+            let c = r0.applyT(d)
+            guard c.2 > 0 else { return (.nan, .nan, c.2) }
+            return ((c.0 / c.2 / tanX + 1) / 2, (c.1 / c.2 / tanY + 1) / 2, c.2)
+        }
+        let izquierda = (atan2(d.0, d.2) - planos.seamYawRad).remainder(dividingBy: 2 * .pi) < 0
+        let c = (izquierda ? rLeft : rRight).applyT(d)
         guard c.2 > 0 else { return (.nan, .nan, c.2) }
-        return ((c.0 / c.2 / tanX + 1) / 2, (c.1 / c.2 / tanY + 1) / 2, c.2)
+        let a = (c.0 / c.2 / tanX + 1) / 2
+        return (izquierda ? a / 2 : 0.5 + a / 2, (c.1 / c.2 / tanY + 1) / 2, c.2)
+    }
+
+    /// Las direcciones del borde de la vista, desde arriba a la izquierda y en el sentido del
+    /// reloj: `framingEdgeSamples` por lado, esquinas incluidas y sin repetirlas.
+    private func border(_ u: Double, _ v: Double, _ hfovRad: Double) -> [(Double, Double, Double)] {
+        let r = axis(u, v)
+        let tx = tan(hfovRad / 2)
+        let ty = tx * Double(height) / Double(width)
+        let tramos = RigConstants.framingEdgeSamples - 1
+        var puntos: [(Double, Double, Double)] = []
+        puntos.reserveCapacity(4 * tramos)
+        for lado in 0..<4 {
+            for i in 0..<tramos {
+                let s = -1 + 2 * Double(i) / Double(tramos)
+                let (x, y): (Double, Double)
+                switch lado {
+                case 0: (x, y) = (s, -1)
+                case 1: (x, y) = (1, s)
+                case 2: (x, y) = (-s, 1)
+                default: (x, y) = (-1, -s)
+                }
+                puntos.append(r.apply((x * tx, y * ty, 1)))
+            }
+        }
+        return puntos
+    }
+
+    /// Si alguna lente ve esa dirección.
+    private func sees(_ d: (Double, Double, Double)) -> Bool {
+        guard let rig else { return false }
+        let (yaw, pitch) = framingYawPitch(d)
+        let direccion = RigDirection(yawRad: yaw, pitchRad: pitch)
+        return rig.sees(.left, direction: direccion) || rig.sees(.right, direction: direccion)
     }
 
     private func axis(_ u: Double, _ v: Double) -> FramingRotation {
@@ -129,6 +254,7 @@ public struct FramingSpace: Sendable {
     }
 
     private func fits(_ u: Double, _ v: Double, _ hfovRad: Double) -> Bool {
+        if panorama != nil { return border(u, v, hfovRad).allSatisfy(sees) }
         let lo = -RigConstants.framingFitEps, hi = 1 + RigConstants.framingFitEps
         return corners(u, v, hfovRad).allSatisfy { $0.z > 0 && lo <= $0.u && $0.u <= hi && lo <= $0.v && $0.v <= hi }
     }
@@ -157,7 +283,7 @@ public struct FramingSpace: Sendable {
         var u = min(max(f.centerU, 0), 1)
         var v = min(max(f.centerV, 0), 1)
         if !fits(0.5, v, hfov) {
-            v = Self.bisect(inside: 0.5, outside: v) { fits(0.5, $0, hfov) }
+            v = Self.bisect(inside: homeV, outside: v) { fits(0.5, $0, hfov) }
         }
         if !fits(u, v, hfov) {
             let vFijo = v
@@ -168,12 +294,12 @@ public struct FramingSpace: Sendable {
 
     /// La lente entera: la vista general misma.
     public func full() -> Framing {
-        Framing(centerU: 0.5, centerV: 0.5, hfovRad: hfovMax)
+        Framing(centerU: 0.5, centerV: homeV, hfovRad: hfovMax)
     }
 
     /// El encuadre de partida: el zoom que se eligió en el móvil, centrado.
     public func start(zoom: Double) -> Framing {
-        fit(Framing(centerU: 0.5, centerV: 0.5, hfovRad: FullLensView.hfovRad(zoom: zoom)))
+        fit(Framing(centerU: 0.5, centerV: homeV, hfovRad: FullLensView.hfovRad(zoom: zoom)))
     }
 
     // MARK: - Las órdenes del mando
@@ -187,7 +313,7 @@ public struct FramingSpace: Sendable {
         func dentro(_ x: Double) -> Double { min(max(x, 0), 1) }
         let izq = min(dentro(x0), dentro(x1)), der = max(dentro(x0), dentro(x1))
         let arr = min(dentro(y0), dentro(y1)), aba = max(dentro(y0), dentro(y1))
-        let lado = max(der - izq, aba - arr)
+        let lado = max(der - izq, (aba - arr) / rectAspect)
         guard lado >= RigConstants.cameraFrameMinSize else {
             throw FramingError.invalid(
                 "el recuadro es más pequeño que \(RigConstants.cameraFrameMinSize) de la vista: \(lado)"
@@ -201,7 +327,8 @@ public struct FramingSpace: Sendable {
         var medio = 0.0
         for du in [-1.0, 0, 1] {
             for dv in [-1.0, 0, 1] where !(du == 0 && dv == 0) {
-                let c = r.applyT(ray(uc + du * lado / 2, vc + dv * lado / 2))
+                let alto = lado * rectAspect
+                let c = r.applyT(ray(uc + du * lado / 2, vc + dv * alto / 2))
                 medio = max(medio, abs(c.0 / c.2), abs(c.1 / c.2) / altoSobreAncho)
             }
         }
@@ -250,6 +377,15 @@ public struct FramingSpace: Sendable {
         return fit(Framing(centerU: p.u, centerV: p.v, hfovRad: hfov))
     }
 
+    /// El encuadre de una vista dada, metido en lo que cabe: al pasar del director a mano, la
+    /// cámara sale de donde está (ADR 0035).
+    public func framing(yawRad: Double, pitchRad: Double, hfovRad: Double) -> Framing {
+        let cp = cos(pitchRad)
+        let p = toOverview((cp * sin(yawRad), -sin(pitchRad), cp * cos(yawRad)))
+        guard p.z > 0 else { return full() }
+        return fit(Framing(centerU: p.u, centerV: p.v, hfovRad: hfovRad))
+    }
+
     // MARK: - Lo que se enseña
 
     /// La cámara virtual del programa para ese encuadre.
@@ -261,7 +397,14 @@ public struct FramingSpace: Sendable {
     /// El contorno del encuadre en la vista general: cuatro esquinas desde arriba a la
     /// izquierda, en el sentido del reloj. Casi un rectángulo: lo tuerce la perspectiva.
     public func outline(_ f: Framing) -> [(u: Double, v: Double)] {
-        corners(f.centerU, f.centerV, f.hfovRad).map { ($0.u, $0.v) }
+        // En el panorama, 32 puntos: se dobla al cruzar la costura.
+        if panorama != nil {
+            return border(f.centerU, f.centerV, f.hfovRad).map {
+                let p = toOverview($0)
+                return (p.u, p.v)
+            }
+        }
+        return corners(f.centerU, f.centerV, f.hfovRad).map { ($0.u, $0.v) }
     }
 
     /// El zoom en la escala de la app Cámara.
@@ -269,9 +412,9 @@ public struct FramingSpace: Sendable {
         Self.zoom(hfovRad: f.hfovRad)
     }
 
-    /// Si el mando avisa «se verá borroso»: pasado el 2×.
+    /// Si el mando avisa «se verá borroso»: con la ultra, pasado el 2×.
     public func soft(_ f: Framing) -> Bool {
-        zoom(f) > RigConstants.cameraZoomSoft * (1 + RigConstants.framingFitEps)
+        zoom(f) > zoomSoft * (1 + RigConstants.framingFitEps)
     }
 }
 
@@ -283,9 +426,14 @@ public struct FramingStatus: Equatable, Sendable {
     public let outline: [Double]
     public let moving: Bool
     public let soft: Bool
+    /// Con dos cámaras: si encuadra el director (ADR 0035). Con una, siempre false.
+    public let auto: Bool
 }
 
-/// El encuadre de la pasada de «Una cámara»: a dónde va y por dónde va.
+/// El encuadre de la pasada: a dónde va y por dónde va.
+///
+/// Con dos cámaras arranca en automático: encuadra el director, y `follow` apunta por dónde va. La
+/// primera orden del mando pasa a mano desde ahí, sin salto (ADR 0035).
 ///
 /// Las órdenes llegan del mando (por Pigeon) y el programa lee la vista en cada fotograma,
 /// desde hilos distintos: todo va bajo un candado. El tiempo es el del host, monótono.
@@ -299,10 +447,13 @@ public final class FramingController: @unchecked Sendable {
     private var to: Framing
     private var startedMs: Double
     private var durationMs: Double
+    private var isAuto: Bool
 
     /// `nowMs`: el reloj monótono en ms; los tests ponen uno falso.
-    public init(space: FramingSpace, zoom: Double, nowMs: @escaping () -> Double = FramingController.hostNowMs) {
+    public init(space: FramingSpace, zoom: Double, auto: Bool = false,
+                nowMs: @escaping () -> Double = FramingController.hostNowMs) {
         self.space = space
+        isAuto = auto
         self.nowMs = nowMs
         startFraming = space.start(zoom: zoom)
         from = startFraming
@@ -336,10 +487,35 @@ public final class FramingController: @unchecked Sendable {
         return to
     }
 
+    /// Si encuadra el director.
+    public var auto: Bool {
+        lock.lock(); defer { lock.unlock() }
+        return isAuto
+    }
+
+    /// Devuelve el encuadre al director (`camera/auto`).
+    public func setAuto() {
+        lock.lock(); defer { lock.unlock() }
+        isAuto = true
+        durationMs = 0
+    }
+
+    /// Por dónde va el director: el contorno lo enseña, y al pasar a mano se sale de aquí. Lo que
+    /// el mando ve es el destino, así que sin nada más que hacer no sube el estado.
+    public func follow(yawRad: Double, pitchRad: Double, hfovRad: Double) {
+        lock.lock(); defer { lock.unlock() }
+        guard isAuto else { return }
+        let f = space.framing(yawRad: yawRad, pitchRad: pitchRad, hfovRad: hfovRad)
+        from = f
+        to = f
+        durationMs = 0
+    }
+
     /// Va a `target` desde donde esté ahora: en `cameraMoveMs` con aceleración y frenada, o
-    /// de golpe con `cut`.
+    /// de golpe con `cut`. Pasa a mano si no lo estaba.
     public func go(to target: Framing, cut: Bool) {
         lock.lock(); defer { lock.unlock() }
+        isAuto = false
         let ahora = nowMs()
         from = current(ahora)
         to = space.fit(target)
@@ -355,7 +531,8 @@ public final class FramingController: @unchecked Sendable {
             zoom: space.zoom(to),
             outline: space.outline(to).flatMap { [$0.u, $0.v] },
             moving: durationMs > 0 && ahora - startedMs < durationMs,
-            soft: space.soft(to)
+            soft: space.soft(to),
+            auto: isAuto
         )
     }
 }

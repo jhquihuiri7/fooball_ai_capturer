@@ -738,4 +738,23 @@ public enum RigConstants {
     /// lente entera tiene que caber en sí misma pese al redondeo.
     /// (Python: `FRAMING_FIT_EPS`.)
     public static let framingFitEps: Double = 1e-09
+
+    /// Puntos por lado del encuadre (esquinas incluidas) con que se mira si cabe en el panorama y se
+    /// dibuja su contorno: 32 en total. El panorama no es un rectángulo, tiene una muesca arriba y abajo
+    /// en la costura, y sus dos planos doblan las rectas: no bastan las cuatro esquinas (ADR 0035).
+    /// (Python: `FRAMING_EDGE_SAMPLES`.)
+    public static let framingEdgeSamples: Int = 9
+
+    /// px. El ancho de la vista general con dos cámaras: dos planos de 320×320 (ADR 0035).
+    /// (Python: `CAMERA_PANORAMA_OVERVIEW_WIDTH`.)
+    public static let cameraPanoramaOverviewWidth: Int = 640
+
+    /// px. El alto de la vista general con dos cámaras.
+    /// (Python: `CAMERA_PANORAMA_OVERVIEW_HEIGHT`.)
+    public static let cameraPanoramaOverviewHeight: Int = 320
+
+    /// El zoom con que «Restablecer» deja el encuadre con dos cámaras, en la costura: más o menos
+    /// lo que abarca el director.
+    /// (Python: `CAMERA_PANORAMA_START_ZOOM`.)
+    public static let cameraPanoramaStartZoom: Double = 1.0
 }

@@ -515,7 +515,7 @@
             3,
             3
           ],
-          "b64": "gb1K3///7z+2qqV+DUZ3vAAtlGFa4DY/Ug6ZItYJeDz////////vPwJL2Hfg+7e8GC2UYVrgNr8AAAAAAABivIC9St///+8/"
+          "b64": "gL1K3///7z8n1TZHZMh2vNEtlGFa4DY/WMWn/5FAdzz////////vP6gKWEnYSbS85i2UYVrgNr8AAAAAACihvH+9St///+8/"
         },
         "angle_rad": 0.00034906584985027324,
         "inliers": 60,
@@ -1031,7 +1031,7 @@
             3,
             3
           ],
-          "b64": "AwAAAAAA8D/zbadi49lkvCALyzLxf0Y8CWPBxpDSZDwLIZMz///vPyAA08ZwmEy/AAAAEB2PJbxqCdPGcJhMPw4hkzP//+8/"
+          "b64": "AgAAAAAA8D+jYms86xhlvMpFGM8jG2C8ZAI4Q7uIZTwMIZMz///vP3wG08ZwmEy/AAAAwmROWTxoBdPGcJhMPw8hkzP//+8/"
         },
         "angle_rad": 0.0008726646254946015,
         "inliers": 60,
@@ -1547,7 +1547,7 @@
             3,
             3
           ],
-          "b64": "ZY5Mzvz/7z9r6yUQcJhcvwUhjz2xs2A8bOslEHCYXD9jjkzO/P/vPzxJzo7dGKO8AAAAAAC4Y7wAAAAAAKirvAAAAAAAAPA/"
+          "b64": "ZY5Mzvz/7z9r6yUQcJhcv9wImHNiZ1U8auslEHCYXD9ijkzO/P/vP7+VQinM7Ky8AAAAAABwW7wAAAAAAKirvAAAAAAAAPA/"
         },
         "angle_rad": 0.0017453292519978123,
         "inliers": 60,
@@ -2063,9 +2063,9 @@
             3,
             3
           ],
-          "b64": "ym9xWPn/7z+KHNuXq+9WvxUZKkZBKGE/A0gapFfgVj/An/jC+v/vPzPuJRBwmFw/dcxgNV4tYb9QZy8oJoxcvyDFzzT4/+8/"
+          "b64": "zG9xWPn/7z+FHNuXq+9Wvw0ZKkZBKGE//0capFfgVj/An/jC+v/vPyPvJRBwmFw/ccxgNV4tYb9OaS8oJoxcvx/FzzT4/+8/"
         },
-        "angle_rad": 0.003063873059048307,
+        "angle_rad": 0.003063873058975835,
         "inliers": 60,
         "usable": true,
         "reason": ""
@@ -2579,9 +2579,9 @@
             3,
             3
           ],
-          "b64": "uLYq13j77z9bHjDvzVmAPGmHfkxXBaE/B6yDVVmNg7wAAAAAAADwP3L82XAkRqg8a4d+TFcFob8AAAAAAEiivLu2Ktd4++8/"
+          "b64": "vLYq13j77z+MmAULNjt9PGmHfkxXBaE/wxOqRs7pgrwBAAAAAADwP0QSDRIKNbA8a4d+TFcFob8AAAAAAHiivLu2Ktd4++8/"
         },
-        "angle_rad": 0.03324999999999652,
+        "angle_rad": 0.033249999999989836,
         "inliers": 60,
         "usable": true,
         "reason": ""
@@ -3095,9 +3095,9 @@
             3,
             3
           ],
-          "b64": "7cFFE/Dr7z/up6Wmz6BJvARh50HG57E/Fs4AuMCThrwCAAAAAADwPxLE2g/KlcU8CGHnQcbnsb8AAAAAAMCpPPbBRRPw6+8/"
+          "b64": "7cFFE/Dr7z9S1sKZeatIvANh50HG57E/76ukYMmZdrwBAAAAAADwP/4MhoqbrbY8BGHnQcbnsb8AAAAAAOCIvPPBRRPw6+8/"
         },
-        "angle_rad": 0.06999999999999192,
+        "angle_rad": 0.0699999999999951,
         "inliers": 60,
         "usable": false,
         "reason": "la camara ha girado 4.0 grados: eso no es viento, alguien ha movido el soporte. Hay que recalibrar"
@@ -3611,9 +3611,9 @@
             3,
             3
           ],
-          "b64": "GRyBjIuD7z/drrEejvdsvItzC34aOsY/uAS0kMGBh7wBAAAAAADwPx9Y44mM2bU8inMLfho6xr8AAAAAAACnvBocgYyLg+8/"
+          "b64": "GRyBjIuD7z+GzCNODBOAvItzC34aOsY/WOui9rRXkjwAAAAAAADwP8aMTVnkqKy8inMLfho6xr8AAAAAAECPvBocgYyLg+8/"
         },
-        "angle_rad": 0.17453292519942998,
+        "angle_rad": 0.17453292519943253,
         "inliers": 60,
         "usable": false,
         "reason": "la camara ha girado 10.0 grados: eso no es viento, alguien ha movido el soporte. Hay que recalibrar"
@@ -4323,7 +4323,7 @@
             3,
             3
           ],
-          "b64": "+dS0QOP/7z8C5jG/0BaYPNkqtFZOcnU/5wcKeGaaoLwAAAAAAADwP4X/OtRSFLe8YSq0Vk5ydb8AAAAAAABwvPjUtEDj/+8/"
+          "b64": "+dS0QOP/7z+iLlh01Y6QvDwqtFZOcnU/SJiNVeBnULz9///////vP5zesJO8mWk8xSq0Vk5ydb8AAAAAAACUPPjUtEDj/+8/"
         },
         "angle_rad": 0.005235987755949767,
         "inliers": 54,

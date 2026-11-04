@@ -133,12 +133,12 @@
         "discarded_correspondences": 0,
         "image_to_pitch": [
           [
-            -20.000001121892918,
-            3.1881806324961752e-06
+            -20.000001121892897,
+            3.188180632496173e-06
           ],
           [
-            6.072272904253497e-08,
-            1.919099672007495e-06
+            6.072272904253485e-08,
+            1.919099558320649e-06
           ]
         ],
         "pitch_to_image": [
@@ -368,10 +368,10 @@
           "b64": "Jz5JlMDcM0CZMZMieQZLQM1cZgXkx6JAUpXzW6OBGsDpfwLPAmU0QJuGDTCeApFAyUz3z4XXfb+0l0H3AfaWPwAAAAAAAPA/"
         },
         "cross_errors_m": [
-          2.9108519890823695e-06,
-          2.3604532515153294e-06
+          2.910851989266015e-06,
+          2.3604532218411233e-06
         ],
-        "mean_cross_camera_error_m": 2.6356526202988494e-06
+        "mean_cross_camera_error_m": 2.635652605553569e-06
       },
       "tol": {
         "abs": 1e-09,
