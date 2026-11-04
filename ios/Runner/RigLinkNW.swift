@@ -3128,6 +3128,20 @@ final class CalibrationPairs {
         session.onCalibrationCapture = { [weak self] destinos in
             self?.run(targets: destinos) { resumen in NSLog("[calib] esclavo: %@", resumen) }
         }
+        // «Calibrar cosido» (ADR 0035): el maestro manda aquí el `rig.json` nuevo.
+        session.onRigFile = { texto in
+            do {
+                try RigFile.install(text: texto)
+                NSLog("[calib] rig.json nuevo guardado; se aplica al volver a EMITIR")
+            } catch {
+                NSLog("[calib] el rig.json que llegó no vale: %@", "\(error)")
+            }
+        }
+    }
+
+    /// El reparto del `rig.json` nuevo al otro móvil.
+    func distribute(rigFile texto: String) {
+        session.send(rigFile: texto)
     }
 
     /// El reloj del soporte de este móvil, en ms: el del host más el desfase del enlace.
@@ -3210,6 +3224,8 @@ final class CalibrationPairs {
             let resumen: [String: Any]
             switch resultado {
             case let .success(fotos):
+                RigCalibrator.shared.stillsReady(id: primero, stills: fotos, side: self.side, pairs: self,
+                                                 isMaster: self.session.isMaster)
                 resumen = [
                     "side": self.side.rawValue, "id": primero, "count": fotos.count,
                     "delta_ms": fotos.map(\.deltaMs), "rig_ms": fotos.map(\.rigMs),
@@ -3223,6 +3239,138 @@ final class CalibrationPairs {
             try? datos.write(to: carpeta.appendingPathComponent("summary-\(self.side.rawValue).json"))
             completion(String(data: datos, encoding: .utf8) ?? "{}")
         }
+    }
+}
+
+// MARK: - «Calibrar cosido» desde el mando (ADR 0035, IOS-122)
+
+// El mando lo pide (`camera/calibrate`). Los dos móviles hacen sus fotos (`CalibrationPairs`) y
+// cada uno sube las suyas a NUBE-09 con su `rig_key`. El maestro pide el cálculo, guarda el
+// `rig.json` y se lo manda al otro. Se aplica al volver a EMITIR: la pasada carga la geometría al
+// arrancar, y rehacer los renderers de los dos móviles con el programa al aire es otra decisión.
+
+enum RigFile {
+    /// Guarda `text` como `Documents/rig.json` si es un soporte válido; el anterior queda como
+    /// `rig.json.previo`. Si no vale, no toca nada.
+    static func install(text: String) throws {
+        let docs = try FileManager.default.url(for: .documentDirectory, in: .userDomainMask,
+                                               appropriateFor: nil, create: true)
+        let nuevo = docs.appendingPathComponent("rig.json.nuevo")
+        try Data(text.utf8).write(to: nuevo, options: .atomic)
+        defer { try? FileManager.default.removeItem(at: nuevo) }
+        _ = try RigModel.load(from: nuevo)
+        let actual = docs.appendingPathComponent("rig.json")
+        let previo = docs.appendingPathComponent("rig.json.previo")
+        if FileManager.default.fileExists(atPath: actual.path) {
+            try? FileManager.default.removeItem(at: previo)
+            try FileManager.default.moveItem(at: actual, to: previo)
+        }
+        try FileManager.default.moveItem(at: nuevo, to: actual)
+    }
+}
+
+final class RigCalibrator: @unchecked Sendable {
+    static let shared = RigCalibrator()
+
+    private let lock = NSLock()
+    private var running = false
+    private var statusText = ""
+
+    /// Cómo va, en JSON (`{state, detail}`); vacío si no se ha pedido.
+    var status: String {
+        lock.lock(); defer { lock.unlock() }
+        return statusText
+    }
+
+    private func set(_ estado: String, _ detalle: String, running: Bool) {
+        let cuerpo: [String: String] = ["state": estado, "detail": detalle]
+        let datos = (try? JSONSerialization.data(withJSONObject: cuerpo, options: [.sortedKeys])) ?? Data()
+        lock.lock()
+        statusText = String(data: datos, encoding: .utf8) ?? ""
+        self.running = running
+        lock.unlock()
+        NSLog("[calib] %@: %@", estado, detalle)
+    }
+
+    /// Al arrancar otra pasada, lo de la anterior ya no cuenta: «vuelve a EMITIR» ya se hizo.
+    func clearFinished() {
+        lock.lock(); defer { lock.unlock() }
+        if !running { statusText = "" }
+    }
+
+    /// Lo pide el mando en el maestro. Devuelve "" o por qué no se puede.
+    func start() -> String {
+        lock.lock()
+        let ocupado = running
+        lock.unlock()
+        guard !ocupado else { return "ya se está calibrando" }
+        guard let pares = ProgramHub.capture?.calibrationPairs else { return "sin enlace entre los dos móviles" }
+        guard (try? VpsPairingKeychain.load()) != nil else {
+            return "falta el QR Soporte: calibrar necesita el VPS"
+        }
+        set("photos", "haciendo las fotos en los dos móviles", running: true)
+        pares.start { [weak self] resumen in
+            let datos = Data(resumen.utf8)
+            let o = (try? JSONSerialization.jsonObject(with: datos)) as? [String: Any]
+            if let fallo = o?["error"] as? String {
+                self?.set("failed", "no se pudieron hacer las fotos: \(fallo)", running: false)
+            }
+        }
+        return ""
+    }
+
+    /// Las fotos de este móvil ya están. Las sube; el maestro, además, pide el cálculo. El
+    /// disparo automático del banco (RIG_CALIB_AT_S) no llega al maestro por aquí.
+    func stillsReady(id: Int64, stills: [CalibrationStillCapture.Still], side: CameraSide,
+                     pairs: CalibrationPairs, isMaster: Bool) {
+        lock.lock()
+        let pedida = running
+        lock.unlock()
+        if isMaster, !pedida { return }
+        Task.detached(priority: .utility) { [self] in
+            do {
+                try await work(id: id, stills: stills, side: side, pairs: pairs, isMaster: isMaster)
+            } catch {
+                if isMaster {
+                    let motivo = (error as? RigCalibrationError)?.description ?? "\(error)"
+                    set("failed", motivo, running: false)
+                } else {
+                    NSLog("[calib] el esclavo no subió sus fotos: %@", "\(error)")
+                }
+            }
+        }
+    }
+
+    private func work(id: Int64, stills: [CalibrationStillCapture.Still], side: CameraSide,
+                      pairs: CalibrationPairs, isMaster: Bool) async throws {
+        guard let emparejado = try VpsPairingKeychain.load(),
+              let base = RigCalibrationClient.baseUrl(tunnelUrl: emparejado.tunnelUrl)
+        else { throw RigCalibrationError.qrExpired }
+        let cliente = RigCalibrationClient(baseUrl: base, rigKey: emparejado.rigKey)
+        let elegidas = stride(from: 0, to: stills.count, by: RigCalibrationConstants.uploadEvery).map { stills[$0] }
+        if isMaster { set("uploading", "subiendo las fotos al VPS", running: true) }
+        for foto in elegidas {
+            let meta = (try? JSONSerialization.jsonObject(with: Data(contentsOf: foto.json))) as? [String: Any]
+            try await cliente.upload(CalibrationUpload(
+                pairId: CalibrationUpload.pairId(calibrationId: id, targetRigMs: foto.targetRigMs),
+                side: side, jpeg: try Data(contentsOf: foto.jpeg), rigMs: foto.rigMs,
+                flipped: meta?["mount_flip"] as? Bool ?? (side == .left),
+                intrinsics: meta?["intrinsics"] as? [Double] ?? []
+            ))
+        }
+        guard isMaster else {
+            NSLog("[calib] esclavo: %d fotos subidas", elegidas.count)
+            return
+        }
+        set("solving", "calculando el cosido en el VPS", running: true)
+        let hecho = try await cliente.solve(pairIds: elegidas.map {
+            CalibrationUpload.pairId(calibrationId: id, targetRigMs: $0.targetRigMs)
+        })
+        try RigFile.install(text: hecho.rigText)
+        pairs.distribute(rigFile: hecho.rigText)
+        let error = String(format: "%.2f", hecho.residualDeg)
+        set("done", "cosido nuevo guardado (\(hecho.inliers) puntos, error \(error)°): para y vuelve a EMITIR para aplicarlo",
+            running: false)
     }
 }
 
@@ -3429,6 +3577,7 @@ final class FramingHub {
         do {
             let espacio = try FramingSpace(rig: rig, width: width, height: height)
             guard let planos = espacio.panorama else { return }
+            RigCalibrator.shared.clearFinished()
             try install(
                 owner: owner,
                 controller: FramingController(space: espacio, zoom: RigConstants.cameraPanoramaStartZoom, auto: true),
@@ -3511,7 +3660,13 @@ final class FramingHub {
         guard let c = current else { return nil }
         var fallo = ""
         do {
-            if kind == "auto" {
+            if kind == "calibrate" {
+                guard c.space.panorama != nil else {
+                    throw FramingError.invalid("con una cámara no hay cosido que calibrar")
+                }
+                let motivo = RigCalibrator.shared.start()
+                if !motivo.isEmpty { throw FramingError.invalid(motivo) }
+            } else if kind == "auto" {
                 guard c.space.panorama != nil else {
                     throw FramingError.invalid("con una cámara no hay director que encuadre")
                 }
@@ -3527,7 +3682,8 @@ final class FramingHub {
         let s = c.status()
         return CameraFraming(
             centerU: s.target.centerU, centerV: s.target.centerV, zoom: s.zoom, outline: s.outline,
-            moving: s.moving, soft: s.soft, error: fallo, panorama: c.space.panorama != nil, auto: s.auto
+            moving: s.moving, soft: s.soft, error: fallo, panorama: c.space.panorama != nil, auto: s.auto,
+            calibration: RigCalibrator.shared.status
         )
     }
 

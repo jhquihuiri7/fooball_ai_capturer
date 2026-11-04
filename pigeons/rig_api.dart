@@ -123,6 +123,7 @@ class CameraFraming {
     required this.error,
     required this.panorama,
     required this.auto,
+    required this.calibration,
   });
 
   /// Dónde cae el centro del destino en la vista general (0–1).
@@ -148,6 +149,9 @@ class CameraFraming {
 
   /// Con dos cámaras: si encuadra el director y no el operador.
   bool auto;
+
+  /// Cómo va «Calibrar cosido» (ADR 0035), en JSON: `{state, detail}`; vacío si no se ha pedido.
+  String calibration;
 }
 
 @HostApi()

@@ -1066,6 +1066,7 @@ Future<CameraReply?> _cameraOrder(String kind, List<double> values, bool cut) as
     soft: f.soft,
     panorama: f.panorama,
     auto: f.auto,
+    calibration: f.calibration,
   );
   return CameraReply(estado, f.error);
 }

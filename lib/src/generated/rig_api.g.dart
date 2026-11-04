@@ -333,6 +333,7 @@ class CameraFraming {
     required this.error,
     required this.panorama,
     required this.auto,
+    required this.calibration,
   });
 
   /// Dónde cae el centro del destino en la vista general (0–1).
@@ -361,6 +362,9 @@ class CameraFraming {
   /// Con dos cámaras: si encuadra el director y no el operador.
   bool auto;
 
+  /// Cómo va «Calibrar cosido» (ADR 0035), en JSON: `{state, detail}`; vacío si no se ha pedido.
+  String calibration;
+
   List<Object?> _toList() {
     return <Object?>[
       centerU,
@@ -372,6 +376,7 @@ class CameraFraming {
       error,
       panorama,
       auto,
+      calibration,
     ];
   }
 
@@ -390,6 +395,7 @@ class CameraFraming {
       error: result[6]! as String,
       panorama: result[7]! as bool,
       auto: result[8]! as bool,
+      calibration: result[9]! as String,
     );
   }
 
@@ -402,7 +408,7 @@ class CameraFraming {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(centerU, other.centerU) && _deepEquals(centerV, other.centerV) && _deepEquals(zoom, other.zoom) && _deepEquals(outline, other.outline) && _deepEquals(moving, other.moving) && _deepEquals(soft, other.soft) && _deepEquals(error, other.error) && _deepEquals(panorama, other.panorama) && _deepEquals(auto, other.auto);
+    return _deepEquals(centerU, other.centerU) && _deepEquals(centerV, other.centerV) && _deepEquals(zoom, other.zoom) && _deepEquals(outline, other.outline) && _deepEquals(moving, other.moving) && _deepEquals(soft, other.soft) && _deepEquals(error, other.error) && _deepEquals(panorama, other.panorama) && _deepEquals(auto, other.auto) && _deepEquals(calibration, other.calibration);
   }
 
   @override
@@ -411,7 +417,7 @@ class CameraFraming {
 
   @override
   String toString() {
-    return 'CameraFraming(centerU: $centerU, centerV: $centerV, zoom: $zoom, outline: $outline, moving: $moving, soft: $soft, error: $error, panorama: $panorama, auto: $auto)';
+    return 'CameraFraming(centerU: $centerU, centerV: $centerV, zoom: $zoom, outline: $outline, moving: $moving, soft: $soft, error: $error, panorama: $panorama, auto: $auto, calibration: $calibration)';
   }
 }
 

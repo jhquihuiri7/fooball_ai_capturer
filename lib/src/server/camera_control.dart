@@ -32,6 +32,7 @@ class CameraState {
     required this.soft,
     this.panorama = false,
     this.auto = false,
+    this.calibration = '',
   });
 
   /// Dónde cae el centro del destino en la vista general (0–1).
@@ -55,6 +56,10 @@ class CameraState {
   /// Con dos cámaras: si encuadra el director y no el operador.
   final bool auto;
 
+  /// Cómo va «Calibrar cosido», en JSON (`{state, detail}`) tal como lo dice el nativo; vacío si
+  /// no se ha pedido.
+  final String calibration;
+
   Map<String, Object?> toJson() => <String, Object?>{
         'center': <double>[centerU, centerV],
         'zoom': zoom,
@@ -65,6 +70,7 @@ class CameraState {
         'soft': soft,
         if (panorama) 'panorama': true,
         if (panorama) 'auto': auto,
+        if (calibration.isNotEmpty) 'calibration': jsonDecode(calibration),
       };
 
   @override
@@ -77,10 +83,11 @@ class CameraState {
       other.moving == moving &&
       other.soft == soft &&
       other.panorama == panorama &&
-      other.auto == auto;
+      other.auto == auto &&
+      other.calibration == calibration;
 
   @override
-  int get hashCode => Object.hash(centerU, centerV, zoom, Object.hashAll(outline), moving, soft, panorama, auto);
+  int get hashCode => Object.hash(centerU, centerV, zoom, Object.hashAll(outline), moving, soft, panorama, auto, calibration);
 }
 
 /// Lo que contesta el nativo a una orden: el encuadre como queda y, si no se aplicó, por qué.
@@ -149,7 +156,7 @@ String cameraPresetName(Map<String, Object?> body) {
 typedef CameraNativeOrder = ({String kind, List<double> values, bool cut});
 
 /// El cuerpo de `camera/frame`, `camera/zoom`, `camera/pan`, `camera/reset` o
-/// `camera/preset` o `camera/auto`, llevado a la orden nativa. Aquí solo se miran los tipos: los topes (el
+/// `camera/preset`, `camera/auto` o `camera/calibrate`, llevado a la orden nativa. Aquí solo se miran los tipos: los topes (el
 /// tamaño del recuadro, el factor, el paso) los pone `FramingSpace`, que contesta con su
 /// error. `preset` busca un encuadre guardado por nombre.
 CameraNativeOrder cameraNativeOrder(
@@ -187,6 +194,8 @@ CameraNativeOrder cameraNativeOrder(
       return (kind: 'reset', values: <double>[a == 'start' ? 0 : 1], cut: corte);
     case 'camera/auto':
       return (kind: 'auto', values: const <double>[], cut: corte);
+    case 'camera/calibrate':
+      return (kind: 'calibrate', values: const <double>[], cut: corte);
     case 'camera/preset':
       final String nombre = cameraPresetName(body);
       final CameraPreset? p = preset(nombre);

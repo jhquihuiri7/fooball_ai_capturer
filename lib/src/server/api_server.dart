@@ -600,6 +600,7 @@ class MasterApi {
     'camera/pan',
     'camera/reset',
     'camera/auto',
+    'camera/calibrate',
     'camera/preset',
     'camera/preset_save',
     'camera/preset_delete',

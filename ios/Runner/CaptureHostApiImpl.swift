@@ -41,6 +41,8 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
     private var linkMedium: LinkMedium?
     /// La pareja de fotogramas para calibrar (IOS-70), con el enlace de Network.
     private var calibPairs: CalibrationPairs?
+    /// Las parejas de calibración de este enlace, para «Calibrar cosido» (ADR 0035).
+    var calibrationPairs: CalibrationPairs? { calibPairs }
     /// El lado del enlace de Network abierto.
     private var currentRole: CameraRole?
 

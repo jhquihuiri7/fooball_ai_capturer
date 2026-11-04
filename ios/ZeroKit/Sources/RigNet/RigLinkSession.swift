@@ -148,6 +148,8 @@ public final class RigLinkSession {
     public var onColorMeans: (([Double]) -> Void)?
     /// El esclavo debe guardar los fotogramas de estos instantes para calibrar (IOS-70).
     public var onCalibrationCapture: (([Int64]) -> Void)?
+    /// El `rig.json` nuevo que manda el maestro tras «Calibrar cosido» (ADR 0035).
+    public var onRigFile: ((String) -> Void)?
 
     public private(set) var state: State = .off {
         didSet { if oldValue != state { onState?(state) } }
@@ -548,6 +550,19 @@ public final class RigLinkSession {
 
     static let calibrationCaptureKind = "calibration_capture"
 
+    /// El maestro reparte el `rig.json` recién calibrado (ADR 0035): `command` por control, en
+    /// JSON, con `kind: rig_file`. Cabe de sobra: son unos cientos de bytes.
+    public func send(rigFile text: String) {
+        queue.async { [self] in
+            guard isMaster, case .connected = state,
+                  let payload = try? JSONSerialization.data(withJSONObject: ["kind": Self.rigFileKind, "text": text])
+            else { return }
+            send(type: .command, payload: payload, seq: nextControlSeq())
+        }
+    }
+
+    static let rigFileKind = "rig_file"
+
     /// El maestro fija la cadencia común de detección (IOS-25, ADR 0023 §5): `command` por
     /// control, en JSON, con `kind: cadence`. El esclavo no la manda.
     public func send(cadence: CadenceCommand) {
@@ -667,6 +682,9 @@ public final class RigLinkSession {
             case Self.calibrationCaptureKind:
                 guard let destinos = orden["targets"] as? [NSNumber] else { return }
                 onCalibrationCapture?(destinos.map(\.int64Value))
+            case Self.rigFileKind:
+                guard let texto = orden["text"] as? String else { return }
+                onRigFile?(texto)
             case CadenceCommand.kind:
                 guard let cadencia = CadenceCommand(json: orden) else { return }
                 onCadence?(cadencia)

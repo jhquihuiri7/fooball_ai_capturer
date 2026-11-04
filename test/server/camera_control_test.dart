@@ -82,6 +82,20 @@ void main() {
       expect(dos, isNot(una), reason: 'el cambio de modo sube el estado');
     });
 
+    test('camera/calibrate va al nativo, y cómo va sale en el estado', () {
+      _esOrden(cameraNativeOrder('camera/calibrate', <String, Object?>{}, (String _) => null), 'calibrate', <double>[]);
+      const CameraState sinPedir = CameraState(
+        centerU: 0.5, centerV: 0.6, zoom: 1, outline: <double>[0, 0], moving: false, soft: false, panorama: true,
+      );
+      expect(sinPedir.toJson().containsKey('calibration'), isFalse);
+      const CameraState pedida = CameraState(
+        centerU: 0.5, centerV: 0.6, zoom: 1, outline: <double>[0, 0], moving: false, soft: false, panorama: true,
+        calibration: '{"state":"solving","detail":"calculando"}',
+      );
+      expect(pedida.toJson()['calibration'], <String, Object?>{'state': 'solving', 'detail': 'calculando'});
+      expect(pedida, isNot(sinPedir), reason: 'el progreso sube el estado');
+    });
+
     test('los planos de la vista general se pueden mirar en vivo', () {
       expect(LiveViews.sources, containsAll(<String>['left', 'right']));
     });
