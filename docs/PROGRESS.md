@@ -12,6 +12,64 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-11-03 · IOS-120, IOS-121 e IOS-122: el zoom con dos cámaras, la lente real y calibrar desde el mando · 🚧 hecho y sin probar en el iPhone
+
+ADR 0035 de football-ai. Lo pidió Alexander tras la prueba del 3-nov con dos iPhone, donde el cosido
+a ratos se torcía, el programa solo enseñaba el medio y los 0,5×, 1× y 2× resultaron ser recortes.
+
+**Lo que dijeron los informes de esa prueba** (solo los del 17; el otro móvil no estaba):
+- Sincronía bien: las mitades se separan de 1 a 5 ms, 12 en el peor caso.
+- `rig.json` era del 11-oct, del trípode de casa. La costura caía sobre gente y rocas a 1–3 m.
+- En la pasada de 135 s, los últimos 11 s sale una cuña negra: falta la mitad del otro, con el
+  enlace arriba. Hacen falta los logs del otro móvil para saber por qué.
+- `program-…-1793744726.mov` (187 s) quedó sin `moov` y no se abre, aunque `mov_failures` está
+  vacío. Sin investigar.
+
+**IOS-120, el encuadre a mano con dos cámaras**
+- `FramingSpace(rig:width:height:)` (`Framing.swift`): el panorama de REF-70, contra `framing.json`.
+- `FramingController`: arranca en automático, `follow` apunta por dónde va el director, y la primera
+  orden pasa a mano sin salto. `camera/auto` lo devuelve.
+- `RigLinkNW`: a mano, el director sigue con sus cuentas y sus vistas no salen.
+- `FramingHub.mountPanorama`: cada móvil pinta su plano de 320×320 a 3 por segundo, y `left` y
+  `right` pasan a ser esos planos. El protocolo del enlace no cambia.
+- El mando: la tarjeta Cámara sale también con dos móviles, con el lienzo de 2:1, «Automático» y lo
+  más abierto.
+
+**IOS-121, la lente real de «Una cámara»**
+- `CaptureSettings.lensZoom` y `availableLensZooms`: 0,5× la ultra, 1× la principal, 2× la principal
+  con `videoZoomFactor` (formato con `secondaryNativeResolutionZoomFactors` si lo hay) y el
+  teleobjetivo si lo tiene el móvil.
+- Las intrínsecas de esas lentes salen de `videoFieldOfView` (`OpenLens`, `withIntrinsics`). Los topes
+  del zoom del mando van con la lente.
+- Las píldoras dicen lo que tiene este iPhone. Con dos móviles, siempre 0,5×.
+
+**IOS-122, Calibrar cosido**
+- `RigCalibrationClient` (RigNet): sube y pide `solve` a NUBE-09, con el transporte inyectado.
+- `RigCalibrator`: cada móvil sube 3 de sus 5 fotos; el maestro calcula, guarda y manda `rig.json` por
+  el enlace (`kind: rig_file`). El anterior queda como `rig.json.previo`.
+- `camera/calibrate` y `calibration` en el estado. Se aplica al volver a EMITIR.
+
+**Probado**
+- `swift test`: RigCore 353 de 353, RigNet con `RigCalibrationClientTests`; en RigMedia solo falla
+  `ProgramRecorderTests`, lo de macOS 27. `framing.json` iguala Python en todos los casos.
+- `flutter analyze` limpio; `flutter test`, los 8 dorados de imagen de este Mac.
+- `flutter build ios` y la IPA compilan.
+- El mando en Chrome sin pantalla contra el maestro de verdad con un nativo falso: el panorama pinta
+  los dos planos, el recuadro sale en la proporción justa, los botones llegan y no hay errores de
+  JavaScript. Es un arnés de una vez y no se commitea.
+- El VPS de verdad: acepta las fotos y `solve` contesta en ~1 s. Con las fotos del 15-oct no calibra
+  (27 emparejamientos, hacen falta 30) y lo dice. **El camino bueno de punta a punta no se ha visto.**
+
+**Sin probar, porque pide los iPhone**: la cámara física a 1× y 2×, el pintado de los planos y su
+coste térmico, la subida con dos móviles y que `rig.json` llegue al otro.
+
+**Fuera**
+- Aplicar la calibración sin parar el programa.
+- Probar la calibración con el soporte montado y un sitio lejano: es la aceptación.
+- La guía de cancha no cuenta todavía nada de esto.
+
+---
+
 ## 2026-11-03 · IOS-119 — la repetición desde el mando, con la cortinilla de la copa y la casa · 🚧 hecho; falta verlo emitido en el iPhone
 
 ADR 0034 de football-ai. Sobre IOS-118.
