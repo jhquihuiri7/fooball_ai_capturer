@@ -25,22 +25,39 @@ La app ya no abre en la pantalla de lado: pregunta **«¿Qué vas a transmitir?�
 
 - **Fútbol**: la pantalla de siempre (lado, enlace, VPS…). Todo lo de esta guía.
 - **Espectáculo** (festivales, presentaciones): un solo móvil. Elige la calidad, escanea el QR
-  Soporte y «Abrir cámara». Desde el mando web (QR «Mando»), la tarjeta **Rótulos**: guarda
+  Soporte y «Abrir cámara». Desde el mando web (QR «Mando»), la pestaña **Evento**, tarjeta **Rótulos**: guarda
   cada número con su título y su subtítulo («Presentación artística: Los Ángeles del Cielo» /
   «Cantado por …») y sácalo 10 s o «Fijo». EN VIVO sale solo arriba a la izquierda.
 - **Vóleibol** (2026-11-03): como el fútbol, con uno o dos móviles (la misma pantalla de lado,
-  enlace y VPS) y la tarjeta Cámara del mando web; sin gráficos por ahora (salvo la repetición).
+  enlace y VPS) y la pestaña Cámara del mando web; sin gráficos por ahora (salvo la repetición).
   No tiene pestaña Partido ni «Solo mando».
 
-**Una noche con varios partidos** (fútbol): antes del primero, carga en el mando web la
-tarjeta **Jornada** con todos los partidos y sus escudos. Al empezar cada uno, «Partido de la
-jornada» → **Empezar** (pone los nombres, los escudos y el reloj a cero, sin escribir nada).
-Al acabar, **Finalizar partido**: el marcador queda guardado. Al final de la noche, en Al aire,
-**Resultados**. El gol sale solo en pantalla con cada «+ Gol»; si fue un error, «− 1» lo quita.
-Para una premiación, en Al aire, **Ocultar marcador y reloj**.
+**El mando web, en tres pestañas** (2026-11-04, IOS-125):
+- **Arriba, siempre a la vista** (la barra de directo): el marcador con **+ Gol** de cada
+  equipo, el reloj con iniciar y pausar, **Marcar jugada** y las etiquetas de lo que está al
+  aire. En el espectáculo, solo «Marcar jugada».
+- **Partido** (**Evento**, en el espectáculo): el partido de la jornada, Al aire, «Corregir
+  marcador y reloj» (− 1 gol, ±1 min, a cero) y En pantalla; en el espectáculo, los Rótulos.
+  Abajo, plegado, **Preparar el partido**: equipos y escudos, jornada, próximo partido,
+  entrevistas e icono.
+- **Cámara**: el encuadre, la repetición, las cámaras a 1 fps y el soporte. La vista en vivo
+  solo corre con esta pestaña abierta: al salir se para y el maestro se calienta menos.
+- **Anuncios**: la franja inferior y los vídeos.
+- Junto al nombre de cada pestaña, una marca dice lo que tiene al aire: «al aire»,
+  «repetición», «a mano» o «auto».
+- Se abre en Partido; después, cada móvil u ordenador recuerda la última. El vóley solo tiene
+  Cámara, así que no enseña pestañas.
 
-**Hacer zoom con una sola cámara** (fútbol, vóley o espectáculo con «Una cámara»): en el mando web
-sale la tarjeta **Cámara**.
+**Una noche con varios partidos** (fútbol): antes del primero, carga en el mando web, en
+Partido → «Preparar el partido», la tarjeta **Jornada** con todos los partidos y sus escudos.
+Al empezar cada uno, «Partido de la jornada» → **Empezar** (pone los nombres, los escudos y el
+reloj a cero, sin escribir nada). Al acabar, **Finalizar partido**: el marcador queda guardado.
+Al final de la noche, en Al aire, **Resultados**. El gol sale solo en pantalla con cada «+ Gol»
+de la barra; si fue un error, «− 1 gol» en «Corregir marcador y reloj» lo quita. Para una
+premiación, en Al aire, **Ocultar marcador y reloj**.
+
+**Hacer zoom con una sola cámara** (fútbol, vóley o espectáculo con «Una cámara»): en el mando web,
+la pestaña **Cámara**.
 - **La vista general** enseña la lente entera con el encuadre de ahora. Arrastra un recuadro
   sobre ella y el programa va ahí en un segundo; con **Corte** puesto, salta de golpe.
 - **Restablecer** vuelve al zoom que elegiste en el móvil; **Lente entera**, a todo el plano.
@@ -60,14 +77,14 @@ pantalla del lado, junto al enlace.
 - **Con dos**, la misma en los dos móviles. Con 0,5× no cambia nada. Con 1× o 2×:
   - gira los dos móviles hacia dentro (unos ±25° con 1×) hasta que sus imágenes se solapen;
   - calibra el cosido desde el mando con esa lente; se guarda aparte de la de 0,5×.
-- **Si algo no cuadra**, la pantalla de captura y la tarjeta Soporte del mando dicen «Aviso del
+- **Si algo no cuadra**, la pantalla de captura y la tarjeta Soporte del mando (pestaña Cámara) dicen «Aviso del
   soporte»: sin calibrar con esa lente, las lentes no se tocan o los dos móviles llevan lentes
   distintas.
 
-**Repetir una jugada** (cualquier evento, con una o dos cámaras): la tarjeta **Repetición** del
-mando web, debajo de los goles.
-- Cuando pase algo, **Marcar jugada**. Sale en la lista con su número (y el minuto, en el
-  fútbol).
+**Repetir una jugada** (cualquier evento, con una o dos cámaras): la tarjeta **Repetición** de
+la pestaña Cámara del mando web.
+- Cuando pase algo, **Marcar jugada**, en la barra de arriba, desde cualquier pestaña. Sale en
+  la lista con su número (y el minuto, en el fútbol).
 - Elige **hacia atrás**: 5, 10, 15, 20 o 30 s (15 por defecto; el navegador lo recuerda).
 - **Repetir** en la marca: sale la cortinilla con la copa y la casa en grande, los segundos
   de antes de la marca y otra vez el directo. **Repetir lo último** hace lo mismo hasta ahora,
@@ -79,7 +96,7 @@ mando web, debajo de los goles.
   en la memoria». Sin emitir no hay nada que repetir.
 - Mientras suena un vídeo del mando no se repite, ni al revés.
 
-**Quitar una sola cosa de la pantalla**: en el mando web, la tarjeta **En pantalla** tiene un
+**Quitar una sola cosa de la pantalla**: en el mando web, pestaña Partido, la tarjeta **En pantalla** tiene un
 interruptor por cada elemento: competición, marcador, tiempo, en vivo, logo de la casa e icono
 de la copa. Apagado, no sale; lo demás no se mueve. Si se reinicia el maestro vuelven todos.
 

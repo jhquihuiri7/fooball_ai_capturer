@@ -176,6 +176,55 @@ void main() {
     expect(html, contains('setPointerCapture'), reason: 'el recuadro se dibuja con el dedo o el ratón');
   });
 
+  test('el mando en pestañas (IOS-125, ADR 0036): la barra de directo y dónde va cada tarjeta', () {
+    // Sin los \r de un checkout de Windows, para que los finales de bloque se encuentren igual.
+    final String html = File('assets/panel/index.html').readAsStringSync().replaceAll('\r\n', '\n');
+    // El trozo de la página entre `desde` y lo primero de `hasta` que venga detrás.
+    String trozo(String desde, List<String> hasta) {
+      final int i = html.indexOf(desde);
+      expect(i, greaterThanOrEqualTo(0), reason: desde);
+      final int fin = hasta.map((String h) => html.indexOf(h, i + desde.length)).where((int j) => j >= 0).reduce(min);
+      return html.substring(i, fin);
+    }
+
+    final String barra = trozo('id="directo"', <String>['</section>\n']);
+    for (final String cosa in <String>['data-gol="home,1"', 'data-gol="away,1"', 'id="reloj"', 'id="toggle"',
+        'id="repe-marcar"', 'id="chips"']) {
+      expect(barra, contains(cosa), reason: 'en la barra de directo: $cosa');
+    }
+    final String pestanas = trozo('id="pestanas"', <String>['</nav>']);
+    for (final String p in <String>['partido', 'camara', 'anuncios']) {
+      expect(pestanas, contains('data-pestana="$p"'));
+      expect(html.split('id="panel-$p"').length, 2, reason: 'un panel por pestaña: $p');
+    }
+    final List<String> fin = <String>['id="panel-', '</main>'];
+    final String partido = trozo('id="panel-partido"', fin);
+    final String camara = trozo('id="panel-camara"', fin);
+    final String anuncios = trozo('id="panel-anuncios"', fin);
+    final Map<String, List<String>> donde = <String, List<String>>{
+      partido: <String>['t-partidos', 't-rotulos', 't-alin', 't-corregir', 't-pantalla', 't-equipos', 't-jornada',
+          't-proximo', 't-entrevista', 't-icono'],
+      camara: <String>['t-camara', 't-jugada', 't-voley', 'camaras-programa', 'id="estado"'],
+      anuncios: <String>['t-franja', 't-videos'],
+    };
+    donde.forEach((String panel, List<String> tarjetas) {
+      for (final String tarjeta in tarjetas) {
+        expect(panel, contains(tarjeta));
+      }
+    });
+    expect(trozo('id="preparar"', <String>['</details>\n  </div>']), contains('t-equipos'),
+        reason: 'lo que se rellena antes del partido va plegado');
+    expect(partido, contains('data-gol="home,-1"'), reason: 'corregir el marcador, fuera de la barra');
+    // La vista en vivo, las miniaturas y los atajos, solo con Cámara delante.
+    expect(html, contains("if (pestana === 'camara' && !vivoAbierto && !document.hidden) arrancaVivo();"));
+    expect(html, contains("if (document.hidden || pestana !== 'camara') return;"));
+    expect(html, contains("if (pestana !== 'camara' || !camaraActiva()"));
+    expect(html, contains("if (nombre !== 'camara') { paraVivo(); return; }"));
+    // Se abre en Partido, y cada navegador recuerda la suya.
+    expect(html, contains("PESTANA_INICIAL = 'partido'"));
+    expect(html, contains("localStorage.setItem(PESTANA_CLAVE, nombre)"));
+  });
+
   group('en el maestro', () {
     late Directory dir;
     late _Reloj reloj;

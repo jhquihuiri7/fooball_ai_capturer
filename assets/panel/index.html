@@ -11,7 +11,8 @@
      fragmento de la URL del QR Mando (#mando=…), que el navegador nunca manda al
      servidor; las llamadas lo llevan en Authorization.
      Pensado primero para el móvil del operador: botones de 56 px o más, una columna, y
-     dos columnas desde 900 px. Las fuentes vienen de Google Fonts si hay red; si no (la
+     dos columnas desde 900 px. Arriba y fija, la barra de directo; debajo, tres pestañas
+     (Partido o Evento, Cámara y Anuncios; ADR 0036). Las fuentes vienen de Google Fonts si hay red; si no (la
      cancha sin internet), caen a las condensadas del sistema y la página aguanta igual.
      Cada tarjeta dice para qué eventos es (data-tipos, ADR 0031): el fútbol lo enseña todo; el
      espectáculo, los rótulos, la franja, los vídeos y el icono; el vóley, solo las cámaras. -->
@@ -40,11 +41,13 @@
   button { font: inherit; color: inherit; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 
   /* ---------------- cabecera ---------------- */
-  header {
-    position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 10px;
-    padding: 10px 16px; background: rgba(7, 17, 31, .94); border-bottom: 1px solid var(--linea);
+  /* ADR 0036: la cabecera, la barra de directo y las pestañas van juntas y fijas arriba. */
+  .fija {
+    position: sticky; top: 0; z-index: 5;
+    background: rgba(7, 17, 31, .94); border-bottom: 1px solid var(--linea);
     backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
   }
+  header { display: flex; align-items: center; gap: 10px; padding: 10px 16px; }
   .marca { display: flex; align-items: center; gap: 10px; font: 800 18px/1 var(--display); letter-spacing: .04em; text-transform: uppercase; }
   .franjas { display: flex; gap: 3px; }
   .franjas i { width: 7px; height: 20px; transform: skewX(var(--sesgo)); background: linear-gradient(180deg, var(--teal), var(--verde)); }
@@ -62,46 +65,87 @@
   .vivo.on { display: inline-flex; }
   .evento { font: 700 11px/1 var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--oceanico); }
 
-  main { width: 100%; max-width: 1100px; margin: 0 auto; padding: 14px 16px 120px; display: grid; gap: 14px; }
-  @media (min-width: 900px) {
-    main { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
-    .ancho { grid-column: 1 / -1; }
+  /* ---------------- barra de directo (ADR 0036) ---------------- */
+  /* En el móvil, dos filas: el marcador con sus «+ Gol», y el reloj con «Marcar jugada». Desde
+     que caben, una sola. */
+  .directo { max-width: 1100px; margin: 0 auto; padding: 0 16px 10px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+  .directo .btn { min-height: 48px; padding: 0 12px; }
+  .directo-marcador { flex: 1 1 340px; min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+  /* Los nombres se parten entre palabras, nunca dentro de una; si no caben en dos líneas, se
+     cortan antes de empujar la página de lado. */
+  .equipo {
+    min-width: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    font: 700 clamp(14px, 3.8vw, 22px)/1.05 var(--display); text-transform: uppercase; letter-spacing: .01em; overflow-wrap: normal; word-break: normal;
   }
-  .col { display: grid; gap: 14px; }
-
-  /* ---------------- marcador ---------------- */
-  .marcador {
-    position: relative; overflow: hidden; padding: 16px 16px 14px; border-radius: 12px;
-    background: linear-gradient(180deg, var(--marino), var(--profundo));
-    box-shadow: inset 0 -3px 0 var(--azul), 0 4px 16px rgba(0, 0, 0, .4);
-  }
-  .equipos { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 10px; }
-  /* Los nombres se parten entre palabras, nunca dentro de una: con el cuerpo que baja con
-     el ancho, «BELLAVISTA» cabe entero en un móvil de 360 px. */
-  .equipo { min-width: 0; font: 700 clamp(15px, 4.4vw, 28px)/1.05 var(--display); text-transform: uppercase; letter-spacing: .01em; overflow-wrap: normal; word-break: normal; }
   .equipo.local { text-align: right; }
-  .goles { display: flex; align-items: stretch; height: clamp(54px, 15vw, 72px); }
+  .goles { display: flex; align-items: stretch; height: 48px; }
   .gol {
-    display: flex; align-items: center; justify-content: center; min-width: clamp(46px, 13vw, 64px); padding: 0 10px;
-    font: 800 clamp(38px, 11vw, 56px)/1 var(--display); font-variant-numeric: tabular-nums; color: var(--profundo);
+    display: flex; align-items: center; justify-content: center; min-width: 42px; padding: 0 8px;
+    font: 800 34px/1 var(--display); font-variant-numeric: tabular-nums; color: var(--profundo);
     transform: skewX(var(--sesgo));
   }
   .gol > span { transform: skewX(30deg); }
   .gol.local { background: linear-gradient(180deg, var(--teal), var(--verde)); }
   .gol.visita { background: #fff; }
-  .reloj-fila { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 14px; }
+  .directo-fila { flex: 1 1 auto; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+  .directo-reloj { display: grid; justify-items: center; gap: 3px; }
   .reloj {
-    padding: 4px 14px; border-radius: 6px; background: rgba(7, 17, 31, .88); box-shadow: inset 0 0 0 2px var(--oceanico);
-    font: 700 clamp(30px, 9vw, 40px)/1.1 var(--display); font-variant-numeric: tabular-nums; letter-spacing: .02em;
+    padding: 2px 10px; border-radius: 6px; background: rgba(7, 17, 31, .88); box-shadow: inset 0 0 0 2px var(--oceanico);
+    font: 700 26px/1.1 var(--display); font-variant-numeric: tabular-nums; letter-spacing: .02em;
   }
-  .estado-reloj { font: 700 11px/1 var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--oceanico); }
+  .estado-reloj { font: 700 10px/1 var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--oceanico); }
   .estado-reloj.corre { color: var(--teal); }
+  .directo .marcar { flex: 1 1 auto; max-width: 420px; }
+  .mas-gol b { font-weight: inherit; }
+  /* En un móvil estrecho (el iPhone base tiene 402 px), «+ Gol» en dos pisos y el reloj solo con
+     su icono (dice «parado» o «en marcha» debajo): así los nombres caben y la barra, en dos filas. */
+  @media (max-width: 420px) {
+    .directo .mas-gol { flex-direction: column; gap: 0; min-width: 48px; padding: 0 6px; font-size: 13px; line-height: 1; }
+    .directo .mas-gol b { font-size: 24px; line-height: .85; }
+    .directo .toggle { min-width: 48px; padding: 0; }
+    #texto-toggle { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  }
   /* Lo que está pasando en el programa: el gol, el marcador oculto y el partido de la jornada. */
-  .chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 10px; }
+  .chips { flex-basis: 100%; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
   .chips:empty { display: none; }
   .chip { padding: 5px 10px; border-radius: 6px; font: 800 12px/1.2 var(--sans); letter-spacing: .06em; text-transform: uppercase; background: var(--tinte); color: var(--oceanico); }
   .chip.gol { background: var(--teal); color: var(--profundo); }
   .chip.aviso { background: var(--amarillo); color: var(--profundo); }
+
+  /* ---------------- pestañas (ADR 0036) ---------------- */
+  .pestanas { max-width: 1100px; margin: 0 auto; padding: 0 16px; display: flex; gap: 4px; }
+  .pestanas.una { display: none; } /* el vóley solo tiene Cámara */
+  .pestana {
+    flex: 1 1 0; min-width: 0; min-height: 46px; padding: 0 6px; overflow: hidden;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    border: 0; border-bottom: 3px solid transparent; background: none; cursor: pointer;
+    font: 700 16px/1 var(--display); letter-spacing: .06em; text-transform: uppercase; color: var(--oceanico);
+  }
+  .pestana[aria-selected="true"] { color: var(--claro); border-bottom-color: var(--teal); }
+  .pestana:focus-visible { outline: 2px solid var(--teal); outline-offset: -2px; }
+  .pestana small {
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 3px 5px; border-radius: 4px;
+    font: 800 10px/1 var(--sans); letter-spacing: .04em; background: var(--tinte); color: var(--claro);
+  }
+  .pestana small:empty { display: none; }
+  .pestana small.aire { background: var(--rojo); color: #fff; }
+  .pestana small.mano { background: var(--amarillo); color: var(--profundo); }
+  /* En el móvil, la marca debajo del nombre: «Anuncios» y «al aire» no caben en un tercio. */
+  @media (max-width: 440px) { .pestana { flex-direction: column; gap: 3px; } }
+
+  main { width: 100%; max-width: 1100px; margin: 0 auto; padding: 14px 16px 120px; }
+  /* Una pista que no crece con lo de dentro: si algo no cabe, se ve dónde, sin ensanchar la página. */
+  .panel, .col, .preparar-cuerpo { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  @media (min-width: 900px) {
+    .panel, .preparar-cuerpo { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+    .ancho { grid-column: 1 / -1; }
+  }
+  /* «Preparar» (ADR 0036): lo que se rellena antes del partido, plegado; dentro, sus tarjetas tal cual. */
+  .preparar > summary { padding: 14px; border-radius: 12px; background: var(--marino); box-shadow: 0 1px 2px #00000080, 0 8px 24px #00000059; }
+  .preparar > summary h2 { display: flex; align-items: center; gap: 8px; font: 600 11px/16px var(--sans); letter-spacing: .14em; text-transform: uppercase; color: var(--oceanico); }
+  .preparar > summary h2::before { content: ""; width: 4px; height: 14px; transform: skewX(var(--sesgo)); background: var(--teal); }
+  .preparar > summary .nota { margin: 6px 0 0; }
+  details.preparar[open] > summary { margin-bottom: 14px; }
 
   /* ---------------- tarjetas ---------------- */
   .card { padding: 14px; border-radius: 12px; background: var(--marino); box-shadow: 0 1px 2px #00000080, 0 8px 24px #00000059; }
@@ -129,7 +173,6 @@
   .primario { background: var(--teal); color: var(--profundo); box-shadow: 0 6px 18px #00e5c459; }
   .acento { background: var(--azul); color: #fff; box-shadow: 0 6px 18px #0066ff59; }
   .blanco { background: #fff; color: var(--profundo); }
-  .grande { min-height: 72px; font-size: 22px; }
 
   .goles-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .lado { display: grid; gap: 8px; min-width: 0; }
@@ -137,7 +180,7 @@
   .quitar { min-height: 44px; font-size: 15px; background: transparent; }
 
   .reloj-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
-  .reloj-grid .toggle { grid-column: 1 / -1; }
+  .goles-grid + .reloj-grid { margin-top: 8px; }
 
   .alin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .alin { flex-direction: column; gap: 4px; min-height: 64px; }
@@ -207,7 +250,7 @@
   .campos { display: grid; gap: 10px; }
   .campos label { display: grid; gap: 4px; font: 600 11px/1.2 var(--sans); letter-spacing: .1em; text-transform: uppercase; color: var(--oceanico); }
   .campos input[type=text] {
-    min-height: 48px; padding: 0 12px; border: 0; border-radius: 10px; background: var(--profundo); color: var(--claro);
+    width: 100%; min-width: 0; min-height: 48px; padding: 0 12px; border: 0; border-radius: 10px; background: var(--profundo); color: var(--claro);
     box-shadow: inset 0 0 0 1px var(--linea); font: 700 18px/1 var(--display); letter-spacing: .03em; text-transform: uppercase;
   }
   .campos input[type=text]:focus { outline: none; box-shadow: inset 0 0 0 2px var(--teal); }
@@ -217,7 +260,7 @@
     min-height: 48px; padding: 0 12px; border: 0; border-radius: 10px; background: var(--profundo); color: var(--claro);
     box-shadow: inset 0 0 0 1px var(--linea); font: 600 15px/1 var(--sans);
   }
-  .pareja { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .pareja { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
   .acciones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px; }
   .uno { grid-template-columns: 1fr; }
   details.editar > summary { margin-top: 10px; padding: 10px 0 0; border-top: 1px solid var(--linea); font: 600 12px/1 var(--sans); letter-spacing: .1em; text-transform: uppercase; color: var(--oceanico); }
@@ -303,36 +346,234 @@
 </style>
 </head>
 <body>
-<header>
-  <div class="marca"><span class="franjas" aria-hidden="true"><i></i><i></i><i></i></span>Mando</div>
-  <span class="evento" id="evento"></span>
-  <span class="vivo" id="vivo">EN VIVO</span>
-  <div class="conexion" id="conexion" role="status"><span class="punto" aria-hidden="true"></span><span id="conexion-texto">conectando…</span></div>
-</header>
-
-<main>
-  <section class="card ancho" data-tipos="volleyball" aria-labelledby="t-voley" hidden>
-    <h2 id="t-voley">Vóleibol</h2>
-    <p class="nota">El vóley sale, por ahora, sin marcador ni gráficos, salvo la repetición. Desde aquí se encuadra la cámara (con una o con dos), se repiten las jugadas y se ve el soporte.</p>
-  </section>
-
-  <section class="marcador ancho" aria-label="Marcador" data-tipos="football">
-    <div class="equipos">
+<!-- ADR 0036: lo fijo arriba (la cabecera, la barra de directo y las pestañas). -->
+<div class="fija">
+  <header>
+    <div class="marca"><span class="franjas" aria-hidden="true"><i></i><i></i><i></i></span>Mando</div>
+    <span class="evento" id="evento"></span>
+    <span class="vivo" id="vivo">EN VIVO</span>
+    <div class="conexion" id="conexion" role="status"><span class="punto" aria-hidden="true"></span><span id="conexion-texto">conectando…</span></div>
+  </header>
+  <!-- ADR 0036: la barra de directo, en todas las pestañas. Lo que no puede esperar a cambiar de
+       pestaña: el gol, el reloj y la jugada, y lo que pasa en el programa. -->
+  <section class="directo" id="directo" aria-label="Directo">
+    <div class="directo-marcador" data-tipos="football">
+      <button type="button" class="btn primario mas-gol" data-gol="home,1" aria-label="Gol del local"><b>+</b><span>Gol</span></button>
       <div class="equipo local" id="local">Local</div>
       <div class="goles" aria-live="polite">
         <div class="gol local"><span id="goles-local">0</span></div>
         <div class="gol visita"><span id="goles-visita">0</span></div>
       </div>
       <div class="equipo" id="visitante">Visitante</div>
+      <button type="button" class="btn blanco mas-gol" data-gol="away,1" aria-label="Gol del visitante"><b>+</b><span>Gol</span></button>
     </div>
-    <div class="reloj-fila">
-      <span class="reloj" id="reloj">00:00</span>
-      <span class="estado-reloj" id="estado-reloj">parado</span>
+    <div class="directo-fila">
+      <div class="directo-reloj" data-tipos="football">
+        <span class="reloj" id="reloj">00:00</span>
+        <span class="estado-reloj" id="estado-reloj">parado</span>
+      </div>
+      <button type="button" class="btn toggle" id="toggle" data-reloj="start" data-tipos="football">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path id="icono-toggle" fill="currentColor" d="M8 5.2v13.6a.8.8 0 0 0 1.23.67l10.4-6.8a.8.8 0 0 0 0-1.34L9.23 4.53A.8.8 0 0 0 8 5.2z"/></svg>
+        <span id="texto-toggle">Iniciar</span>
+      </button>
+      <button type="button" class="btn acento marcar" id="repe-marcar" data-propio>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/></g><circle cx="12" cy="12" r="1.8" fill="currentColor"/></svg>
+        <span>Marcar jugada</span>
+      </button>
     </div>
     <div class="chips" id="chips" aria-live="polite"></div>
   </section>
+  <nav class="pestanas" id="pestanas" role="tablist" aria-label="Secciones del mando">
+    <button type="button" role="tab" class="pestana" id="tab-partido" data-pestana="partido" data-tipos="football show" aria-controls="panel-partido" aria-selected="false" data-propio><span id="tab-partido-nombre">Partido</span><small id="tab-partido-estado"></small></button>
+    <button type="button" role="tab" class="pestana" id="tab-camara" data-pestana="camara" data-tipos="football show volleyball" aria-controls="panel-camara" aria-selected="false" data-propio><span>Cámara</span><small id="tab-camara-estado"></small></button>
+    <button type="button" role="tab" class="pestana" id="tab-anuncios" data-pestana="anuncios" data-tipos="football show" aria-controls="panel-anuncios" aria-selected="false" data-propio><span>Anuncios</span><small id="tab-anuncios-estado"></small></button>
+  </nav>
+</div>
 
-  <!-- ADR 0033 y 0035: el encuadre a mano, con una cámara y con dos, en cuanto se emite. -->
+<main>
+  <!-- Partido en el fútbol, Evento en el espectáculo: lo que se pulsa durante y, plegado, lo que se
+       prepara antes. -->
+  <div class="panel" id="panel-partido" role="tabpanel" aria-labelledby="tab-partido" hidden>
+  <div class="col">
+    <section class="card" aria-labelledby="t-partidos" data-tipos="football">
+      <h2 id="t-partidos">Partido de la jornada</h2>
+      <ul class="videos partidos" id="partidos"></ul>
+      <button class="btn primario" style="width:100%" id="finalizar" type="button" data-propio disabled>Finalizar partido</button>
+      <p class="nota">Empezar pone en el marcador los nombres y los escudos de la jornada, el reloj a cero. Finalizar guarda el marcador en la jornada: «Resultados», en Al aire, los enseña todos.</p>
+    </section>
+    <section class="card" aria-labelledby="t-rotulos" data-tipos="show" hidden>
+      <h2 id="t-rotulos">Rótulos</h2>
+      <div class="sonando" id="rotulo-aire" hidden>
+        <div><small>Al aire</small><b id="rotulo-nombre"></b></div>
+        <span class="cuenta" id="rotulo-cuenta">fijo</span>
+        <button class="btn quitar" id="rotulo-quitar" type="button" data-propio>Quitar</button>
+      </div>
+      <p class="tanda" id="rotulo-tanda"></p>
+      <button class="btn acento" style="width:100%" id="rotulos-todos" type="button" data-propio>Pasar todos · 10 s cada uno</button>
+      <ul class="videos rotulos" id="rotulos"></ul>
+      <details class="editar" id="rotulo-editor">
+        <summary id="rotulo-editor-titulo">Agregar rótulo</summary>
+        <form class="campos" id="form-rotulo">
+          <input type="hidden" name="previo">
+          <label>Nombre<input type="text" name="nombre" maxlength="24" autocomplete="off" required placeholder="Ángeles del Cielo"></label>
+          <label>Título<input type="text" name="titulo" maxlength="48" autocomplete="off" required placeholder="Presentación artística: Los Ángeles del Cielo"></label>
+          <label>Subtítulo<input class="tal-cual" type="text" name="sub" maxlength="72" autocomplete="off" placeholder="Cantado por … (opcional)"></label>
+          <div class="acciones">
+            <button class="btn primario" type="submit">Guardar rótulo</button>
+            <button class="btn" type="button" id="rotulo-cancelar" data-propio>Cancelar</button>
+          </div>
+        </form>
+      </details>
+      <p class="nota">Como en los noticieros: abajo a la izquierda, el título en mayúsculas y el subtítulo debajo, tal cual se escribe. «10 s» lo saca y se va solo; «Fijo» lo deja hasta quitarlo.</p>
+    </section>
+    <section class="card" aria-labelledby="t-alin" data-tipos="football">
+      <h2 id="t-alin">Al aire</h2>
+      <div class="alin-grid">
+        <button type="button" class="btn alin" style="grid-column: 1 / -1" id="marcador-aire" data-propio aria-pressed="false"><span id="marcador-texto">Ocultar marcador y reloj</span><small id="marcador-estado">para una premiación</small></button>
+        <button type="button" class="btn alin" data-alin="home" aria-pressed="false"><span id="alin-local">Local</span><small id="alin-local-estado">mostrar</small></button>
+        <button type="button" class="btn alin" data-alin="away" aria-pressed="false"><span id="alin-visitante">Visitante</span><small id="alin-visitante-estado">mostrar</small></button>
+        <button type="button" class="btn alin" style="grid-column: 1 / -1" id="entretiempo" data-propio aria-pressed="false"><span>Entretiempo</span><small id="entretiempo-estado">mostrar el marcador</small></button>
+        <button type="button" class="btn alin" style="grid-column: 1 / -1" id="final" data-propio aria-pressed="false"><span>Final del partido</span><small id="final-estado">mostrar el resultado</small></button>
+        <button type="button" class="btn alin" style="grid-column: 1 / -1" id="proximo" data-propio aria-pressed="false"><span>Próximo partido</span><small id="proximo-estado">mostrar</small></button>
+        <button type="button" class="btn alin" id="jornada-aire" data-propio aria-pressed="false"><span>Jornada</span><small id="jornada-estado">mostrar</small></button>
+        <button type="button" class="btn alin" id="resultados-aire" data-propio aria-pressed="false"><span>Resultados</span><small id="resultados-estado">mostrar</small></button>
+        <button type="button" class="btn alin" style="grid-column: 1 / -1" id="entrevista-aire" data-propio aria-pressed="false"><span>Entrevistas</span><small id="entrevista-estado">mostrar</small></button>
+      </div>
+    </section>
+  </div>
+  <div class="col">
+    <!-- ADR 0036: el «+ Gol» y el reloj van en la barra de directo; aquí, lo que corrige. -->
+    <section class="card" aria-labelledby="t-corregir" data-tipos="football">
+      <h2 id="t-corregir">Corregir marcador y reloj</h2>
+      <div class="goles-grid">
+        <div class="lado">
+          <div class="nombre" id="nombre-local">Local</div>
+          <button type="button" class="btn quitar" data-gol="home,-1" aria-label="Quitar un gol al local">− 1 gol</button>
+        </div>
+        <div class="lado">
+          <div class="nombre" id="nombre-visitante">Visitante</div>
+          <button type="button" class="btn quitar" data-gol="away,-1" aria-label="Quitar un gol al visitante">− 1 gol</button>
+        </div>
+      </div>
+      <div class="reloj-grid">
+        <button type="button" class="btn" data-nudge="-60" aria-label="Restar un minuto">−1 min</button>
+        <button type="button" class="btn" data-nudge="60" aria-label="Sumar un minuto">+1 min</button>
+        <button type="button" class="btn" data-reloj="reset" data-confirma="¿Poner el reloj a 00:00?">↺ Cero</button>
+      </div>
+    </section>
+    <section class="card" aria-labelledby="t-pantalla" data-tipos="football show">
+      <h2 id="t-pantalla">En pantalla</h2>
+      <div class="interruptores">
+        <label class="interruptor" data-tipos="football"><span>Competición<small data-nota="el chip de arriba">el chip de arriba</small></span><input type="checkbox" role="switch" data-elemento="competition" checked></label>
+        <label class="interruptor" data-tipos="football"><span>Marcador<small data-nota="escudos, nombres y goles">escudos, nombres y goles</small></span><input type="checkbox" role="switch" data-elemento="bar" checked></label>
+        <label class="interruptor" data-tipos="football"><span>Tiempo<small data-nota="el reloj">el reloj</small></span><input type="checkbox" role="switch" data-elemento="clock" checked></label>
+        <label class="interruptor"><span>En vivo<small data-nota="mientras se emite">mientras se emite</small></span><input type="checkbox" role="switch" data-elemento="live" checked></label>
+        <label class="interruptor"><span>Logo de la casa<small data-nota="arriba a la derecha">arriba a la derecha</small></span><input type="checkbox" role="switch" data-elemento="broadcaster" checked></label>
+        <label class="interruptor"><span>Icono de la copa<small data-nota="arriba a la derecha">arriba a la derecha</small></span><input type="checkbox" role="switch" data-elemento="championship" checked></label>
+      </div>
+    </section>
+  </div>
+  <details class="ancho preparar" id="preparar">
+    <summary><h2 id="preparar-titulo">Preparar el partido</h2><p class="nota" id="preparar-nota">Equipos y escudos, jornada, próximo partido, entrevistas e icono.</p></summary>
+    <div class="preparar-cuerpo">
+    <div class="col">
+    <section class="card" aria-labelledby="t-equipos" data-tipos="football">
+      <h2 id="t-equipos">Equipos</h2>
+      <form class="campos" id="form-equipos">
+        <label>Local<input type="text" id="in-local" maxlength="24" autocomplete="off" required></label>
+        <label>Visitante<input type="text" id="in-visitante" maxlength="24" autocomplete="off" required></label>
+        <button class="btn primario" type="submit">Guardar nombres</button>
+      </form>
+      <div class="escudos">
+        <div class="escudo">
+          <span class="lado">Escudo local</span>
+          <span class="nombre" id="escudo-home-nombre">Local</span>
+          <div class="icono-vista" id="escudo-home">sin escudo</div>
+          <label class="btn subir">Cargar escudo<input type="file" data-escudo="home" accept="image/png,image/jpeg"></label>
+          <button class="btn quitar" type="button" data-propio data-quitar-escudo="home" disabled>Quitar</button>
+        </div>
+        <div class="escudo">
+          <span class="lado">Escudo visitante</span>
+          <span class="nombre" id="escudo-away-nombre">Visitante</span>
+          <div class="icono-vista" id="escudo-away">sin escudo</div>
+          <label class="btn subir">Cargar escudo<input type="file" data-escudo="away" accept="image/png,image/jpeg"></label>
+          <button class="btn quitar" type="button" data-propio data-quitar-escudo="away" disabled>Quitar</button>
+        </div>
+      </div>
+      <p class="nota">El escudo va con el nombre del equipo y vuelve cada vez que juegue: guarda el nombre antes de subirlo. Mejor PNG con fondo transparente, hasta 4 MB.</p>
+    </section>
+    <section class="card" aria-labelledby="t-jornada" data-tipos="football">
+      <h2 id="t-jornada">Jornada</h2>
+      <form class="campos" id="form-jornada">
+        <div id="jornada-filas"></div>
+        <div class="acciones">
+          <button class="btn" type="button" id="jornada-agregar" data-propio>Agregar partido</button>
+          <button class="btn primario" type="submit">Guardar jornada</button>
+        </div>
+      </form>
+      <div class="escudos-jornada" id="jornada-escudos"></div>
+      <p class="nota">Hasta 8 partidos. El subtítulo (final, semifinal, tercer y cuarto lugar…) es opcional. Los escudos van con el nombre de cada equipo: guarda la jornada y súbelos debajo.</p>
+    </section>
+    </div>
+    <div class="col">
+    <section class="card" aria-labelledby="t-proximo" data-tipos="football">
+      <h2 id="t-proximo">Próximo partido</h2>
+      <form class="campos" id="form-proximo">
+        <label id="px-jornada-fila" hidden>Desde la jornada<select id="px-jornada"><option value="">elige un partido…</option></select></label>
+        <div class="pareja">
+          <label>Local<input type="text" id="px-local" maxlength="24" autocomplete="off" required></label>
+          <label>Visitante<input type="text" id="px-visitante" maxlength="24" autocomplete="off" required></label>
+        </div>
+        <label>Cuándo<input type="text" id="px-cuando" maxlength="32" autocomplete="off" placeholder="Sábado 25 oct · 16:00" required></label>
+        <label>Dónde<input type="text" id="px-donde" maxlength="32" autocomplete="off" placeholder="Estadio municipal"></label>
+        <button class="btn primario" type="submit">Guardar próximo partido</button>
+      </form>
+      <div class="escudos">
+        <div class="escudo">
+          <span class="lado">Escudo local</span>
+          <span class="nombre" id="escudo-next_home-nombre">—</span>
+          <div class="icono-vista" id="escudo-next_home">sin escudo</div>
+          <label class="btn subir">Cargar escudo<input type="file" data-escudo="next_home" accept="image/png,image/jpeg"></label>
+          <button class="btn quitar" type="button" data-propio data-quitar-escudo="next_home" disabled>Quitar</button>
+        </div>
+        <div class="escudo">
+          <span class="lado">Escudo visitante</span>
+          <span class="nombre" id="escudo-next_away-nombre">—</span>
+          <div class="icono-vista" id="escudo-next_away">sin escudo</div>
+          <label class="btn subir">Cargar escudo<input type="file" data-escudo="next_away" accept="image/png,image/jpeg"></label>
+          <button class="btn quitar" type="button" data-propio data-quitar-escudo="next_away" disabled>Quitar</button>
+        </div>
+      </div>
+      <p class="nota">Los escudos van con el nombre de cada equipo: guarda antes el próximo partido.</p>
+    </section>
+    <section class="card" aria-labelledby="t-entrevista" data-tipos="football">
+      <h2 id="t-entrevista">Entrevistas</h2>
+      <form class="campos" id="form-entrevista">
+        <label>Quién habla<input type="text" id="en-nombre" maxlength="32" autocomplete="off" placeholder="opcional"></label>
+        <label>Cargo<input type="text" id="en-cargo" maxlength="32" autocomplete="off" placeholder="opcional"></label>
+        <button class="btn primario" type="submit">Guardar</button>
+      </form>
+    </section>
+    <section class="card" aria-labelledby="t-icono" data-tipos="football show">
+      <h2 id="t-icono">Icono del campeonato</h2>
+      <div class="campos">
+        <div class="icono-vista" id="icono-vista">sin icono</div>
+        <div class="acciones">
+          <label class="btn subir">Cargar icono<input type="file" id="in-icono" accept="image/png,image/jpeg"></label>
+          <button class="btn quitar" id="quitar-icono" type="button" data-propio data-confirma="¿Quitar el icono del campeonato?">Quitar</button>
+        </div>
+      </div>
+    </section>
+    </div>
+    </div>
+  </details>
+  </div>
+
+  <div class="panel" id="panel-camara" role="tabpanel" aria-labelledby="tab-camara" hidden>
+  <section class="card ancho" data-tipos="volleyball" aria-labelledby="t-voley" hidden>
+    <h2 id="t-voley">Vóleibol</h2>
+    <p class="nota">El vóley sale, por ahora, sin marcador ni gráficos, salvo la repetición. Desde aquí se encuadra la cámara (con una o con dos), se repiten las jugadas y se ve el soporte.</p>
+  </section>
   <section class="card ancho" id="camara" aria-labelledby="t-camara" hidden>
     <h2 id="t-camara">Cámara</h2>
     <div class="camara-vistas" id="cam-vistas">
@@ -375,32 +616,7 @@
     </form>
     <p class="nota">Teclado: 1–9 los encuadres guardados, R restablece, + y − acercan y alejan, las flechas mueven.</p>
   </section>
-
   <div class="col">
-    <section class="card" aria-labelledby="t-partidos" data-tipos="football">
-      <h2 id="t-partidos">Partido de la jornada</h2>
-      <ul class="videos partidos" id="partidos"></ul>
-      <button class="btn primario" style="width:100%" id="finalizar" type="button" data-propio disabled>Finalizar partido</button>
-      <p class="nota">Empezar pone en el marcador los nombres y los escudos de la jornada, el reloj a cero. Finalizar guarda el marcador en la jornada: «Resultados», en Al aire, los enseña todos.</p>
-    </section>
-
-    <section class="card" aria-labelledby="t-goles" data-tipos="football">
-      <h2 id="t-goles">Goles</h2>
-      <div class="goles-grid">
-        <div class="lado">
-          <div class="nombre" id="nombre-local">Local</div>
-          <button type="button" class="btn primario grande" data-gol="home,1" aria-label="Gol del local">+ Gol</button>
-          <button type="button" class="btn quitar" data-gol="home,-1" aria-label="Quitar un gol al local">− 1</button>
-        </div>
-        <div class="lado">
-          <div class="nombre" id="nombre-visitante">Visitante</div>
-          <button type="button" class="btn blanco grande" data-gol="away,1" aria-label="Gol del visitante">+ Gol</button>
-          <button type="button" class="btn quitar" data-gol="away,-1" aria-label="Quitar un gol al visitante">− 1</button>
-        </div>
-      </div>
-    </section>
-
-    <!-- ADR 0034: la repetición al aire, en los tres tipos de evento y con una o dos cámaras. -->
     <section class="card" aria-labelledby="t-jugada" data-tipos="football show volleyball">
       <h2 id="t-jugada">Repetición</h2>
       <div class="sonando" id="repe-sonando" hidden>
@@ -408,10 +624,6 @@
         <span class="cuenta" id="repe-cuenta">0:00</span>
         <button class="btn quitar" id="repe-parar" type="button" data-propio>Volver al directo</button>
       </div>
-      <button type="button" class="btn acento grande" style="width:100%" id="repe-marcar" data-propio>
-        <svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/></g><circle cx="12" cy="12" r="1.8" fill="currentColor"/></svg>
-        <span>Marcar jugada</span>
-      </button>
       <div class="atras" role="group" aria-label="Segundos hacia atrás" id="repe-atras">
         <span>Hacia atrás</span>
         <button type="button" class="btn" data-propio data-atras="5" aria-pressed="false">5 s</button>
@@ -424,112 +636,25 @@
       <ul class="videos" id="repe-marcas"><li class="vacio">Sin marcas: pulsa «Marcar jugada» cuando pase algo.</li></ul>
       <p class="nota">Sale la cortinilla con la copa y la casa, la jugada tal como se emitió (con el gráfico de entonces) y otra vez el directo. El sonido sigue en directo. El maestro guarda el último minuto y medio.</p>
     </section>
-
-    <section class="card" aria-labelledby="t-reloj" data-tipos="football">
-      <h2 id="t-reloj">Reloj</h2>
-      <div class="reloj-grid">
-        <button type="button" class="btn acento grande toggle" id="toggle" data-reloj="start">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path id="icono-toggle" fill="currentColor" d="M8 5.2v13.6a.8.8 0 0 0 1.23.67l10.4-6.8a.8.8 0 0 0 0-1.34L9.23 4.53A.8.8 0 0 0 8 5.2z"/></svg>
-          <span id="texto-toggle">Iniciar</span>
-        </button>
-        <button type="button" class="btn" data-nudge="-60" aria-label="Restar un minuto">−1 min</button>
-        <button type="button" class="btn" data-nudge="60" aria-label="Sumar un minuto">+1 min</button>
-        <button type="button" class="btn" data-reloj="reset" data-confirma="¿Poner el reloj a 00:00?">↺ Cero</button>
-      </div>
-    </section>
-
-    <section class="card" aria-labelledby="t-equipos" data-tipos="football">
-      <h2 id="t-equipos">Equipos</h2>
-      <form class="campos" id="form-equipos">
-        <label>Local<input type="text" id="in-local" maxlength="24" autocomplete="off" required></label>
-        <label>Visitante<input type="text" id="in-visitante" maxlength="24" autocomplete="off" required></label>
-        <button class="btn primario" type="submit">Guardar nombres</button>
-      </form>
-      <div class="escudos">
-        <div class="escudo">
-          <span class="lado">Escudo local</span>
-          <span class="nombre" id="escudo-home-nombre">Local</span>
-          <div class="icono-vista" id="escudo-home">sin escudo</div>
-          <label class="btn subir">Cargar escudo<input type="file" data-escudo="home" accept="image/png,image/jpeg"></label>
-          <button class="btn quitar" type="button" data-propio data-quitar-escudo="home" disabled>Quitar</button>
-        </div>
-        <div class="escudo">
-          <span class="lado">Escudo visitante</span>
-          <span class="nombre" id="escudo-away-nombre">Visitante</span>
-          <div class="icono-vista" id="escudo-away">sin escudo</div>
-          <label class="btn subir">Cargar escudo<input type="file" data-escudo="away" accept="image/png,image/jpeg"></label>
-          <button class="btn quitar" type="button" data-propio data-quitar-escudo="away" disabled>Quitar</button>
-        </div>
-      </div>
-      <p class="nota">El escudo va con el nombre del equipo y vuelve cada vez que juegue: guarda el nombre antes de subirlo. Mejor PNG con fondo transparente, hasta 4 MB.</p>
-    </section>
-
-    <section class="card" aria-labelledby="t-icono" data-tipos="football show">
-      <h2 id="t-icono">Icono del campeonato</h2>
-      <div class="campos">
-        <div class="icono-vista" id="icono-vista">sin icono</div>
-        <div class="acciones">
-          <label class="btn subir">Cargar icono<input type="file" id="in-icono" accept="image/png,image/jpeg"></label>
-          <button class="btn quitar" id="quitar-icono" type="button" data-propio data-confirma="¿Quitar el icono del campeonato?">Quitar</button>
-        </div>
-      </div>
-    </section>
+  </div>
+  <div class="col">
+  <details class="card ancho" id="camaras-programa" open>
+    <summary><h2>Cámaras y programa · 1 fps</h2></summary>
+    <div class="thumbs">
+      <figure class="programa"><img id="t-program" alt="Programa"><figcaption>Programa</figcaption></figure>
+      <figure><img id="t-left" alt="Cámara izquierda"><figcaption>Izquierda</figcaption></figure>
+      <figure><img id="t-right" alt="Cámara derecha"><figcaption>Derecha</figcaption></figure>
+    </div>
+  </details>
+  <details class="card ancho">
+    <summary><h2>Soporte</h2></summary>
+    <dl class="datos" id="estado"><div><dt>Estado</dt><dd>—</dd></div></dl>
+  </details>
+  </div>
   </div>
 
+  <div class="panel" id="panel-anuncios" role="tabpanel" aria-labelledby="tab-anuncios" hidden>
   <div class="col">
-    <section class="card" aria-labelledby="t-alin" data-tipos="football">
-      <h2 id="t-alin">Al aire</h2>
-      <div class="alin-grid">
-        <button type="button" class="btn alin" style="grid-column: 1 / -1" id="marcador-aire" data-propio aria-pressed="false"><span id="marcador-texto">Ocultar marcador y reloj</span><small id="marcador-estado">para una premiación</small></button>
-        <button type="button" class="btn alin" data-alin="home" aria-pressed="false"><span id="alin-local">Local</span><small id="alin-local-estado">mostrar</small></button>
-        <button type="button" class="btn alin" data-alin="away" aria-pressed="false"><span id="alin-visitante">Visitante</span><small id="alin-visitante-estado">mostrar</small></button>
-        <button type="button" class="btn alin" style="grid-column: 1 / -1" id="entretiempo" data-propio aria-pressed="false"><span>Entretiempo</span><small id="entretiempo-estado">mostrar el marcador</small></button>
-        <button type="button" class="btn alin" style="grid-column: 1 / -1" id="final" data-propio aria-pressed="false"><span>Final del partido</span><small id="final-estado">mostrar el resultado</small></button>
-        <button type="button" class="btn alin" style="grid-column: 1 / -1" id="proximo" data-propio aria-pressed="false"><span>Próximo partido</span><small id="proximo-estado">mostrar</small></button>
-        <button type="button" class="btn alin" id="jornada-aire" data-propio aria-pressed="false"><span>Jornada</span><small id="jornada-estado">mostrar</small></button>
-        <button type="button" class="btn alin" id="resultados-aire" data-propio aria-pressed="false"><span>Resultados</span><small id="resultados-estado">mostrar</small></button>
-        <button type="button" class="btn alin" style="grid-column: 1 / -1" id="entrevista-aire" data-propio aria-pressed="false"><span>Entrevistas</span><small id="entrevista-estado">mostrar</small></button>
-      </div>
-    </section>
-
-    <section class="card" aria-labelledby="t-pantalla" data-tipos="football show">
-      <h2 id="t-pantalla">En pantalla</h2>
-      <div class="interruptores">
-        <label class="interruptor" data-tipos="football"><span>Competición<small data-nota="el chip de arriba">el chip de arriba</small></span><input type="checkbox" role="switch" data-elemento="competition" checked></label>
-        <label class="interruptor" data-tipos="football"><span>Marcador<small data-nota="escudos, nombres y goles">escudos, nombres y goles</small></span><input type="checkbox" role="switch" data-elemento="bar" checked></label>
-        <label class="interruptor" data-tipos="football"><span>Tiempo<small data-nota="el reloj">el reloj</small></span><input type="checkbox" role="switch" data-elemento="clock" checked></label>
-        <label class="interruptor"><span>En vivo<small data-nota="mientras se emite">mientras se emite</small></span><input type="checkbox" role="switch" data-elemento="live" checked></label>
-        <label class="interruptor"><span>Logo de la casa<small data-nota="arriba a la derecha">arriba a la derecha</small></span><input type="checkbox" role="switch" data-elemento="broadcaster" checked></label>
-        <label class="interruptor"><span>Icono de la copa<small data-nota="arriba a la derecha">arriba a la derecha</small></span><input type="checkbox" role="switch" data-elemento="championship" checked></label>
-      </div>
-    </section>
-
-    <section class="card" aria-labelledby="t-rotulos" data-tipos="show" hidden>
-      <h2 id="t-rotulos">Rótulos</h2>
-      <div class="sonando" id="rotulo-aire" hidden>
-        <div><small>Al aire</small><b id="rotulo-nombre"></b></div>
-        <span class="cuenta" id="rotulo-cuenta">fijo</span>
-        <button class="btn quitar" id="rotulo-quitar" type="button" data-propio>Quitar</button>
-      </div>
-      <p class="tanda" id="rotulo-tanda"></p>
-      <button class="btn acento" style="width:100%" id="rotulos-todos" type="button" data-propio>Pasar todos · 10 s cada uno</button>
-      <ul class="videos rotulos" id="rotulos"></ul>
-      <details class="editar" id="rotulo-editor">
-        <summary id="rotulo-editor-titulo">Agregar rótulo</summary>
-        <form class="campos" id="form-rotulo">
-          <input type="hidden" name="previo">
-          <label>Nombre<input type="text" name="nombre" maxlength="24" autocomplete="off" required placeholder="Ángeles del Cielo"></label>
-          <label>Título<input type="text" name="titulo" maxlength="48" autocomplete="off" required placeholder="Presentación artística: Los Ángeles del Cielo"></label>
-          <label>Subtítulo<input class="tal-cual" type="text" name="sub" maxlength="72" autocomplete="off" placeholder="Cantado por … (opcional)"></label>
-          <div class="acciones">
-            <button class="btn primario" type="submit">Guardar rótulo</button>
-            <button class="btn" type="button" id="rotulo-cancelar" data-propio>Cancelar</button>
-          </div>
-        </form>
-      </details>
-      <p class="nota">Como en los noticieros: abajo a la izquierda, el título en mayúsculas y el subtítulo debajo, tal cual se escribe. «10 s» lo saca y se va solo; «Fijo» lo deja hasta quitarlo.</p>
-    </section>
-
     <section class="card" aria-labelledby="t-franja" data-tipos="football show">
       <h2 id="t-franja">Franja inferior</h2>
       <div class="acciones">
@@ -558,60 +683,8 @@
         </form>
       </details>
     </section>
-
-    <section class="card" aria-labelledby="t-jornada" data-tipos="football">
-      <h2 id="t-jornada">Jornada</h2>
-      <form class="campos" id="form-jornada">
-        <div id="jornada-filas"></div>
-        <div class="acciones">
-          <button class="btn" type="button" id="jornada-agregar" data-propio>Agregar partido</button>
-          <button class="btn primario" type="submit">Guardar jornada</button>
-        </div>
-      </form>
-      <div class="escudos-jornada" id="jornada-escudos"></div>
-      <p class="nota">Hasta 8 partidos. El subtítulo (final, semifinal, tercer y cuarto lugar…) es opcional. Los escudos van con el nombre de cada equipo: guarda la jornada y súbelos debajo.</p>
-    </section>
-
-    <section class="card" aria-labelledby="t-entrevista" data-tipos="football">
-      <h2 id="t-entrevista">Entrevistas</h2>
-      <form class="campos" id="form-entrevista">
-        <label>Quién habla<input type="text" id="en-nombre" maxlength="32" autocomplete="off" placeholder="opcional"></label>
-        <label>Cargo<input type="text" id="en-cargo" maxlength="32" autocomplete="off" placeholder="opcional"></label>
-        <button class="btn primario" type="submit">Guardar</button>
-      </form>
-    </section>
-
-    <section class="card" aria-labelledby="t-proximo" data-tipos="football">
-      <h2 id="t-proximo">Próximo partido</h2>
-      <form class="campos" id="form-proximo">
-        <label id="px-jornada-fila" hidden>Desde la jornada<select id="px-jornada"><option value="">elige un partido…</option></select></label>
-        <div class="pareja">
-          <label>Local<input type="text" id="px-local" maxlength="24" autocomplete="off" required></label>
-          <label>Visitante<input type="text" id="px-visitante" maxlength="24" autocomplete="off" required></label>
-        </div>
-        <label>Cuándo<input type="text" id="px-cuando" maxlength="32" autocomplete="off" placeholder="Sábado 25 oct · 16:00" required></label>
-        <label>Dónde<input type="text" id="px-donde" maxlength="32" autocomplete="off" placeholder="Estadio municipal"></label>
-        <button class="btn primario" type="submit">Guardar próximo partido</button>
-      </form>
-      <div class="escudos">
-        <div class="escudo">
-          <span class="lado">Escudo local</span>
-          <span class="nombre" id="escudo-next_home-nombre">—</span>
-          <div class="icono-vista" id="escudo-next_home">sin escudo</div>
-          <label class="btn subir">Cargar escudo<input type="file" data-escudo="next_home" accept="image/png,image/jpeg"></label>
-          <button class="btn quitar" type="button" data-propio data-quitar-escudo="next_home" disabled>Quitar</button>
-        </div>
-        <div class="escudo">
-          <span class="lado">Escudo visitante</span>
-          <span class="nombre" id="escudo-next_away-nombre">—</span>
-          <div class="icono-vista" id="escudo-next_away">sin escudo</div>
-          <label class="btn subir">Cargar escudo<input type="file" data-escudo="next_away" accept="image/png,image/jpeg"></label>
-          <button class="btn quitar" type="button" data-propio data-quitar-escudo="next_away" disabled>Quitar</button>
-        </div>
-      </div>
-      <p class="nota">Los escudos van con el nombre de cada equipo: guarda antes el próximo partido.</p>
-    </section>
-
+  </div>
+  <div class="col">
     <section class="card" aria-labelledby="t-videos" data-tipos="football show">
       <h2 id="t-videos">Vídeos</h2>
       <div class="sonando" id="video-sonando" hidden>
@@ -626,22 +699,8 @@
         <label class="btn subir ancho">Subir MP4<input type="file" id="in-video" accept="video/mp4,.mp4"></label>
       </div>
     </section>
-
   </div>
-
-  <details class="card ancho" id="camaras-programa" open>
-    <summary><h2>Cámaras y programa · 1 fps</h2></summary>
-    <div class="thumbs">
-      <figure class="programa"><img id="t-program" alt="Programa"><figcaption>Programa</figcaption></figure>
-      <figure><img id="t-left" alt="Cámara izquierda"><figcaption>Izquierda</figcaption></figure>
-      <figure><img id="t-right" alt="Cámara derecha"><figcaption>Derecha</figcaption></figure>
-    </div>
-  </details>
-
-  <details class="card ancho">
-    <summary><h2>Soporte</h2></summary>
-    <dl class="datos" id="estado"><div><dt>Estado</dt><dd>—</dd></div></dl>
-  </details>
+  </div>
 </main>
 
 <div id="aviso" role="alert"></div>
@@ -682,6 +741,7 @@ function tic() {
     $('rotulo-cuenta').textContent = rotuloFijo ? 'fijo' : Math.max(0, Math.ceil((rotuloHasta - performance.now()) / 1000)) + ' s';
   }
   ticRepeticion();
+  marcasPestanas();
 }
 
 const PLAY = 'M8 5.2v13.6a.8.8 0 0 0 1.23.67l10.4-6.8a.8.8 0 0 0 0-1.34L9.23 4.53A.8.8 0 0 0 8 5.2z';
@@ -695,6 +755,64 @@ function pintaTipo(tipo) {
   $('evento').textContent = TIPOS[tipo] || tipo;
   document.querySelectorAll('[data-tipos]').forEach(el => { el.hidden = !el.dataset.tipos.split(' ').includes(tipo); });
   $('t-icono').textContent = tipo === 'show' ? 'Icono del evento' : 'Icono del campeonato';
+  // ADR 0036: en el espectáculo, la primera pestaña es el Evento.
+  const show = tipo === 'show';
+  $('tab-partido-nombre').textContent = show ? 'Evento' : 'Partido';
+  $('preparar-titulo').textContent = show ? 'Preparar el evento' : 'Preparar el partido';
+  $('preparar-nota').textContent = show ? 'El icono del evento.' : 'Equipos y escudos, jornada, próximo partido, entrevistas e icono.';
+  let guardada = null;
+  try { guardada = localStorage.getItem(PESTANA_CLAVE); } catch {}
+  muestraPestana(pestanasVisibles().includes(guardada) ? guardada : PESTANA_INICIAL, false);
+}
+
+// ---------------- las pestañas (ADR 0036) ----------------
+const PESTANA_CLAVE = 'zero.pestana';  // la última de este navegador; la almohadilla ya lleva el token
+const PESTANA_INICIAL = 'partido';     // decisión 3: donde empieza todo antes del partido
+let pestana = '';
+const pestanasVisibles = () => [...document.querySelectorAll('#pestanas [data-pestana]')].filter(b => !b.hidden).map(b => b.dataset.pestana);
+// Enseña una pestaña (o la primera que haya, si esa no es de este tipo de evento). La vista en
+// vivo y las miniaturas solo corren con Cámara delante.
+function muestraPestana(nombre, guardar) {
+  const visibles = pestanasVisibles();
+  if (!visibles.includes(nombre)) nombre = visibles[0];
+  const antes = pestana;
+  pestana = nombre;
+  document.querySelectorAll('#pestanas [data-pestana]').forEach(b => {
+    const esta = b.dataset.pestana === nombre;
+    b.setAttribute('aria-selected', esta ? 'true' : 'false');
+    b.tabIndex = esta ? 0 : -1;
+    $('panel-' + b.dataset.pestana).hidden = !esta;
+  });
+  $('pestanas').classList.toggle('una', visibles.length < 2);
+  if (guardar) { try { localStorage.setItem(PESTANA_CLAVE, nombre); } catch {} }
+  if (antes === nombre) return;
+  if (guardar) window.scrollTo(0, 0);
+  if (nombre !== 'camara') { paraVivo(); return; }
+  if (camaraActiva() && !$('camara').hidden && !vivoAbierto && !document.hidden) arrancaVivo();
+  miniaturas();
+}
+$('pestanas').addEventListener('click', e => {
+  const b = e.target.closest('[data-pestana]');
+  if (b) muestraPestana(b.dataset.pestana, true);
+});
+// Las flechas pasan de pestaña con el foco en ellas, sin llegar a los atajos de la cámara.
+$('pestanas').addEventListener('keydown', e => {
+  const paso = { ArrowLeft: -1, ArrowRight: 1 }[e.key];
+  if (!paso) return;
+  const v = pestanasVisibles(), siguiente = v[(v.indexOf(pestana) + paso + v.length) % v.length];
+  muestraPestana(siguiente, true); $('tab-' + siguiente).focus();
+  e.preventDefault(); e.stopPropagation();
+});
+// La marca de cada pestaña: lo que tiene al aire, sin tener que abrirla.
+function marcasPestanas() {
+  const p = partido;
+  const marca = (id, texto, clase) => { const el = $(id); el.textContent = texto; el.className = clase; };
+  const partidoAlAire = p.halftime_on_air || p.fulltime_on_air || p.next_match_on_air || p.fixtures_on_air
+    || p.results_on_air || p.interview_on_air || p.lineup_on_air || p.caption;
+  marca('tab-partido-estado', partidoAlAire ? 'al aire' : '', 'aire');
+  const repe = !!(p.replay && p.replay.on_air), pano = !!(p.camera && p.camera.panorama), auto = pano && !!p.camera.auto;
+  marca('tab-camara-estado', repe ? 'repetición' : !pano ? '' : auto ? 'auto' : 'a mano', repe ? 'aire' : pano && !auto ? 'mano' : '');
+  marca('tab-anuncios-estado', p.video || franjaHasta > performance.now() ? 'al aire' : '', 'aire');
 }
 
 function pinta(p) {
@@ -976,7 +1094,7 @@ function pintaCamara(p) {
   $('cam-moviendo').hidden = !cam.moving;
   pintaEncuadres(cam.presets || []);
   dibujaGeneral();
-  if (!vivoAbierto && !document.hidden) arrancaVivo();
+  if (pestana === 'camara' && !vivoAbierto && !document.hidden) arrancaVivo();
 }
 
 // «Calibrar cosido» (ADR 0035): lo que dice el nativo mientras va; al acabar, el resultado.
@@ -1094,7 +1212,7 @@ $('form-encuadre').addEventListener('submit', async e => {
 
 // Los atajos de teclado, con el mando en un ordenador: 1–9, R, + y −, y las flechas.
 document.addEventListener('keydown', e => {
-  if (!camaraActiva() || $('camara').hidden || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (pestana !== 'camara' || !camaraActiva() || $('camara').hidden || e.ctrlKey || e.metaKey || e.altKey) return;
   const foco = document.activeElement;
   if (foco && (['INPUT', 'TEXTAREA', 'SELECT'].includes(foco.tagName) || foco.isContentEditable)) return;
   const lista = partido.camera.presets || [];
@@ -1236,9 +1354,9 @@ function arrancaVivo() {
   });
 }
 document.addEventListener('visibilitychange', () => {
-  // En segundo plano no se gastan datos ni batería.
+  // En segundo plano, o en otra pestaña (ADR 0036), no se gastan datos ni batería.
   if (document.hidden) paraVivo();
-  else if (camaraActiva() && !$('camara').hidden && !vivoAbierto) arrancaVivo();
+  else if (pestana === 'camara' && camaraActiva() && !$('camara').hidden && !vivoAbierto) arrancaVivo();
 });
 
 // ---------------- lo que pasa en el programa (ADR 0032) ----------------
@@ -1847,7 +1965,8 @@ function pintaEstado(s) {
   }));
 }
 async function miniaturas() {
-  if (document.hidden) return; // en segundo plano no se gastan datos ni batería
+  // En segundo plano, o en otra pestaña (ADR 0036), no se gastan datos ni batería.
+  if (document.hidden || pestana !== 'camara') return;
   // Con «Una cámara» las sustituye la vista en vivo de la tarjeta Cámara (ADR 0033).
   for (const n of camaraActiva() ? [] : ['left', 'right', 'program']) {
     try {
@@ -1865,6 +1984,7 @@ if (token) {
   setInterval(cargaVideos, 30000); // lo que suban otros mandos
 } else {
   conexion(false, 'sin token');
+  $('directo').hidden = true; $('pestanas').hidden = true;
   document.querySelector('main').innerHTML =
     '<div class="sin-token ancho"><strong>Falta el QR Mando</strong>Abre esta página escaneando el QR «Mando» del móvil que emite.</div>';
 }

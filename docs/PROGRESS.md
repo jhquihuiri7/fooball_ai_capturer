@@ -12,6 +12,55 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-11-04 · IOS-125 — el mando web en pestañas, con la barra de directo · 🚧 hecho y visto en Edge; falta verlo en el móvil con la app nueva
+
+ADR 0036 de football-ai (db6830c). Solo cambia `assets/panel/index.html`; el maestro, las
+órdenes y el estado no se tocan.
+- **La barra de directo**, fija debajo de la cabecera y en todas las pestañas:
+  - el marcador con «+ Gol» de cada equipo;
+  - el reloj con iniciar y pausar;
+  - «Marcar jugada» y las etiquetas del programa.
+  En el espectáculo y el vóley, solo «Marcar jugada».
+- **Tres pestañas**:
+  - **Partido** (Evento en el espectáculo): el partido de la jornada, los Rótulos, Al aire,
+    «Corregir marcador y reloj» (nueva: − 1 gol, ±1 min y a cero) y En pantalla. Abajo, plegado,
+    «Preparar el partido» con equipos, jornada, próximo, entrevistas e icono;
+  - **Cámara**: la cámara, la repetición, las miniaturas de 1 fps y el soporte;
+  - **Anuncios**: la franja y los vídeos.
+  Las tarjetas Goles y Reloj desaparecen: lo suyo está en la barra y en «Corregir». Las demás
+  se mueven tal cual, con sus `id`.
+- **La marca de cada pestaña**: «al aire», «repetición», «a mano» o «auto» (`marcasPestanas`).
+- **La pestaña** se abre en Partido; en el vóley, que solo tiene Cámara, no salen pestañas. Cada
+  navegador recuerda la suya (`zero.pestana` en `localStorage`). Las flechas cambian de
+  pestaña con el foco en ellas.
+- **Solo con Cámara delante** corren la vista en vivo, las miniaturas, el estado del soporte y
+  los atajos de teclado. Al salir, `paraVivo()`.
+- La guía de cancha dice dónde está cada cosa.
+- **En el móvil estrecho** (hasta 420 px; el iPhone base tiene 402):
+  - «+ Gol» va en dos pisos;
+  - el botón del reloj, solo con su icono (el texto queda para el lector de pantalla);
+  - la marca de cada pestaña, debajo del nombre.
+  Así la barra cabe en dos filas y los nombres de los equipos se leen.
+- **Lo que se salía de verdad, y venía de antes**: la jornada y el próximo partido. `.pareja`
+  era `1fr 1fr` y los campos de texto llevaban su ancho nativo (~20 letras), así que la página
+  pasaba de 402 a 449 px. Ahora `.pareja` es `minmax(0, 1fr)` y los campos, `width: 100%`. Las
+  pistas de los paneles y las columnas también son `minmax(0, 1fr)`: lo que no quepa se ve
+  dónde, sin ensanchar la página.
+- **El «desborde a 430 px» que se vio el 3-nov** era del arnés: Edge sin cabeza no abre
+  ventanas de menos de ~500 px. Con el protocolo de DevTools se emula el ancho de verdad.
+- **Tests**:
+  - `camera_control_test.dart`: la barra, las pestañas, en qué panel va cada tarjeta y las
+    condiciones de la vista en vivo;
+  - en Edge sin cabeza (por DevTools), contra el maestro de verdad: 1 400, 430, 402 y 360 px;
+    fútbol, espectáculo y vóley; las tres pestañas y «Preparar» abierto. En ninguno se sale nada
+    a lo ancho, y la vista en vivo solo corre en Cámara.
+  - A 360 px (ningún iPhone es tan estrecho), «BELLAVISTA» pierde la última letra.
+
+**En el iPhone**, con la +21, desde el navegador del móvil:
+- fútbol: «+ Gol» y «Marcar jugada» desde las tres pestañas;
+- la vista en vivo solo en Cámara;
+- la pestaña recordada al recargar.
+
 ## 2026-11-04 · IOS-124 — la lente física también con dos cámaras, con aviso · 🚧 escrito sin toolchain de Swift: falta compilarlo y verlo con los dos iPhone
 
 Enmienda del ADR 0035 de football-ai, del 2026-11-04, sobre REF-71 (38295ca).
