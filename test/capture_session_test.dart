@@ -1280,16 +1280,29 @@ void main() {
       expect(singleZooms.map(CaptureSession.zoomLabel), <String>['0,5×', '1×', '2×']);
     });
 
-    test('ADR 0035: la cámara se abre con la lente real, y con dos móviles siempre en 0,5×', () async {
+    test('ADR 0035: la cámara se abre con la lente real, con una y con dos cámaras (enmienda del 2026-11-04)',
+        () async {
       final FakeCaptureApi una = FakeCaptureApi();
       await CaptureSession(role: CameraRole.left, api: una, rigApi: FakeRigApi(), linkMode: LinkMode.single, zoom: 2)
           .prepare();
       expect(una.lastSettings!.lensZoom, 2);
 
       final FakeCaptureApi dos = FakeCaptureApi();
-      await CaptureSession(role: CameraRole.left, api: dos, rigApi: FakeRigApi(), linkMode: LinkMode.aware, zoom: 2)
+      await CaptureSession(role: CameraRole.left, api: dos, rigApi: FakeRigApi(), linkMode: LinkMode.aware, zoom: 1)
           .prepare();
-      expect(dos.lastSettings!.lensZoom, singleDefaultZoom);
+      expect(dos.lastSettings!.lensZoom, 1, reason: 'con el soporte de dos también se elige la lente');
+
+      // Sin programa (al pod por Multipeer) no hay lente que elegir: la ultra.
+      final FakeCaptureApi pod = FakeCaptureApi();
+      await CaptureSession(role: CameraRole.left, api: pod, linkMode: LinkMode.multipeer, zoom: 2).prepare();
+      expect(pod.lastSettings!.lensZoom, singleDefaultZoom);
+    });
+
+    test('la geometría en palabras: la calibración de cada lente, la lente real y sin calibrar', () {
+      expect(CaptureReadout.geometryLabel('rig.json'), 'calibrada · rig.json');
+      expect(CaptureReadout.geometryLabel('rig-1x.json'), 'calibrada · rig-1x.json');
+      expect(CaptureReadout.geometryLabel('nominal'), 'NOMINAL · sin Documents/rig.json');
+      expect(CaptureReadout.geometryLabel('sin calibrar para 1×'), 'sin calibrar para 1×');
     });
 
     test('2026-10-30: el soporte de dos pide siempre la lente entera aunque le llegue otro zoom', () async {

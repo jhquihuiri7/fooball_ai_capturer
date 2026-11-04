@@ -323,6 +323,8 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
             }
             linkMedium = medio
             let nw = RigLinkNW(role: role, secret: secreto, prefersMaster: prefersMaster, medium: medio)
+            // ADR 0035, enmienda del 2026-11-04: el `hello` dice al otro qué lente se abrió.
+            nw.session.localLens = OpenLens.lens
             // IOS-13: la cámara lee el reloj nativo por fotograma, sin pasar por
             // Pigeon; a Dart solo le llega la estimación, para la pantalla y la fase.
             engine.rigClock = nw.clock

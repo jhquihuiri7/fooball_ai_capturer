@@ -12,6 +12,45 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+## 2026-11-04 · IOS-124 — la lente física también con dos cámaras, con aviso · 🚧 escrito sin toolchain de Swift: falta compilarlo y verlo con los dos iPhone
+
+Enmienda del ADR 0035 de football-ai, del 2026-11-04, sobre REF-71 (38295ca).
+- **Por qué.** La prueba del 3-nov fue con la +19: allí 0,5×, 1× y 2× aún recortaban la ultra.
+  La lente real llegó con la +20 (IOS-121 de Alexander), pero solo con «Una cámara». El
+  propietario la quiere también con dos, con aviso.
+- **La pantalla del lado**: la píldora de la lente sale con cualquier enlace del soporte, no
+  solo con «Una cámara». Con dos móviles y otra lente que no sea 0,5× se ve el aviso de girarlos
+  y calibrar (`rigLensNote`).
+- **`CaptureSession`**: con programa, `lensZoom` es la lente elegida también con dos móviles.
+  Sin programa (Multipeer, al pod), la ultra.
+- **El nativo**:
+  - `OpenLens.lens` es la lente abierta de verdad, con su campo, y se apunta en el registro
+    (`[lente]`);
+  - el `hello` del enlace lleva `lens_zoom` y `lens_hfov_rad`, y `RigLinkSession.peerLens` es la
+    del otro;
+  - la pasada con dos cámaras carga `rig-1x.json`, `rig-2x.json`… de la lente abierta. Sin ella,
+    usa la pose de `rig.json` y las intrínsecas del campo de cada lente («sin calibrar para 1×»);
+  - «Calibrar cosido» guarda en el fichero de la lente (`RigFile.install`).
+- **Los avisos** (`RigLensWarning`, en RigCore): lentes distintas, sin calibrar con esa lente y
+  sin solape (`RigModel.horizontalOverlapRad` por debajo de `rigMinOverlapRad`).
+  - Van en `ProgramStatus.rigWarning`, con la lente abierta en `lensZoom` (Pigeon regenerado).
+  - Se ven en la pantalla de captura («Lente», «Geometría», «Aviso del soporte») y en la tarjeta
+    Soporte del mando.
+- La guía de cancha lo cuenta.
+- **Tests**:
+  - `RigLensTests` (sin correr): el solape contra `overlap.json`, el fichero por lente y los
+    avisos;
+  - Dart: la lente con dos móviles y sin programa, la geometría en palabras, la píldora con el
+    soporte y su aviso.
+  - `flutter analyze` limpio.
+
+**En el Mac**: `swift test` y `flutter build ios`.
+
+**En los iPhone**, con la +21:
+- una cámara a 1× y 2×: la imagen del programa cambia de lente;
+- dos cámaras a 1× con los móviles a ±40°: el aviso del hueco;
+- girados y calibrados con «Calibrar cosido»: `rig-1x.json` y sin aviso.
+
 ## 2026-11-03 · IOS-123 — el vóley como el fútbol: uno o dos móviles y la tarjeta Cámara · 🚧 hecho; falta verlo en el iPhone
 
 Enmienda del ADR 0031 de football-ai, del 2026-11-03. La pidió el propietario: «el voleibol va

@@ -1005,6 +1005,9 @@ final class SplitBench {
     // Montado al haber pipeline (sabe el tamaño de la cámara).
     private var rig: RigModel?
     private var rigSource = ""
+    /// La lente de la pasada y si su geometría es la calibrada para ella (ADR 0035, enmienda).
+    private var rigLens = RigLens.ultraWide
+    private var rigCalibratedForLens = true
     private var context: MetalContext?
     private var slave: SlavePartStage?
     private var slaveEncoder: VideoEncoder?
@@ -1536,15 +1539,31 @@ final class SplitBench {
         guard let pipeline = pipelineProvider() else { return false }
         let ring = pipeline.ring
         do {
-            var (modelo, fuente) = try Self.loadRig(width: ring.width, height: ring.height, env: env)
+            // La lente que se abrió (ADR 0035). Con dos cámaras, la geometría es la de esa lente:
+            // `rig.json` la ultra; `rig-1x.json`, `rig-2x.json`… las demás (enmienda del 2026-11-04).
+            let lente = OpenLens.lens
+            var (modelo, fuente) = try Self.loadRig(width: ring.width, height: ring.height, env: env,
+                                                    lens: config.singleCamera ? .ultraWide : lente)
             // «Una cámara» con una lente que no es la ultra (ADR 0035): sus intrínsecas salen de su
             // campo. Con una lente sola no hay costura que alinear; la pose sigue siendo la del lado.
-            if config.singleCamera, let campo = OpenLens.hfovRad {
+            if config.singleCamera, let campo = lente.hfovRad {
                 modelo = modelo.withIntrinsics(side, intrinsics: try CameraIntrinsics.fromHfov(
                     width: ring.width, height: ring.height, hfovRad: campo
                 ))
                 fuente = "lente real"
+            } else if !config.singleCamera, let campo = lente.hfovRad, fuente != lente.rigFileName {
+                // Dos cámaras con una lente sin calibrar: la pose de la ultra y las intrínsecas del
+                // campo de cada lente (la del otro, de su `hello`). Cose a ojo y se avisa.
+                let propia = try CameraIntrinsics.fromHfov(width: ring.width, height: ring.height, hfovRad: campo)
+                let suya = try session.peerLens?.hfovRad.map {
+                    try CameraIntrinsics.fromHfov(width: ring.width, height: ring.height, hfovRad: $0)
+                } ?? propia
+                modelo = modelo.withIntrinsics(side, intrinsics: propia)
+                    .withIntrinsics(side == .left ? .right : .left, intrinsics: suya)
+                fuente = "sin calibrar para \(lente.label)"
             }
+            rigLens = lente
+            rigCalibratedForLens = fuente == lente.rigFileName
             guard let ctx = MetalContext() else { return false }
             // «Una cámara»: el encuadre a mano del mando (ADR 0033), que arranca en el zoom que
             // eligió el operador, y la vista general para las miniaturas.
@@ -1710,13 +1729,17 @@ final class SplitBench {
         }
     }
 
-    /// Documents/rig.json si lo hay (la calibración); si no, un soporte nominal.
-    static func loadRig(width: Int, height: Int, env: [String: String]) throws -> (RigModel, String) {
+    /// La calibración de `lens` en Documents (`rig.json` la ultra; `rig-1x.json`… las demás), o
+    /// la de la ultra si esa lente no tiene, o un soporte nominal. Devuelve también de dónde salió.
+    static func loadRig(width: Int, height: Int, env: [String: String],
+                        lens: RigLens = .ultraWide) throws -> (RigModel, String) {
         let docs = try FileManager.default.url(for: .documentDirectory, in: .userDomainMask,
                                                appropriateFor: nil, create: true)
-        let fichero = docs.appendingPathComponent("rig.json")
-        if FileManager.default.fileExists(atPath: fichero.path) {
-            return (try RigModel.load(from: fichero), "rig.json")
+        for nombre in [lens.rigFileName, RigLens.ultraWide.rigFileName] {
+            let fichero = docs.appendingPathComponent(nombre)
+            if FileManager.default.fileExists(atPath: fichero.path) {
+                return (try RigModel.load(from: fichero), nombre)
+            }
         }
         let grados = { (k: String, d: Double) in (env[k].flatMap(Double.init) ?? d) * .pi / 180 }
         let intr = try CameraIntrinsics.fromHfov(width: width, height: height,
@@ -1728,6 +1751,15 @@ final class SplitBench {
             left: RigCamera(intrinsics: intr, pose: CameraPose(yawRad: -yaw, pitchRad: pitch)),
             right: RigCamera(intrinsics: intr, pose: CameraPose(yawRad: yaw, pitchRad: pitch))
         ), "nominal")
+    }
+
+    /// Con dos cámaras (ADR 0035, enmienda): lo que hay que avisar de la geometría, separado
+    /// por « · »; vacío si cuadra o con una cámara. Se rehace en cada estado: la lente del otro
+    /// llega con su `hello`, que puede ser después de montar.
+    private func rigWarning() -> String {
+        guard !config.singleCamera, let rig else { return "" }
+        return RigLensWarning.warnings(rig: rig, own: rigLens, peer: session.peerLens,
+                                       calibrated: rigCalibratedForLens).joined(separator: " · ")
     }
 
     // MARK: - Esclavo
@@ -2285,7 +2317,8 @@ final class SplitBench {
     static let idleStatus = ProgramStatus(
         running: false, master: false, programFps: 0, programFrames: 0, srtState: "", srtTarget: "",
         srtDetail: "", srtBitrateBps: 0, srtRttMs: 0, srtReconnects: 0, partMbps: 0, partFallbacks: 0,
-        partsLost: 0, detectorRuns: 0, detectorNote: "", problem: "", rigSource: ""
+        partsLost: 0, detectorRuns: 0, detectorNote: "", problem: "", rigSource: "", rigWarning: "",
+        lensZoom: RigLens.ultraWide.zoom
     )
 
     /// La copia del programa: en el banco, junto al .ts; en EMITIR, Documents/program-<id>.mov.
@@ -2445,7 +2478,8 @@ final class SplitBench {
             partMbps: esMaestro ? (enlace?.mbps ?? 0) : bytesPorS * Self.bitsPerByte / Self.bitsPerMegabit,
             partFallbacks: Int64(esMaestro ? partFallbacks : (slave?.stats.withoutView ?? 0)),
             partsLost: Int64(enlace?.lost ?? 0), detectorRuns: Int64(detect?.runCount ?? 0),
-            detectorNote: nota, problem: setUpProblem, rigSource: rigSource
+            detectorNote: nota, problem: setUpProblem, rigSource: rigSource, rigWarning: rigWarning(),
+            lensZoom: rigLens.zoom
         )
         lock.lock()
         statusSnapshot = nuevo
@@ -3250,17 +3284,19 @@ final class CalibrationPairs {
 // arrancar, y rehacer los renderers de los dos móviles con el programa al aire es otra decisión.
 
 enum RigFile {
-    /// Guarda `text` como `Documents/rig.json` si es un soporte válido; el anterior queda como
-    /// `rig.json.previo`. Si no vale, no toca nada.
-    static func install(text: String) throws {
+    /// Guarda `text` como la geometría de la lente abierta (`rig.json` la ultra; `rig-1x.json`…
+    /// las demás, ADR 0035, enmienda del 2026-11-04) si es un soporte válido; el anterior queda
+    /// con `.previo`. Si no vale, no toca nada.
+    static func install(text: String, lens: RigLens = OpenLens.lens) throws {
         let docs = try FileManager.default.url(for: .documentDirectory, in: .userDomainMask,
                                                appropriateFor: nil, create: true)
-        let nuevo = docs.appendingPathComponent("rig.json.nuevo")
+        let nombre = lens.rigFileName
+        let nuevo = docs.appendingPathComponent("\(nombre).nuevo")
         try Data(text.utf8).write(to: nuevo, options: .atomic)
         defer { try? FileManager.default.removeItem(at: nuevo) }
         _ = try RigModel.load(from: nuevo)
-        let actual = docs.appendingPathComponent("rig.json")
-        let previo = docs.appendingPathComponent("rig.json.previo")
+        let actual = docs.appendingPathComponent(nombre)
+        let previo = docs.appendingPathComponent("\(nombre).previo")
         if FileManager.default.fileExists(atPath: actual.path) {
             try? FileManager.default.removeItem(at: previo)
             try FileManager.default.moveItem(at: actual, to: previo)

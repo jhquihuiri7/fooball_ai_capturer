@@ -215,9 +215,17 @@ struct ProgramStatus: Hashable, CustomStringConvertible {
   var detectorNote: String
   /// Lo que impidió montar el programa, si algo lo impidió.
   var problem: String
-  /// La geometría con la que se compone: `rig.json` (la calibración en Documents) o
-  /// `nominal` (sin calibrar: la costura no casará). Vacío antes de montar.
+  /// La geometría con la que se compone: el fichero de la calibración de la lente (`rig.json` la
+  /// ultra, `rig-1x.json`…), `nominal` (sin calibrar: la costura no casará), `lente real` (con
+  /// «Una cámara» y otra lente) o `sin calibrar para 1×` (dos cámaras con una lente sin su
+  /// calibración, ADR 0035). Vacío antes de montar.
   var rigSource: String
+  /// Con dos cámaras, lo que hay que avisar de la geometría (ADR 0035, enmienda del 2026-11-04):
+  /// sin calibrar con esta lente, las lentes que no se solapan y lentes distintas en los dos
+  /// móviles, separado por « · ». Vacío si cuadra.
+  var rigWarning: String
+  /// La lente que se abrió de verdad, en la escala de la app Cámara: 0,5 la ultra.
+  var lensZoom: Double
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
@@ -239,6 +247,8 @@ struct ProgramStatus: Hashable, CustomStringConvertible {
     let detectorNote = pigeonVar_list[14] as! String
     let problem = pigeonVar_list[15] as! String
     let rigSource = pigeonVar_list[16] as! String
+    let rigWarning = pigeonVar_list[17] as! String
+    let lensZoom = pigeonVar_list[18] as! Double
 
     return ProgramStatus(
       running: running,
@@ -257,7 +267,9 @@ struct ProgramStatus: Hashable, CustomStringConvertible {
       detectorRuns: detectorRuns,
       detectorNote: detectorNote,
       problem: problem,
-      rigSource: rigSource
+      rigSource: rigSource,
+      rigWarning: rigWarning,
+      lensZoom: lensZoom
     )
   }
   func toList() -> [Any?] {
@@ -279,13 +291,15 @@ struct ProgramStatus: Hashable, CustomStringConvertible {
       detectorNote,
       problem,
       rigSource,
+      rigWarning,
+      lensZoom,
     ]
   }
   static func == (lhs: ProgramStatus, rhs: ProgramStatus) -> Bool {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return RigApiPigeonInternal.deepEquals(lhs.running, rhs.running) && RigApiPigeonInternal.deepEquals(lhs.master, rhs.master) && RigApiPigeonInternal.deepEquals(lhs.programFps, rhs.programFps) && RigApiPigeonInternal.deepEquals(lhs.programFrames, rhs.programFrames) && RigApiPigeonInternal.deepEquals(lhs.srtState, rhs.srtState) && RigApiPigeonInternal.deepEquals(lhs.srtTarget, rhs.srtTarget) && RigApiPigeonInternal.deepEquals(lhs.srtDetail, rhs.srtDetail) && RigApiPigeonInternal.deepEquals(lhs.srtBitrateBps, rhs.srtBitrateBps) && RigApiPigeonInternal.deepEquals(lhs.srtRttMs, rhs.srtRttMs) && RigApiPigeonInternal.deepEquals(lhs.srtReconnects, rhs.srtReconnects) && RigApiPigeonInternal.deepEquals(lhs.partMbps, rhs.partMbps) && RigApiPigeonInternal.deepEquals(lhs.partFallbacks, rhs.partFallbacks) && RigApiPigeonInternal.deepEquals(lhs.partsLost, rhs.partsLost) && RigApiPigeonInternal.deepEquals(lhs.detectorRuns, rhs.detectorRuns) && RigApiPigeonInternal.deepEquals(lhs.detectorNote, rhs.detectorNote) && RigApiPigeonInternal.deepEquals(lhs.problem, rhs.problem) && RigApiPigeonInternal.deepEquals(lhs.rigSource, rhs.rigSource)
+    return RigApiPigeonInternal.deepEquals(lhs.running, rhs.running) && RigApiPigeonInternal.deepEquals(lhs.master, rhs.master) && RigApiPigeonInternal.deepEquals(lhs.programFps, rhs.programFps) && RigApiPigeonInternal.deepEquals(lhs.programFrames, rhs.programFrames) && RigApiPigeonInternal.deepEquals(lhs.srtState, rhs.srtState) && RigApiPigeonInternal.deepEquals(lhs.srtTarget, rhs.srtTarget) && RigApiPigeonInternal.deepEquals(lhs.srtDetail, rhs.srtDetail) && RigApiPigeonInternal.deepEquals(lhs.srtBitrateBps, rhs.srtBitrateBps) && RigApiPigeonInternal.deepEquals(lhs.srtRttMs, rhs.srtRttMs) && RigApiPigeonInternal.deepEquals(lhs.srtReconnects, rhs.srtReconnects) && RigApiPigeonInternal.deepEquals(lhs.partMbps, rhs.partMbps) && RigApiPigeonInternal.deepEquals(lhs.partFallbacks, rhs.partFallbacks) && RigApiPigeonInternal.deepEquals(lhs.partsLost, rhs.partsLost) && RigApiPigeonInternal.deepEquals(lhs.detectorRuns, rhs.detectorRuns) && RigApiPigeonInternal.deepEquals(lhs.detectorNote, rhs.detectorNote) && RigApiPigeonInternal.deepEquals(lhs.problem, rhs.problem) && RigApiPigeonInternal.deepEquals(lhs.rigSource, rhs.rigSource) && RigApiPigeonInternal.deepEquals(lhs.rigWarning, rhs.rigWarning) && RigApiPigeonInternal.deepEquals(lhs.lensZoom, rhs.lensZoom)
   }
 
   func hash(into hasher: inout Hasher) {
@@ -307,10 +321,12 @@ struct ProgramStatus: Hashable, CustomStringConvertible {
     RigApiPigeonInternal.deepHash(value: detectorNote, hasher: &hasher)
     RigApiPigeonInternal.deepHash(value: problem, hasher: &hasher)
     RigApiPigeonInternal.deepHash(value: rigSource, hasher: &hasher)
+    RigApiPigeonInternal.deepHash(value: rigWarning, hasher: &hasher)
+    RigApiPigeonInternal.deepHash(value: lensZoom, hasher: &hasher)
   }
 
   public var description: String {
-    return "ProgramStatus(running: \(String(describing: running)), master: \(String(describing: master)), programFps: \(String(describing: programFps)), programFrames: \(String(describing: programFrames)), srtState: \(String(describing: srtState)), srtTarget: \(String(describing: srtTarget)), srtDetail: \(String(describing: srtDetail)), srtBitrateBps: \(String(describing: srtBitrateBps)), srtRttMs: \(String(describing: srtRttMs)), srtReconnects: \(String(describing: srtReconnects)), partMbps: \(String(describing: partMbps)), partFallbacks: \(String(describing: partFallbacks)), partsLost: \(String(describing: partsLost)), detectorRuns: \(String(describing: detectorRuns)), detectorNote: \(String(describing: detectorNote)), problem: \(String(describing: problem)), rigSource: \(String(describing: rigSource)))"
+    return "ProgramStatus(running: \(String(describing: running)), master: \(String(describing: master)), programFps: \(String(describing: programFps)), programFrames: \(String(describing: programFrames)), srtState: \(String(describing: srtState)), srtTarget: \(String(describing: srtTarget)), srtDetail: \(String(describing: srtDetail)), srtBitrateBps: \(String(describing: srtBitrateBps)), srtRttMs: \(String(describing: srtRttMs)), srtReconnects: \(String(describing: srtReconnects)), partMbps: \(String(describing: partMbps)), partFallbacks: \(String(describing: partFallbacks)), partsLost: \(String(describing: partsLost)), detectorRuns: \(String(describing: detectorRuns)), detectorNote: \(String(describing: detectorNote)), problem: \(String(describing: problem)), rigSource: \(String(describing: rigSource)), rigWarning: \(String(describing: rigWarning)), lensZoom: \(String(describing: lensZoom)))"
   }
 }
 

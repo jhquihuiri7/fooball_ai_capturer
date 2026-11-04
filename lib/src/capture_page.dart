@@ -187,6 +187,11 @@ class _CapturePageState extends State<CapturePage> {
         'rec_clock_jump_segments': st.recordingClockJumpSegments,
         'stream': st.streamState.name,
       },
+      // La lente que abrió el nativo y lo que hay que avisar del soporte (ADR 0035, enmienda).
+      if (_session.program case final ProgramStatus p) ...<String, Object?>{
+        'lens': p.lensZoom,
+        if (p.rigWarning.isNotEmpty) 'rig_warning': p.rigWarning,
+      },
     };
   }
 

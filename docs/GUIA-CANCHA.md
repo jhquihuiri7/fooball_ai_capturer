@@ -51,6 +51,19 @@ sale la tarjeta **Cámara**.
 - En la cancha, con el Wi-Fi del móvil, la vista va casi sin retraso; desde fuera, por el VPS,
   unos 2 s detrás.
 
+**Elegir la lente del iPhone** (desde la +20, 2026-11-04): antes de «Abrir cámara», en la
+pantalla del lado, junto al enlace.
+- **0,5×** es la ultra gran angular; **1×**, la principal; **2×**, la principal con el recorte
+  del sensor. Es la lente de verdad, no un recorte. El zoom fino del directo sigue siendo el del
+  mando.
+- **Con una cámara**, la que quieras.
+- **Con dos**, la misma en los dos móviles. Con 0,5× no cambia nada. Con 1× o 2×:
+  - gira los dos móviles hacia dentro (unos ±25° con 1×) hasta que sus imágenes se solapen;
+  - calibra el cosido desde el mando con esa lente; se guarda aparte de la de 0,5×.
+- **Si algo no cuadra**, la pantalla de captura y la tarjeta Soporte del mando dicen «Aviso del
+  soporte»: sin calibrar con esa lente, las lentes no se tocan o los dos móviles llevan lentes
+  distintas.
+
 **Repetir una jugada** (cualquier evento, con una o dos cámaras): la tarjeta **Repetición** del
 mando web, debajo de los goles.
 - Cuando pase algo, **Marcar jugada**. Sale en la lista con su número (y el minuto, en el

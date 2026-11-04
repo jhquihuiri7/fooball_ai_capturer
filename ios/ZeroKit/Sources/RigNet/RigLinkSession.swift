@@ -46,6 +46,10 @@ public final class RigLinkSession {
         var nonce: String  // 16 B en base64url
         /// «Este móvil dirige» (IOS-80). Opcional: un hello sin él es el de antes.
         var prefersMaster: Bool?
+        /// La lente que abrió (ADR 0035, enmienda del 2026-11-04): su zoom en la escala de la app
+        /// Cámara y su campo horizontal en rad (sin él, la ultra de `rig.json`). Opcionales.
+        var lensZoom: Double?
+        var lensHfovRad: Double?
 
         enum CodingKeys: String, CodingKey {
             case linkVersion = "link_version"
@@ -55,6 +59,8 @@ public final class RigLinkSession {
             case appVersion = "app_version"
             case nonce
             case prefersMaster = "prefers_master"
+            case lensZoom = "lens_zoom"
+            case lensHfovRad = "lens_hfov_rad"
         }
     }
 
@@ -94,6 +100,11 @@ public final class RigLinkSession {
     public var term = 0
     public var matchId: String?
     public var prefersMaster: Bool
+    /// La lente que abrió este móvil, para el `hello` (ADR 0035, enmienda del 2026-11-04). Se pone
+    /// antes de enlazar: la cámara se configura antes que el enlace.
+    public var localLens: RigLens?
+    /// La que dijo el otro en su `hello`; nil si no lo dijo (un móvil de antes) o sin enlace.
+    public private(set) var peerLens: RigLens?
 
     /// El rol que salió de la negociación al conectar, con su term y partido. Hasta
     /// entonces, el reclamado.
@@ -322,7 +333,9 @@ public final class RigLinkSession {
             deviceId: deviceId,
             appVersion: appVersion,
             nonce: myNonce.base64EncodedString(),
-            prefersMaster: prefersMaster
+            prefersMaster: prefersMaster,
+            lensZoom: localLens?.zoom,
+            lensHfovRad: localLens?.hfovRad
         )
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
@@ -343,6 +356,7 @@ public final class RigLinkSession {
         }
         theirHello = hello
         theirHelloBytes = frame.payload
+        peerLens = hello.lensZoom.map { RigLens(zoom: $0, hfovRad: hello.lensHfovRad) }
         let mac = LinkAuth.authMac(secret: secret, myHello: myHelloBytes, theirHello: theirHelloBytes)
         send(type: .auth, payload: mac, preSession: true)
     }

@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "warning": "NO EDITAR: copiado por tools/export_golden.py --sync del repo football-ai. Se regenera allí y se vuelve a sincronizar.",
-  "source_commit": "90bfa7f787779e06eec816831667c039d609e7de",
+  "source_commit": "38295cac40a428f780206384725a0cdf7c0ea2df",
   "files": {
     "action.json": "bc7e32ca75c01b4dcf33e76d0a5ad726fba41d3ed3ed2992b914a7b43803548d",
     "ad_strip.json": "312648972cf788bcf374cc223b71f3e706b1528d9555fc5305d4f89039813d55",
@@ -15,10 +15,11 @@
     "director.json": "a469e93f18928e1768d83b267cc6fa02b2e7ffe61161c0a1479ccca9e7bef74b",
     "framing.json": "9fcef4d8da40644fe18b7249e978ec97456a99936db8327a17a92ff69b9aae58",
     "lineups.json": "6c9b8c6a5d305590b59c4589306af48d9f8c9a4721dd47f303bbf9e483b7dc74",
-    "manifest.json": "b82f70796c7f9e76ca0692684ff3a14fba69ac4ea73f8f0c91c4a7ba8eec7028",
+    "manifest.json": "9cbf8a8d338f20c8ef9589c57675fc00e6b9f6d94d8810a38fbc44dc8b652510",
     "match.json": "eb5c46eea88696f5e7050ec9a08f880e9d6abc4f1d6decfe8c1c4440aaeb91f6",
     "match_clock.json": "52608e4278498a5293b115a215d3b76c5e18cb2047a2da721cce5b7859ed7efc",
     "match_log_sample.jsonl": "ec2fb80272d367c309e98f10af2c2e04f2ca3b90a0a5f3b5c67ec32df46be5ae",
+    "overlap.json": "d42a81b70cd1fe4fdc21a20e998c5d2c947f421f85553b600c9ac5786980d275",
     "pitch.json": "4ef452010539dfa175fb7ed6bfa8a540c9eb5a2d9dc2af29be4ba4224953b20a",
     "postprocess.json": "e1ebc086824eddee7d62c795d563d7051cc31a96932ac72c3a98f8b4b5f51a91",
     "reprojection.json": "c1058b04933e913c6f91633bede022fdefaf5c65480d3e2795997fa8b427357f",

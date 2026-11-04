@@ -38,6 +38,8 @@ class ProgramStatus {
     required this.detectorNote,
     required this.problem,
     required this.rigSource,
+    required this.rigWarning,
+    required this.lensZoom,
   });
 
   /// Hay una pasada en marcha en este móvil.
@@ -81,9 +83,19 @@ class ProgramStatus {
   /// Lo que impidió montar el programa, si algo lo impidió.
   final String problem;
 
-  /// La geometría con la que se compone: `rig.json` (la calibración en Documents) o
-  /// `nominal` (sin calibrar: la costura no casará). Vacío antes de montar.
+  /// La geometría con la que se compone: el fichero de la calibración de la lente (`rig.json` la
+  /// ultra, `rig-1x.json`…), `nominal` (sin calibrar: la costura no casará), `lente real` (con
+  /// «Una cámara» y otra lente) o `sin calibrar para 1×` (dos cámaras con una lente sin su
+  /// calibración, ADR 0035). Vacío antes de montar.
   final String rigSource;
+
+  /// Con dos cámaras, lo que hay que avisar de la geometría (ADR 0035, enmienda del 2026-11-04):
+  /// sin calibrar con esta lente, las lentes que no se solapan y lentes distintas en los dos
+  /// móviles, separado por « · ». Vacío si cuadra.
+  final String rigWarning;
+
+  /// La lente que se abrió de verdad, en la escala de la app Cámara: 0,5 la ultra.
+  final double lensZoom;
 }
 
 /// La resolución con la que sale el programa (IOS-99, ADR 0025 de football-ai). El soporte

@@ -1,0 +1,153 @@
+{
+  "schema": 1,
+  "module": "overlap",
+  "conventions": {
+    "axes": "Ejes del soporte: X a la derecha, Y hacia abajo, Z hacia delante (rig.py).",
+    "rotation": "R = R_yaw · R_pitch · R_roll, de cámara a soporte; ortonormal (CameraPose.matrix), así que la inversa es la traspuesta.",
+    "angles": "Radianes. Yaw positivo gira la cámara a la derecha; pitch positivo, hacia arriba.",
+    "pixel_center": "El convenio de rig.py: el píxel i cubre [i, i+1) y su centro continuo está en i+0,5; CameraIntrinsics.scaled reescala pasando por ese centro.",
+    "homography": "Las homografías de vista van del programa a la cámara (view_homography).",
+    "scalars": "Float con el repr de Python: ida y vuelta exacta a Double en Swift.",
+    "tensors": "{dtype: f64|f32|u8|i32, shape, b64}, little-endian y orden C; en Swift, Data(base64Encoded:)."
+  },
+  "cases": [
+    {
+      "name": "ultra_a_40",
+      "fn": "RigModel.horizontal_overlap_rad",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 1446.8237761974,
+              "fy": 1446.8237761974,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        }
+      },
+      "expected": {
+        "overlap_rad": 0.457845705
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "principal_a_40_deja_hueco",
+      "fn": "RigModel.horizontal_overlap_rad",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 2772.8321392378,
+              "fy": 2772.8321392378,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 2772.8321392378,
+              "fy": 2772.8321392378,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.6981317008,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        }
+      },
+      "expected": {
+        "overlap_rad": -0.1788677
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    },
+    {
+      "name": "principal_a_25_se_solapa",
+      "fn": "RigModel.horizontal_overlap_rad",
+      "inputs": {
+        "rig": {
+          "version": 1,
+          "left": {
+            "intrinsics": {
+              "fx": 2772.8321392378,
+              "fy": 2772.8321392378,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": -0.436332313,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 3.1415926536
+            }
+          },
+          "right": {
+            "intrinsics": {
+              "fx": 2772.8321392378,
+              "fy": 2772.8321392378,
+              "cx": 1920.0,
+              "cy": 1080.0,
+              "width": 3840,
+              "height": 2160
+            },
+            "pose": {
+              "yaw_rad": 0.436332313,
+              "pitch_rad": -0.1396263402,
+              "roll_rad": 0.0523598776
+            }
+          }
+        }
+      },
+      "expected": {
+        "overlap_rad": 0.3447310756
+      },
+      "tol": {
+        "abs": 1e-09,
+        "rel": 1e-09
+      }
+    }
+  ]
+}

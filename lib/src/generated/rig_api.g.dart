@@ -138,6 +138,8 @@ class ProgramStatus {
     required this.detectorNote,
     required this.problem,
     required this.rigSource,
+    required this.rigWarning,
+    required this.lensZoom,
   });
 
   /// Hay una pasada en marcha en este móvil.
@@ -186,9 +188,19 @@ class ProgramStatus {
   /// Lo que impidió montar el programa, si algo lo impidió.
   String problem;
 
-  /// La geometría con la que se compone: `rig.json` (la calibración en Documents) o
-  /// `nominal` (sin calibrar: la costura no casará). Vacío antes de montar.
+  /// La geometría con la que se compone: el fichero de la calibración de la lente (`rig.json` la
+  /// ultra, `rig-1x.json`…), `nominal` (sin calibrar: la costura no casará), `lente real` (con
+  /// «Una cámara» y otra lente) o `sin calibrar para 1×` (dos cámaras con una lente sin su
+  /// calibración, ADR 0035). Vacío antes de montar.
   String rigSource;
+
+  /// Con dos cámaras, lo que hay que avisar de la geometría (ADR 0035, enmienda del 2026-11-04):
+  /// sin calibrar con esta lente, las lentes que no se solapan y lentes distintas en los dos
+  /// móviles, separado por « · ». Vacío si cuadra.
+  String rigWarning;
+
+  /// La lente que se abrió de verdad, en la escala de la app Cámara: 0,5 la ultra.
+  double lensZoom;
 
   List<Object?> _toList() {
     return <Object?>[
@@ -209,6 +221,8 @@ class ProgramStatus {
       detectorNote,
       problem,
       rigSource,
+      rigWarning,
+      lensZoom,
     ];
   }
 
@@ -235,6 +249,8 @@ class ProgramStatus {
       detectorNote: result[14]! as String,
       problem: result[15]! as String,
       rigSource: result[16]! as String,
+      rigWarning: result[17]! as String,
+      lensZoom: result[18]! as double,
     );
   }
 
@@ -247,7 +263,7 @@ class ProgramStatus {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(running, other.running) && _deepEquals(master, other.master) && _deepEquals(programFps, other.programFps) && _deepEquals(programFrames, other.programFrames) && _deepEquals(srtState, other.srtState) && _deepEquals(srtTarget, other.srtTarget) && _deepEquals(srtDetail, other.srtDetail) && _deepEquals(srtBitrateBps, other.srtBitrateBps) && _deepEquals(srtRttMs, other.srtRttMs) && _deepEquals(srtReconnects, other.srtReconnects) && _deepEquals(partMbps, other.partMbps) && _deepEquals(partFallbacks, other.partFallbacks) && _deepEquals(partsLost, other.partsLost) && _deepEquals(detectorRuns, other.detectorRuns) && _deepEquals(detectorNote, other.detectorNote) && _deepEquals(problem, other.problem) && _deepEquals(rigSource, other.rigSource);
+    return _deepEquals(running, other.running) && _deepEquals(master, other.master) && _deepEquals(programFps, other.programFps) && _deepEquals(programFrames, other.programFrames) && _deepEquals(srtState, other.srtState) && _deepEquals(srtTarget, other.srtTarget) && _deepEquals(srtDetail, other.srtDetail) && _deepEquals(srtBitrateBps, other.srtBitrateBps) && _deepEquals(srtRttMs, other.srtRttMs) && _deepEquals(srtReconnects, other.srtReconnects) && _deepEquals(partMbps, other.partMbps) && _deepEquals(partFallbacks, other.partFallbacks) && _deepEquals(partsLost, other.partsLost) && _deepEquals(detectorRuns, other.detectorRuns) && _deepEquals(detectorNote, other.detectorNote) && _deepEquals(problem, other.problem) && _deepEquals(rigSource, other.rigSource) && _deepEquals(rigWarning, other.rigWarning) && _deepEquals(lensZoom, other.lensZoom);
   }
 
   @override
@@ -256,7 +272,7 @@ class ProgramStatus {
 
   @override
   String toString() {
-    return 'ProgramStatus(running: $running, master: $master, programFps: $programFps, programFrames: $programFrames, srtState: $srtState, srtTarget: $srtTarget, srtDetail: $srtDetail, srtBitrateBps: $srtBitrateBps, srtRttMs: $srtRttMs, srtReconnects: $srtReconnects, partMbps: $partMbps, partFallbacks: $partFallbacks, partsLost: $partsLost, detectorRuns: $detectorRuns, detectorNote: $detectorNote, problem: $problem, rigSource: $rigSource)';
+    return 'ProgramStatus(running: $running, master: $master, programFps: $programFps, programFrames: $programFrames, srtState: $srtState, srtTarget: $srtTarget, srtDetail: $srtDetail, srtBitrateBps: $srtBitrateBps, srtRttMs: $srtRttMs, srtReconnects: $srtReconnects, partMbps: $partMbps, partFallbacks: $partFallbacks, partsLost: $partsLost, detectorRuns: $detectorRuns, detectorNote: $detectorNote, problem: $problem, rigSource: $rigSource, rigWarning: $rigWarning, lensZoom: $lensZoom)';
   }
 }
 

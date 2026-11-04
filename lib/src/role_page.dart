@@ -1187,8 +1187,19 @@ class _LinkCard extends StatelessWidget {
                 ],
               ],
             ),
+          ],
+          // La lente física, con una cámara y con el soporte de dos (ADR 0035, enmienda del
+          // 2026-11-04). Sin programa (Multipeer, al pod) no hay lente que elegir.
+          if (mode != LinkMode.multipeer) ...<Widget>[
             const SizedBox(height: 8),
             _ZoomRow(zoom: zoom, zooms: zooms, onZoom: onZoom),
+            if (mode != LinkMode.single && zoom != singleDefaultZoom) ...<Widget>[
+              const SizedBox(height: 6),
+              Text(
+                rigLensNote,
+                style: ZeroType.data(size: 11, weight: FontWeight.w500, color: ZeroColors.alarm, height: 1.5),
+              ),
+            ],
           ],
           const SizedBox(height: 10),
           Text(
@@ -1206,8 +1217,15 @@ class _LinkCard extends StatelessWidget {
   }
 }
 
+/// Lo que se avisa al elegir con el soporte de dos una lente que no es la ultra (ADR 0035,
+/// enmienda del 2026-11-04): con la principal y los móviles a ±40° las dos no se tocan.
+const String rigLensNote = 'Con dos móviles, los dos con la misma lente. Si no es 0,5×, gira los '
+    'móviles hacia dentro hasta que sus imágenes se solapen y calibra el cosido desde el mando con '
+    'esta lente: con la principal a ±40° queda un hueco en el centro.';
+
 /// La lente de «Una cámara» (ADR 0035, lo pidió Alexander: quería el zoom de la cámara, no un
-/// recorte). Las mismas píldoras que la app Cámara, y solo las que tiene este iPhone.
+/// recorte) y, desde la enmienda del 2026-11-04, también la del soporte de dos. Las mismas
+/// píldoras que la app Cámara, y solo las que tiene este iPhone.
 class _ZoomRow extends StatelessWidget {
   const _ZoomRow({required this.zoom, required this.zooms, required this.onZoom});
 

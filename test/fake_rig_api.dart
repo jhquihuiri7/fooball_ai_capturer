@@ -20,6 +20,8 @@ ProgramStatus fakeProgramStatus({
   String detectorNote = '',
   String problem = '',
   String rigSource = 'rig.json',
+  String rigWarning = '',
+  double lensZoom = 0.5,
 }) {
   return ProgramStatus(
     running: running,
@@ -39,6 +41,8 @@ ProgramStatus fakeProgramStatus({
     detectorNote: detectorNote,
     problem: problem,
     rigSource: rigSource,
+    rigWarning: rigWarning,
+    lensZoom: lensZoom,
   );
 }
 

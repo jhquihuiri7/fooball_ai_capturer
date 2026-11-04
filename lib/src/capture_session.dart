@@ -202,8 +202,9 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
   final ProgramResolution resolution;
 
   /// Lo que se le pide al nativo al EMITIR: la elegida con una cámara; si no, 1080p.
-  /// La lente física de «Una cámara» (ADR 0035), en la escala de la app Cámara: 0,5 es la ultra
-  /// gran angular. Con el soporte de dos no cuenta: los dos móviles van en 0,5.
+  /// La lente física (ADR 0035), en la escala de la app Cámara: 0,5 es la ultra gran angular.
+  /// Con una cámara y, desde la enmienda del 2026-11-04, también con el soporte de dos, donde los
+  /// dos móviles tienen que llevar la misma. Sin programa (el pod) no cuenta: 0,5.
   final double zoom;
 
   /// `0,5×`, `1×`, `2×`.
@@ -618,9 +619,10 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
         );
         return;
       }
-      // Con «Una cámara», el foco sigue a la escena como la app Cámara del iPhone.
+      // Con «Una cámara», el foco sigue a la escena como la app Cámara del iPhone. La lente, la
+      // elegida con una cámara y con dos (ADR 0035, enmienda del 2026-11-04).
       status = await _api.configure(
-        settings ?? defaultSettings(role, autoFocus: singleCamera, lensZoom: singleCamera ? zoom : singleDefaultZoom),
+        settings ?? defaultSettings(role, autoFocus: singleCamera, lensZoom: programMode ? zoom : singleDefaultZoom),
       );
       final String? wrong = _whatIsWrong(status!);
       if (wrong != null) {

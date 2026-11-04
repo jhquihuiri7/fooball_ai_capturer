@@ -267,6 +267,14 @@ public enum RigConstants {
     /// (Python: `RIG_INTRINSICS_MAX_CENTER_PX`.)
     public static let rigIntrinsicsMaxCenterPx: Double = 8.0
 
+    /// Radianes (~8°). Lo menos que tienen que solaparse en yaw las dos lentes del soporte, a media
+    /// altura de la imagen, para coser y calibrar (ADR 0035, enmienda del 2026-11-04: la lente con dos
+    /// cámaras). La rampa de la costura ya pide 2° (`PANORAMA_FEATHER_RAD`); el resto es para que la
+    /// calibración encuentre puntos comunes y para el error de la pose. Con la ultra a ±40° se solapan
+    /// ~26°; con la principal (1×) a ±40° no se solapan: queda un hueco de ~10°.
+    /// (Python: `RIG_MIN_OVERLAP_RAD`.)
+    public static let rigMinOverlapRad: Double = 0.14
+
     /// Píxeles que se ensancha una zona ciega de una cámara. `cv2.remap` interpola entre
     /// vecinos, así que un píxel pegado al borde de la zona todavía arrastra algo de ella.
     /// (Python: `PANORAMA_BLIND_MARGIN_PX`.)

@@ -332,6 +332,20 @@ class CaptureReadout {
     };
   }
 
+  /// La geometría en palabras: la calibración de la lente (`rig.json`, `rig-1x.json`…), la lente
+  /// real de «Una cámara», una lente sin calibrar con dos cámaras o el soporte nominal.
+  static String geometryLabel(String rigSource) => switch (rigSource) {
+        'nominal' => 'NOMINAL · sin Documents/rig.json',
+        'lente real' => 'lente real · su campo, sin cosido',
+        final String f when f.startsWith('rig') && f.endsWith('.json') => 'calibrada · $f',
+        final String otra => otra,
+      };
+
+  static ZeroTone _geometryTone(String rigSource) =>
+      rigSource == 'lente real' || (rigSource.startsWith('rig') && rigSource.endsWith('.json'))
+          ? ZeroTone.ok
+          : ZeroTone.bad;
+
   List<CaptureReading> get programReadings {
     final ProgramStatus? p = session.recording ? _program : null;
     final int ladder = _status?.ladderLevel ?? 0;
@@ -339,7 +353,8 @@ class CaptureReadout {
       // IOS-99: con una cámara, la resolución elegida (el soporte va siempre a 1080p).
       if (session.singleCamera)
         CaptureReading('Resolución', CaptureSession.resolutionLabel(session.resolution)),
-      if (session.singleCamera) CaptureReading('Lente', CaptureSession.zoomLabel(session.zoom)),
+      // La lente física (ADR 0035): la que abrió el nativo, en cuanto hay pasada; antes, la pedida.
+      if (session.programMode) CaptureReading('Lente', CaptureSession.zoomLabel(p?.lensZoom ?? session.zoom)),
       if (p == null)
         CaptureReading(
           'Programa',
@@ -377,11 +392,9 @@ class CaptureReadout {
           tone: p.detectorNote.isEmpty ? ZeroTone.neutral : ZeroTone.bad,
         ),
       if (p != null && p.rigSource.isNotEmpty)
-        CaptureReading(
-          'Geometría',
-          p.rigSource == 'rig.json' ? 'calibrada · rig.json' : 'NOMINAL · sin Documents/rig.json',
-          tone: p.rigSource == 'rig.json' ? ZeroTone.ok : ZeroTone.bad,
-        ),
+        CaptureReading('Geometría', geometryLabel(p.rigSource), tone: _geometryTone(p.rigSource)),
+      // Con dos cámaras (ADR 0035, enmienda): sin calibrar con esta lente, sin solape o lentes distintas.
+      if (p != null && p.rigWarning.isNotEmpty) CaptureReading('Aviso del soporte', p.rigWarning, tone: ZeroTone.bad),
       if (p != null && p.problem.isNotEmpty) CaptureReading('Problema', p.problem, tone: ZeroTone.bad),
       CaptureReading(
         'Enlace',

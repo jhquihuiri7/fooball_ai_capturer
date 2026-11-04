@@ -45,16 +45,20 @@ struct AppliedCameraSettings {
     var lensPosition: Float = 0
 }
 
-/// La lente física que se abrió, para la pasada de «Una cámara» (ADR 0035): su campo horizontal
-/// en rad, o nil con la ultra gran angular, que tiene las intrínsecas de `rig.json`.
+/// La lente física que se abrió de verdad (ADR 0035): con «Una cámara» y, desde la enmienda del
+/// 2026-11-04, también con dos. Su campo horizontal es nil con la ultra gran angular, que tiene
+/// las intrínsecas de `rig.json`.
 enum OpenLens {
     private static let lock = NSLock()
-    private static var value: Double?
+    private static var value = RigLens.ultraWide
 
-    static var hfovRad: Double? {
+    static var lens: RigLens {
         get { lock.lock(); defer { lock.unlock() }; return value }
         set { lock.lock(); value = newValue; lock.unlock() }
     }
+
+    /// El campo de la lente abierta, o nil con la ultra.
+    static var hfovRad: Double? { lens.hfovRad }
 }
 
 enum UltraWideCamera {
@@ -174,10 +178,15 @@ enum UltraWideCamera {
         // La lente real de «Una cámara» (ADR 0035): su campo sale del formato y del zoom, porque
         // solo la ultra gran angular está calibrada.
         device.videoZoomFactor = min(CGFloat(zoom), format.videoMaxZoomFactor)
-        OpenLens.hfovRad = settings.lensZoom > FullLensView.fullLensZoom
-            ? FullLensView.lensHfovRad(formatHfovRad: Double(format.videoFieldOfView) * .pi / 180,
-                                       zoomFactor: Double(device.videoZoomFactor))
-            : nil
+        // La que se abrió de verdad: si el móvil no tiene la pedida, `discover` cae en la ultra.
+        let abierta = device.deviceType == .builtInUltraWideCamera ? FullLensView.fullLensZoom : settings.lensZoom
+        OpenLens.lens = abierta > FullLensView.fullLensZoom
+            ? RigLens(zoom: abierta, hfovRad: FullLensView.lensHfovRad(
+                formatHfovRad: Double(format.videoFieldOfView) * .pi / 180,
+                zoomFactor: Double(device.videoZoomFactor)
+            ))
+            : .ultraWide
+        NSLog("[lente] abierta %@ (pedida %.1f×)", OpenLens.lens.label, settings.lensZoom)
 
         // Fijar el mismo mínimo y máximo desactiva la cadencia variable. Sin esto, con
         // poca luz el iPhone baja a 24 fps por su cuenta y las dos cámaras dejan de ir

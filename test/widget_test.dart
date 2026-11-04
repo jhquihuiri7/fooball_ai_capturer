@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:football_ai_capture/main.dart';
+import 'package:football_ai_capture/src/role_page.dart';
 import 'package:football_ai_capture/src/event_kind.dart';
 import 'package:football_ai_capture/src/capture_page.dart';
 import 'package:football_ai_capture/src/capture_session.dart';
@@ -145,6 +146,21 @@ void main() {
       expect((EventKind.volleyball.usesRig, EventKind.volleyball.isFootball), (true, false),
           reason: 'el soporte como el fútbol, pero sin su marcador ni su pestaña Partido');
       expect(EventKind.show.usesRig, isFalse);
+    });
+
+    testWidgets('la lente también con el soporte de dos, con su aviso (ADR 0035, enmienda del 2026-11-04)',
+        (WidgetTester tester) async {
+      usePhone(tester);
+      await abrirFutbol(tester, FakeCaptureApi());
+      await tester.ensureVisible(find.text('Cable'));
+      await tester.tap(find.text('Cable'));
+      await tester.pumpAndSettle();
+      expect(find.text('1×'), findsOneWidget, reason: 'la píldora de la lente sale también con dos móviles');
+      expect(find.text(rigLensNote), findsNothing, reason: 'con la ultra no hay nada que avisar');
+      await tester.ensureVisible(find.text('1×'));
+      await tester.tap(find.text('1×'));
+      await tester.pumpAndSettle();
+      expect(find.text(rigLensNote), findsOneWidget);
     });
 
     testWidgets('lo primero que se pide es el lado', (WidgetTester tester) async {
