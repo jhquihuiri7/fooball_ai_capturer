@@ -53,6 +53,16 @@ public struct RigModel: Sendable {
         }
     }
 
+    /// El mismo soporte con otras intrínsecas para una de las cámaras: con una sola cámara y una
+    /// lente que no es la calibrada (ADR 0035).
+    public func withIntrinsics(_ side: CameraSide, intrinsics: CameraIntrinsics) -> RigModel {
+        let nueva = RigCamera(intrinsics: intrinsics, pose: camera(side).pose)
+        switch side {
+        case .left: return RigModel(left: nueva, right: camera(.right))
+        case .right: return RigModel(left: camera(.left), right: nueva)
+        }
+    }
+
     /// Hacia dónde mira un píxel de una de las cámaras, en ejes del soporte.
     public func directionOf(_ side: CameraSide, xPx: Double, yPx: Double) -> RigDirection {
         let intr = camera(side).intrinsics

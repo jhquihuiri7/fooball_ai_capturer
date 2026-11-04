@@ -316,6 +316,10 @@ struct CaptureSettings: Hashable, CustomStringConvertible {
   /// Jhonatan): con «Una cámara (sin pareja)». Con el soporte de dos, el foco se mide al
   /// abrir la cámara y se congela, porque la calibración cuenta con una focal fija.
   var autoFocus: Bool
+  /// La lente física, en la escala de la app Cámara (ADR 0035): 0,5 es la ultra gran angular,
+  /// 1 la principal, 2 la principal con el recorte del sensor, y más el teleobjetivo si lo hay.
+  /// Con el soporte de dos, siempre 0,5: el cosido necesita todo el ancho.
+  var lensZoom: Double
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
@@ -329,6 +333,7 @@ struct CaptureSettings: Hashable, CustomStringConvertible {
     let iso = pigeonVar_list[6] as! Int64
     let cropToPlayableBand = pigeonVar_list[7] as! Bool
     let autoFocus = pigeonVar_list[8] as! Bool
+    let lensZoom = pigeonVar_list[9] as! Double
 
     return CaptureSettings(
       role: role,
@@ -339,7 +344,8 @@ struct CaptureSettings: Hashable, CustomStringConvertible {
       shutterDenominator: shutterDenominator,
       iso: iso,
       cropToPlayableBand: cropToPlayableBand,
-      autoFocus: autoFocus
+      autoFocus: autoFocus,
+      lensZoom: lensZoom
     )
   }
   func toList() -> [Any?] {
@@ -353,13 +359,14 @@ struct CaptureSettings: Hashable, CustomStringConvertible {
       iso,
       cropToPlayableBand,
       autoFocus,
+      lensZoom,
     ]
   }
   static func == (lhs: CaptureSettings, rhs: CaptureSettings) -> Bool {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return CaptureApiPigeonInternal.deepEquals(lhs.role, rhs.role) && CaptureApiPigeonInternal.deepEquals(lhs.width, rhs.width) && CaptureApiPigeonInternal.deepEquals(lhs.height, rhs.height) && CaptureApiPigeonInternal.deepEquals(lhs.fps, rhs.fps) && CaptureApiPigeonInternal.deepEquals(lhs.bitrateBps, rhs.bitrateBps) && CaptureApiPigeonInternal.deepEquals(lhs.shutterDenominator, rhs.shutterDenominator) && CaptureApiPigeonInternal.deepEquals(lhs.iso, rhs.iso) && CaptureApiPigeonInternal.deepEquals(lhs.cropToPlayableBand, rhs.cropToPlayableBand) && CaptureApiPigeonInternal.deepEquals(lhs.autoFocus, rhs.autoFocus)
+    return CaptureApiPigeonInternal.deepEquals(lhs.role, rhs.role) && CaptureApiPigeonInternal.deepEquals(lhs.width, rhs.width) && CaptureApiPigeonInternal.deepEquals(lhs.height, rhs.height) && CaptureApiPigeonInternal.deepEquals(lhs.fps, rhs.fps) && CaptureApiPigeonInternal.deepEquals(lhs.bitrateBps, rhs.bitrateBps) && CaptureApiPigeonInternal.deepEquals(lhs.shutterDenominator, rhs.shutterDenominator) && CaptureApiPigeonInternal.deepEquals(lhs.iso, rhs.iso) && CaptureApiPigeonInternal.deepEquals(lhs.cropToPlayableBand, rhs.cropToPlayableBand) && CaptureApiPigeonInternal.deepEquals(lhs.autoFocus, rhs.autoFocus) && CaptureApiPigeonInternal.deepEquals(lhs.lensZoom, rhs.lensZoom)
   }
 
   func hash(into hasher: inout Hasher) {
@@ -373,10 +380,11 @@ struct CaptureSettings: Hashable, CustomStringConvertible {
     CaptureApiPigeonInternal.deepHash(value: iso, hasher: &hasher)
     CaptureApiPigeonInternal.deepHash(value: cropToPlayableBand, hasher: &hasher)
     CaptureApiPigeonInternal.deepHash(value: autoFocus, hasher: &hasher)
+    CaptureApiPigeonInternal.deepHash(value: lensZoom, hasher: &hasher)
   }
 
   public var description: String {
-    return "CaptureSettings(role: \(String(describing: role)), width: \(String(describing: width)), height: \(String(describing: height)), fps: \(String(describing: fps)), bitrateBps: \(String(describing: bitrateBps)), shutterDenominator: \(String(describing: shutterDenominator)), iso: \(String(describing: iso)), cropToPlayableBand: \(String(describing: cropToPlayableBand)), autoFocus: \(String(describing: autoFocus)))"
+    return "CaptureSettings(role: \(String(describing: role)), width: \(String(describing: width)), height: \(String(describing: height)), fps: \(String(describing: fps)), bitrateBps: \(String(describing: bitrateBps)), shutterDenominator: \(String(describing: shutterDenominator)), iso: \(String(describing: iso)), cropToPlayableBand: \(String(describing: cropToPlayableBand)), autoFocus: \(String(describing: autoFocus)), lensZoom: \(String(describing: lensZoom)))"
   }
 }
 
@@ -769,6 +777,8 @@ protocol CaptureHostApi {
   /// Se resuelve con `AVCaptureDevice.DiscoverySession`, **nunca con una lista de
   /// modelos**: Veo Go rechazó el iPhone 17 Pro por tener una lista desactualizada.
   func hasUltraWideCamera() throws -> Bool
+  /// Las lentes físicas que tiene este iPhone, en la escala de la app Cámara (ADR 0035).
+  func availableLensZooms() throws -> [Double]
   /// Abre la cámara con los ajustes dados y devuelve lo que se aplicó de verdad.
   ///
   /// Tarda unos segundos: la cámara mide exposición y balance en automático antes de
@@ -967,6 +977,20 @@ class CaptureHostApiSetup {
       }
     } else {
       hasUltraWideCameraChannel.setMessageHandler(nil)
+    }
+    /// Las lentes físicas que tiene este iPhone, en la escala de la app Cámara (ADR 0035).
+    let availableLensZoomsChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.availableLensZooms\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      availableLensZoomsChannel.setMessageHandler { _, reply in
+        do {
+          let result = try api.availableLensZooms()
+          reply(wrapResult(result))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      availableLensZoomsChannel.setMessageHandler(nil)
     }
     /// Abre la cámara con los ajustes dados y devuelve lo que se aplicó de verdad.
     ///

@@ -30,6 +30,12 @@ public enum FullLensView {
     /// El zoom de «la lente entera»: el 0,5× de la ultra gran angular.
     public static let fullLensZoom = 0.5
 
+    /// El campo horizontal de una lente física con su zoom aplicado: `videoFieldOfView` es el del
+    /// formato sin zoom, en rad, y `zoomFactor` cierra el plano de imagen (ADR 0035).
+    public static func lensHfovRad(formatHfovRad: Double, zoomFactor: Double) -> Double {
+        2 * atan(tan(formatHfovRad / 2) / max(zoomFactor, 1))
+    }
+
     /// El campo de visión horizontal, en rad, del zoom `zoom` de la app Cámara del iPhone
     /// (1 es la cámara principal; 2, el doble de cerca).
     public static func hfovRad(zoom: Double) -> Double {

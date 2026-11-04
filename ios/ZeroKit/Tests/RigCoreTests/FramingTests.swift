@@ -94,6 +94,26 @@ final class FramingTests: XCTestCase {
         XCTAssertEqual(try espacio.view(c.framing()).yawRad, -0.5, accuracy: 1e-9)
     }
 
+    func testLaLenteRealCambiaLasIntrinsecasDeSuLadoYLosTopes() throws {
+        let rig = try RectilinearViewTests.rig(from: Golden.loadDocument(named: "framing.json").cases[0].inputs)
+        let campo = FullLensView.lensHfovRad(formatHfovRad: 70 * .pi / 180, zoomFactor: 1)
+        XCTAssertEqual(campo, 70 * .pi / 180, accuracy: 1e-12)
+        let doble = FullLensView.lensHfovRad(formatHfovRad: 70 * .pi / 180, zoomFactor: 2)
+        XCTAssertEqual(tan(doble / 2), tan(35 * .pi / 180) / 2, accuracy: 1e-12)
+
+        let intr = try CameraIntrinsics.fromHfov(width: 3840, height: 2160, hfovRad: campo)
+        let conLente = rig.withIntrinsics(.right, intrinsics: intr)
+        XCTAssertEqual(conLente.camera(.right).intrinsics, intr)
+        XCTAssertEqual(conLente.camera(.right).pose, rig.camera(.right).pose)
+        XCTAssertEqual(conLente.camera(.left).intrinsics, rig.camera(.left).intrinsics)
+
+        let e = try FramingSpace(camera: conLente.camera(.right), width: 1920, height: 1080, lensZoom: 1)
+        XCTAssertEqual(e.zoom(e.start(zoom: 1)), e.zoom(e.full()), accuracy: 1e-9, "1× es toda la lente")
+        XCTAssertEqual(e.zoom(e.start(zoom: 50)), 6, accuracy: 1e-9, "seis veces la lente")
+        XCTAssertFalse(e.soft(e.start(zoom: 4)))
+        XCTAssertTrue(e.soft(e.start(zoom: 4.5)))
+    }
+
     func testUnPanoramaImposibleNoSeMonta() throws {
         let rig = try RectilinearViewTests.rig(from: Golden.loadDocument(named: "framing.json").cases[0].inputs)
         let intr = rig.camera(.left).intrinsics

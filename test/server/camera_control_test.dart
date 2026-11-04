@@ -324,7 +324,7 @@ void main() {
         final HttpClientResponse tres = await mirar('program');
         expect(tres.statusCode, 503);
         expect(api.live!.viewers('program'), 2);
-        expect((await mirar('left')).statusCode, 404, reason: 'en vivo solo la vista general y el programa');
+        expect((await mirar('nada')).statusCode, 404, reason: 'en vivo solo las fuentes que hay');
       });
     });
   });

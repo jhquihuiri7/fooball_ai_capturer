@@ -301,7 +301,7 @@ final class CaptureEngine: NSObject {
     }
 
     func configure(_ settings: CaptureSettings) async throws -> AppliedCameraSettings {
-        guard let device = UltraWideCamera.discover() else {
+        guard let device = UltraWideCamera.discover(lensZoom: settings.lensZoom) else {
             throw CameraSetupError.noUltraWideCamera
         }
 

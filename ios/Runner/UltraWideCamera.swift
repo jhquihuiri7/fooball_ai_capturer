@@ -45,6 +45,18 @@ struct AppliedCameraSettings {
     var lensPosition: Float = 0
 }
 
+/// La lente física que se abrió, para la pasada de «Una cámara» (ADR 0035): su campo horizontal
+/// en rad, o nil con la ultra gran angular, que tiene las intrínsecas de `rig.json`.
+enum OpenLens {
+    private static let lock = NSLock()
+    private static var value: Double?
+
+    static var hfovRad: Double? {
+        get { lock.lock(); defer { lock.unlock() }; return value }
+        set { lock.lock(); value = newValue; lock.unlock() }
+    }
+}
+
 enum UltraWideCamera {
     /// La posición más lejana de la lente. AVFoundation la normaliza de 0 (lo más cerca) a
     /// 1 (lo más lejos), sin unidades ni distancia real, y **1 no es el infinito**: en el
@@ -68,6 +80,49 @@ enum UltraWideCamera {
         ).devices.first
     }
 
+    /// La cámara trasera para la lente `lensZoom` de la escala de la app Cámara (ADR 0035): la
+    /// ultra gran angular, el teleobjetivo si llega, o si no la principal.
+    static func discover(lensZoom: Double) -> AVCaptureDevice? {
+        guard lensZoom > FullLensView.fullLensZoom else { return discover() }
+        if let tele = telephoto(), let aumentos = telephotoZoom(tele), lensZoom >= aumentos { return tele }
+        return wideAngle() ?? discover()
+    }
+
+    private static func wideAngle() -> AVCaptureDevice? {
+        AVCaptureDevice.DiscoverySession(
+            deviceTypes: [.builtInWideAngleCamera], mediaType: .video, position: .back
+        ).devices.first
+    }
+
+    private static func telephoto() -> AVCaptureDevice? {
+        AVCaptureDevice.DiscoverySession(
+            deviceTypes: [.builtInTelephotoCamera], mediaType: .video, position: .back
+        ).devices.first
+    }
+
+    /// Los aumentos del teleobjetivo respecto a la principal, redondeados como en la app Cámara.
+    private static func telephotoZoom(_ tele: AVCaptureDevice) -> Double? {
+        guard let principal = wideAngle() else { return nil }
+        let medio = { (d: AVCaptureDevice) in tan(Double(d.activeFormat.videoFieldOfView) * .pi / 360) }
+        let aumentos = (medio(principal) / medio(tele)).rounded()
+        return aumentos > 2 ? aumentos : nil
+    }
+
+    /// Las lentes físicas de este iPhone: 0,5 si hay ultra, 1 y 2 con la principal, y el
+    /// teleobjetivo si lo hay.
+    static func availableLensZooms() -> [Double] {
+        var lentes: [Double] = []
+        if discover() != nil { lentes.append(FullLensView.fullLensZoom) }
+        if wideAngle() != nil { lentes += [1, 2] }
+        if let tele = telephoto(), let aumentos = telephotoZoom(tele) { lentes.append(aumentos) }
+        return lentes
+    }
+
+    /// Cuánto se cierra el sensor de `device` para llegar a `lensZoom`: el 2× de la principal.
+    private static func zoomFactor(on device: AVCaptureDevice, lensZoom: Double) -> Double {
+        device.deviceType == .builtInWideAngleCamera && lensZoom > 1 ? lensZoom : 1
+    }
+
     /// El formato más ajustado a lo pedido.
     ///
     /// Se busca coincidencia exacta de resolución: un 4K que en realidad sea 1080p
@@ -76,9 +131,10 @@ enum UltraWideCamera {
         for device: AVCaptureDevice,
         width: Int,
         height: Int,
-        fps: Int
+        fps: Int,
+        zoomFactor: Double = 1
     ) -> AVCaptureDevice.Format? {
-        device.formats.first { format in
+        let validos = device.formats.filter { format in
             let dimensions = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
             guard Int(dimensions.width) == width, Int(dimensions.height) == height else {
                 return false
@@ -87,6 +143,13 @@ enum UltraWideCamera {
                 range.minFrameRate <= Double(fps) && Double(fps) <= range.maxFrameRate
             }
         }
+        // Con zoom, mejor un formato que lo saque del sensor de 48 MP que uno que lo amplíe.
+        if zoomFactor > 1, let nativo = validos.first(where: {
+            $0.secondaryNativeResolutionZoomFactors.contains(CGFloat(zoomFactor))
+        }) {
+            return nativo
+        }
+        return validos.first
     }
 
     /// Aplica los ajustes del ADR 0012 y devuelve lo que quedó puesto.
@@ -98,7 +161,8 @@ enum UltraWideCamera {
         let height = Int(settings.height)
         let fps = Int(settings.fps)
 
-        guard let format = bestFormat(for: device, width: width, height: height, fps: fps) else {
+        let zoom = zoomFactor(on: device, lensZoom: settings.lensZoom)
+        guard let format = bestFormat(for: device, width: width, height: height, fps: fps, zoomFactor: zoom) else {
             throw CameraSetupError.noFormat(width: width, height: height, fps: fps)
         }
 
@@ -106,6 +170,14 @@ enum UltraWideCamera {
         defer { device.unlockForConfiguration() }
 
         device.activeFormat = format
+
+        // La lente real de «Una cámara» (ADR 0035): su campo sale del formato y del zoom, porque
+        // solo la ultra gran angular está calibrada.
+        device.videoZoomFactor = min(CGFloat(zoom), format.videoMaxZoomFactor)
+        OpenLens.hfovRad = settings.lensZoom > FullLensView.fullLensZoom
+            ? FullLensView.lensHfovRad(formatHfovRad: Double(format.videoFieldOfView) * .pi / 180,
+                                       zoomFactor: Double(device.videoZoomFactor))
+            : nil
 
         // Fijar el mismo mínimo y máximo desactiva la cadencia variable. Sin esto, con
         // poca luz el iPhone baja a 24 fps por su cuenta y las dos cámaras dejan de ir

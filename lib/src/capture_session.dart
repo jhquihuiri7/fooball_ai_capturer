@@ -202,8 +202,8 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
   final ProgramResolution resolution;
 
   /// Lo que se le pide al nativo al EMITIR: la elegida con una cámara; si no, 1080p.
-  /// El zoom de «Una cámara» (2026-10-30), como en la app Cámara: 0,5 es la lente entera.
-  /// Con el soporte de dos no cuenta.
+  /// La lente física de «Una cámara» (ADR 0035), en la escala de la app Cámara: 0,5 es la ultra
+  /// gran angular. Con el soporte de dos no cuenta: los dos móviles van en 0,5.
   final double zoom;
 
   /// `0,5×`, `1×`, `2×`.
@@ -619,7 +619,9 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
         return;
       }
       // Con «Una cámara», el foco sigue a la escena como la app Cámara del iPhone.
-      status = await _api.configure(settings ?? defaultSettings(role, autoFocus: singleCamera));
+      status = await _api.configure(
+        settings ?? defaultSettings(role, autoFocus: singleCamera, lensZoom: singleCamera ? zoom : singleDefaultZoom),
+      );
       final String? wrong = _whatIsWrong(status!);
       if (wrong != null) {
         _set(SessionPhase.fallo, problem: wrong);
@@ -1079,7 +1081,7 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
 
 /// Los ajustes del ADR 0012. No son preferencias: cambiarlos invalida la calibración.
 /// `autoFocus`: el foco continuo de «Una cámara» (sin calibración que proteger).
-CaptureSettings defaultSettings(CameraRole role, {bool autoFocus = false}) {
+CaptureSettings defaultSettings(CameraRole role, {bool autoFocus = false, double lensZoom = singleDefaultZoom}) {
   return CaptureSettings(
     role: role,
     width: 3840,
@@ -1094,5 +1096,6 @@ CaptureSettings defaultSettings(CameraRole role, {bool autoFocus = false}) {
     iso: 200,
     cropToPlayableBand: true,
     autoFocus: autoFocus,
+    lensZoom: lensZoom,
   );
 }

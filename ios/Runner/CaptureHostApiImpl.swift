@@ -90,6 +90,10 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
         engine.hasUltraWideCamera()
     }
 
+    func availableLensZooms() throws -> [Double] {
+        UltraWideCamera.availableLensZooms()
+    }
+
     func configure(settings: CaptureSettings) async throws -> CaptureStatus {
         do {
             _ = try await engine.configure(settings)

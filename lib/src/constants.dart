@@ -461,12 +461,12 @@ const String singleResolutionKey = 'zero.singleResolution';
 /// Dónde se guarda el zoom de «Una cámara» (2026-10-30), como número: 0.5, 1 o 2.
 const String singleZoomKey = 'zero.singleZoom';
 
-/// Los zooms de «Una cámara», como en la app Cámara del iPhone: 0,5× es la lente entera (la
-/// ultra gran angular), 1× el campo de la cámara principal y 2× el doble de cerca, que amplía
-/// y se ve más blando. El nativo los traduce a un campo de visión (`FullLensView`).
+/// Las lentes de «Una cámara» si el nativo no dice otra cosa, en la escala de la app Cámara del
+/// iPhone: 0,5× es la ultra gran angular, 1× la principal y 2× la principal con el recorte del
+/// sensor (ADR 0035). El zoom virtual va encima, desde el mando.
 const List<double> singleZooms = <double>[0.5, 1, 2];
 
-/// El zoom de partida: la lente entera, como hasta el 2026-10-30.
+/// La lente de partida: la ultra gran angular, como hasta el 2026-11-03.
 const double singleDefaultZoom = 0.5;
 
 /// PHONE_DISK_RESERVE_GB (IOS-57) en bytes: lo que tiene que quedar libre para que la

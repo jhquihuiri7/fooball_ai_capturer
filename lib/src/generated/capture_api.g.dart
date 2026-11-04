@@ -217,6 +217,7 @@ class CaptureSettings {
     required this.iso,
     required this.cropToPlayableBand,
     required this.autoFocus,
+    required this.lensZoom,
   });
 
   CameraRole role;
@@ -254,6 +255,11 @@ class CaptureSettings {
   /// abrir la cámara y se congela, porque la calibración cuenta con una focal fija.
   bool autoFocus;
 
+  /// La lente física, en la escala de la app Cámara (ADR 0035): 0,5 es la ultra gran angular,
+  /// 1 la principal, 2 la principal con el recorte del sensor, y más el teleobjetivo si lo hay.
+  /// Con el soporte de dos, siempre 0,5: el cosido necesita todo el ancho.
+  double lensZoom;
+
   List<Object?> _toList() {
     return <Object?>[
       role,
@@ -265,6 +271,7 @@ class CaptureSettings {
       iso,
       cropToPlayableBand,
       autoFocus,
+      lensZoom,
     ];
   }
 
@@ -283,6 +290,7 @@ class CaptureSettings {
       iso: result[6]! as int,
       cropToPlayableBand: result[7]! as bool,
       autoFocus: result[8]! as bool,
+      lensZoom: result[9]! as double,
     );
   }
 
@@ -295,7 +303,7 @@ class CaptureSettings {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(role, other.role) && _deepEquals(width, other.width) && _deepEquals(height, other.height) && _deepEquals(fps, other.fps) && _deepEquals(bitrateBps, other.bitrateBps) && _deepEquals(shutterDenominator, other.shutterDenominator) && _deepEquals(iso, other.iso) && _deepEquals(cropToPlayableBand, other.cropToPlayableBand) && _deepEquals(autoFocus, other.autoFocus);
+    return _deepEquals(role, other.role) && _deepEquals(width, other.width) && _deepEquals(height, other.height) && _deepEquals(fps, other.fps) && _deepEquals(bitrateBps, other.bitrateBps) && _deepEquals(shutterDenominator, other.shutterDenominator) && _deepEquals(iso, other.iso) && _deepEquals(cropToPlayableBand, other.cropToPlayableBand) && _deepEquals(autoFocus, other.autoFocus) && _deepEquals(lensZoom, other.lensZoom);
   }
 
   @override
@@ -304,7 +312,7 @@ class CaptureSettings {
 
   @override
   String toString() {
-    return 'CaptureSettings(role: $role, width: $width, height: $height, fps: $fps, bitrateBps: $bitrateBps, shutterDenominator: $shutterDenominator, iso: $iso, cropToPlayableBand: $cropToPlayableBand, autoFocus: $autoFocus)';
+    return 'CaptureSettings(role: $role, width: $width, height: $height, fps: $fps, bitrateBps: $bitrateBps, shutterDenominator: $shutterDenominator, iso: $iso, cropToPlayableBand: $cropToPlayableBand, autoFocus: $autoFocus, lensZoom: $lensZoom)';
   }
 }
 
@@ -764,6 +772,26 @@ class CaptureHostApi {
     )
     ;
     return pigeonVar_replyValue! as bool;
+  }
+
+  /// Las lentes físicas que tiene este iPhone, en la escala de la app Cámara (ADR 0035).
+  Future<List<double>> availableLensZooms() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.CaptureHostApi.availableLensZooms$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return (pigeonVar_replyValue! as List<Object?>).cast<double>();
   }
 
   /// Abre la cámara con los ajustes dados y devuelve lo que se aplicó de verdad.

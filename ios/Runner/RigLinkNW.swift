@@ -1536,7 +1536,15 @@ final class SplitBench {
         guard let pipeline = pipelineProvider() else { return false }
         let ring = pipeline.ring
         do {
-            let (modelo, fuente) = try Self.loadRig(width: ring.width, height: ring.height, env: env)
+            var (modelo, fuente) = try Self.loadRig(width: ring.width, height: ring.height, env: env)
+            // «Una cámara» con una lente que no es la ultra (ADR 0035): sus intrínsecas salen de su
+            // campo. Con una lente sola no hay costura que alinear; la pose sigue siendo la del lado.
+            if config.singleCamera, let campo = OpenLens.hfovRad {
+                modelo = modelo.withIntrinsics(side, intrinsics: try CameraIntrinsics.fromHfov(
+                    width: ring.width, height: ring.height, hfovRad: campo
+                ))
+                fuente = "lente real"
+            }
             guard let ctx = MetalContext() else { return false }
             // «Una cámara»: el encuadre a mano del mando (ADR 0033), que arranca en el zoom que
             // eligió el operador, y la vista general para las miniaturas.
@@ -3400,7 +3408,7 @@ final class FramingHub {
     func mount(owner: AnyObject, rig: RigModel, side: CameraSide, context: MetalContext, zoom: Double,
                width: Int, height: Int) {
         do {
-            let espacio = try FramingSpace(camera: rig.camera(side), width: width, height: height)
+            let espacio = try FramingSpace(camera: rig.camera(side), width: width, height: height, lensZoom: zoom)
             // La vista general: la lente entera por su eje, al tamaño de la miniatura (el
             // mismo campo que a 1080p, porque la relación de aspecto es la misma).
             let general = espacio.overview

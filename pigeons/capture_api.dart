@@ -132,6 +132,7 @@ class CaptureSettings {
     required this.iso,
     required this.cropToPlayableBand,
     required this.autoFocus,
+    required this.lensZoom,
   });
 
   final CameraRole role;
@@ -167,6 +168,11 @@ class CaptureSettings {
   /// Jhonatan): con «Una cámara (sin pareja)». Con el soporte de dos, el foco se mide al
   /// abrir la cámara y se congela, porque la calibración cuenta con una focal fija.
   final bool autoFocus;
+
+  /// La lente física, en la escala de la app Cámara (ADR 0035): 0,5 es la ultra gran angular,
+  /// 1 la principal, 2 la principal con el recorte del sensor, y más el teleobjetivo si lo hay.
+  /// Con el soporte de dos, siempre 0,5: el cosido necesita todo el ancho.
+  final double lensZoom;
 }
 
 /// Lo que la cámara consiguió aplicar de verdad.
@@ -325,6 +331,9 @@ abstract class CaptureHostApi {
   /// Se resuelve con `AVCaptureDevice.DiscoverySession`, **nunca con una lista de
   /// modelos**: Veo Go rechazó el iPhone 17 Pro por tener una lista desactualizada.
   bool hasUltraWideCamera();
+
+  /// Las lentes físicas que tiene este iPhone, en la escala de la app Cámara (ADR 0035).
+  List<double> availableLensZooms();
 
   /// Abre la cámara con los ajustes dados y devuelve lo que se aplicó de verdad.
   ///

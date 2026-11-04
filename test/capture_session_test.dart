@@ -1280,6 +1280,18 @@ void main() {
       expect(singleZooms.map(CaptureSession.zoomLabel), <String>['0,5×', '1×', '2×']);
     });
 
+    test('ADR 0035: la cámara se abre con la lente real, y con dos móviles siempre en 0,5×', () async {
+      final FakeCaptureApi una = FakeCaptureApi();
+      await CaptureSession(role: CameraRole.left, api: una, rigApi: FakeRigApi(), linkMode: LinkMode.single, zoom: 2)
+          .prepare();
+      expect(una.lastSettings!.lensZoom, 2);
+
+      final FakeCaptureApi dos = FakeCaptureApi();
+      await CaptureSession(role: CameraRole.left, api: dos, rigApi: FakeRigApi(), linkMode: LinkMode.aware, zoom: 2)
+          .prepare();
+      expect(dos.lastSettings!.lensZoom, singleDefaultZoom);
+    });
+
     test('2026-10-30: el soporte de dos pide siempre la lente entera aunque le llegue otro zoom', () async {
       final FakeRigApi rig = FakeRigApi();
       final CaptureSession session = CaptureSession(

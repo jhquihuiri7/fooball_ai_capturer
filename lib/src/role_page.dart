@@ -81,6 +81,8 @@ class _RolePageState extends State<RolePage> {
   /// único que se elige en ese modo. Se guarda; sin nada, 1080p.
   ProgramResolution _resolution = ProgramResolution.p1080;
   double _zoom = singleDefaultZoom;
+  /// Las lentes físicas de este iPhone (ADR 0035); hasta que conteste el nativo, las de siempre.
+  List<double> _lenses = singleZooms;
 
   bool _searching = false;
   _ServerOrigin _origin = _ServerOrigin.none;
@@ -196,7 +198,15 @@ class _RolePageState extends State<RolePage> {
         setState(() => _resolution = r);
       }
       final double? zoom = prefs.getDouble(singleZoomKey);
-      if (zoom != null && singleZooms.contains(zoom) && mounted) {
+      try {
+        final List<double> lentes = await _api.availableLensZooms();
+        if (lentes.isNotEmpty && mounted) {
+          setState(() => _lenses = lentes);
+        }
+      } on Exception {
+        // Sin nativo (tests): las de siempre.
+      }
+      if (zoom != null && _lenses.contains(zoom) && mounted) {
         setState(() => _zoom = zoom);
       }
     } on Exception {
@@ -579,6 +589,7 @@ class _RolePageState extends State<RolePage> {
                       resolution: _resolution,
                       onResolution: (ProgramResolution r) => unawaited(_setResolution(r)),
                       zoom: _zoom,
+                      zooms: _lenses,
                       onZoom: (double z) => unawaited(_setZoom(z)),
                     ),
                     const SizedBox(height: ZeroMetrics.innerGap),
@@ -704,6 +715,7 @@ extension on _RolePageState {
                       resolution: _resolution,
                       onResolution: (ProgramResolution r) => unawaited(_setResolution(r)),
                       zoom: _zoom,
+                      zooms: _lenses,
                       onZoom: (double z) => unawaited(_setZoom(z)),
                     ),
                     const SizedBox(height: ZeroMetrics.innerGap),
@@ -789,12 +801,14 @@ class _ResolutionCard extends StatelessWidget {
     required this.resolution,
     required this.onResolution,
     required this.zoom,
+    required this.zooms,
     required this.onZoom,
   });
 
   final ProgramResolution resolution;
   final ValueChanged<ProgramResolution> onResolution;
   final double zoom;
+  final List<double> zooms;
   final ValueChanged<double> onZoom;
 
   @override
@@ -818,7 +832,7 @@ class _ResolutionCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          _ZoomRow(zoom: zoom, onZoom: onZoom),
+          _ZoomRow(zoom: zoom, zooms: zooms, onZoom: onZoom),
           const SizedBox(height: 10),
           Text(
             nota,
@@ -1090,6 +1104,7 @@ class _LinkCard extends StatelessWidget {
     required this.resolution,
     required this.onResolution,
     required this.zoom,
+    required this.zooms,
     required this.onZoom,
   });
 
@@ -1102,6 +1117,7 @@ class _LinkCard extends StatelessWidget {
 
   /// El zoom de «Una cámara» (2026-10-30), que también solo se ve con ella elegida.
   final double zoom;
+  final List<double> zooms;
   final ValueChanged<double> onZoom;
 
   static const List<(ProgramResolution, String)> _resolutions = <(ProgramResolution, String)>[
@@ -1171,7 +1187,7 @@ class _LinkCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            _ZoomRow(zoom: zoom, onZoom: onZoom),
+            _ZoomRow(zoom: zoom, zooms: zooms, onZoom: onZoom),
           ],
           const SizedBox(height: 10),
           Text(
@@ -1189,22 +1205,33 @@ class _LinkCard extends StatelessWidget {
   }
 }
 
-/// El zoom de «Una cámara» (2026-10-30, lo pidió Alexander: la lente entera se veía como el
-/// 0,5× de la app Cámara). Las mismas píldoras que la app Cámara.
+/// La lente de «Una cámara» (ADR 0035, lo pidió Alexander: quería el zoom de la cámara, no un
+/// recorte). Las mismas píldoras que la app Cámara, y solo las que tiene este iPhone.
 class _ZoomRow extends StatelessWidget {
-  const _ZoomRow({required this.zoom, required this.onZoom});
+  const _ZoomRow({required this.zoom, required this.zooms, required this.onZoom});
 
   final double zoom;
+  final List<double> zooms;
   final ValueChanged<double> onZoom;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        for (final double z in singleZooms) ...<Widget>[
-          if (z != singleZooms.first) const SizedBox(width: 8),
-          ZeroPill(label: CaptureSession.zoomLabel(z), selected: zoom == z, onTap: () => onZoom(z)),
-        ],
+        Row(
+          children: <Widget>[
+            for (final double z in zooms) ...<Widget>[
+              if (z != zooms.first) const SizedBox(width: 8),
+              ZeroPill(label: CaptureSession.zoomLabel(z), selected: zoom == z, onTap: () => onZoom(z)),
+            ],
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'La lente real del iPhone, antes de EMITIR. El zoom fino, durante el directo, va en el mando.',
+          style: ZeroType.data(size: 11, weight: FontWeight.w400, color: ZeroColors.inkTertiary, height: 1.5),
+        ),
       ],
     );
   }

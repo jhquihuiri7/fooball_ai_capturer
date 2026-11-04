@@ -125,6 +125,12 @@ class FakeCaptureApi extends CaptureHostApi {
   @override
   Future<bool> hasUltraWideCamera() async => ultraWide;
 
+  @override
+  Future<List<double>> availableLensZooms() async => lensZooms;
+
+  /// Las lentes que dice tener el móvil.
+  List<double> lensZooms = <double>[0.5, 1, 2];
+
   /// Los ajustes con los que se abrió la cámara la última vez.
   CaptureSettings? lastSettings;
 
