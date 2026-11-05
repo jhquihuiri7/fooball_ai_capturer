@@ -375,9 +375,15 @@ public enum RigConstants {
     /// (Python: `RIG_CALIB_NEAR_RATIO_TEST`.)
     public static let rigCalibNearRatioTest: Double = 0.72
 
-    /// Puntos SIFT por imagen en la segunda pasada. Solo corre si la estricta falla: tarda ~2 s a 4K.
+    /// Puntos SIFT por imagen en la segunda pasada, que solo corre si la estricta falla.
     /// (Python: `RIG_CALIB_NEAR_MAX_FEATURES`.)
-    public static let rigCalibNearMaxFeatures: Int = 12000
+    public static let rigCalibNearMaxFeatures: Int = 4000
+
+    /// Píxeles: el ancho al que se reduce cada foto en la segunda pasada. SIFT dobla la imagen y guarda
+    /// su pirámide en coma flotante: a 4K el pico fue de 1,9 GB y mató al hub en un VPS de 2 GB
+    /// (2026-11-04). Medido con 3 parejas: 4K, 85-94 puntos y 1 938 MB; 1280, 74-86 puntos y 302 MB.
+    /// (Python: `RIG_CALIB_NEAR_MAX_WIDTH_PX`.)
+    public static let rigCalibNearMaxWidthPx: Int = 1280
 
     /// Hipótesis que prueba RANSAC. Una rotación se resuelve con dos direcciones, así que con
     /// la mitad de emparejamientos falsos cada hipótesis acierta con probabilidad 0.25, y 500
