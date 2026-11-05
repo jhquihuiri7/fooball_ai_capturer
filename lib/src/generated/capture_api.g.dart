@@ -1263,6 +1263,26 @@ class CaptureHostApi {
     return pigeonVar_replyValue! as String;
   }
 
+  /// Con quién está emparejado este móvil por Wi-Fi Aware, separado por comas; vacío si con nadie.
+  Future<String> pairedDevices() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.football_ai_capture.CaptureHostApi.pairedDevices$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as String;
+  }
+
   /// El secreto del mando del partido `matchId`: HMAC-SHA256(S, "zero-control-v1 " ‖
   /// match_id) en base64url (ADR 0023 §3). Lo deriva el nativo, así que el secreto del
   /// soporte S no pasa nunca a Dart. Sin S (un móvil que nunca lo recibió, en «Una

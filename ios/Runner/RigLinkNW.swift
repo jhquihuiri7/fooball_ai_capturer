@@ -1581,17 +1581,20 @@ final class SplitBench {
             overlap = OverlapMeans(rig: modelo, side: side, width: ring.width, height: ring.height,
                                    mountedUpsideDown: side == .left)
 
+            var pintores: [MetalPartRenderer] = []
             // Esclavo: su parte. «Una cámara» no tiene a quién mandarla.
             if !config.singleCamera {
                 let enc = try VideoEncoder(
                     width: Self.programWidth, height: Self.programHeight,
                     bitrateBps: config.partBitrateBps, viewId: side == .left ? 0 : 1
                 )
+                let parte = try MetalPartRenderer(context: ctx, rig: modelo, side: side,
+                                                  width: Self.programWidth, height: Self.programHeight)
+                pintores.append(parte)
                 let s = SlavePartStage(
                     side: side,
                     resolver: SlaveViewResolver(frameDurationMs: 1000 / Self.fps),
-                    renderer: try MetalPartRenderer(context: ctx, rig: modelo, side: side,
-                                                    width: Self.programWidth, height: Self.programHeight),
+                    renderer: parte,
                     encoder: enc
                 )
                 // RIG_SPLIT_SLAVE_NO_PARTS=1: el esclavo renderiza y codifica igual, pero manda
@@ -1630,10 +1633,13 @@ final class SplitBench {
                 kCVPixelBufferMetalCompatibilityKey: true,
             ] as CFDictionary, &pool)
             guard let pool else { return false }
+            let propia = try MetalPartRenderer(context: ctx, rig: modelo, side: side,
+                                               width: Self.programWidth, height: Self.programHeight)
+            pintores.append(propia)
+            FramingHub.shared.register(renderers: pintores)
             let m = MasterProgramStage(
                 masterSide: side, frameDurationMs: 1000 / Self.fps,
-                renderer: try MetalPartRenderer(context: ctx, rig: modelo, side: side,
-                                                width: Self.programWidth, height: Self.programHeight),
+                renderer: propia,
                 composer: try {
                     let c = try MetalProgramComposer(context: ctx, masterSide: side,
                                                      width: Self.programWidth, height: Self.programHeight)
@@ -1792,6 +1798,18 @@ final class SplitBench {
 
     /// El barrido de guion: un seno en yaw que cruza la costura, a pitch y HFOV fijos; con
     /// RIG_SPLIT_SCRIPT=spk04, el de SPK-04 (Spk04Script), que además abre y cierra el zoom.
+    /// Si las dos lentes no se tocan, la vista del director se corre a la lente de su lado: el
+    /// programa no enseña el hueco.
+    private static func outOfGap(_ v: ViewCommand, _ c: FramingController?) -> ViewCommand {
+        guard let e = c?.space, e.hasGap,
+              let w = try? e.view(e.framing(yawRad: v.yawRad, pitchRad: v.pitchRad, hfovRad: v.hfovRad))
+        else { return v }
+        return ViewCommand(
+            targetRigMs: v.targetRigMs, viewId: v.viewId, yawRad: w.yawRad, pitchRad: w.pitchRad,
+            hfovRad: w.hfovRad, sides: v.sides, seamYawRad: v.seamYawRad, featherRad: v.featherRad, gains: v.gains
+        )
+    }
+
     private func scriptedView(_ t: Int64) -> ViewCommand {
         guard let rig else { fatalError("sin soporte") }
         let a = number("RIG_SPLIT_SWEEP_DEG", 30) * .pi / 180
@@ -1970,7 +1988,11 @@ final class SplitBench {
             for instante in reloj.gridInstants(after: lastDirectorT, through: objetivo,
                                                limit: Self.directorCatchUpInstants) {
                 if let (_, hist) = try? director.tick(targetRigMs: instante), !aMano {
-                    hist.forEach { if history.view(at: $0.targetRigMs) == nil { history.append(ViewWire.quantized($0)) } }
+                    hist.forEach {
+                        if history.view(at: $0.targetRigMs) == nil {
+                            history.append(ViewWire.quantized(Self.outOfGap($0, encuadre)))
+                        }
+                    }
                     if let v = hist.last {
                         encuadre?.follow(yawRad: v.yawRad, pitchRad: v.pitchRad, hfovRad: v.hfovRad)
                     }
@@ -3162,11 +3184,15 @@ final class CalibrationPairs {
         session.onCalibrationCapture = { [weak self] destinos in
             self?.run(targets: destinos) { resumen in NSLog("[calib] esclavo: %@", resumen) }
         }
-        // «Calibrar cosido» (ADR 0035): el maestro manda aquí el `rig.json` nuevo.
+        session.onCalibrationCredentials = { RigCalibrator.shared.useCredentials($0) }
+        session.onCalibrationProblem = { RigCalibrator.shared.peerProblem($0) }
+        // «Calibrar cosido» y el ajuste a mano (ADR 0035): el maestro manda aquí la geometría nueva,
+        // que se ve en el fotograma siguiente.
         session.onRigFile = { texto in
             do {
                 try RigFile.install(text: texto)
-                NSLog("[calib] rig.json nuevo guardado; se aplica al volver a EMITIR")
+                FramingHub.shared.applyLive(try RigFile.model())
+                NSLog("[calib] geometría nueva guardada y aplicada")
             } catch {
                 NSLog("[calib] el rig.json que llegó no vale: %@", "\(error)")
             }
@@ -3176,6 +3202,16 @@ final class CalibrationPairs {
     /// El reparto del `rig.json` nuevo al otro móvil.
     func distribute(rigFile texto: String) {
         session.send(rigFile: texto)
+    }
+
+    var isLinked: Bool {
+        if case .connected = session.state { return true }
+        return false
+    }
+
+    /// El esclavo le dice al maestro que no pudo subir sus fotos.
+    func report(problem motivo: String) {
+        session.send(calibrationProblem: motivo)
     }
 
     /// El reloj del soporte de este móvil, en ms: el del host más el desfase del enlace.
@@ -3196,7 +3232,7 @@ final class CalibrationPairs {
         // maestro y el esclavo queda a la distancia de la fase, no de medio fotograma.
         let base = engine.rigPipeline?.ring.availableRigMs().last ?? nowRigMs()
         let destinos = CalibrationPlan.targets(nowRigMs: base)
-        session.send(calibrationCapture: destinos)
+        session.send(calibrationCapture: destinos, credentials: RigCalibrator.shared.credentialsForPeer())
         run(targets: destinos, completion: completion)
     }
 
@@ -3288,9 +3324,41 @@ enum RigFile {
     /// las demás, ADR 0035, enmienda del 2026-11-04) si es un soporte válido; el anterior queda
     /// con `.previo`. Si no vale, no toca nada.
     static func install(text: String, lens: RigLens = OpenLens.lens) throws {
-        let docs = try FileManager.default.url(for: .documentDirectory, in: .userDomainMask,
-                                               appropriateFor: nil, create: true)
-        let nombre = lens.rigFileName
+        try install(text: text, name: lens.rigFileName)
+    }
+
+    private static func documents() throws -> URL {
+        try FileManager.default.url(for: .documentDirectory, in: .userDomainMask,
+                                    appropriateFor: nil, create: true)
+    }
+
+    /// Si es el nombre de una geometría: `rig.json`, `rig-1x.json`, `rig-2x.json`…
+    static func isRigFileName(_ nombre: String) -> Bool {
+        nombre == RigLens.ultraWide.rigFileName || nombre.range(of: #"^rig-[0-9.]+x\.json$"#, options: .regularExpression) != nil
+    }
+
+    /// Las geometrías guardadas, por nombre: las dice el `hello` para que los dos cosan igual.
+    static func allFiles() -> [String: String] {
+        guard let docs = try? documents(),
+              let nombres = try? FileManager.default.contentsOfDirectory(atPath: docs.path)
+        else { return [:] }
+        var ficheros: [String: String] = [:]
+        for nombre in nombres where isRigFileName(nombre) {
+            ficheros[nombre] = try? String(contentsOf: docs.appendingPathComponent(nombre), encoding: .utf8)
+        }
+        return ficheros
+    }
+
+    /// La geometría de la lente abierta, leída del fichero.
+    static func model(lens: RigLens = OpenLens.lens) throws -> RigModel {
+        try RigModel.load(from: documents().appendingPathComponent(lens.rigFileName))
+    }
+
+    static func install(text: String, name nombre: String) throws {
+        guard isRigFileName(nombre) else { throw RigCalibrationError.server(0, "nombre de geometría raro: \(nombre)") }
+        let docs = try documents()
+        // Lo mismo que ya hay: nada que hacer, ni perder el `.previo`.
+        if (try? String(contentsOf: docs.appendingPathComponent(nombre), encoding: .utf8)) == text { return }
         let nuevo = docs.appendingPathComponent("\(nombre).nuevo")
         try Data(text.utf8).write(to: nuevo, options: .atomic)
         defer { try? FileManager.default.removeItem(at: nuevo) }
@@ -3311,6 +3379,10 @@ final class RigCalibrator: @unchecked Sendable {
     private let lock = NSLock()
     private var running = false
     private var statusText = ""
+    /// Lo que el maestro prestó para subir las fotos: el esclavo no necesita QR propio.
+    private var lent: (tunnelUrl: String, rigKey: String)?
+    /// Lo que dijo el esclavo si no pudo subir sus fotos.
+    private var peerProblemText: String?
 
     /// Cómo va, en JSON (`{state, detail}`); vacío si no se ha pedido.
     var status: String {
@@ -3328,6 +3400,37 @@ final class RigCalibrator: @unchecked Sendable {
         NSLog("[calib] %@: %@", estado, detalle)
     }
 
+    /// Las credenciales del maestro para el esclavo, en JSON; nil sin QR.
+    func credentialsForPeer() -> String? {
+        guard let e = try? VpsPairingKeychain.load(),
+              let datos = try? JSONSerialization.data(withJSONObject: ["url": e.tunnelUrl.absoluteString, "key": e.rigKey])
+        else { return nil }
+        return String(data: datos, encoding: .utf8)
+    }
+
+    func useCredentials(_ texto: String) {
+        guard let o = (try? JSONSerialization.jsonObject(with: Data(texto.utf8))) as? [String: String],
+              let url = o["url"], let key = o["key"]
+        else { return }
+        lock.lock(); lent = (url, key); lock.unlock()
+    }
+
+    func peerProblem(_ motivo: String) {
+        lock.lock(); peerProblemText = motivo; lock.unlock()
+    }
+
+    /// Mueve a mano la cámara del esclavo (el mando, «Ajustar el cosido»): se ve en el programa en
+    /// el fotograma siguiente y queda guardado en los dos móviles.
+    func nudgeSeam(yawDeg: Double, pitchDeg: Double, rollDeg: Double) throws {
+        guard let pares = ProgramHub.capture?.calibrationPairs, pares.isLinked else {
+            throw FramingError.invalid("sin enlace entre los dos móviles")
+        }
+        let texto = try FramingHub.shared.nudged(yawDeg: yawDeg, pitchDeg: pitchDeg, rollDeg: rollDeg)
+        try RigFile.install(text: texto)
+        pares.distribute(rigFile: texto)
+        set("done", "ajuste guardado en los dos móviles", running: false)
+    }
+
     /// Al arrancar otra pasada, lo de la anterior ya no cuenta: «vuelve a EMITIR» ya se hizo.
     func clearFinished() {
         lock.lock(); defer { lock.unlock() }
@@ -3340,6 +3443,7 @@ final class RigCalibrator: @unchecked Sendable {
         let ocupado = running
         lock.unlock()
         guard !ocupado else { return "ya se está calibrando" }
+        lock.lock(); peerProblemText = nil; lock.unlock()
         guard let pares = ProgramHub.capture?.calibrationPairs else { return "sin enlace entre los dos móviles" }
         guard (try? VpsPairingKeychain.load()) != nil else {
             return "falta el QR Soporte: calibrar necesita el VPS"
@@ -3371,7 +3475,9 @@ final class RigCalibrator: @unchecked Sendable {
                     let motivo = (error as? RigCalibrationError)?.description ?? "\(error)"
                     set("failed", motivo, running: false)
                 } else {
-                    NSLog("[calib] el esclavo no subió sus fotos: %@", "\(error)")
+                    let motivo = (error as? RigCalibrationError)?.description ?? "\(error)"
+                    NSLog("[calib] el esclavo no subió sus fotos: %@", motivo)
+                    pairs.report(problem: motivo)
                 }
             }
         }
@@ -3379,10 +3485,20 @@ final class RigCalibrator: @unchecked Sendable {
 
     private func work(id: Int64, stills: [CalibrationStillCapture.Still], side: CameraSide,
                       pairs: CalibrationPairs, isMaster: Bool) async throws {
-        guard let emparejado = try VpsPairingKeychain.load(),
-              let base = RigCalibrationClient.baseUrl(tunnelUrl: emparejado.tunnelUrl)
+        lock.lock()
+        let prestadas = lent
+        lock.unlock()
+        // El esclavo sube con lo que le prestó el maestro; si no llegó, con su QR.
+        var credenciales: (tunnelUrl: URL, rigKey: String)?
+        if !isMaster, let p = prestadas, let url = URL(string: p.tunnelUrl) {
+            credenciales = (url, p.rigKey)
+        }
+        if credenciales == nil, let e = try VpsPairingKeychain.load() {
+            credenciales = (e.tunnelUrl, e.rigKey)
+        }
+        guard let credenciales, let base = RigCalibrationClient.baseUrl(tunnelUrl: credenciales.tunnelUrl)
         else { throw RigCalibrationError.qrExpired }
-        let cliente = RigCalibrationClient(baseUrl: base, rigKey: emparejado.rigKey)
+        let cliente = RigCalibrationClient(baseUrl: base, rigKey: credenciales.rigKey)
         let elegidas = stride(from: 0, to: stills.count, by: RigCalibrationConstants.uploadEvery).map { stills[$0] }
         if isMaster { set("uploading", "subiendo las fotos al VPS", running: true) }
         for foto in elegidas {
@@ -3401,12 +3517,15 @@ final class RigCalibrator: @unchecked Sendable {
         set("solving", "calculando el cosido en el VPS", running: true)
         let hecho = try await cliente.solve(pairIds: elegidas.map {
             CalibrationUpload.pairId(calibrationId: id, targetRigMs: $0.targetRigMs)
+        }, peerProblem: { [self] in
+            lock.lock(); defer { lock.unlock() }
+            return peerProblemText
         })
         try RigFile.install(text: hecho.rigText)
         pairs.distribute(rigFile: hecho.rigText)
+        FramingHub.shared.applyLive(try RigFile.model())
         let error = String(format: "%.2f", hecho.residualDeg)
-        set("done", "cosido nuevo guardado (\(hecho.inliers) puntos, error \(error)°): para y vuelve a EMITIR para aplicarlo",
-            running: false)
+        set("done", "cosido nuevo aplicado (\(hecho.inliers) puntos, error \(error)°)", running: false)
     }
 }
 
@@ -3586,6 +3705,11 @@ final class FramingHub {
     private var overviewThumbnailer: Thumbnailer?
     private var mountOwner: ObjectIdentifier?
     private var panorama = false
+    /// La geometría en vigor, el lado de este móvil y quién pinta con ella: ajustar el cosido se
+    /// ve en el fotograma siguiente.
+    private var liveRig: RigModel?
+    private var liveSide: CameraSide?
+    private var liveRenderers: [MetalPartRenderer] = []
 
     /// Con dos cámaras: la vista general son dos planos, y cada móvil pinta el suyo.
     var isPanorama: Bool {
@@ -3616,12 +3740,46 @@ final class FramingHub {
         }
     }
 
+    func register(renderers: [MetalPartRenderer]) {
+        lock.lock(); defer { lock.unlock() }
+        liveRenderers = renderers
+    }
+
+    /// Pinta con esta geometría desde el fotograma siguiente.
+    func applyLive(_ rig: RigModel) {
+        lock.lock()
+        liveRig = rig
+        let pintores = liveRenderers + (overviewRenderer.map { [$0] } ?? [])
+        lock.unlock()
+        pintores.forEach { $0.update(rig: rig) }
+    }
+
+    /// La geometría con la cámara del otro móvil movida esos grados, en JSON. Solo se mueve la
+    /// suya: este móvil es la referencia y su parte no cambia.
+    func nudged(yawDeg: Double, pitchDeg: Double, rollDeg: Double) throws -> String {
+        lock.lock()
+        let rig = liveRig, lado = liveSide
+        lock.unlock()
+        guard let rig, let lado else { throw FramingError.invalid("sin programa en marcha") }
+        let otro: CameraSide = lado == .left ? .right : .left
+        let p = rig.camera(otro).pose
+        let radianes = Double.pi / 180
+        let nuevo = rig.withPose(otro, pose: CameraPose(
+            yawRad: p.yawRad + yawDeg * radianes,
+            pitchRad: p.pitchRad + pitchDeg * radianes,
+            rollRad: p.rollRad + rollDeg * radianes
+        ))
+        let datos = try JSONSerialization.data(withJSONObject: nuevo.toDictionary(), options: [.prettyPrinted, .sortedKeys])
+        lock.lock(); liveRig = nuevo; lock.unlock()
+        return String(decoding: datos, as: UTF8.self)
+    }
+
     /// Con dos cámaras (ADR 0035). Arranca en automático: encuadra el director. La vista
     /// general de este móvil es el plano de su lado, que mira a la mitad de ese lado, sin pitch.
     func mountPanorama(owner: AnyObject, rig: RigModel, side: CameraSide, context: MetalContext,
                        width: Int, height: Int) {
         do {
-            let espacio = try FramingSpace(rig: rig, width: width, height: height)
+            let espacio = try FramingSpace(rig: rig, width: width, height: height, lensZoom: OpenLens.lens.zoom)
             guard let planos = espacio.panorama else { return }
             RigCalibrator.shared.clearFinished()
             try install(
@@ -3663,6 +3821,9 @@ final class FramingHub {
         overviewThumbnailer = miniatura
         mountOwner = ObjectIdentifier(owner)
         panorama = enPanorama
+        liveRig = rig
+        liveSide = side
+        liveRenderers = []
         lock.unlock()
     }
 
@@ -3678,6 +3839,9 @@ final class FramingHub {
         overviewThumbnailer = nil
         mountOwner = nil
         panorama = false
+        liveRig = nil
+        liveSide = nil
+        liveRenderers = []
     }
 
     /// La vista general de `source` (un fotograma de la cámara) en JPEG, o el plano de este lado
@@ -3717,6 +3881,14 @@ final class FramingHub {
                     throw FramingError.invalid("con una cámara no hay director que encuadre")
                 }
                 c.setAuto()
+            } else if kind == "seam" {
+                guard c.space.panorama != nil else {
+                    throw FramingError.invalid("con una cámara no hay cosido que ajustar")
+                }
+                guard values.count == 3 else {
+                    throw FramingError.invalid("seam lleva 3 números y llegaron \(values.count)")
+                }
+                try RigCalibrator.shared.nudgeSeam(yawDeg: values[0], pitchDeg: values[1], rollDeg: values[2])
             } else if let destino = try Self.target(kind: kind, values: values, controller: c) {
                 c.go(to: destino, cut: cut)
             }

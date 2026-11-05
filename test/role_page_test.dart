@@ -70,7 +70,7 @@ void main() {
 
     await emparejar(tester);
 
-    expect(find.text('Sin emparejar.'), findsOneWidget);
+    expect(find.textContaining('Sin emparejar.'), findsOneWidget);
   });
 
   testWidgets('sin Wi-Fi Aware se dice por qué', (WidgetTester tester) async {

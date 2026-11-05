@@ -864,6 +864,8 @@ protocol CaptureHostApi {
   /// queda emparejado, o vacío si se cierra sin emparejar. Falla si el iPhone no tiene
   /// Wi-Fi Aware o falta el entitlement.
   func pairWithoutCable(role: CameraRole) async throws -> String
+  /// Con quién está emparejado este móvil por Wi-Fi Aware, separado por comas; vacío si con nadie.
+  func pairedDevices() async throws -> String
   /// El secreto del mando del partido `matchId`: HMAC-SHA256(S, "zero-control-v1 " ‖
   /// match_id) en base64url (ADR 0023 §3). Lo deriva el nativo, así que el secreto del
   /// soporte S no pasa nunca a Dart. Sin S (un móvil que nunca lo recibió, en «Una
@@ -1370,6 +1372,22 @@ class CaptureHostApiSetup {
       }
     } else {
       pairWithoutCableChannel.setMessageHandler(nil)
+    }
+    /// Con quién está emparejado este móvil por Wi-Fi Aware, separado por comas; vacío si con nadie.
+    let pairedDevicesChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.football_ai_capture.CaptureHostApi.pairedDevices\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      pairedDevicesChannel.setMessageHandler { _, reply in
+        Task { @MainActor in
+          do {
+            let result = try await api.pairedDevices()
+            reply(wrapResult(result))
+          } catch {
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      pairedDevicesChannel.setMessageHandler(nil)
     }
     /// El secreto del mando del partido `matchId`: HMAC-SHA256(S, "zero-control-v1 " ‖
     /// match_id) en base64url (ADR 0023 §3). Lo deriva el nativo, así que el secreto del

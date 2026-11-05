@@ -196,6 +196,12 @@ CameraNativeOrder cameraNativeOrder(
       return (kind: 'auto', values: const <double>[], cut: corte);
     case 'camera/calibrate':
       return (kind: 'calibrate', values: const <double>[], cut: corte);
+    case 'camera/seam':
+      final List<double> grados = numeros(<String>['yaw_deg', 'pitch_deg', 'roll_deg']);
+      if (grados.any((double g) => g.abs() > cameraSeamStepMaxDeg)) {
+        throw OrderError(400, 'el cosido se mueve hasta $cameraSeamStepMaxDeg grados por orden');
+      }
+      return (kind: 'seam', values: grados, cut: corte);
     case 'camera/preset':
       final String nombre = cameraPresetName(body);
       final CameraPreset? p = preset(nombre);

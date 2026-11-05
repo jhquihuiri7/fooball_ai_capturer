@@ -212,6 +212,11 @@
   .cam-cosido { margin: 10px 0; }
   .cam-cosido .btn { width: 100%; }
   .cam-cosido.falla .nota { color: var(--rojo, #e5484d); }
+  .cam-ajuste { margin-top: 10px; }
+  .cam-ajuste summary { cursor: pointer; font-weight: 700; padding: 6px 0; }
+  .ajuste-fila { display: grid; grid-template-columns: minmax(84px, 1fr) repeat(4, minmax(44px, 1fr)); gap: 6px; align-items: center; margin: 6px 0; }
+  .ajuste-fila .btn { width: auto; padding-left: 0; padding-right: 0; }
+  .aviso-soporte { background: var(--rojo); color: #fff; font-weight: 700; padding: 8px 12px; border-radius: 8px; margin-bottom: 8px; }
   .camara-estado { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0; }
   .camara-estado .zoom { font: 800 22px/1 var(--display); letter-spacing: .02em; }
   .camara-estado .chip { margin: 0; }
@@ -357,6 +362,7 @@
   <!-- ADR 0036: la barra de directo, en todas las pestañas. Lo que no puede esperar a cambiar de
        pestaña: el gol, el reloj y la jugada, y lo que pasa en el programa. -->
   <section class="directo" id="directo" aria-label="Directo">
+    <div class="aviso-soporte" id="aviso-soporte" role="alert" hidden></div>
     <div class="directo-marcador" data-tipos="football">
       <button type="button" class="btn primario mas-gol" data-gol="home,1" aria-label="Gol del local"><b>+</b><span>Gol</span></button>
       <div class="equipo local" id="local">Local</div>
@@ -609,6 +615,29 @@
       <button type="button" class="btn" id="cam-calibrar" data-propio>Calibrar cosido</button>
       <p class="nota" id="cam-calibrar-estado" aria-live="polite">Con el soporte ya montado, apuntando a algo lejano y con detalle, y sin nadie cerca. Tarda cerca de un minuto, necesita internet y el QR Soporte en los dos móviles. Se aplica al parar y volver a EMITIR.</p>
     </div>
+    <details class="cam-ajuste" id="cam-ajuste">
+      <summary>Ajustar el cosido a mano</summary>
+      <p class="nota">Por si calibrar no encuentra puntos. Mira la costura en el programa y mueve hasta que las líneas de la cancha casen; se guarda sola en los dos móviles.</p>
+      <button type="button" class="btn" id="cam-ver-costura" data-propio>Mirar la costura</button>
+      <div class="ajuste-fila"><span>Lado a lado</span>
+        <button type="button" class="btn" data-propio data-seam="yaw_deg,-1">−1°</button>
+        <button type="button" class="btn" data-propio data-seam="yaw_deg,-0.1">−0,1°</button>
+        <button type="button" class="btn" data-propio data-seam="yaw_deg,0.1">+0,1°</button>
+        <button type="button" class="btn" data-propio data-seam="yaw_deg,1">+1°</button>
+      </div>
+      <div class="ajuste-fila"><span>Arriba y abajo</span>
+        <button type="button" class="btn" data-propio data-seam="pitch_deg,-1">−1°</button>
+        <button type="button" class="btn" data-propio data-seam="pitch_deg,-0.1">−0,1°</button>
+        <button type="button" class="btn" data-propio data-seam="pitch_deg,0.1">+0,1°</button>
+        <button type="button" class="btn" data-propio data-seam="pitch_deg,1">+1°</button>
+      </div>
+      <div class="ajuste-fila"><span>Giro</span>
+        <button type="button" class="btn" data-propio data-seam="roll_deg,-1">−1°</button>
+        <button type="button" class="btn" data-propio data-seam="roll_deg,-0.1">−0,1°</button>
+        <button type="button" class="btn" data-propio data-seam="roll_deg,0.1">+0,1°</button>
+        <button type="button" class="btn" data-propio data-seam="roll_deg,1">+1°</button>
+      </div>
+    </details>
     <ul class="encuadres" id="cam-encuadres"></ul>
     <form class="campos fila-encuadre" id="form-encuadre">
       <label>Guardar este encuadre<input type="text" id="cam-nombre" maxlength="24" autocomplete="off" placeholder="Escenario" required></label>
@@ -1194,6 +1223,13 @@ $('cam-reset').addEventListener('click', e => ordenCamara('reset', { to: 'start'
 $('cam-entera').addEventListener('click', e => ordenCamara('reset', { to: 'full' }, e.currentTarget));
 $('cam-auto').addEventListener('click', e => ordenCamara('auto', {}, e.currentTarget));
 $('cam-calibrar').addEventListener('click', e => ordenCamara('calibrate', {}, e.currentTarget));
+$('cam-ver-costura').addEventListener('click', e => ordenCamara('frame', { x0: 0.42, y0: 0.45, x1: 0.58, y1: 0.65 }, e.currentTarget));
+$('cam-ajuste').addEventListener('click', e => {
+  const b = e.target.closest('[data-seam]');
+  if (!b) return;
+  const [k, d] = b.dataset.seam.split(',');
+  ordenCamara('seam', { yaw_deg: 0, pitch_deg: 0, roll_deg: 0, [k]: Number(d) }, b);
+});
 $('cam-mas').addEventListener('click', e => ordenCamara('zoom', { factor: ZOOM_PASO }, e.currentTarget));
 $('cam-menos').addEventListener('click', e => ordenCamara('zoom', { factor: 1 / ZOOM_PASO }, e.currentTarget));
 $('cam-corte').addEventListener('click', () => { corte = !corte; pintaCorte(); });
@@ -1959,6 +1995,9 @@ function valor(k, v) {
   return String(v);
 }
 function pintaEstado(s) {
+  // Lo que deja el programa mal se ve en todas las pestañas, no solo en la lista de estado.
+  $('aviso-soporte').hidden = !s.rig_warning;
+  $('aviso-soporte').textContent = s.rig_warning || '';
   $('estado').replaceChildren(...Object.entries(s).map(([k, v]) => {
     const d = document.createElement('div');
     // El aviso del soporte (ADR 0035, enmienda) solo sale cuando hay algo que avisar.

@@ -461,6 +461,13 @@ const String singleResolutionKey = 'zero.singleResolution';
 /// Dónde se guarda el zoom de «Una cámara» (2026-10-30), como número: 0.5, 1 o 2.
 const String singleZoomKey = 'zero.singleZoom';
 
+/// La lente con dos móviles, aparte de la de «Una cámara»: con la 1× guardada de otro día, dos
+/// móviles a 81° dejaban un hueco negro en el centro (prueba del 2026-11-04).
+const String rigLensKey = 'zero.rigLens';
+
+/// Lo más que mueve el cosido una orden del mando, en grados.
+const double cameraSeamStepMaxDeg = 5;
+
 /// Las lentes de «Una cámara» si el nativo no dice otra cosa, en la escala de la app Cámara del
 /// iPhone: 0,5× es la ultra gran angular, 1× la principal y 2× la principal con el recorte del
 /// sensor (ADR 0035). El zoom virtual va encima, desde el mando.

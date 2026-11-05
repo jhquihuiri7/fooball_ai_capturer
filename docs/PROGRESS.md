@@ -12,6 +12,38 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 
 ---
 
+
+## 2026-11-04 · IOS-127, IOS-128 e IOS-129 — lo que dejó ver la prueba de dos móviles de esa tarde · 🚧 instalado en los dos iPhone (1.0.0 (22), firma de desarrollo); falta verlo funcionar (ADR 0035, enmienda de la tarde)
+
+Lo medido en los dos iPhone (`program-live/split`, `link-diag`, `prefs`) y en el VPS:
+
+- **Hueco negro y zoom en 3×:** los dos con la lente 1× guardada de «Una cámara». Ver REF-72.
+- **El 16 Pro sin `rig.json`** (`rig: nominal` también el 3-nov) **y sin detector** (`detect_runs: 0`,
+  `director_pairing.complete: 0`): cada móvil cosía con una geometría, y el director veía un lado.
+- **Calibrar:** `falta la imagen right` en el VPS hasta parar; el esclavo solo lo apuntaba en su log.
+- **Foco:** congelado a 26 mm, el 17 salió desenfocado toda la prueba.
+- **Emparejar:** el primer intento no dejó rastro. El 17 llamaba al otro `id 2` el 3-nov e `id 1` hoy,
+  indicio de que iOS perdió el emparejado; la causa no se ha encontrado. Volver al 17 de maestro tardó
+  206 s, la espera de iOS ya medida al cambiar de lado (FB23509767).
+
+Qué se hizo:
+
+- **IOS-127:** el porte de REF-72 (`hasGap`, `lensZoom`), `zero.rigLens` aparte de `zero.singleZoom`,
+  foco continuo con lente larga, el director tampoco enseña el hueco y `rig_warning` en la barra de
+  directo del mando, en todas las pestañas.
+- **IOS-128:** `rig_files` en el `hello` (el esclavo toma las del maestro y el maestro las que le
+  faltan); el maestro presta sus credenciales del VPS cifradas con la clave de la sesión;
+  `calibration_problem` del esclavo al maestro; `MetalPartRenderer.update(rig:)`, con calibrar aplicado
+  sin parar; y `camera/seam` con «Ajustar el cosido a mano» y «Mirar la costura» en el mando.
+- **IOS-129:** «Probar al revés», con quién está emparejado y `bench/pair-diag-*.json`.
+- A mano: `players-centernet-mnv4.mlpackage` copiado del 17 al 16 Pro.
+
+**Queda fuera:** el detector no viene en la app: una instalación limpia desde TestFlight no lo trae.
+
+**Comprobado en el Mac:** `FramingTests` con los dorados nuevos, `RigLinkSessionTests`,
+`RigCalibrationClientTests` y `SlavePartStageTests`; `camera_control_test`, `capture_session_test` y
+`widget_test`. **En el iPhone, nada todavía.**
+
 ## 2026-11-04 · IOS-126 — las miniaturas de la cancha a 5 por segundo · 🚧 hecho; el Swift sin compilar y falta verlo en los iPhone
 
 Enmienda del ADR 0033 de football-ai, del 2026-11-04. El propietario: «no quiero que estén a un

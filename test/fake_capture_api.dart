@@ -259,6 +259,9 @@ class FakeCaptureApi extends CaptureHostApi {
   String? pairError;
 
   @override
+  Future<String> pairedDevices() async => '';
+
+  @override
   Future<String> pairWithoutCable(CameraRole role) async {
     pairRequests.add(role);
     if (pairError case final String error) {

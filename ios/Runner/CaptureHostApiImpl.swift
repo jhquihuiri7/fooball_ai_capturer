@@ -325,6 +325,17 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
             let nw = RigLinkNW(role: role, secret: secreto, prefersMaster: prefersMaster, medium: medio)
             // ADR 0035, enmienda del 2026-11-04: el `hello` dice al otro qué lente se abrió.
             nw.session.localLens = OpenLens.lens
+            // Los dos cosen con la misma geometría: va en el `hello` y se guarda antes de `connected`.
+            nw.session.localRigFiles = { RigFile.allFiles() }
+            nw.session.onRigFileNamed = { nombre, texto in
+                do {
+                    try RigFile.install(text: texto, name: nombre)
+                    if nombre == OpenLens.lens.rigFileName { FramingHub.shared.applyLive(try RigFile.model()) }
+                    NSLog("[enlace] geometría %@ del otro móvil guardada", nombre)
+                } catch {
+                    NSLog("[enlace] la geometría %@ del otro móvil no vale: %@", nombre, "\(error)")
+                }
+            }
             // IOS-13: la cámara lee el reloj nativo por fotograma, sin pasar por
             // Pigeon; a Dart solo le llega la estimación, para la pantalla y la fase.
             engine.rigClock = nw.clock
@@ -531,11 +542,37 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
         guard let encima = QrScanner.topViewController() else {
             throw PigeonError(code: "aware", message: "no hay pantalla sobre la que emparejar", details: nil)
         }
+        let lado = role == .left ? "left" : "right"
+        let empieza = Date()
+        let antes = await WiFiAwarePairing.pairedNames()
         do {
-            return try await WiFiAwarePairing.pair(side: role == .left ? .left : .right, from: encima)
+            let nombre = try await WiFiAwarePairing.pair(side: role == .left ? .left : .right, from: encima)
+            Self.logPairing(side: lado, startedAt: empieza, before: antes, after: await WiFiAwarePairing.pairedNames(), result: nombre, error: "")
+            return nombre
         } catch {
+            Self.logPairing(side: lado, startedAt: empieza, before: antes, after: await WiFiAwarePairing.pairedNames(), result: "", error: "\(error)")
             throw PigeonError(code: "aware", message: "\(error)", details: nil)
         }
+    }
+
+    /// Con quién está emparejado este móvil, separado por comas; vacío si con nadie.
+    @MainActor
+    func pairedDevices() async throws -> String {
+        await WiFiAwarePairing.pairedNames().joined(separator: ", ")
+    }
+
+    /// Lo que pasó al emparejar, en Documents/bench: el 2026-11-04 un intento fallido no dejó rastro.
+    private static func logPairing(side: String, startedAt: Date, before: [String], after: [String], result: String, error: String) {
+        guard let docs = try? FileManager.default.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+        else { return }
+        let dir = docs.appendingPathComponent("bench", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let cuerpo: [String: Any] = [
+            "side": side, "start_unix_s": Int(startedAt.timeIntervalSince1970), "elapsed_s": Date().timeIntervalSince(startedAt),
+            "paired_before": before, "paired_after": after, "result": result, "error": error,
+        ]
+        guard let datos = try? JSONSerialization.data(withJSONObject: cuerpo, options: [.prettyPrinted, .sortedKeys]) else { return }
+        try? datos.write(to: dir.appendingPathComponent("pair-diag-\(side)-\(Int(startedAt.timeIntervalSince1970)).json"))
     }
 
     func masterRecentPtsNs() async throws -> [Int64] {

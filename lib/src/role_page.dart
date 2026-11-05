@@ -82,6 +82,11 @@ class _RolePageState extends State<RolePage> {
   /// único que se elige en ese modo. Se guarda; sin nada, 1080p.
   ProgramResolution _resolution = ProgramResolution.p1080;
   double _zoom = singleDefaultZoom;
+
+  /// La lente con dos móviles: 0,5× hasta que se elija otra aquí (ver `rigLensKey`).
+  double _rigLens = singleDefaultZoom;
+
+  double get _lensNow => _linkMode == LinkMode.single ? _zoom : _rigLens;
   /// Las lentes físicas de este iPhone (ADR 0035); hasta que conteste el nativo, las de siempre.
   List<double> _lenses = singleZooms;
 
@@ -95,6 +100,12 @@ class _RolePageState extends State<RolePage> {
   bool _pairing = false;
   String? _pairingNote;
   bool _pairingFailed = false;
+
+  /// El último intento acabó sin emparejar: se ofrece probar al revés.
+  bool _pairingMissed = false;
+
+  /// Con quién está emparejado este móvil; null hasta que conteste el nativo.
+  String? _paired;
 
   /// IOS-68: el emparejado con el VPS guardado en el Keychain, y por qué no se pudo
   /// cambiar, si no se pudo.
@@ -211,6 +222,11 @@ class _RolePageState extends State<RolePage> {
       if (zoom != null && _lenses.contains(zoom) && mounted) {
         setState(() => _zoom = zoom);
       }
+      final double? lente = prefs.getDouble(rigLensKey);
+      if (lente != null && _lenses.contains(lente) && mounted) {
+        setState(() => _rigLens = lente);
+      }
+      unawaited(_loadPaired());
     } on Exception {
       // Sin almacenamiento (tests): manda el valor por defecto.
     }
@@ -231,6 +247,31 @@ class _RolePageState extends State<RolePage> {
     try {
       final SharedPreferences prefs = await SharedPreferences.getInstance();
       await prefs.setString(singleResolutionKey, resolution.name);
+    } on Exception {
+      // Si no se guarda, vale para esta vez.
+    }
+  }
+
+  Future<void> _loadPaired() async {
+    try {
+      final String nombres = await _api.pairedDevices();
+      if (mounted) {
+        setState(() => _paired = nombres);
+      }
+    } on Exception {
+      // Sin nativo (tests): no se dice nada.
+    }
+  }
+
+  /// La lente del modo elegido: cada modo guarda la suya.
+  Future<void> _setLens(double zoom) async {
+    if (_linkMode == LinkMode.single) {
+      return _setZoom(zoom);
+    }
+    setState(() => _rigLens = zoom);
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.setDouble(rigLensKey, zoom);
     } on Exception {
       // Si no se guarda, vale para esta vez.
     }
@@ -392,7 +433,7 @@ class _RolePageState extends State<RolePage> {
                 prefersMaster: _directs || _linkMode == LinkMode.single,
                 linkMode: _linkMode,
                 resolution: _resolution,
-                zoom: _zoom,
+                zoom: _lensNow,
                 eventKind: widget.eventKind,
               )
             // El espectáculo (ADR 0031): «Una cámara (sin pareja)», que dirige.
@@ -411,16 +452,27 @@ class _RolePageState extends State<RolePage> {
   /// Wi-Fi Aware, el plan B del enlace sin router (IOS-14): se empareja una vez y el
   /// sistema lo recuerda. El izquierdo enseña un código y el derecho lo teclea, así que
   /// el lado elegido arriba decide qué hoja sale.
-  Future<void> _pairWithoutCable() async {
+  ///
+  /// `reversed`: al revés, sin cambiar de lado (2026-11-04: con el 17 enseñando el código no
+  /// emparejaban, y cambiar de lado para probarlo cuesta unos 3 min de enlace después).
+  Future<void> _pairWithoutCable({bool reversed = false}) async {
     setState(() {
       _pairing = true;
       _pairingNote = null;
+      _pairingMissed = false;
     });
     String note;
     bool failed = false;
+    bool missed = false;
     try {
-      final String peer = await _api.pairWithoutCable(_role);
-      note = peer.isEmpty ? 'Sin emparejar.' : 'Emparejado sin cable con $peer.';
+      final CameraRole hoja = reversed
+          ? (_role == CameraRole.left ? CameraRole.right : CameraRole.left)
+          : _role;
+      final String peer = await _api.pairWithoutCable(hoja);
+      missed = peer.isEmpty;
+      note = peer.isEmpty
+          ? 'Sin emparejar. Si no salió el código, pulsa «Probar al revés» en los dos móviles.'
+          : 'Emparejado sin cable con $peer.';
     } on PlatformException catch (e) {
       note = 'No se pudo emparejar: ${e.message ?? e.code}';
       failed = true;
@@ -434,8 +486,10 @@ class _RolePageState extends State<RolePage> {
         _pairing = false;
         _pairingNote = note;
         _pairingFailed = failed;
+        _pairingMissed = missed || failed;
       });
     }
+    unawaited(_loadPaired());
   }
 
   /// El móvil como mando del panel, sin cámara (ADR 0017 de football-ai).
@@ -591,9 +645,9 @@ class _RolePageState extends State<RolePage> {
                       onMode: (LinkMode m) => unawaited(_setLinkMode(m)),
                       resolution: _resolution,
                       onResolution: (ProgramResolution r) => unawaited(_setResolution(r)),
-                      zoom: _zoom,
+                      zoom: _lensNow,
                       zooms: _lenses,
-                      onZoom: (double z) => unawaited(_setZoom(z)),
+                      onZoom: (double z) => unawaited(_setLens(z)),
                     ),
                     const SizedBox(height: ZeroMetrics.innerGap),
                     // Una vez por soporte, con los dos móviles delante: el plan B si no
@@ -602,6 +656,22 @@ class _RolePageState extends State<RolePage> {
                       label: _pairing ? 'Emparejando…' : 'Emparejar sin cable',
                       onPressed: _pairing ? null : () => unawaited(_pairWithoutCable()),
                     ),
+                    if (_pairingMissed) ...<Widget>[
+                      const SizedBox(height: 8),
+                      ZeroButton.secondary(
+                        label: 'Probar al revés',
+                        onPressed: _pairing ? null : () => unawaited(_pairWithoutCable(reversed: true)),
+                      ),
+                    ],
+                    if (_pairingNote == null && _paired != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          _paired!.isEmpty ? 'Este móvil no está emparejado con ninguno.' : 'Emparejado con $_paired.',
+                          textAlign: TextAlign.center,
+                          style: ZeroType.plex(size: 12, weight: FontWeight.w400, color: ZeroColors.inkTertiary),
+                        ),
+                      ),
                     if (_pairingNote case final String note)
                       Padding(
                         padding: const EdgeInsets.only(top: 8),

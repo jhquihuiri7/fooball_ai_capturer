@@ -601,6 +601,7 @@ class MasterApi {
     'camera/reset',
     'camera/auto',
     'camera/calibrate',
+    'camera/seam',
     'camera/preset',
     'camera/preset_save',
     'camera/preset_delete',

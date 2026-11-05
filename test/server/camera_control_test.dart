@@ -82,6 +82,30 @@ void main() {
       expect(dos, isNot(una), reason: 'el cambio de modo sube el estado');
     });
 
+    test('camera/seam lleva los tres ángulos y tiene tope', () {
+      _esOrden(
+        cameraNativeOrder(
+          'camera/seam',
+          <String, Object?>{'yaw_deg': 0.1, 'pitch_deg': -1, 'roll_deg': 0},
+          (String _) => null,
+        ),
+        'seam',
+        <double>[0.1, -1, 0],
+      );
+      expect(
+        () => cameraNativeOrder(
+          'camera/seam',
+          <String, Object?>{'yaw_deg': 6, 'pitch_deg': 0, 'roll_deg': 0},
+          (String _) => null,
+        ),
+        throwsA(isA<OrderError>()),
+      );
+      expect(
+        () => cameraNativeOrder('camera/seam', <String, Object?>{'yaw_deg': 1}, (String _) => null),
+        throwsA(isA<OrderError>()),
+      );
+    });
+
     test('camera/calibrate va al nativo, y cómo va sale en el estado', () {
       _esOrden(cameraNativeOrder('camera/calibrate', <String, Object?>{}, (String _) => null), 'calibrate', <double>[]);
       const CameraState sinPedir = CameraState(

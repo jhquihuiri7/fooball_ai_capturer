@@ -622,7 +622,14 @@ class CaptureSession extends ChangeNotifier implements CaptureFlutterApi {
       // Con «Una cámara», el foco sigue a la escena como la app Cámara del iPhone. La lente, la
       // elegida con una cámara y con dos (ADR 0035, enmienda del 2026-11-04).
       status = await _api.configure(
-        settings ?? defaultSettings(role, autoFocus: singleCamera, lensZoom: programMode ? zoom : singleDefaultZoom),
+        // Con dos móviles y una lente larga el foco tampoco se congela: a 26 mm, congelado donde
+        // cayó, el 17 salió desenfocado la prueba entera (2026-11-04). La ultra no lo necesita.
+        settings ??
+            defaultSettings(
+              role,
+              autoFocus: singleCamera || (programMode && zoom > singleDefaultZoom),
+              lensZoom: programMode ? zoom : singleDefaultZoom,
+            ),
       );
       final String? wrong = _whatIsWrong(status!);
       if (wrong != null) {

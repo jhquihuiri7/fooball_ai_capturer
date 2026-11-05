@@ -446,6 +446,10 @@ abstract class CaptureHostApi {
   @async
   String pairWithoutCable(CameraRole role);
 
+  /// Con quién está emparejado este móvil por Wi-Fi Aware, separado por comas; vacío si con nadie.
+  @async
+  String pairedDevices();
+
   /// El secreto del mando del partido `matchId`: HMAC-SHA256(S, "zero-control-v1 " ‖
   /// match_id) en base64url (ADR 0023 §3). Lo deriva el nativo, así que el secreto del
   /// soporte S no pasa nunca a Dart. Sin S (un móvil que nunca lo recibió, en «Una
