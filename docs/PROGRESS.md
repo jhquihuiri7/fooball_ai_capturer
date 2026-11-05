@@ -46,12 +46,15 @@ maestro y 16 Pro derecha, 20 min; `rig.json` calculado en el Mac con REF-73 e in
 - Zoom por `camera/zoom` de 0,7× a 3× y de vuelta. `camera/seam` aplicado en vivo y guardado igual en los dos.
 - `rig: rig.json` en los dos, y el `hello` le pasó la geometría al 16 Pro.
 - Detector en el 16 Pro (5 914 pasadas), y `director_pairing.complete` 5 904 de 5 924 (antes, 0).
-- «Calibrar cosido» de punta a punta: suben los dos y el VPS contesta; rechazó la habitación porque
-  aún no tiene REF-73 desplegado.
+- «Calibrar cosido» de punta a punta con REF-73 desplegado (`dbaaed7`): 67 puntos, 0,12° de error, en
+  31 s, aplicado en vivo y guardado igual en los dos. VPS estable, con 1 197 MB libres.
 - Al VPS, 1 conexión sin fallos a 6 Mbit/s.
 - **A vigilar:** las mitades se separan 11-13 ms y `torn_frames` sube a 661 de 35 444 (1,9 %); el 3-nov
   eran 1-5 ms. Con movimiento rápido puede notarse en la costura.
 - **Sin probar:** la cancha, «Probar al revés», mover el encuadre y los botones del mando a mano.
+- Tras unos 40 min en la habitación, el maestro llegó a térmica `serious`.
+- EMITIR arranca solo el relé a YouTube en el VPS (`vps-estado`: «emitiendo»), aunque el mando diga
+  `stream: off`. Falta decidir si debe ser así: un ensayo también sale por ahí.
 
 **Comprobado en el Mac:** `FramingTests` con los dorados nuevos, `RigLinkSessionTests`,
 `RigCalibrationClientTests` y `SlavePartStageTests`; `camera_control_test`, `capture_session_test` y

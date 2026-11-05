@@ -364,12 +364,18 @@ public enum RigConstants {
     /// (Python: `RIG_CALIB_RANSAC_THRESHOLD_PX`.)
     public static let rigCalibRansacThresholdPx: Double = 3.0
 
-    /// Píxeles: ~0,5° con la ultra a 4K. La segunda pasada, cuando la estricta no calibra: con cosas
+    /// Píxeles: ~0,25° con la ultra a 4K. La segunda pasada, cuando la estricta no calibra: con cosas
     /// cerca (a 1-3 m) el paralaje entre los dos móviles deja fuera a casi todo con 3 px. Medido el
-    /// 2026-11-04 con 5 parejas de una habitación: ORB y 3 px, 7 de 57; SIFT y 12 px, ~100 de 220. El
-    /// cosido sale bueno a esa distancia y puede quedar doble lo que esté a otra.
+    /// 2026-11-04 con 10 parejas de una habitación, sin mover los móviles: ORB y 3 px, 7 de 57 puntos. SIFT
+    /// y 12 px da dos soluciones a 3,6° entre sí, y la de más puntos es la peor; SIFT y 6 px, de 52 a 69
+    /// puntos y 0,5° de una pareja a otra. El cosido sale bueno a esa distancia y lo que esté a otra puede
+    /// quedar doble.
     /// (Python: `RIG_CALIB_NEAR_THRESHOLD_PX`.)
-    public static let rigCalibNearThresholdPx: Double = 12.0
+    public static let rigCalibNearThresholdPx: Double = 6.0
+
+    /// Intentos de RANSAC en la segunda pasada: con el umbral cerrado cuesta más dar con la buena.
+    /// (Python: `RIG_CALIB_NEAR_RANSAC_ITERATIONS`.)
+    public static let rigCalibNearRansacIterations: Int = 2000
 
     /// Cociente de Lowe de la segunda pasada: más estricto, porque ese umbral deja pasar más.
     /// (Python: `RIG_CALIB_NEAR_RATIO_TEST`.)
