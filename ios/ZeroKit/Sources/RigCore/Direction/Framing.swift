@@ -91,6 +91,10 @@ public struct FramingSpace: Sendable {
     public let hfovMin: Double
     /// Los dos planos de la vista general con dos cámaras; nil con una.
     public let panorama: PanoramaPlanes?
+    /// Con dos cámaras: las dos lentes no se tocan. Ningún encuadre cruza el hueco, y lo que no
+    /// cabe se corre hacia el eje de la lente de su lado (`has_gap` de framing.py).
+    public let hasGap: Bool
+    private var anchors: [(u: Double, v: Double)]
     private let r0: FramingRotation
     private let tanX: Double
     private let tanY: Double
@@ -124,6 +128,8 @@ public struct FramingSpace: Sendable {
         homeV = 0.5
         rectAspect = 1
         panorama = nil
+        hasGap = false
+        anchors = []
         rig = nil
         rLeft = r0
         rRight = r0
@@ -131,7 +137,8 @@ public struct FramingSpace: Sendable {
 
     /// El panorama de los dos lados (ADR 0035): dos planos que se tocan en la costura, sin pitch.
     /// La mitad izquierda de la vista (u < 0,5) es el plano izquierdo.
-    public init(rig: RigModel, width: Int, height: Int) throws {
+    /// `lensZoom`: la lente abierta; los topes del zoom son relativos a ella.
+    public init(rig: RigModel, width: Int, height: Int, lensZoom: Double = FullLensView.fullLensZoom) throws {
         self.width = width
         self.height = height
         self.rig = rig
@@ -158,8 +165,11 @@ public struct FramingSpace: Sendable {
         tanY = tanX * Double(RigConstants.cameraPanoramaOverviewHeight) / anchoPlano
         rectAspect = Double(height) / Double(width)
             * Double(RigConstants.cameraPanoramaOverviewWidth) / Double(RigConstants.cameraPanoramaOverviewHeight)
-        zoomSoft = RigConstants.cameraZoomSoft
-        hfovMin = FullLensView.hfovRad(zoom: RigConstants.cameraZoomMax)
+        let lentes = lensZoom / FullLensView.fullLensZoom
+        zoomSoft = RigConstants.cameraZoomSoft * lentes
+        hfovMin = FullLensView.hfovRad(zoom: RigConstants.cameraZoomMax * lentes)
+        hasGap = rig.horizontalOverlapRad() <= 0
+        anchors = []
         // De aquí abajo hacen falta las cuentas del propio espacio: primero, valores de paso.
         homeV = 0.5
         hfovMax = hfovMin
@@ -169,7 +179,20 @@ public struct FramingSpace: Sendable {
         let hogar = toOverview((cp * sin(costura), -sin(pitch), cp * cos(costura))).v
         homeV = hogar
         let ancho = FullLensView.hfovRad(zoom: FullLensView.fullLensZoom)
-        if fits(0.5, hogar, ancho) {
+        if hasGap {
+            func eje(_ c: RigCamera) -> (u: Double, v: Double) {
+                let cpe = cos(c.pose.pitchRad)
+                let p = toOverview((cpe * sin(c.pose.yawRad), -sin(c.pose.pitchRad), cpe * cos(c.pose.yawRad)))
+                return (p.u, p.v)
+            }
+            anchors = [eje(izq), eje(der)]
+            let copia = self
+            let tope = hfovMin
+            // El más abierto que cabe en las dos lentes: el zoom vale igual a los dos lados.
+            hfovMax = anchors.map { a in
+                Self.bisect(inside: tope, outside: ancho) { copia.fits(a.u, a.v, $0) }
+            }.min() ?? tope
+        } else if fits(0.5, hogar, ancho) {
             hfovMax = ancho
         } else {
             let copia = self
@@ -234,10 +257,21 @@ public struct FramingSpace: Sendable {
 
     /// Si alguna lente ve esa dirección.
     private func sees(_ d: (Double, Double, Double)) -> Bool {
+        seenBy(.left, d) || seenBy(.right, d)
+    }
+
+    /// Si esa lente ve esa dirección.
+    private func seenBy(_ lado: CameraSide, _ d: (Double, Double, Double)) -> Bool {
         guard let rig else { return false }
         let (yaw, pitch) = framingYawPitch(d)
-        let direccion = RigDirection(yawRad: yaw, pitchRad: pitch)
-        return rig.sees(.left, direction: direccion) || rig.sees(.right, direction: direccion)
+        return rig.sees(lado, direction: RigDirection(yawRad: yaw, pitchRad: pitch))
+    }
+
+    /// Hacia dónde se corre un encuadre que no cabe: el centro de la vista general o, con hueco,
+    /// el eje de la lente de su lado.
+    private func home(_ u: Double) -> (u: Double, v: Double) {
+        if hasGap, anchors.count == 2 { return anchors[u <= 0.5 ? 0 : 1] }
+        return (0.5, homeV)
     }
 
     private func axis(_ u: Double, _ v: Double) -> FramingRotation {
@@ -254,7 +288,14 @@ public struct FramingSpace: Sendable {
     }
 
     private func fits(_ u: Double, _ v: Double, _ hfovRad: Double) -> Bool {
-        if panorama != nil { return border(u, v, hfovRad).allSatisfy(sees) }
+        if panorama != nil {
+            let borde = border(u, v, hfovRad)
+            if hasGap {
+                // Una lente es un rectángulo y la vista otro: si ve todo el borde, ve la vista entera.
+                return [CameraSide.left, .right].contains { lado in borde.allSatisfy { seenBy(lado, $0) } }
+            }
+            return borde.allSatisfy(sees)
+        }
         let lo = -RigConstants.framingFitEps, hi = 1 + RigConstants.framingFitEps
         return corners(u, v, hfovRad).allSatisfy { $0.z > 0 && lo <= $0.u && $0.u <= hi && lo <= $0.v && $0.v <= hi }
     }
@@ -282,24 +323,25 @@ public struct FramingSpace: Sendable {
         let hfov = min(max(f.hfovRad, hfovMin), hfovMax)
         var u = min(max(f.centerU, 0), 1)
         var v = min(max(f.centerV, 0), 1)
-        if !fits(0.5, v, hfov) {
-            v = Self.bisect(inside: homeV, outside: v) { fits(0.5, $0, hfov) }
+        let casa = home(u)
+        if !fits(casa.u, v, hfov) {
+            v = Self.bisect(inside: casa.v, outside: v) { fits(casa.u, $0, hfov) }
         }
         if !fits(u, v, hfov) {
             let vFijo = v
-            u = Self.bisect(inside: 0.5, outside: u) { fits($0, vFijo, hfov) }
+            u = Self.bisect(inside: casa.u, outside: u) { fits($0, vFijo, hfov) }
         }
         return Framing(centerU: u, centerV: v, hfovRad: hfov)
     }
 
     /// La lente entera: la vista general misma.
     public func full() -> Framing {
-        Framing(centerU: 0.5, centerV: homeV, hfovRad: hfovMax)
+        Framing(centerU: home(0.5).u, centerV: home(0.5).v, hfovRad: hfovMax)
     }
 
     /// El encuadre de partida: el zoom que se eligió en el móvil, centrado.
     public func start(zoom: Double) -> Framing {
-        fit(Framing(centerU: 0.5, centerV: homeV, hfovRad: FullLensView.hfovRad(zoom: zoom)))
+        fit(Framing(centerU: home(0.5).u, centerV: home(0.5).v, hfovRad: FullLensView.hfovRad(zoom: zoom)))
     }
 
     // MARK: - Las órdenes del mando

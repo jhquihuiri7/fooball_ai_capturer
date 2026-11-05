@@ -136,6 +136,9 @@ final class FramingTests: XCTestCase {
         let ancho = try Int(inputs.number("width")), alto = try Int(inputs.number("height"))
         // Sin `side`, el panorama de los dos lados (ADR 0035).
         guard let lado = try? RectilinearViewTests.side(from: inputs) else {
+            if let lente = try? inputs.number("lens_zoom") {
+                return try FramingSpace(rig: rig, width: ancho, height: alto, lensZoom: lente)
+            }
             return try FramingSpace(rig: rig, width: ancho, height: alto)
         }
         if let lente = try? inputs.number("lens_zoom") {
@@ -215,6 +218,7 @@ final class FramingTests: XCTestCase {
                 "right_plane_yaw_rad": .number(p.rightPlaneYawRad),
                 "hfov_min": .number(e.hfovMin),
                 "hfov_max": .number(e.hfovMax),
+                "has_gap": .bool(e.hasGap),
             ])
         case "FramingSpace.between":
             let e = try space(from: inputs)
