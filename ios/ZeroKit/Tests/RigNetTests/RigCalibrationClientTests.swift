@@ -113,6 +113,15 @@ final class RigCalibrationClientTests: XCTestCase {
         XCTAssertEqual(vps.peticiones.count, intentos)
     }
 
+    func testSiElOtroMovilDiceQueNoSubeNoSeEspera() async throws {
+        let vps = VpsFalso()
+        vps.porDefecto = json(409, ["detail": "falta la imagen right"])
+        await assertThrows(RigCalibrationError.peerFailed("sin internet")) {
+            _ = try await self.cliente(vps).solve(pairIds: ["a"], peerProblem: { "sin internet" })
+        }
+        XCTAssertEqual(vps.peticiones.count, 1)
+    }
+
     func testLaDireccionSaleDelTunelDelQr() {
         XCTAssertEqual(
             RigCalibrationClient.baseUrl(tunnelUrl: URL(string: "wss://vps.test/tunnel/v1")!)?.absoluteString,

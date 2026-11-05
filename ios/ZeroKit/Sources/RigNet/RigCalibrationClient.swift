@@ -65,6 +65,8 @@ public enum RigCalibrationError: Error, Equatable, CustomStringConvertible {
     case noInternet
     /// El VPS no llegó a tener las fotos del otro móvil.
     case missingPeer
+    /// El otro móvil dijo que no pudo subir sus fotos.
+    case peerFailed(String)
     /// Ninguna pareja calibra: el motivo es el del VPS.
     case notCalibrated(String)
     case server(Int, String)
@@ -76,7 +78,9 @@ public enum RigCalibrationError: Error, Equatable, CustomStringConvertible {
         case .noInternet:
             return "sin internet o sin respuesta del VPS"
         case .missingPeer:
-            return "el otro móvil no subió sus fotos: mira que tenga internet y el QR Soporte"
+            return "el otro móvil no subió sus fotos: mira que tenga internet"
+        case let .peerFailed(motivo):
+            return "el otro móvil no pudo subir sus fotos: \(motivo)"
         case let .notCalibrated(motivo):
             return "no se pudo calibrar: \(motivo). Apunta a algo lejano y con detalle, sin nadie cerca"
         case let .server(codigo, detalle):
@@ -156,7 +160,8 @@ public final class RigCalibrationClient: Sendable {
     }
 
     /// Pide el cálculo de cada pareja, esperando al otro móvil, y devuelve la de más puntos.
-    public func solve(pairIds: [String]) async throws -> CalibrationSolved {
+    /// `peerProblem`: si el otro móvil ya dijo que no sube sus fotos, para qué seguir esperando.
+    public func solve(pairIds: [String], peerProblem: @escaping () -> String? = { nil }) async throws -> CalibrationSolved {
         let tope = nowS() + RigCalibrationConstants.solveDeadlineS
         var mejor: CalibrationSolved?
         var motivo = ""
@@ -177,6 +182,7 @@ public final class RigCalibrationClient: Sendable {
                     case 409:
                         // Falta el lado del otro móvil.
                         faltaElOtro = true
+                        if let motivo = peerProblem() { throw RigCalibrationError.peerFailed(motivo) }
                         espera = .missingPeer
                     case 503:
                         espera = .server(codigo, Self.detail(cuerpo))

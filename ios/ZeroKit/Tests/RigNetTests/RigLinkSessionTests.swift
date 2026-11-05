@@ -301,6 +301,43 @@ final class RigLinkSessionTests: XCTestCase {
         XCTAssertTrue(cableLeft.sentFrames(of: .part).isEmpty)
     }
 
+    // MARK: - La misma geometría en los dos (prueba del 2026-11-04)
+
+    func testElEsclavoCoseConLaGeometriaDelMaestroYElMaestroConLaQueLeFalta() throws {
+        let (left, right, _, _) = makePair()
+        left.localRigFiles = { ["rig.json": "del maestro"] }
+        right.localRigFiles = { ["rig.json": "vieja", "rig-1x.json": "solo del esclavo"] }
+        let lock = NSLock()
+        nonisolated(unsafe) var enEsclavo: [String: String] = [:]
+        nonisolated(unsafe) var enMaestro: [String: String] = [:]
+        right.onRigFileNamed = { n, t in lock.lock(); enEsclavo[n] = t; lock.unlock() }
+        left.onRigFileNamed = { n, t in lock.lock(); enMaestro[n] = t; lock.unlock() }
+        left.start()
+        right.start()
+        waitUntil { self.isConnected(left) && self.isConnected(right) }
+        lock.lock(); defer { lock.unlock() }
+        XCTAssertEqual(enEsclavo, ["rig.json": "del maestro"])
+        XCTAssertEqual(enMaestro, ["rig-1x.json": "solo del esclavo"])
+    }
+
+    func testLasCredencialesDeLaCalibracionVanCifradasYElEsclavoAvisaSiFalla() throws {
+        let (left, right, cableLeft, _) = makePair()
+        left.start()
+        right.start()
+        waitUntil { self.isConnected(left) && self.isConnected(right) }
+        let lock = NSLock()
+        nonisolated(unsafe) var recibidas = ""
+        nonisolated(unsafe) var problema = ""
+        right.onCalibrationCredentials = { c in lock.lock(); recibidas = c; lock.unlock() }
+        left.onCalibrationProblem = { p in lock.lock(); problema = p; lock.unlock() }
+        left.send(calibrationCapture: [1_000], credentials: "llave-del-vps")
+        waitUntil { lock.lock(); defer { lock.unlock() }; return recibidas == "llave-del-vps" }
+        let enviada = try XCTUnwrap(cableLeft.sentFrames(of: .command).last)
+        XCTAssertFalse(String(decoding: enviada.payload, as: UTF8.self).contains("llave-del-vps"))
+        right.send(calibrationProblem: "sin internet")
+        waitUntil { lock.lock(); defer { lock.unlock() }; return problema == "sin internet" }
+    }
+
     // MARK: - La escalera (IOS-06, IOS-25)
 
     func testLaEscaleraDelEsclavoVaEnSuLatidoYLaCadenciaComunEnUnaOrden() throws {

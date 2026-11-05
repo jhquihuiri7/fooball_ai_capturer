@@ -59,7 +59,8 @@ public enum GpuTiming {
 public final class MetalPartRenderer: PartRendering {
     private let context: MetalContext
     private let kernel: ReprojectKernel
-    private let rig: RigModel
+    private var rig: RigModel
+    private let rigLock = NSLock()
     private let side: CameraSide
     private let width: Int
     private let height: Int
@@ -84,7 +85,16 @@ public final class MetalPartRenderer: PartRendering {
         self.blind = blind
     }
 
+    /// La geometría nueva, para el fotograma siguiente: ajustar el cosido se ve en directo.
+    public func update(rig nuevo: RigModel) {
+        rigLock.lock(); defer { rigLock.unlock() }
+        rig = nuevo
+    }
+
     public func render(source: CVPixelBuffer, view: ViewCommand, into destination: CVPixelBuffer) throws {
+        rigLock.lock()
+        let rig = self.rig
+        rigLock.unlock()
         let vista = try RectilinearView(
             yawRad: view.yawRad, pitchRad: view.pitchRad, hfovRad: view.hfovRad,
             width: width, height: height

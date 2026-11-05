@@ -50,6 +50,9 @@ public final class RigLinkSession {
         /// Cámara y su campo horizontal en rad (sin él, la ultra de `rig.json`). Opcionales.
         var lensZoom: Double?
         var lensHfovRad: Double?
+        /// Las geometrías guardadas de este móvil, por nombre de fichero: los dos tienen que coser
+        /// con las mismas (ADR 0035, enmienda de la prueba del 2026-11-04). Opcional.
+        var rigFiles: [String: String]?
 
         enum CodingKeys: String, CodingKey {
             case linkVersion = "link_version"
@@ -61,6 +64,7 @@ public final class RigLinkSession {
             case prefersMaster = "prefers_master"
             case lensZoom = "lens_zoom"
             case lensHfovRad = "lens_hfov_rad"
+            case rigFiles = "rig_files"
         }
     }
 
@@ -161,6 +165,15 @@ public final class RigLinkSession {
     public var onCalibrationCapture: (([Int64]) -> Void)?
     /// El `rig.json` nuevo que manda el maestro tras «Calibrar cosido» (ADR 0035).
     public var onRigFile: ((String) -> Void)?
+    /// Las geometrías que este móvil dice en su `hello`, por nombre de fichero.
+    public var localRigFiles: (() -> [String: String])?
+    /// Una geometría del otro que hay que guardar: fichero y contenido, antes de `connected`.
+    public var onRigFileNamed: ((String, String) -> Void)?
+    /// El maestro manda sus credenciales del VPS para las fotos de calibración: el esclavo no
+    /// necesita QR propio. Llega antes que `onCalibrationCapture`.
+    public var onCalibrationCredentials: ((String) -> Void)?
+    /// El esclavo no pudo subir sus fotos: el maestro lo dice en el mando y deja de esperar.
+    public var onCalibrationProblem: ((String) -> Void)?
 
     public private(set) var state: State = .off {
         didSet { if oldValue != state { onState?(state) } }
@@ -335,7 +348,8 @@ public final class RigLinkSession {
             nonce: myNonce.base64EncodedString(),
             prefersMaster: prefersMaster,
             lensZoom: localLens?.zoom,
-            lensHfovRad: localLens?.hfovRad
+            lensHfovRad: localLens?.hfovRad,
+            rigFiles: localRigFiles?()
         )
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
@@ -399,10 +413,21 @@ public final class RigLinkSession {
             matchId = partido
             onRole?(rol, nuevoTerm, partido)
         }
+        adoptRigFiles(hello.rigFiles)
         state = .connected(peer: hello.deviceId)
         // El maestro del reloj es el maestro del soporte: pregunta el esclavo.
         if !isMaster {
             startPinging()
+        }
+    }
+
+    /// Los dos cosen con la misma geometría: manda la del maestro y, de lo que el maestro no
+    /// tiene, la del esclavo.
+    private func adoptRigFiles(_ suyas: [String: String]?) {
+        guard let suyas else { return }
+        let mias = localRigFiles?() ?? [:]
+        for (nombre, texto) in suyas.sorted(by: { $0.key < $1.key }) where texto != mias[nombre] {
+            if !isMaster || mias[nombre] == nil { onRigFileNamed?(nombre, texto) }
         }
     }
 
@@ -551,16 +576,33 @@ public final class RigLinkSession {
 
     /// El maestro pide al esclavo los fotogramas de estos instantes (IOS-70): `command`
     /// por control, en JSON, con `kind: calibration_capture` (ADR 0023 §1).
-    public func send(calibrationCapture targets: [Int64]) {
+    /// `credentials`: lo que necesita para subir sus fotos, cifrado con la clave de la sesión.
+    public func send(calibrationCapture targets: [Int64], credentials: String? = nil) {
         queue.async { [self] in
-            guard isMaster, case .connected = state,
+            guard isMaster, case .connected = state else { return }
+            var cuerpo: [String: Any] = ["kind": Self.calibrationCaptureKind, "targets": targets]
+            if let credentials, let clave = sessionKey?.key,
+               let sellado = try? AES.GCM.seal(Data(credentials.utf8), using: clave).combined {
+                cuerpo["vps"] = sellado.base64EncodedString()
+            }
+            guard let payload = try? JSONSerialization.data(withJSONObject: cuerpo) else { return }
+            send(type: .command, payload: payload, seq: nextControlSeq())
+        }
+    }
+
+    /// El esclavo avisa de que no pudo subir sus fotos de calibración.
+    public func send(calibrationProblem motivo: String) {
+        queue.async { [self] in
+            guard !isMaster, case .connected = state,
                   let payload = try? JSONSerialization.data(withJSONObject: [
-                      "kind": Self.calibrationCaptureKind, "targets": targets,
+                      "kind": Self.calibrationProblemKind, "detail": motivo,
                   ])
             else { return }
             send(type: .command, payload: payload, seq: nextControlSeq())
         }
     }
+
+    static let calibrationProblemKind = "calibration_problem"
 
     static let calibrationCaptureKind = "calibration_capture"
 
@@ -689,12 +731,23 @@ public final class RigLinkSession {
             guard isMaster, let bgr = ColorMeansWire.decode(frame.payload) else { return }
             onColorMeans?(bgr)
         case .command:
-            guard !isMaster,
-                  let orden = try? JSONSerialization.jsonObject(with: frame.payload) as? [String: Any]
-            else { return }
+            guard let orden = try? JSONSerialization.jsonObject(with: frame.payload) as? [String: Any] else { return }
+            // Del esclavo al maestro solo sube esto.
+            if isMaster {
+                if orden["kind"] as? String == Self.calibrationProblemKind, let motivo = orden["detail"] as? String {
+                    onCalibrationProblem?(motivo)
+                }
+                return
+            }
             switch orden["kind"] as? String {
             case Self.calibrationCaptureKind:
                 guard let destinos = orden["targets"] as? [NSNumber] else { return }
+                if let sellado = (orden["vps"] as? String).flatMap({ Data(base64Encoded: $0) }),
+                   let caja = try? AES.GCM.SealedBox(combined: sellado),
+                   let claro = try? AES.GCM.open(caja, using: sessionKey.key),
+                   let texto = String(data: claro, encoding: .utf8) {
+                    onCalibrationCredentials?(texto)
+                }
                 onCalibrationCapture?(destinos.map(\.int64Value))
             case Self.rigFileKind:
                 guard let texto = orden["text"] as? String else { return }

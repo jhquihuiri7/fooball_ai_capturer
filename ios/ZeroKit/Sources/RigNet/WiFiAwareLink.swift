@@ -369,6 +369,13 @@ public enum WiFiAwarePairing {
         return ahora.values.map(label(of:)).sorted().joined(separator: ", ")
     }
 
+    /// Con quién está emparejado este móvil.
+    public static func pairedNames() async -> [String] {
+        guard WiFiAwareRendezvous.isSupported else { return [] }
+        let ahora = (try? await WAPairedDevice.allDevices.current()) ?? [:]
+        return ahora.values.map(label(of:)).sorted()
+    }
+
     /// Cada cuánto se mira si la hoja sigue en pantalla.
     static let pairingPollInterval = Duration.milliseconds(500)
 
