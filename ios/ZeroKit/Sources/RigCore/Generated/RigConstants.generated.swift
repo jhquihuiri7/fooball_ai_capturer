@@ -364,6 +364,21 @@ public enum RigConstants {
     /// (Python: `RIG_CALIB_RANSAC_THRESHOLD_PX`.)
     public static let rigCalibRansacThresholdPx: Double = 3.0
 
+    /// Píxeles: ~0,5° con la ultra a 4K. La segunda pasada, cuando la estricta no calibra: con cosas
+    /// cerca (a 1-3 m) el paralaje entre los dos móviles deja fuera a casi todo con 3 px. Medido el
+    /// 2026-11-04 con 5 parejas de una habitación: ORB y 3 px, 7 de 57; SIFT y 12 px, ~100 de 220. El
+    /// cosido sale bueno a esa distancia y puede quedar doble lo que esté a otra.
+    /// (Python: `RIG_CALIB_NEAR_THRESHOLD_PX`.)
+    public static let rigCalibNearThresholdPx: Double = 12.0
+
+    /// Cociente de Lowe de la segunda pasada: más estricto, porque ese umbral deja pasar más.
+    /// (Python: `RIG_CALIB_NEAR_RATIO_TEST`.)
+    public static let rigCalibNearRatioTest: Double = 0.72
+
+    /// Puntos SIFT por imagen en la segunda pasada. Solo corre si la estricta falla: tarda ~2 s a 4K.
+    /// (Python: `RIG_CALIB_NEAR_MAX_FEATURES`.)
+    public static let rigCalibNearMaxFeatures: Int = 12000
+
     /// Hipótesis que prueba RANSAC. Una rotación se resuelve con dos direcciones, así que con
     /// la mitad de emparejamientos falsos cada hipótesis acierta con probabilidad 0.25, y 500
     /// iteraciones fallan todas con probabilidad 0.75^500: nunca.
