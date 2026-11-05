@@ -40,6 +40,19 @@ Qué se hizo:
 
 **Queda fuera:** el detector no viene en la app: una instalación limpia desde TestFlight no lo trae.
 
+**Probado en los dos iPhone el 2026-11-04 por la noche, en una habitación** (1.0.0 (22), 17 izquierda
+maestro y 16 Pro derecha, 20 min; `rig.json` calculado en el Mac con REF-73 e instalado a mano):
+- Sin hueco, y el cosido continúa en el cabecero y la cama; lo muy cerca aún se dobla algo (paralaje).
+- Zoom por `camera/zoom` de 0,7× a 3× y de vuelta. `camera/seam` aplicado en vivo y guardado igual en los dos.
+- `rig: rig.json` en los dos, y el `hello` le pasó la geometría al 16 Pro.
+- Detector en el 16 Pro (5 914 pasadas), y `director_pairing.complete` 5 904 de 5 924 (antes, 0).
+- «Calibrar cosido» de punta a punta: suben los dos y el VPS contesta; rechazó la habitación porque
+  aún no tiene REF-73 desplegado.
+- Al VPS, 1 conexión sin fallos a 6 Mbit/s.
+- **A vigilar:** las mitades se separan 11-13 ms y `torn_frames` sube a 661 de 35 444 (1,9 %); el 3-nov
+  eran 1-5 ms. Con movimiento rápido puede notarse en la costura.
+- **Sin probar:** la cancha, «Probar al revés», mover el encuadre y los botones del mando a mano.
+
 **Comprobado en el Mac:** `FramingTests` con los dorados nuevos, `RigLinkSessionTests`,
 `RigCalibrationClientTests` y `SlavePartStageTests`; `camera_control_test`, `capture_session_test` y
 `widget_test`. **En el iPhone, nada todavía.**
