@@ -13,6 +13,36 @@ Leyenda: ✅ hecha · 🚧 en curso · ⛔ bloqueada · ⬜ pendiente
 ---
 
 
+
+## 2026-11-09 · IOS-130 — los controles de la cámara y del cosido sin EMITIR, con cualquier lente · 🚧 en la (23); falta verlo en el iPhone
+
+Lo pidieron tras la prueba del 2026-11-08: con 0,5× el mando enseñaba calibrar y los controles; con
+1× y 2×, no. Lo que dicen los informes del 17 de esa tarde:
+
+- **La tarjeta solo existía con EMITIR, con cualquier lente.** El encuadre se montaba al arrancar la
+  pasada. A 1× sí salió, porque emitían: de 19:33 a 19:44 hubo encuadre a mano (`script: manual`) y se
+  pulsó «Calibrar» a las 19:36. Las sesiones de las 20:00 y las 20:01 enlazaron pero no emitieron, y
+  ahí no había tarjeta: seguramente la prueba con 2×.
+- **Con 1× y los móviles a 81° no hay nada que coser.** El 17 ve 70° con la 1× (fotos de calibración)
+  y el 16 Pro unos 73°: queda un hueco de unos 10° en el centro y la calibración no puede salir. Con 2×
+  el hueco es de unos 42°.
+
+Qué se hizo:
+
+- `FramingHub.preparer`: si el mando pregunta y no hay pasada, se monta el encuadre con las cámaras
+  abiertas (con dos móviles, ya enlazados: el `hello` trae las geometrías). Al EMITIR lo sustituye la
+  pasada, que sigue donde estaba el operador; al PARAR vuelve. `SplitBench.rigForLens` es la geometría
+  de la lente para los dos.
+- `RigLensWarning.gapAdvice`: el aviso y el fallo de «Calibrar cosido» dicen cuánto juntar los móviles
+  para esa lente (hasta solaparse 8°) o que se use 0,5×.
+
+**Comprobado en el Mac:** `RigLensTests` y `FramingTests`, `swift test` (solo falla
+`ProgramRecorderTests`, como antes) y `flutter test` (+596 −8, los 8 dorados de imagen de siempre).
+**En el iPhone, nada todavía**: el 16 Pro no estaba conectado y el 17 no dejó instalar.
+
+**Para coser con 1×** hay que girar los móviles hacia dentro, hasta unos 60° entre ellos, y calibrar
+con esa lente (queda en `rig-1x.json`). Con 2×, hasta unos 30°. El panorama es entonces más estrecho.
+
 ## 2026-11-04 · IOS-127, IOS-128 e IOS-129 — lo que dejó ver la prueba de dos móviles de esa tarde · 🚧 instalado en los dos iPhone (1.0.0 (22), firma de desarrollo); falta verlo funcionar (ADR 0035, enmienda de la tarde)
 
 Lo medido en los dos iPhone (`program-live/split`, `link-diag`, `prefs`) y en el VPS:

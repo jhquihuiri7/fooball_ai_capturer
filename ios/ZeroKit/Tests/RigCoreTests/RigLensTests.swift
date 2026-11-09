@@ -42,6 +42,9 @@ final class RigLensTests: XCTestCase {
         XCTAssertEqual(hueco.count, 2)
         XCTAssertTrue(hueco[0].contains("sin calibrar con la lente 1×"))
         XCTAssertTrue(hueco[1].contains("hueco de 10°"))
+        // Cuánto juntarlos: hasta tocarse y lo que pide el cosido de más.
+        XCTAssertTrue(hueco[1].contains("junta los móviles hasta unos"))
+        XCTAssertTrue(hueco[1].contains("o usa 0,5×"))
         XCTAssertEqual(
             RigLensWarning.warnings(rig: try rig("principal_a_25_se_solapa"), own: principal, peer: principal,
                                     calibrated: true), [],

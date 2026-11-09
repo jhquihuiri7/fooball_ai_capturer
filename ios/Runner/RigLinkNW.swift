@@ -1542,26 +1542,10 @@ final class SplitBench {
             // La lente que se abrió (ADR 0035). Con dos cámaras, la geometría es la de esa lente:
             // `rig.json` la ultra; `rig-1x.json`, `rig-2x.json`… las demás (enmienda del 2026-11-04).
             let lente = OpenLens.lens
-            var (modelo, fuente) = try Self.loadRig(width: ring.width, height: ring.height, env: env,
-                                                    lens: config.singleCamera ? .ultraWide : lente)
-            // «Una cámara» con una lente que no es la ultra (ADR 0035): sus intrínsecas salen de su
-            // campo. Con una lente sola no hay costura que alinear; la pose sigue siendo la del lado.
-            if config.singleCamera, let campo = lente.hfovRad {
-                modelo = modelo.withIntrinsics(side, intrinsics: try CameraIntrinsics.fromHfov(
-                    width: ring.width, height: ring.height, hfovRad: campo
-                ))
-                fuente = "lente real"
-            } else if !config.singleCamera, let campo = lente.hfovRad, fuente != lente.rigFileName {
-                // Dos cámaras con una lente sin calibrar: la pose de la ultra y las intrínsecas del
-                // campo de cada lente (la del otro, de su `hello`). Cose a ojo y se avisa.
-                let propia = try CameraIntrinsics.fromHfov(width: ring.width, height: ring.height, hfovRad: campo)
-                let suya = try session.peerLens?.hfovRad.map {
-                    try CameraIntrinsics.fromHfov(width: ring.width, height: ring.height, hfovRad: $0)
-                } ?? propia
-                modelo = modelo.withIntrinsics(side, intrinsics: propia)
-                    .withIntrinsics(side == .left ? .right : .left, intrinsics: suya)
-                fuente = "sin calibrar para \(lente.label)"
-            }
+            let (modelo, fuente) = try Self.rigForLens(
+                lente, width: ring.width, height: ring.height, env: env, side: side,
+                singleCamera: config.singleCamera, peerLens: session.peerLens
+            )
             rigLens = lente
             rigCalibratedForLens = fuente == lente.rigFileName
             guard let ctx = MetalContext() else { return false }
@@ -1737,6 +1721,33 @@ final class SplitBench {
 
     /// La calibración de `lens` en Documents (`rig.json` la ultra; `rig-1x.json`… las demás), o
     /// la de la ultra si esa lente no tiene, o un soporte nominal. Devuelve también de dónde salió.
+    /// La geometría con la que se pinta, para la lente abierta: la de su fichero o, sin él, la de la
+    /// ultra con el campo de cada lente. La usan la pasada y el encuadre sin EMITIR (IOS-130).
+    static func rigForLens(_ lente: RigLens, width: Int, height: Int, env: [String: String], side: CameraSide,
+                           singleCamera: Bool, peerLens: RigLens?) throws -> (RigModel, String) {
+        var (modelo, fuente) = try loadRig(width: width, height: height, env: env,
+                                           lens: singleCamera ? .ultraWide : lente)
+        // «Una cámara» con una lente que no es la ultra (ADR 0035): sus intrínsecas salen de su
+        // campo. Con una lente sola no hay costura que alinear; la pose sigue siendo la del lado.
+        if singleCamera, let campo = lente.hfovRad {
+            modelo = modelo.withIntrinsics(side, intrinsics: try CameraIntrinsics.fromHfov(
+                width: width, height: height, hfovRad: campo
+            ))
+            fuente = "lente real"
+        } else if !singleCamera, let campo = lente.hfovRad, fuente != lente.rigFileName {
+            // Dos cámaras con una lente sin calibrar: la pose de la ultra y las intrínsecas del
+            // campo de cada lente (la del otro, de su `hello`). Cose a ojo y se avisa.
+            let propia = try CameraIntrinsics.fromHfov(width: width, height: height, hfovRad: campo)
+            let suya = try peerLens?.hfovRad.map {
+                try CameraIntrinsics.fromHfov(width: width, height: height, hfovRad: $0)
+            } ?? propia
+            modelo = modelo.withIntrinsics(side, intrinsics: propia)
+                .withIntrinsics(side == .left ? .right : .left, intrinsics: suya)
+            fuente = "sin calibrar para \(lente.label)"
+        }
+        return (modelo, fuente)
+    }
+
     static func loadRig(width: Int, height: Int, env: [String: String],
                         lens: RigLens = .ultraWide) throws -> (RigModel, String) {
         let docs = try FileManager.default.url(for: .documentDirectory, in: .userDomainMask,
@@ -3472,7 +3483,8 @@ final class RigCalibrator: @unchecked Sendable {
                 try await work(id: id, stills: stills, side: side, pairs: pairs, isMaster: isMaster)
             } catch {
                 if isMaster {
-                    let motivo = (error as? RigCalibrationError)?.description ?? "\(error)"
+                    var motivo = (error as? RigCalibrationError)?.description ?? "\(error)"
+                    if let consejo = FramingHub.shared.gapAdvice() { motivo += ". " + consejo }
                     set("failed", motivo, running: false)
                 } else {
                     let motivo = (error as? RigCalibrationError)?.description ?? "\(error)"
@@ -3711,6 +3723,11 @@ final class FramingHub {
     private var liveSide: CameraSide?
     private var liveRenderers: [MetalPartRenderer] = []
 
+    /// Monta el encuadre cuando el mando lo pide y no hay pasada: los controles de la cámara y del
+    /// cosido salen desde que se abren las cámaras, con cualquier lente, y no solo con EMITIR
+    /// (2026-11-08, IOS-130). Lo pone quien abre el enlace.
+    var preparer: (() -> Void)?
+
     /// Con dos cámaras: la vista general son dos planos, y cada móvil pinta el suyo.
     var isPanorama: Bool {
         lock.lock(); defer { lock.unlock() }
@@ -3738,6 +3755,15 @@ final class FramingHub {
         } catch {
             NSLog("[encuadre] sin encuadre a mano: %@", "\(error)")
         }
+    }
+
+    /// Qué hacer si con esta lente las dos cámaras no se solapan; nil si se solapan.
+    func gapAdvice() -> String? {
+        lock.lock()
+        let rig = liveRig, enPanorama = panorama
+        lock.unlock()
+        guard enPanorama, let rig else { return nil }
+        return RigLensWarning.gapAdvice(rig: rig, lens: OpenLens.lens)
     }
 
     func register(renderers: [MetalPartRenderer]) {
@@ -3814,6 +3840,10 @@ final class FramingHub {
         )
         let miniatura = Thumbnailer(width: ancho, height: alto)
         lock.lock()
+        // Del encuadre sin pasada a la pasada (o al revés), el operador sigue donde estaba.
+        if let previo = controller, (previo.space.panorama != nil) == enPanorama, !previo.auto {
+            c.go(to: previo.target, cut: true)
+        }
         controller = c
         overviewRenderer = renderer
         overviewPool = pool
@@ -3867,6 +3897,7 @@ final class FramingHub {
     /// Una orden del mando (ADR 0033 y 0035) y cómo queda el encuadre; nil sin programa. Una
     /// orden que no se puede aplicar deja el encuadre como estaba y lo dice en `error`.
     func apply(kind: String, values: [Double], cut: Bool) -> CameraFraming? {
+        if current == nil { preparer?() }
         guard let c = current else { return nil }
         var fallo = ""
         do {

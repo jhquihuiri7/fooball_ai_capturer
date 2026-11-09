@@ -7,6 +7,7 @@
 import AVFoundation
 import Flutter
 import RigCore
+import RigMedia
 import RigNet
 import Security
 
@@ -416,6 +417,40 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
         }
         self.link = link
         link.start()
+        FramingHub.shared.preparer = { [weak self] in self?.mountFramingWithoutProgram() }
+    }
+
+    /// El encuadre y el cosido sin EMITIR (IOS-130): con las dos cámaras abiertas y enlazadas, con
+    /// cualquier lente. Con dos móviles espera al enlace, que trae las geometrías del otro en el
+    /// `hello`. Al EMITIR lo sustituye la pasada, que sigue donde estaba el operador; al PARAR,
+    /// vuelve este.
+    private func mountFramingWithoutProgram() {
+        guard program == nil, split == nil, let rol = currentRole, let ring = engine.rigPipeline?.ring else { return }
+        let solo = link as? RigSoloLink
+        let nw = link as? RigLinkNW
+        if let nw {
+            guard case .connected = nw.session.state else { return }
+        } else if solo == nil {
+            return
+        }
+        let lado: CameraSide = rol == .left ? .left : .right
+        do {
+            let lente = OpenLens.lens
+            let (modelo, _) = try SplitBench.rigForLens(
+                lente, width: ring.width, height: ring.height, env: ProcessInfo.processInfo.environment,
+                side: lado, singleCamera: solo != nil, peerLens: nw?.session.peerLens
+            )
+            guard let ctx = MetalContext() else { return }
+            if solo != nil {
+                FramingHub.shared.mount(owner: self, rig: modelo, side: lado, context: ctx, zoom: lente.zoom,
+                                        width: SplitBench.programWidth, height: SplitBench.programHeight)
+            } else {
+                FramingHub.shared.mountPanorama(owner: self, rig: modelo, side: lado, context: ctx,
+                                                width: SplitBench.programWidth, height: SplitBench.programHeight)
+            }
+        } catch {
+            NSLog("[encuadre] sin encuadre antes de EMITIR: %@", "\(error)")
+        }
     }
 
     func sendPeerCommand(command: RigCommand) throws {
@@ -423,6 +458,8 @@ final class CaptureHostApiImpl: NSObject, CaptureHostApi {
     }
 
     func stopLink() throws {
+        FramingHub.shared.preparer = nil
+        FramingHub.shared.unmount(owner: self)
         stopProgramRun()
         split?.stop()
         split = nil

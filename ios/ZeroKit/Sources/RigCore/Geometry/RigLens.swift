@@ -68,13 +68,23 @@ public enum RigLensWarning {
         if !own.isUltraWide, !calibrated {
             avisos.append("sin calibrar con la lente \(own.label): calibra el cosido desde el mando con esta lente")
         }
-        let solape = rig.horizontalOverlapRad()
-        if solape < RigConstants.rigMinOverlapRad {
-            let grados = Int((abs(solape) * 180 / .pi).rounded())
-            avisos.append(solape < 0
-                ? "las dos lentes no se tocan: queda un hueco de \(grados)° en el centro. Gira los móviles hacia dentro y calibra el cosido"
-                : "las dos lentes apenas se solapan (\(grados)°): gira los móviles hacia dentro y calibra el cosido")
-        }
+        if let consejo = gapAdvice(rig: rig, lens: own) { avisos.append(consejo) }
         return avisos
+    }
+
+    /// Si las dos lentes no llegan a solaparse lo que pide el cosido, qué hacer: cuánto juntar los
+    /// móviles para esta lente, o volver a la ultra. nil si se solapan. Lo usan el aviso y el fallo
+    /// de «Calibrar cosido»: el 2026-11-08, con 1× y los móviles a 81°, no había nada que calibrar.
+    public static func gapAdvice(rig: RigModel, lens: RigLens) -> String? {
+        let solape = rig.horizontalOverlapRad()
+        guard solape < RigConstants.rigMinOverlapRad else { return nil }
+        let grados = { (r: Double) in Int((abs(r) * 180 / .pi).rounded()) }
+        let separacion = rig.camera(.right).pose.yawRad - rig.camera(.left).pose.yawRad
+        let objetivo = separacion - (RigConstants.rigMinOverlapRad - solape)
+        let que = solape < 0
+            ? "las dos lentes no se tocan con \(lens.label): queda un hueco de \(grados(solape))° en el centro"
+            : "las dos lentes apenas se solapan con \(lens.label) (\(grados(solape))°)"
+        let otra = lens.isUltraWide ? "" : ", o usa 0,5×"
+        return "\(que). Para coser, junta los móviles hasta unos \(grados(objetivo))° entre ellos (ahora \(grados(separacion))°) y calibra\(otra)"
     }
 }
